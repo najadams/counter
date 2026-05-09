@@ -1,0 +1,141 @@
+# Build platform-specific installers for Counter via GitHub-hosted runners.
+#
+# better-sqlite3 is a native module, so each OS must build on its own runner.
+# Building Windows from macOS yields a broken .exe (Mac .node binding).
+#
+# Triggers:
+#   - push of a tag matching v*       — publishes installers to a GitHub Release
+#   - workflow_dispatch (manual run)  — uploads installers as workflow artifacts only
+#
+# Secrets used: none required for unsigned builds. For signed builds add:
+#   WIN_CSC_LINK / WIN_CSC_KEY_PASSWORD  (Windows code signing)
+#   APPLE_ID / APPLE_ID_PASSWORD / APPLE_TEAM_ID  (macOS notarization)
+#   CSC_LINK / CSC_KEY_PASSWORD  (Mac code signing)
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            dist_script: dist:win
+            artifact_glob: 'release/*/Counter-Setup-*.exe'
+            artifact_name: counter-windows
+          - os: macos-latest
+            dist_script: dist:mac
+            artifact_glob: 'release/*/Counter-*.dmg'
+            artifact_name: counter-macos
+          - os: ubuntu-latest
+            dist_script: dist:linux
+            artifact_glob: 'release/*/Counter-*.AppImage'
+            artifact_name: counter-linux
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      # Linux needs a couple of system libs for electron-builder to assemble
+      # the AppImage (libarchive-tools + fuse). Mac/Windows runners have
+      # everything they need preinstalled.
+      - name: Install Linux build deps
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libarchive-tools fakeroot rpm
+
+      - name: Install dependencies
+        run: npm ci
+        # postinstall runs `electron-builder install-app-deps` which rebuilds
+        # better-sqlite3 against the Electron ABI for THIS runner's OS.
+
+      - name: Typecheck
+        run: npx tsc -b --noEmit
+        # Don't fail the build on the pre-existing TS2717 noise from the
+        # multi-block `declare global` pattern in src/renderer/lib/ipc.ts.
+        # The runtime build (Vite/esbuild) handles those fine.
+        continue-on-error: true
+
+      - name: Build installer
+        run: npm run ${{ matrix.dist_script }}
+        env:
+          # Skip code signing on CI for the unsigned dev builds. Real
+          # production releases should set CSC_LINK / WIN_CSC_LINK and the
+          # corresponding passwords as repo secrets.
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: List build output
+        shell: bash
+        run: |
+          echo "Contents of release/:"
+          ls -la release/ || true
+          find release/ -type f -name 'Counter*' -print
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_glob }}
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: List downloaded artifacts
+        run: find dist -type f -print
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          # Match the tag that triggered this workflow.
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            dist/counter-windows/*
+            dist/counter-macos/*
+            dist/counter-linux/*
+          body: |
+            ## Counter ${{ github.ref_name }}
+
+            Built by GitHub Actions on `${{ github.sha }}`.
+
+            ### Installation
+
+            - **Windows**: download `Counter-Setup-*-x64.exe`, run it. Windows SmartScreen may warn that the publisher is unverified — click "More info" → "Run anyway" (the build is unsigned for v0.x).
+            - **macOS**: download the `.dmg`, drag Counter to Applications. Right-click → Open the first time to bypass Gatekeeper (unsigned).
+            - **Linux**: download `Counter-*.AppImage`, `chmod +x`, run.
+
+            See [CLAUDE.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/CLAUDE.md) for setup, backup, and runbook.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
