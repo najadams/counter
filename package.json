@@ -6,7 +6,7 @@
   "main": "dist-electron/main/index.js",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "vite build",
     "preview": "vite preview",
     "db:reset": "tsx scripts/db-reset.ts",
     "db:migrate": "tsx scripts/db-migrate.ts",
