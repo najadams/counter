@@ -103,6 +103,16 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
     setDiscount(p ?? 0, discountReason);
   }, [discountRaw, discountReason, setDiscount]);
 
+  // Clear stale submit errors as soon as the user edits the sale. Without
+  // this, a failed `completeSale` (e.g. backend rejection because neither
+  // `payments` nor `paymentMethod` was supplied) leaves the red banner up
+  // even after the user has changed the cart, customer, channel, or
+  // payment method — looking like a fresh failure when the form is now
+  // in a valid state.
+  useEffect(() => {
+    setError(null);
+  }, [lines, paymentMethod, customer, channel]);
+
   // Debounced product search
   useEffect(() => {
     let cancelled = false;
@@ -189,6 +199,10 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
       setError('Add items before choosing payment.');
       return;
     }
+    setError(null);
+    setPaymentMethod(method);
+    setShowPaymentModal(method);
+  }
 
   async function submitWithSplit(result: SplitPaymentResult): Promise<void> {
     setShowSplit(false);
@@ -239,10 +253,6 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
     setShowPaymentModal(null);
     setTimeout(() => setCompletedToast(null), 5000);
     searchRef.current?.focus();
-  }
-    setError(null);
-    setPaymentMethod(method);
-    setShowPaymentModal(method);
   }
 
   async function submitSale(supervisorOverride?: { id: string; pin: string }) {
