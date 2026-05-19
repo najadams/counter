@@ -267,6 +267,56 @@ export function defaultSaleUnit(db: DB, productId: string): ProductUnit | null {
   return { ...r, isPurchaseUnit: r.isPurchaseUnit === 1, isSaleUnit: r.isSaleUnit === 1, active: r.active === 1 };
 }
 
+/**
+ * Compute the per-unit sale price for a (product, unit, channel) triple.
+ *
+ * The price stored on a product_units row is the WALK-IN baseline. For
+ * wholesale / route, we scale that baseline by the product's channel-vs-
+ * walk-in canonical-price ratio so that:
+ *   - a unit at factor=1 ends up at exactly the channel's canonical price
+ *   - a non-canonical unit with an explicit bulk-discount price (e.g. PACK
+ *     at ₵55 when 12×walk-in would be ₵60) keeps that discount
+ *     proportionally when switching to a cheaper channel
+ *
+ * Returns an integer pesewas value rounded HALF-AWAY-FROM-ZERO. Never negative.
+ */
+export function priceForUnit(
+  db: DB,
+  productId: string,
+  unitId: string | null,
+  channel: 'WALK_IN' | 'WHOLESALE' | 'ROUTE',
+): number {
+  const p = db
+    .prepare(
+      `SELECT walk_in_price_pesewas    AS walkIn,
+              wholesale_price_pesewas  AS wholesale,
+              route_price_pesewas      AS route
+         FROM products
+         WHERE id = ?`,
+    )
+    .get(productId) as { walkIn: number; wholesale: number; route: number } | undefined;
+  if (!p) throw new Error(`priceForUnit: product ${productId} not found`);
+
+  const channelCanonical =
+    channel === 'WHOLESALE' ? p.wholesale
+    : channel === 'ROUTE'   ? p.route
+    : p.walkIn;
+
+  if (!unitId) {
+    // Canonical (no explicit unit). Channel price IS the unit price.
+    return channelCanonical;
+  }
+
+  const u = getUnit(db, unitId);
+  if (!u) throw new Error(`priceForUnit: unit ${unitId} not found`);
+
+  if (channel === 'WALK_IN') return u.pricePesewas;
+  // Avoid div-by-zero on a free walk-in product.
+  if (p.walkIn <= 0) return u.pricePesewas;
+  const scaled = (u.pricePesewas * channelCanonical) / p.walkIn;
+  return Math.max(0, Math.round(scaled));
+}
+
 /** Convert a quantity in `unitId`'s units into canonical units. */
 export function convertToCanonical(db: DB, unitId: string, qtyInUnit: number): number {
   if (!Number.isInteger(qtyInUnit) || qtyInUnit <= 0) {

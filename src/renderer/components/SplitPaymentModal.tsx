@@ -125,7 +125,7 @@ export function SplitPaymentModal({
         </div>
 
         <div className="space-y-2">
-          {rows.map((r, i) => (
+          {rows.map((r) => (
             <div key={r.id} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center">
               <select
                 value={r.method}

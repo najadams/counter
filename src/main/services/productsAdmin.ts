@@ -47,6 +47,20 @@ export interface AddProductInput {
   primarySupplierId?: string | null;
   defaultLeadTimeDays?: number;
   shelfLifeDays?: number | null;
+  countClass?: 'A' | 'B' | 'C' | null;
+  /**
+   * Optional list of additional sellable/purchasable units (CRATE, PACK,
+   * BAG_50KG, etc). Created in the same transaction as the product; if
+   * any one is invalid the whole product creation rolls back.
+   */
+  units?: Array<{
+    unitName: string;
+    conversionFactor: number;
+    pricePesewas: number;
+    isSaleUnit?: boolean;
+    isPurchaseUnit?: boolean;
+    notes?: string | null;
+  }>;
   actorWorkerId: string;
   deviceId: string;
 }
@@ -54,6 +68,7 @@ export interface AddProductInput {
 export interface AddProductResult {
   productId: string;
   warnings: string[];
+  unitIds: string[];
 }
 
 export function addProduct(db: DB, input: AddProductInput): AddProductResult {
@@ -91,58 +106,118 @@ export function addProduct(db: DB, input: AddProductInput): AddProductResult {
     warnings.push('route price is below cost');
   }
 
-  const productId = `prod-${uuidv4()}`;
-  db.prepare(
-    `INSERT INTO products (
-      id, sku, barcode, name, category, brand, pack_size_units, unit_volume_ml,
-      is_returnable, bottle_deposit_pesewas,
-      cost_price_pesewas, walk_in_price_pesewas, wholesale_price_pesewas, route_price_pesewas,
-      reorder_threshold, reorder_quantity, primary_supplier_id,
-      default_lead_time_days, shelf_life_days,
-      created_by, updated_by, device_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(
-    productId,
-    input.sku.trim(),
-    input.barcode ?? null,
-    input.name.trim(),
-    input.category,
-    input.brand ?? null,
-    input.packSizeUnits ?? 1,
-    input.unitVolumeMl ?? null,
-    input.isReturnable ? 1 : 0,
-    input.bottleDepositPesewas ?? 0,
-    input.costPricePesewas,
-    input.walkInPricePesewas,
-    input.wholesalePricePesewas,
-    input.routePricePesewas,
-    input.reorderThreshold ?? 0,
-    input.reorderQuantity ?? 0,
-    input.primarySupplierId ?? null,
-    input.defaultLeadTimeDays ?? 7,
-    input.shelfLifeDays ?? null,
-    input.actorWorkerId,
-    input.actorWorkerId,
-    input.deviceId,
-  );
+  // Pre-validate units (before opening a transaction so we fail cheaply).
+  const seenNames = new Set<string>();
+  for (const u of input.units ?? []) {
+    const name = u.unitName.trim().toUpperCase();
+    if (!name) throw new Error('unit name required');
+    if (seenNames.has(name)) throw new Error(`duplicate unit name '${name}' in input`);
+    seenNames.add(name);
+    if (!Number.isInteger(u.conversionFactor) || u.conversionFactor <= 0) {
+      throw new Error(`unit '${name}': conversionFactor must be a positive integer`);
+    }
+    if (!Number.isInteger(u.pricePesewas) || u.pricePesewas < 0) {
+      throw new Error(`unit '${name}': pricePesewas must be a non-negative integer`);
+    }
+    if (u.isSaleUnit === false && u.isPurchaseUnit === false) {
+      throw new Error(`unit '${name}': must be sellable, purchasable, or both`);
+    }
+  }
 
-  logAudit(db, {
-    workerId: input.actorWorkerId,
-    action: 'PRODUCT_ADDED',
-    entityType: 'products',
-    entityId: productId,
-    afterValue: {
-      sku: input.sku, name: input.name, category: input.category,
-      costPricePesewas: input.costPricePesewas,
-      walkInPricePesewas: input.walkInPricePesewas,
-      wholesalePricePesewas: input.wholesalePricePesewas,
-      routePricePesewas: input.routePricePesewas,
-      warnings,
-    },
-    deviceId: input.deviceId,
+  const productId = `prod-${uuidv4()}`;
+  const unitIds: string[] = [];
+
+  const tx = db.transaction(() => {
+    db.prepare(
+      `INSERT INTO products (
+        id, sku, barcode, name, category, brand, pack_size_units, unit_volume_ml,
+        is_returnable, bottle_deposit_pesewas,
+        cost_price_pesewas, walk_in_price_pesewas, wholesale_price_pesewas, route_price_pesewas,
+        reorder_threshold, reorder_quantity, primary_supplier_id,
+        default_lead_time_days, shelf_life_days, count_class,
+        created_by, updated_by, device_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      productId,
+      input.sku.trim(),
+      input.barcode ?? null,
+      input.name.trim(),
+      input.category,
+      input.brand ?? null,
+      input.packSizeUnits ?? 1,
+      input.unitVolumeMl ?? null,
+      input.isReturnable ? 1 : 0,
+      input.bottleDepositPesewas ?? 0,
+      input.costPricePesewas,
+      input.walkInPricePesewas,
+      input.wholesalePricePesewas,
+      input.routePricePesewas,
+      input.reorderThreshold ?? 0,
+      input.reorderQuantity ?? 0,
+      input.primarySupplierId ?? null,
+      input.defaultLeadTimeDays ?? 7,
+      input.shelfLifeDays ?? null,
+      input.countClass ?? null,
+      input.actorWorkerId,
+      input.actorWorkerId,
+      input.deviceId,
+    );
+
+    logAudit(db, {
+      workerId: input.actorWorkerId,
+      action: 'PRODUCT_ADDED',
+      entityType: 'products',
+      entityId: productId,
+      afterValue: {
+        sku: input.sku, name: input.name, category: input.category,
+        costPricePesewas: input.costPricePesewas,
+        walkInPricePesewas: input.walkInPricePesewas,
+        wholesalePricePesewas: input.wholesalePricePesewas,
+        routePricePesewas: input.routePricePesewas,
+        warnings,
+        initialUnitCount: input.units?.length ?? 0,
+      },
+      deviceId: input.deviceId,
+    });
+
+    for (const [idx, u] of (input.units ?? []).entries()) {
+      const name = u.unitName.trim().toUpperCase();
+      const unitId = `pu-${uuidv4()}`;
+      db.prepare(
+        `INSERT INTO product_units (
+          id, product_id, unit_name, conversion_factor, price_pesewas,
+          is_purchase_unit, is_sale_unit, display_order, notes,
+          created_by, updated_by, device_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(
+        unitId, productId, name, u.conversionFactor, u.pricePesewas,
+        u.isPurchaseUnit === false ? 0 : 1,
+        u.isSaleUnit === false ? 0 : 1,
+        idx,
+        u.notes ?? null,
+        input.actorWorkerId, input.actorWorkerId, input.deviceId,
+      );
+      unitIds.push(unitId);
+
+      logAudit(db, {
+        workerId: input.actorWorkerId,
+        action: 'PRODUCT_UNIT_ADDED',
+        entityType: 'product_units',
+        entityId: unitId,
+        afterValue: {
+          productId, unitName: name,
+          conversionFactor: u.conversionFactor,
+          pricePesewas: u.pricePesewas,
+          viaInitialProductCreate: true,
+        },
+        deviceId: input.deviceId,
+      });
+    }
   });
 
-  return { productId, warnings };
+  tx();
+
+  return { productId, warnings, unitIds };
 }
 
 export interface UpdateProductInput {
@@ -166,6 +241,10 @@ export interface UpdateProductInput {
     shelfLifeDays: number | null;
     barcode: string | null;
     countClass: 'A' | 'B' | 'C' | null;
+    /** product_units.id — UI default for receive-stock flows. NULL = canonical. */
+    primaryPurchaseUnitId: string | null;
+    /** product_units.id — UI default for sale flows. NULL = canonical. */
+    primarySaleUnitId: string | null;
   }>;
   actorWorkerId: string;
   deviceId: string;
@@ -205,6 +284,8 @@ export function updateProduct(db: DB, input: UpdateProductInput): { warnings: st
     primarySupplierId: 'primary_supplier_id',
     defaultLeadTimeDays: 'default_lead_time_days',
     shelfLifeDays: 'shelf_life_days', barcode: 'barcode',
+    primaryPurchaseUnitId: 'primary_purchase_unit_id',
+    primarySaleUnitId: 'primary_sale_unit_id',
   };
   const setParts: string[] = [];
   const params: unknown[] = [];
@@ -308,8 +389,13 @@ export interface AdminProduct {
   defaultLeadTimeDays: number;
   shelfLifeDays: number | null;
   countClass: 'A' | 'B' | 'C' | null;
+  primaryPurchaseUnitId: string | null;
+  primarySaleUnitId: string | null;
   active: boolean;
+  /** Sum of stock_movements.quantity in canonical units at the given location. */
   unitsOnHand: number;
+  /** Active sale/purchase units for this product, largest factor first. */
+  units: Array<{ id: string; unitName: string; conversionFactor: number }>;
 }
 
 export function listProductsForAdmin(db: DB, locationId: string): AdminProduct[] {
@@ -328,12 +414,36 @@ export function listProductsForAdmin(db: DB, locationId: string): AdminProduct[]
               default_lead_time_days AS defaultLeadTimeDays,
               shelf_life_days AS shelfLifeDays,
               count_class AS countClass,
+              primary_purchase_unit_id AS primaryPurchaseUnitId,
+              primary_sale_unit_id    AS primarySaleUnitId,
               active
          FROM products
          WHERE deleted_at IS NULL
          ORDER BY active DESC, name ASC`,
     )
-    .all() as Array<Omit<AdminProduct, 'active' | 'isReturnable' | 'unitsOnHand'> & { active: number; isReturnable: number }>;
+    .all() as Array<
+      Omit<AdminProduct, 'active' | 'isReturnable' | 'unitsOnHand' | 'units'>
+      & { active: number; isReturnable: number }
+    >;
+
+  // Single bulk query for all active units across all listed products,
+  // grouped client-side. Avoids the previous N+1 stock query too.
+  const unitRows = db
+    .prepare(
+      `SELECT id, product_id AS productId, unit_name AS unitName,
+              conversion_factor AS conversionFactor
+         FROM product_units
+         WHERE active = 1
+         ORDER BY product_id, conversion_factor DESC`,
+    )
+    .all() as Array<{ id: string; productId: string; unitName: string; conversionFactor: number }>;
+  const unitsByProduct = new Map<string, Array<{ id: string; unitName: string; conversionFactor: number }>>();
+  for (const u of unitRows) {
+    const arr = unitsByProduct.get(u.productId) ?? [];
+    arr.push({ id: u.id, unitName: u.unitName, conversionFactor: u.conversionFactor });
+    unitsByProduct.set(u.productId, arr);
+  }
+
   return rows.map((r) => {
     const stockRow = db
       .prepare('SELECT COALESCE(SUM(quantity), 0) AS u FROM stock_movements WHERE product_id = ? AND location_id = ?')
@@ -343,6 +453,7 @@ export function listProductsForAdmin(db: DB, locationId: string): AdminProduct[]
       active: r.active === 1,
       isReturnable: r.isReturnable === 1,
       unitsOnHand: stockRow.u,
+      units: unitsByProduct.get(r.id) ?? [],
     };
   });
 }

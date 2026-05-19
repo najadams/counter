@@ -70,10 +70,6 @@ jobs:
 
       - name: Typecheck
         run: npx tsc -b --noEmit
-        # Don't fail the build on the pre-existing TS2717 noise from the
-        # multi-block `declare global` pattern in src/renderer/lib/ipc.ts.
-        # The runtime build (Vite/esbuild) handles those fine.
-        continue-on-error: true
 
       - name: Build installer
         run: npm run ${{ matrix.dist_script }}

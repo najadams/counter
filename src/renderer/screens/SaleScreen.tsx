@@ -14,7 +14,9 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CustomerCreateModal } from '../components/CustomerCreateModal';
+import { ReceiptPrintModal } from '../components/ReceiptPrintModal';
 import { SplitPaymentModal, type SplitPaymentResult } from '../components/SplitPaymentModal';
+import type { SaleReceipt } from '../../shared/lib/receipt';
 import { counter } from '../lib/ipc';
 import { useSession } from '../store/session';
 import { useCart, type PaymentMethod } from '../store/cart';
@@ -50,6 +52,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
   const addLine = useCart((s) => s.addLine);
   const removeLine = useCart((s) => s.removeLine);
   const bumpQuantity = useCart((s) => s.bumpQuantity);
+  const setQuantity = useCart((s) => s.setQuantity);
   const setPaymentMethod = useCart((s) => s.setPaymentMethod);
   const setChannel = useCart((s) => s.setChannel);
   const setPaymentReference = useCart((s) => s.setPaymentReference);
@@ -63,6 +66,11 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [completedToast, setCompletedToast] = useState<string | null>(null);
+  // Last completed sale's receipt — kept after the toast clears so the cashier
+  // can still hit F8 / the Print button to bring up the OS print dialog.
+  // Reset when a new line is added to start the next sale.
+  const [lastReceipt, setLastReceipt] = useState<SaleReceipt | null>(null);
+  const [showReceiptPrint, setShowReceiptPrint] = useState(false);
   const [discountRaw, setDiscountRaw] = useState('');
   const [discountReason, setDiscountReason] = useState('');
   const setDiscount = useCart((s) => s.setDiscount);
@@ -72,11 +80,24 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
   const [channelSwitchBanner, setChannelSwitchBanner] = useState<'WALK_IN' | 'WHOLESALE' | 'ROUTE' | null>(null);
   const [showCustomerPicker, setShowCustomerPicker] = useState(false);
   const swapUnit = useCart((s) => s.swapUnit);
+  const repriceLines = useCart((s) => s.repriceLines);
 
-  function attemptChannelChange(next: 'WALK_IN' | 'WHOLESALE' | 'ROUTE') {
+  async function attemptChannelChange(next: 'WALK_IN' | 'WHOLESALE' | 'ROUTE') {
     if (next === channel) return;
-    if (lines.length > 0 && !confirm('Switching channel will clear the cart so prices reload. Continue?')) return;
-    clearCart();
+    // Re-price each existing line for the new channel BEFORE flipping the
+    // channel flag — that way subtotals don't briefly render with stale
+    // pricing. Empty cart? Just flip.
+    if (lines.length > 0) {
+      const r = await counter.repriceLines({
+        channel: next,
+        lines: lines.map((l) => ({ productId: l.productId, unitId: l.unitId })),
+      });
+      if (!r.success) {
+        setError(`Channel switch failed: ${r.error}`);
+        return;
+      }
+      repriceLines(r.data.lines);
+    }
     setChannel(next);
     setChannelSwitchBanner(null);
   }
@@ -103,15 +124,17 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
     setDiscount(p ?? 0, discountReason);
   }, [discountRaw, discountReason, setDiscount]);
 
-  // Clear stale submit errors as soon as the user edits the sale. Without
-  // this, a failed `completeSale` (e.g. backend rejection because neither
-  // `payments` nor `paymentMethod` was supplied) leaves the red banner up
-  // even after the user has changed the cart, customer, channel, or
-  // payment method — looking like a fresh failure when the form is now
-  // in a valid state.
+  // Clear stale submit errors when the cart composition changes (item added
+  // or removed) — that's a meaningfully different submission. Don't clear
+  // on quantity-only edits, customer swaps, or channel switches, since the
+  // user is often remediating exactly what the error flagged and silently
+  // wiping the message hides whether they fixed it. All submit paths
+  // already clear the error at start (see submit handlers), so a successful
+  // re-submit will clear it too.
   useEffect(() => {
     setError(null);
-  }, [lines, paymentMethod, customer, channel]);
+  }, [lines.length]);
+
 
   // Debounced product search
   useEffect(() => {
@@ -182,6 +205,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
       else if (e.key === 'F5') { e.preventDefault(); openPayment('MOMO_MTN'); }
       else if (e.key === 'F6') { e.preventDefault(); openPayment('CREDIT'); }
       else if (e.key === 'F2') { e.preventDefault(); void submitSale(); }
+      else if (e.key === 'F8') { e.preventDefault(); if (lastReceipt) setShowReceiptPrint(true); }
       else if (e.key === 'F9') { e.preventDefault(); onExit(); }
       else if (e.key === 'Escape') {
         e.preventDefault();
@@ -192,7 +216,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showPaymentModal, paymentMethod, paymentReference, cashGiven, customer, lines.length]);
+  }, [showPaymentModal, paymentMethod, paymentReference, cashGiven, customer, lines.length, lastReceipt]);
 
   function openPayment(method: PaymentMethod) {
     if (lines.length === 0) {
@@ -237,13 +261,14 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
     });
     setSubmitting(false);
     if (!res.success) { setError(res.error); return; }
-    const { saleId, changePesewas, printerFailed, printerError } = res.data;
+    const { saleId, changePesewas, printerFailed, printerError, receipt } = res.data;
     if (printerFailed) { chimeWarning(); flashBody('flash-warning'); }
     else { chimeSuccess(); flashBody('flash-success'); }
     let toast = `Sale ${saleId.slice(-8)} complete.`;
     if (changePesewas != null && changePesewas > 0) toast += ` Change: ${formatMoneyWithCurrency(changePesewas)}.`;
     if (printerFailed) toast += `  ⚠ Receipt queued — ${printerError ?? 'printer offline'}.`;
     setCompletedToast(toast);
+    setLastReceipt(receipt);
     clearCart();
     setDiscountRaw('');
     setDiscountReason('');
@@ -310,7 +335,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
     });
     setSubmitting(false);
     if (!res.success) { setError(res.error); return; }
-    const { saleId, changePesewas, printerFailed, printerError } = res.data;
+    const { saleId, changePesewas, printerFailed, printerError, receipt } = res.data;
     if (printerFailed) {
       chimeWarning();
       flashBody('flash-warning');
@@ -322,6 +347,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
     if (changePesewas != null) toast += ` Change: ${formatMoneyWithCurrency(changePesewas)}.`;
     if (printerFailed) toast += `  ⚠ Receipt queued — ${printerError ?? 'printer offline'}.`;
     setCompletedToast(toast);
+    setLastReceipt(receipt);
     clearCart();
     setDiscountRaw('');
     setDiscountReason('');
@@ -406,6 +432,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
               <span className="kbd">F5</span> MoMo ·
               <span className="kbd">F6</span> Credit ·
               <span className="kbd">F2</span> Complete ·
+              <span className="kbd">F8</span> Print ·
               <span className="kbd">F9</span> Back ·
               <span className="kbd">Esc</span> Clear
             </div>
@@ -523,11 +550,18 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
                   <button
                     onClick={() => bumpQuantity(l.productId, -1)}
                     className="px-2 py-0.5 border border-border hover:bg-bg-elevated text-text-primary"
+                    aria-label="Decrease quantity"
                   >−</button>
-                  <span className="font-mono tnum text-text-primary w-8 text-center">{l.quantity}</span>
+                  <QuantityInput
+                    productId={l.productId}
+                    quantity={l.quantity}
+                    onCommit={(n) => setQuantity(l.productId, n)}
+                    onRemove={() => removeLine(l.productId)}
+                  />
                   <button
                     onClick={() => bumpQuantity(l.productId, +1)}
                     className="px-2 py-0.5 border border-border hover:bg-bg-elevated text-text-primary"
+                    aria-label="Increase quantity"
                   >+</button>
                   <button
                     onClick={() => setSwapUnitFor(l.productId)}
@@ -619,11 +653,33 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
               <div className="bg-bg-deep border border-danger px-4 py-2 text-danger text-sm">{error}</div>
             )}
             {completedToast && (
-              <div className="bg-bg-deep border border-success px-4 py-2 text-success text-sm">{completedToast}</div>
+              <div className="bg-bg-deep border border-success px-4 py-2 text-success text-sm flex items-center justify-between gap-3">
+                <span>{completedToast}</span>
+                {lastReceipt && (
+                  <button
+                    type="button"
+                    onClick={() => setShowReceiptPrint(true)}
+                    className="border border-success px-3 py-1 text-xs hover:bg-success hover:text-bg-deep">
+                    Print receipt <span className="kbd">F8</span>
+                  </button>
+                )}
+              </div>
+            )}
+            {!completedToast && lastReceipt && (
+              <button
+                type="button"
+                onClick={() => setShowReceiptPrint(true)}
+                className="text-text-tertiary text-xs hover:text-text-secondary text-left">
+                Reprint last sale #{lastReceipt.receiptId.slice(-8)} <span className="kbd">F8</span>
+              </button>
             )}
           </div>
         </section>
       </main>
+
+      {showReceiptPrint && lastReceipt && (
+        <ReceiptPrintModal receipt={lastReceipt} onClose={() => setShowReceiptPrint(false)} />
+      )}
 
       {showSplit && (
         <SplitPaymentModal
@@ -845,6 +901,60 @@ function UnitSwapModal({
         <button onClick={onCancel} className="self-end px-4 py-2 border border-border hover:bg-bg-elevated text-sm">Cancel</button>
       </div>
     </div>
+  );
+}
+
+// Editable per-line quantity. Owns a local string buffer so the cashier can
+// type "50" naturally (intermediate empty / partial states are fine — the
+// store only updates on Enter / blur with a valid positive integer). Esc
+// cancels; backspace into empty + blur removes the line, matching the spirit
+// of `setQuantity(0)` in the store.
+function QuantityInput({
+  productId, quantity, onCommit, onRemove,
+}: {
+  productId: string;
+  quantity: number;
+  onCommit: (n: number) => void;
+  onRemove: () => void;
+}) {
+  const [raw, setRaw] = useState(String(quantity));
+  const [focused, setFocused] = useState(false);
+
+  // Sync local buffer back to the line's quantity when it changes externally
+  // (e.g. +/- buttons, tier reload) and we aren't currently editing.
+  useEffect(() => {
+    if (!focused) setRaw(String(quantity));
+  }, [quantity, focused]);
+
+  function commit() {
+    const trimmed = raw.trim();
+    if (trimmed === '') { onRemove(); return; }
+    const n = Number.parseInt(trimmed, 10);
+    if (!Number.isFinite(n) || n <= 0) { setRaw(String(quantity)); return; }
+    if (n !== quantity) onCommit(n);
+    else setRaw(String(quantity));
+  }
+
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      pattern="[0-9]*"
+      value={raw}
+      onChange={(e) => setRaw(e.target.value.replace(/[^\d]/g, ''))}
+      onFocus={(e) => { setFocused(true); e.target.select(); }}
+      onBlur={() => { setFocused(false); commit(); }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') { e.preventDefault(); (e.currentTarget as HTMLInputElement).blur(); }
+        else if (e.key === 'Escape') {
+          e.preventDefault();
+          setRaw(String(quantity));
+          (e.currentTarget as HTMLInputElement).blur();
+        }
+      }}
+      aria-label={`Quantity for ${productId}`}
+      className="font-mono tnum text-text-primary w-14 text-center bg-bg-input border border-border hover:border-border-strong focus:border-accent focus:outline-none px-1 py-0.5"
+    />
   );
 }
 

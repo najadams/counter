@@ -34,7 +34,7 @@ export interface SessionState {
   clearShift: () => void;
 }
 
-export const useSession = create<SessionState>((set, get) => ({
+export const useSession = create<SessionState>((set) => ({
   workerId: null,
   workerName: null,
   workerRole: null,

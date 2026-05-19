@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PTA — LinkedIn Carousel Slide Templates</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --charcoal: #0A0C10;
+    --cream: #FAF7F2;
+    --ink-light: #F4F1EC;
+    --gold: #C9A84C;
+    --gold-quiet: #C9A84C40;
+    --display: 'Cormorant Garamond', serif;
+    --body: 'DM Sans', sans-serif;
+    --mono: 'DM Mono', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: #1a1d24; font-family: var(--body); color: var(--ink-light); }
+  body { padding: 64px 32px 96px; }
+  .page-header {
+    max-width: 1280px; margin: 0 auto 56px; padding: 0 16px;
+  }
+  .page-eyebrow {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.18em;
+    text-transform: uppercase; color: var(--gold); margin-bottom: 16px;
+  }
+  .page-title {
+    font-family: var(--display); font-weight: 500; font-size: 44px;
+    line-height: 1.1; margin-bottom: 14px; letter-spacing: -0.01em;
+  }
+  .page-sub {
+    font-size: 15px; line-height: 1.6; color: #c8c8c8; max-width: 640px;
+  }
+  .page-sub b { color: var(--gold); font-weight: 500; }
+
+  .grid {
+    display: grid; gap: 64px 48px; max-width: 1280px; margin: 0 auto;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+
+  .slide-wrap { display: flex; flex-direction: column; gap: 18px; }
+  .slide-label {
+    display: flex; align-items: baseline; justify-content: space-between;
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em;
+    text-transform: uppercase; color: #9a9a9a;
+  }
+  .slide-label b { color: var(--gold); font-weight: 500; }
+  .slide-note { font-family: var(--body); font-size: 13px; color: #b0b0b0; line-height: 1.55; }
+
+  /*
+   * Slide canvas.
+   * Real LinkedIn carousel: 1080 x 1350.
+   * Here scaled to 540 x 675 for preview.
+   */
+  .slide {
+    width: 100%; aspect-ratio: 1080 / 1350;
+    position: relative; overflow: hidden;
+    box-shadow: 0 12px 48px rgba(0,0,0,0.6);
+  }
+  .slide.dark { background: var(--charcoal); color: var(--ink-light); }
+  .slide.cream { background: var(--cream); color: var(--charcoal); }
+
+  /* corner mark — PTA monogram, always top-left */
+  .mark {
+    position: absolute; top: 36px; left: 36px;
+    font-family: var(--mono); font-size: 11px;
+    letter-spacing: 0.22em; text-transform: uppercase;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .mark .dot { width: 7px; height: 7px; background: var(--gold); display: inline-block; }
+  .slide.cream .mark { color: var(--charcoal); }
+  .slide.dark .mark { color: var(--ink-light); }
+
+  /* slide number — top-right, monospaced */
+  .num {
+    position: absolute; top: 36px; right: 36px;
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em;
+    color: var(--gold);
+  }
+
+  /* hairline rule */
+  .hairline {
+    position: absolute; left: 36px; right: 36px; height: 1px;
+    background: var(--gold-quiet);
+  }
+
+  /* footer band */
+  .foot {
+    position: absolute; bottom: 36px; left: 36px; right: 36px;
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  .slide.dark .foot { color: #8a8a8a; }
+  .slide.cream .foot { color: #5a5a5a; }
+  .foot .url { color: var(--gold); }
+
+  /* ===================== SLIDE 1 — COVER ===================== */
+  .s-cover .hairline { top: 84px; }
+  .s-cover .eyebrow {
+    position: absolute; top: 120px; left: 36px;
+    font-family: var(--mono); font-size: 11px;
+    letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--gold);
+  }
+  .s-cover .title {
+    position: absolute; left: 36px; right: 36px; top: 200px;
+    font-family: var(--display); font-weight: 500;
+    font-size: 64px; line-height: 1.04; letter-spacing: -0.015em;
+    color: var(--ink-light);
+  }
+  .s-cover .title em { font-style: italic; color: var(--gold); font-weight: 500; }
+  .s-cover .meta {
+    position: absolute; left: 36px; right: 36px; bottom: 130px;
+    display: flex; gap: 28px; align-items: baseline;
+  }
+  .s-cover .meta .pill {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em;
+    text-transform: uppercase; color: var(--ink-light);
+    padding: 8px 12px; border: 1px solid var(--gold-quiet);
+  }
+
+  /* ===================== SLIDE 2 — PREMISE ===================== */
+  .s-premise .hairline { top: 84px; }
+  .s-premise .label {
+    position: absolute; top: 120px; left: 36px;
+    font-family: var(--mono); font-size: 11px;
+    letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--gold);
+  }
+  .s-premise .body {
+    position: absolute; left: 36px; right: 90px; top: 180px;
+    font-family: var(--display); font-weight: 400;
+    font-size: 36px; line-height: 1.25; color: var(--charcoal);
+  }
+  .s-premise .body em { font-style: italic; color: #6b5520; }
+  .s-premise .signoff {
+    position: absolute; left: 36px; bottom: 130px;
+    font-family: var(--body); font-size: 13px; line-height: 1.6;
+    color: #5a5a5a; max-width: 380px;
+  }
+
+  /* ===================== SLIDE 3 — POINT ===================== */
+  .s-point .num-large {
+    position: absolute; top: 110px; left: 36px;
+    font-family: var(--display); font-style: italic; font-weight: 400;
+    font-size: 140px; line-height: 0.9; color: var(--gold);
+  }
+  .s-point .num-large::after {
+    content: ''; display: block; width: 40px; height: 1px;
+    background: var(--gold-quiet); margin-top: 18px;
+  }
+  .s-point .point-eyebrow {
+    position: absolute; top: 280px; left: 36px;
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.22em;
+    text-transform: uppercase; color: var(--gold);
+  }
+  .s-point .point-headline {
+    position: absolute; left: 36px; right: 60px; top: 320px;
+    font-family: var(--display); font-weight: 500;
+    font-size: 38px; line-height: 1.15; color: var(--ink-light);
+    letter-spacing: -0.01em;
+  }
+  .s-point .point-body {
+    position: absolute; left: 36px; right: 60px; bottom: 140px;
+    font-family: var(--body); font-size: 16px; line-height: 1.55;
+    color: #c8c8c8; max-width: 440px;
+  }
+
+  /* ===================== SLIDE 4 — STATUTE PULL ===================== */
+  .s-statute .ribbon {
+    position: absolute; top: 110px; left: 36px;
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.22em;
+    text-transform: uppercase; color: var(--charcoal);
+    background: var(--gold); padding: 7px 12px;
+  }
+  .s-statute .quote-mark {
+    position: absolute; top: 165px; left: 36px;
+    font-family: var(--display); font-style: italic;
+    font-size: 130px; line-height: 0.8; color: var(--gold);
+  }
+  .s-statute .quote-body {
+    position: absolute; left: 36px; right: 36px; top: 280px;
+    font-family: var(--display); font-style: italic; font-weight: 400;
+    font-size: 26px; line-height: 1.4; color: var(--charcoal);
+  }
+  .s-statute .citation {
+    position: absolute; left: 36px; bottom: 200px;
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em;
+    text-transform: uppercase; color: #6b5520;
+  }
+  .s-statute .citation::before {
+    content: ''; display: block; width: 24px; height: 1px;
+    background: var(--charcoal); margin-bottom: 12px;
+  }
+  .s-statute .gloss {
+    position: absolute; left: 36px; right: 36px; bottom: 110px;
+    font-family: var(--body); font-size: 14px; line-height: 1.55;
+    color: #4a4a4a; padding-top: 18px; border-top: 1px solid #d4cfc4;
+  }
+
+  /* ===================== SLIDE 5 — SUMMARY ===================== */
+  .s-summary .hairline { top: 84px; }
+  .s-summary .summary-eyebrow {
+    position: absolute; top: 120px; left: 36px;
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.22em;
+    text-transform: uppercase; color: var(--gold);
+  }
+  .s-summary .summary-title {
+    position: absolute; left: 36px; right: 36px; top: 160px;
+    font-family: var(--display); font-weight: 500; font-size: 32px;
+    line-height: 1.15; color: var(--ink-light);
+  }
+  .s-summary .summary-list {
+    position: absolute; left: 36px; right: 36px; top: 270px;
+    display: flex; flex-direction: column; gap: 22px;
+  }
+  .s-summary .row {
+    display: flex; gap: 20px; align-items: flex-start;
+    padding-bottom: 22px; border-bottom: 1px solid var(--gold-quiet);
+  }
+  .s-summary .row:last-child { border-bottom: none; }
+  .s-summary .row .n {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em;
+    color: var(--gold); flex: 0 0 36px; padding-top: 3px;
+  }
+  .s-summary .row .t {
+    font-family: var(--body); font-size: 16px; line-height: 1.45;
+    color: var(--ink-light); flex: 1;
+  }
+
+  /* ===================== SLIDE 6 — CTA ===================== */
+  .s-cta .hairline { top: 84px; }
+  .s-cta .cta-eyebrow {
+    position: absolute; top: 120px; left: 36px;
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.22em;
+    text-transform: uppercase; color: var(--gold);
+  }
+  .s-cta .cta-title {
+    position: absolute; left: 36px; right: 36px; top: 180px;
+    font-family: var(--display); font-weight: 500; font-size: 56px;
+    line-height: 1.08; letter-spacing: -0.015em; color: var(--charcoal);
+  }
+  .s-cta .cta-title em { font-style: italic; color: #6b5520; }
+  .s-cta .cta-body {
+    position: absolute; left: 36px; right: 90px; top: 440px;
+    font-family: var(--body); font-size: 16px; line-height: 1.6;
+    color: #3a3a3a; max-width: 420px;
+  }
+  .s-cta .cta-block {
+    position: absolute; left: 36px; right: 36px; bottom: 110px;
+    padding-top: 22px; border-top: 1px solid var(--charcoal);
+    display: flex; justify-content: space-between; align-items: baseline;
+  }
+  .s-cta .cta-block .lhs {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.22em;
+    text-transform: uppercase; color: var(--charcoal);
+  }
+  .s-cta .cta-block .rhs {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.22em;
+    text-transform: uppercase; color: #6b5520;
+  }
+
+  /* design tokens panel */
+  .tokens {
+    max-width: 1280px; margin: 96px auto 0;
+    padding: 40px; background: var(--charcoal);
+    border: 1px solid #2a2d34;
+  }
+  .tokens h2 {
+    font-family: var(--display); font-weight: 500; font-size: 28px;
+    margin-bottom: 8px; letter-spacing: -0.01em;
+  }
+  .tokens p { color: #b0b0b0; font-size: 14px; margin-bottom: 28px; }
+  .tokens .row2 {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 24px;
+  }
+  .tokens .tok {
+    border: 1px solid #2a2d34; padding: 16px;
+  }
+  .tokens .tok .sw { height: 56px; margin-bottom: 12px; }
+  .tokens .tok .name { font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--gold); }
+  .tokens .tok .hex { font-family: var(--mono); font-size: 13px; color: var(--ink-light); margin-top: 6px; }
+  .tokens .tok .use { font-size: 12px; color: #909090; margin-top: 8px; line-height: 1.5; }
+
+  .typeset {
+    max-width: 1280px; margin: 32px auto 0;
+    padding: 40px; background: var(--charcoal);
+    border: 1px solid #2a2d34;
+  }
+  .typeset .ts-row { padding: 18px 0; border-bottom: 1px solid #2a2d34; display: grid; grid-template-columns: 200px 1fr; gap: 24px; align-items: baseline; }
+  .typeset .ts-row:last-child { border-bottom: none; }
+  .typeset .ts-row .lab { font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--gold); }
+  .typeset .display-xl { font-family: var(--display); font-weight: 500; font-size: 56px; line-height: 1.05; letter-spacing: -0.015em; }
+  .typeset .display-lg { font-family: var(--display); font-weight: 400; font-style: italic; font-size: 40px; line-height: 1.15; }
+  .typeset .body-md { font-family: var(--body); font-size: 16px; line-height: 1.55; }
+  .typeset .mono-sm { font-family: var(--mono); font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: #c8c8c8; }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <div class="page-eyebrow">PTA — LinkedIn Carousel System v1</div>
+  <h1 class="page-title">Six slide templates. <em style="font-style:italic;color:#C9A84C;font-weight:500">One brand.</em></h1>
+  <p class="page-sub">Visual reference for the six carousel slide types described in <b>MARKETING.md §3.2</b>. Rebuild these in Figma at <b>1080 × 1350px</b> using the design tokens below. Every carousel uses the same six template types, in the same order: <b>cover → premise → point (repeating) → statute pull → summary → CTA</b>.</p>
+</div>
+
+<div class="grid">
+
+  <!-- SLIDE 1 — COVER -->
+  <div class="slide-wrap">
+    <div class="slide-label"><span><b>01</b> — Cover</span><span>Slide 1 of 10</span></div>
+    <div class="slide s-cover dark">
+      <div class="mark"><span class="dot"></span>PTA · PROTOCOL &amp; TRANSFER</div>
+      <div class="num">01 / 10</div>
+      <div class="hairline"></div>
+      <div class="eyebrow">Briefing No. 04 · Q4 2026</div>
+      <div class="title">The <em>seven-step</em><br>pre-filing checklist<br>for a Ghana TTA.</div>
+      <div class="meta">
+        <span class="pill">GIPC ACT 865</span>
+        <span class="pill">L.I. 1547</span>
+        <span class="pill">10 SLIDES</span>
+      </div>
+      <div class="foot"><span>PREMIUM ADVISORY · EXCELLENT EXECUTION</span><span class="url">PTADVISORY.CO</span></div>
+    </div>
+    <p class="slide-note"><b style="color:#C9A84C">Use for slide 1 only.</b> Hook is the entire value prop in under 12 words. The italicised mid-line is the gold-coloured word — pick the one word the post lives or dies on.</p>
+  </div>
+
+  <!-- SLIDE 2 — PREMISE -->
+  <div class="slide-wrap">
+    <div class="slide-label"><span><b>02</b> — Premise</span><span>Slide 2</span></div>
+    <div class="slide s-premise cream">
+      <div class="mark"><span class="dot"></span>PTA · PROTOCOL &amp; TRANSFER</div>
+      <div class="num" style="color:#6b5520">02 / 10</div>
+      <div class="hairline" style="background:#d4cfc4"></div>
+      <div class="label">Why this matters</div>
+      <div class="body">GIPC rejected <em>31% of TTA<br>filings</em> last quarter.<br><br>The reasons are not what most<br>counsel think.</div>
+      <div class="signoff">A briefing for legal counsel and finance directors at multinationals operating in Ghana. Reading time: 4 minutes.</div>
+      <div class="foot" style="color:#5a5a5a"><span>BRIEFING · OCT 2026</span><span style="color:#6b5520">PTADVISORY.CO</span></div>
+    </div>
+    <p class="slide-note"><b style="color:#C9A84C">Use for slide 2.</b> Sets stakes. Cream background creates contrast with the dark cover. Number + emphasised phrase carry the slide — keep everything else quiet.</p>
+  </div>
+
+  <!-- SLIDE 3 — POINT -->
+  <div class="slide-wrap">
+    <div class="slide-label"><span><b>03</b> — Point</span><span>Slides 3 – 8</span></div>
+    <div class="slide s-point dark">
+      <div class="mark"><span class="dot"></span>PTA · PROTOCOL &amp; TRANSFER</div>
+      <div class="num">03 / 10</div>
+      <div class="num-large">01</div>
+      <div class="point-eyebrow">Reason one</div>
+      <div class="point-headline">The agreement is signed before the application is filed.</div>
+      <div class="point-body">GIPC reads Section 30 strictly. A TTA executed and operative before registration is, in their words, "an unregistered agreement" — and the foreign exchange transfer that follows is a separate offence under the BoG FX Act.</div>
+      <div class="foot"><span>POINT 01 · OF 05</span><span class="url">PTADVISORY.CO</span></div>
+    </div>
+    <p class="slide-note"><b style="color:#C9A84C">Reusable.</b> This is the workhorse — slides 3 through 8 all use this template, swapping the number and content. Oversized italic numeral is the visual anchor. Body text never exceeds 50 words.</p>
+  </div>
+
+  <!-- SLIDE 4 — STATUTE PULL -->
+  <div class="slide-wrap">
+    <div class="slide-label"><span><b>04</b> — Statute pull</span><span>Optional, mid-carousel</span></div>
+    <div class="slide s-statute cream">
+      <div class="mark"><span class="dot"></span>PTA · PROTOCOL &amp; TRANSFER</div>
+      <div class="num" style="color:#6b5520">06 / 10</div>
+      <div class="ribbon">The Statute</div>
+      <div class="quote-mark">"</div>
+      <div class="quote-body">No technology transfer agreement to which this Act applies shall be operative for any purpose unless it has been registered with the Centre.</div>
+      <div class="citation">GIPC Act 865 · Section 30(1)</div>
+      <div class="gloss">In plain English: an unregistered TTA is legally inert. Royalties, fees, and foreign exchange transfers made under it are exposed.</div>
+      <div class="foot" style="color:#5a5a5a"><span>STATUTORY EXTRACT</span><span style="color:#6b5520">PTADVISORY.CO</span></div>
+    </div>
+    <p class="slide-note"><b style="color:#C9A84C">Use 1–2 per carousel.</b> Drops in the actual statute language with a one-line gloss. Authority signal — your buyers know you've actually read the Act. Oversized opening quote-mark in display italic is the visual hook.</p>
+  </div>
+
+  <!-- SLIDE 5 — SUMMARY -->
+  <div class="slide-wrap">
+    <div class="slide-label"><span><b>05</b> — Summary</span><span>Slide 9</span></div>
+    <div class="slide s-summary dark">
+      <div class="mark"><span class="dot"></span>PTA · PROTOCOL &amp; TRANSFER</div>
+      <div class="num">09 / 10</div>
+      <div class="hairline"></div>
+      <div class="summary-eyebrow">The five reasons, in one place</div>
+      <div class="summary-title">Save this slide.</div>
+      <div class="summary-list">
+        <div class="row"><div class="n">01</div><div class="t">Agreement signed before filing.</div></div>
+        <div class="row"><div class="n">02</div><div class="t">Technology categorisation misclassified under L.I. 1547.</div></div>
+        <div class="row"><div class="n">03</div><div class="t">Royalty rate breaches the 6% statutory ceiling.</div></div>
+        <div class="row"><div class="n">04</div><div class="t">Related-party disclosure missing or incomplete.</div></div>
+        <div class="row"><div class="n">05</div><div class="t">No BoG approval reference attached to FX clause.</div></div>
+      </div>
+      <div class="foot"><span>SAVE FOR REFERENCE</span><span class="url">PTADVISORY.CO</span></div>
+    </div>
+    <p class="slide-note"><b style="color:#C9A84C">Use for slide 9.</b> "Save this slide" is intentional — drives the LinkedIn save metric, which weights distribution. Recaps every point in one screen.</p>
+  </div>
+
+  <!-- SLIDE 6 — CTA -->
+  <div class="slide-wrap">
+    <div class="slide-label"><span><b>06</b> — CTA</span><span>Slide 10</span></div>
+    <div class="slide s-cta cream">
+      <div class="mark"><span class="dot"></span>PTA · PROTOCOL &amp; TRANSFER</div>
+      <div class="num" style="color:#6b5520">10 / 10</div>
+      <div class="hairline" style="background:#d4cfc4"></div>
+      <div class="cta-eyebrow">If your filing is up for renewal</div>
+      <div class="cta-title">A <em>30-minute</em><br>compliance<br>audit.</div>
+      <div class="cta-body">PTA advises multinational subsidiaries in Ghana on Technology Transfer Agreements, GIPC registration, and Bank of Ghana foreign exchange compliance.<br><br>Network partners: Firmus Advisory · Globetrotters Legal Africa.</div>
+      <div class="cta-block">
+        <span class="lhs">PTADVISORY.CO</span>
+        <span class="rhs">INFO@PTADVISORY.CO</span>
+      </div>
+    </div>
+    <p class="slide-note"><b style="color:#C9A84C">Use for slide 10.</b> The only sell-slide. Soft offer (audit, not "book a call"), partner credibility, and contact. No "click here," no urgency theatrics — the brand does the work.</p>
+  </div>
+
+</div>
+
+<!-- DESIGN TOKENS -->
+<section class="tokens">
+  <h2>Design tokens</h2>
+  <p>Copy these values straight into Figma styles. Identical to <span style="color:#C9A84C">ptadvisory.co</span> production tokens — so every public asset reads as one system.</p>
+  <div class="row2">
+    <div class="tok"><div class="sw" style="background:#0A0C10;border:1px solid #2a2d34"></div><div class="name">Charcoal · primary bg</div><div class="hex">#0A0C10</div><div class="use">Cover, point, summary slides. Brand banners.</div></div>
+    <div class="tok"><div class="sw" style="background:#FAF7F2"></div><div class="name">Cream · secondary bg</div><div class="hex">#FAF7F2</div><div class="use">Premise, statute, CTA slides. Visual breathing room.</div></div>
+    <div class="tok"><div class="sw" style="background:#C9A84C"></div><div class="name">Gold · single accent</div><div class="hex">#C9A84C</div><div class="use">Numerals, accents, ribbons. One gold element per slide, never two.</div></div>
+    <div class="tok"><div class="sw" style="background:#F4F1EC"></div><div class="name">Ink · on dark</div><div class="hex">#F4F1EC</div><div class="use">All body text on charcoal slides.</div></div>
+    <div class="tok"><div class="sw" style="background:#6b5520"></div><div class="name">Gold quiet · on cream</div><div class="hex">#6B5520</div><div class="use">Gold reads too bright on cream — use the darker variant for monos and numerals.</div></div>
+    <div class="tok"><div class="sw" style="background:#C9A84C40"></div><div class="name">Hairline · rule</div><div class="hex">#C9A84C40</div><div class="use">25% gold for divider lines. 1px, never thicker.</div></div>
+  </div>
+</section>
+
+<!-- TYPOGRAPHY -->
+<section class="typeset">
+  <div class="ts-row">
+    <div class="lab">Display XL · Cormorant 56/60</div>
+    <div class="display-xl">A <span style="font-style:italic;color:#C9A84C">30-minute</span> compliance audit.</div>
+  </div>
+  <div class="ts-row">
+    <div class="lab">Display LG · Cormorant 40 italic</div>
+    <div class="display-lg">The reasons are not what most counsel think.</div>
+  </div>
+  <div class="ts-row">
+    <div class="lab">Body · DM Sans 16/26</div>
+    <div class="body-md">GIPC reads Section 30 strictly. A TTA executed and operative before registration is, in their words, "an unregistered agreement" — and the foreign exchange transfer that follows is a separate offence under the BoG FX Act.</div>
+  </div>
+  <div class="ts-row">
+    <div class="lab">Mono · DM Mono 11 / 0.22em</div>
+    <div class="mono-sm">PREMIUM ADVISORY · EXCELLENT EXECUTION</div>
+  </div>
+</section>
+
+</body>
+</html>

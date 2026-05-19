@@ -9,7 +9,7 @@ import { connect, defaultDbPath, defaultMigrationsDir } from './db/connection.js
 import { runMigrations } from './db/migrations.js';
 import { getDeviceId } from './db/deviceId.js';
 import { reconcileAllCustomersOnBoot } from './services/boot.js';
-import { registerIpcHandlers, registerSession5Handlers, registerSession6Handlers, registerSession7Handlers, registerSession8Handlers, registerSession9Handlers, registerSession11Handlers, registerSession11SuppliersHandlers, registerSession12AuditHandlers, registerSession12BreakageHandlers, registerSession12ReprintHandlers, registerSession12StockHandlers, registerSession14ReprintHandlers, registerSession15PeriodHandlers, registerSession15ExcHandlers, registerSession16ReorderHandlers, registerSession17ExpenseHandlers, registerSession18RecoveryHandlers, registerBackupHandlers, registerStatementHandlers, registerCpoHandlers, registerReturnsHandlers, registerPromoHandlers } from './ipc/handlers.js';
+import { registerIpcHandlers, registerSession5Handlers, registerSession6Handlers, registerSession7Handlers, registerSession8Handlers, registerSession9Handlers, registerSession11Handlers, registerSession11SuppliersHandlers, registerSession12AuditHandlers, registerSession12BreakageHandlers, registerSession12ReprintHandlers, registerSession12StockHandlers, registerSession14ReprintHandlers, registerSession15PeriodHandlers, registerSession15ExcHandlers, registerSession16ReorderHandlers, registerSession17ExpenseHandlers, registerSession18RecoveryHandlers, registerBackupHandlers, registerStatementHandlers, registerCpoHandlers, registerReturnsHandlers, registerSupplierPaymentsHandlers, registerReportsHandlers } from './ipc/handlers.js';
 
 log.initialize();
 log.transports.file.level = 'info';
@@ -112,7 +112,8 @@ app.whenReady().then(() => {
   registerStatementHandlers(ipcMain, db);
   registerCpoHandlers(ipcMain, db, deviceId);
   registerReturnsHandlers(ipcMain, db, deviceId);
-  registerPromoHandlers(ipcMain, db, deviceId);
+  registerSupplierPaymentsHandlers(ipcMain, db, deviceId);
+  registerReportsHandlers(ipcMain, db, deviceId);
 
   createMainWindow();
 

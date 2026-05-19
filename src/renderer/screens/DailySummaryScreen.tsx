@@ -5,27 +5,12 @@ import { counter } from '../lib/ipc';
 import { useSession } from '../store/session';
 import { AppHeader } from '../components/AppHeader';
 import { formatMoney, formatMoneyWithCurrency } from '../../shared/lib/money';
+import type { DailySummaryGenerateResponse } from '../../shared/types/ipc';
 
 interface SummaryRow { date: string; locationId: string; revenuePesewas: number; numSales: number;
   shrinkageRate: number | null; generatedAt: string; whatsappSentAt: string | null }
 
-interface FullSummary {
-  date: string; locationId: string;
-  totalRevenuePesewas: number; totalCostOfGoodsSoldPesewas: number;
-  grossMarginPesewas: number; totalBreakageValuePesewas: number;
-  totalConsumptionValuePesewas: number; cashCountVariancePesewas: number;
-  totalExpensesValuePesewas?: number;
-  expensesByCategory?: Array<{ category: string; totalPesewas: number; count: number }>;
-  stocktakeShrinkageValuePesewas: number | null; stocktakeShrinkageRate: number | null;
-  creditExtendedPesewas: number; creditCollectedPesewas: number;
-  totalOutstandingCreditPesewas: number;
-  numSales: number; numUniqueCustomers: number;
-  topSkus: Array<{ sku: string; name: string; revenuePesewas: number; unitsSold: number }>;
-  reorderAlerts: Array<{ sku: string; name: string; unitsOnHand: number; reorderThreshold: number }>;
-  shiftSummaries: Array<{ shiftId: string; workerName: string;
-    totalSalesPesewas: number; cashVariancePesewas: number | null; closedAt: string | null }>;
-  generatedAt: string;
-}
+type FullSummary = DailySummaryGenerateResponse;
 
 function todayIso(): string {
   const d = new Date();
@@ -80,14 +65,14 @@ export default function DailySummaryScreen({ onExit }: { onExit: () => void }) {
     setSelectedDate(date);
     void refreshClose(date);
     const r = await counter.getDailySummary({ date });
-    if (r.success) setDetail(r.data as FullSummary | null);
+    if (r.success) setDetail(r.data);
   }
   async function generate() {
     setError(null);
     const r = await counter.generateDailySummary({ date: selectedDate });
     if (!r.success) { setError(r.error); return; }
     setInfo(`Generated summary for ${selectedDate}.`);
-    setDetail(r.data as FullSummary);
+    setDetail(r.data);
     await refreshList();
   }
 

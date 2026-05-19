@@ -1,7 +1,7 @@
 // Preload: the only bridge between renderer and main.
 
 import { contextBridge, ipcRenderer } from 'electron';
-import { IPC_CHANNELS, IPC_CHANNELS_S5, IPC_CHANNELS_S6, IPC_CHANNELS_S7, IPC_CHANNELS_S8, IPC_CHANNELS_S9, IPC_CHANNELS_S11, IPC_CHANNELS_S11_SUP, IPC_CHANNELS_S12_AUDIT, IPC_CHANNELS_S12_BREAK, IPC_CHANNELS_S12_REPRINT, IPC_CHANNELS_S12_STOCK, IPC_CHANNELS_S14_REPRINT, IPC_CHANNELS_S15_PERIOD, IPC_CHANNELS_S15_EXC, IPC_CHANNELS_S16_REORDER, IPC_CHANNELS_S17_EXPENSES, IPC_CHANNELS_S18_RECOVERY, IPC_CHANNELS_BACKUP, IPC_CHANNELS_STATEMENT, IPC_CHANNELS_CPO, IPC_CHANNELS_RETURNS } from '../shared/types/ipc.js';
+import { IPC_CHANNELS, IPC_CHANNELS_S5, IPC_CHANNELS_S6, IPC_CHANNELS_S7, IPC_CHANNELS_S8, IPC_CHANNELS_S9, IPC_CHANNELS_S11, IPC_CHANNELS_S11_SUP, IPC_CHANNELS_S12_AUDIT, IPC_CHANNELS_S12_BREAK, IPC_CHANNELS_S12_REPRINT, IPC_CHANNELS_S12_STOCK, IPC_CHANNELS_S14_REPRINT, IPC_CHANNELS_S15_PERIOD, IPC_CHANNELS_S15_EXC, IPC_CHANNELS_S16_REORDER, IPC_CHANNELS_S17_EXPENSES, IPC_CHANNELS_S18_RECOVERY, IPC_CHANNELS_BACKUP, IPC_CHANNELS_STATEMENT, IPC_CHANNELS_CPO, IPC_CHANNELS_RETURNS, IPC_CHANNELS_SUP_PAY, IPC_CHANNELS_REPORTS } from '../shared/types/ipc.js';
 import type {
   BreakageReportRequest, CashDropRecordRequest, ConsumptionLogRequest,
   CustomerCreateRequest, CustomerUpdateRequest,
@@ -10,7 +10,7 @@ import type {
   ProductUnitAddRequest, ProductUnitUpdateRequest,
   PricingTierAddRequest, PricingTierUpdateRequest,
   ProductAddRequest, ProductUpdateRequest,
-  SaleCompleteRequest, StockReceiveRequest,
+  SaleCompleteRequest, SaleRepriceLinesRequest, StockReceiveRequest,
   StocktakeCompleteRequest, StocktakeRecordLineRequest,
   WorkerAddRequest,
   SetupCreateOwnerRequest,
@@ -18,6 +18,10 @@ import type {
   AuditListRequest,
   BreakageReviewListRequest,
   ReprintDiscardRequest, ReprintRetryRequest,
+  SupplierPaymentListRequest, SupplierPaymentRecordRequest,
+  SupplierStatementsListRequest,
+  ReportsOverviewRequest,
+  ReportsSalesRequest, ReportsMarginRequest, ReportsInventoryRequest,
 } from '../shared/types/ipc.js';
 
 const api = {
@@ -48,6 +52,8 @@ const api = {
     ipcRenderer.invoke(IPC_CHANNELS.CUSTOMER_SEARCH, { query, limit }),
   completeSale: (req: SaleCompleteRequest) =>
     ipcRenderer.invoke(IPC_CHANNELS.SALE_COMPLETE, req),
+  repriceLines: (req: SaleRepriceLinesRequest) =>
+    ipcRenderer.invoke(IPC_CHANNELS.SALE_REPRICE_LINES, req),
 
   // voids
   listRecentSales: (limit?: number) =>
@@ -218,6 +224,8 @@ const api = {
   // --- Session 14: on-demand receipt reprint ---
   reprintSaleReceipt: (saleId: string) =>
     ipcRenderer.invoke(IPC_CHANNELS_S14_REPRINT.SALE_REPRINT_RECEIPT, { saleId }),
+  getSaleReceipt: (saleId: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS_S14_REPRINT.SALE_GET_RECEIPT, { saleId }),
 
   // --- Session 15: period close ---
   periodGetActiveClose: (businessDate: string) =>
@@ -300,6 +308,24 @@ const api = {
   }) => ipcRenderer.invoke(IPC_CHANNELS_RETURNS.RETURN_RECORD, req),
   listReturnsForCustomer: (customerId: string, limit?: number) =>
     ipcRenderer.invoke(IPC_CHANNELS_RETURNS.RETURN_LIST_FOR_CUSTOMER, { customerId, limit }),
+
+  // --- Supplier payments ---
+  listSupplierPayments: (req: SupplierPaymentListRequest) =>
+    ipcRenderer.invoke(IPC_CHANNELS_SUP_PAY.SUPPLIER_PAYMENT_LIST, req),
+  recordSupplierPayment: (req: SupplierPaymentRecordRequest) =>
+    ipcRenderer.invoke(IPC_CHANNELS_SUP_PAY.SUPPLIER_PAYMENT_RECORD, req),
+  listSupplierStatements: (req: SupplierStatementsListRequest) =>
+    ipcRenderer.invoke(IPC_CHANNELS_SUP_PAY.SUPPLIER_STATEMENTS_LIST, req),
+
+  // --- Reports / dashboard ---
+  reportsOverview: (req: ReportsOverviewRequest = {}) =>
+    ipcRenderer.invoke(IPC_CHANNELS_REPORTS.REPORTS_OVERVIEW, req),
+  reportsSales: (req: ReportsSalesRequest) =>
+    ipcRenderer.invoke(IPC_CHANNELS_REPORTS.REPORTS_SALES, req),
+  reportsMargin: (req: ReportsMarginRequest) =>
+    ipcRenderer.invoke(IPC_CHANNELS_REPORTS.REPORTS_MARGIN, req),
+  reportsInventory: (req: ReportsInventoryRequest = {}) =>
+    ipcRenderer.invoke(IPC_CHANNELS_REPORTS.REPORTS_INVENTORY, req),
 };
 
 contextBridge.exposeInMainWorld('counter', api);

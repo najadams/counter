@@ -15,6 +15,18 @@ npm run db:reset      # wipes ./dev.db and reapplies all migrations
 npm run dev           # vite + electron in dev mode (auto-cleans dist-electron)
 ```
 
+Two seed scripts are also available, depending on the situation:
+
+- `npm run seed:reset` — destructive. Nukes business data (sales, customers,
+  products, stock, etc.) and replants a realistic fixture set. Keeps workers,
+  locations, lookup tables, schema_migrations, device_config — so the
+  first-run wizard doesn't re-fire. Useful for testing whole workflows from
+  a known-good starting state.
+- `npm run seed:demo` — idempotent additive. Inserts a handful of `DEMO_*`
+  products with two units each (canonical + bigger purchase unit), primary
+  unit selections, opening stock. Skips SKUs that already exist. Useful for
+  poking the units / pricing UI without touching anything else.
+
 If the renderer hangs on "Loading…" after edits to main/preload code, it's
 almost always a stale `dist-electron` cache. The `predev` script in
 `package.json` wipes it automatically on every `npm run dev`. To force

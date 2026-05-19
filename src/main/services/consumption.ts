@@ -13,6 +13,7 @@ import type { Database as DB } from 'better-sqlite3';
 import { v4 as uuidv4 } from 'uuid';
 import { logAudit } from '../db/audit.js';
 import { insertStockMovement } from './stockMovements.js';
+import { assertNotSealed } from './periods.js';
 
 export interface ConsumptionUsage {
   workerId: string;
@@ -117,6 +118,11 @@ export function recordConsumption(
     unitsPaid: paid,
     costToWorkerPesewas: paid * product.walk_in_price_pesewas,
   };
+
+  // Day-lock guard: worker consumption changes stock and (for PAID) wage
+  // deductions — both must be locked once the day is sealed.
+  const todayISO = new Date().toISOString().slice(0, 10);
+  assertNotSealed(db, input.locationId, todayISO, 'recording worker consumption');
 
   const tx = db.transaction(() => {
     if (free > 0) {

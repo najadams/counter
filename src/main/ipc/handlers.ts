@@ -13,6 +13,7 @@ import {
   type ProductGetStockRequest, type ProductGetStockResponse,
   type ProductSearchRequest, type ProductSearchResponse,
   type SaleCompleteRequest, type SaleCompleteResponse,
+  type SaleRepriceLinesRequest, type SaleRepriceLinesResponse,
   type SaleListRecentRequest, type SaleListRecentResponse,
   type SaleVoidRequest, type SaleVoidResponse,
   type ShiftCloseRequest, type ShiftCloseResponse,
@@ -33,6 +34,7 @@ import {
   computeAndCloseShift, getOpenShift, openShift, submitClosingCount,
 } from '../services/shifts.js';
 import { completeSale, getShopHeader, searchProducts } from '../services/sales.js';
+import { priceForUnit } from '../services/productUnits.js';
 import { searchCustomers } from '../services/customers.js';
 import { unitsOnHand } from '../services/stockMovements.js';
 import { listRecentSales, voidSale } from '../services/voids.js';
@@ -177,6 +179,8 @@ export function registerIpcHandlers(
         shiftId: req.shiftId, workerId: w.workerId, workerName: w.fullName,
         locationId: DEFAULT_LOCATION_ID, channel: req.channel, lines: req.lines,
         discountPesewas: req.discountPesewas, discountReason: req.discountReason,
+        supervisorWorkerId: req.supervisorWorkerId, supervisorPin: req.supervisorPin,
+        payments: req.payments,
         paymentMethod: req.paymentMethod, paymentReference: req.paymentReference,
         cashGivenPesewas: req.cashGivenPesewas, customerId: req.customerId,
         deviceId, shopName: header.shopName, shopSubtitle: header.shopSubtitle,
@@ -184,6 +188,21 @@ export function registerIpcHandlers(
     },
     IPC_CHANNELS.SALE_COMPLETE,
   ));
+
+  ipcMain.handle(IPC_CHANNELS.SALE_REPRICE_LINES,
+    wrap<SaleRepriceLinesRequest, SaleRepriceLinesResponse>(
+      (req) => {
+        requireWorker();
+        const lines = req.lines.map((l) => ({
+          productId: l.productId,
+          unitId: l.unitId,
+          unitPricePesewas: priceForUnit(db, l.productId, l.unitId, req.channel),
+        }));
+        return { channel: req.channel, lines };
+      },
+      IPC_CHANNELS.SALE_REPRICE_LINES,
+    ),
+  );
 
   // --- voids -------------------------------------------------------------
   ipcMain.handle(IPC_CHANNELS.SALE_LIST_RECENT, wrap<SaleListRecentRequest, SaleListRecentResponse>(
@@ -1083,6 +1102,7 @@ export function registerSession12StockHandlers(
 import {
   IPC_CHANNELS_S14_REPRINT,
   type SaleReprintRequest, type SaleReprintResponse,
+  type SaleGetReceiptRequest, type SaleGetReceiptResponse,
 } from '../../shared/types/ipc.js';
 
 export function registerSession14ReprintHandlers(
@@ -1121,6 +1141,53 @@ export function registerSession14ReprintHandlers(
         return { ok: false, printed: false, error: `${result.reason}: ${result.message}` };
       },
       IPC_CHANNELS_S14_REPRINT.SALE_REPRINT_RECEIPT,
+    ),
+  );
+
+  // Read-only receipt fetch — used by the customer-detail screen to show the
+  // line items behind a credit sale, and by any "Print again" flow that wants
+  // to render the receipt in the renderer (OS print dialog) rather than fire
+  // the thermal printer. Available to any logged-in worker.
+  ipcMain.handle(IPC_CHANNELS_S14_REPRINT.SALE_GET_RECEIPT,
+    wrap<SaleGetReceiptRequest, SaleGetReceiptResponse>(
+      (req) => {
+        requireWorker();
+        const receipt = buildSaleReceiptForReprint(db, req.saleId);
+        if (!receipt) throw new Error(`sale ${req.saleId} not found`);
+
+        // Was the sale on credit at all? If not, there's no "outstanding"
+        // concept — the till took payment at sale time and that's the end
+        // of it. customer_payment_allocations is only populated for
+        // credit-debt payoffs, so its absence isn't evidence of unpaid
+        // money on a cash sale.
+        const flags = db.prepare(
+          'SELECT is_credit FROM sales WHERE id = ?'
+        ).get(req.saleId) as { is_credit: number } | undefined;
+        if (!flags || flags.is_credit === 0) {
+          return {
+            receipt,
+            amountOutstandingPesewas: null,
+            amountPaidPesewas: receipt.totalPesewas,
+          };
+        }
+
+        // Credit sale: combine any cash/MoMo portion taken at sale time
+        // (sale_payments where method != 'CREDIT') with later allocations.
+        const tenderRow = db.prepare(
+          `SELECT COALESCE(SUM(amount_pesewas), 0) AS paid
+             FROM sale_payments
+            WHERE sale_id = ? AND payment_method != 'CREDIT'`
+        ).get(req.saleId) as { paid: number };
+        const allocRow = db.prepare(
+          `SELECT COALESCE(SUM(amount_pesewas), 0) AS paid
+             FROM customer_payment_allocations
+            WHERE sale_id = ?`
+        ).get(req.saleId) as { paid: number };
+        const amountPaidPesewas = tenderRow.paid + allocRow.paid;
+        const amountOutstandingPesewas = Math.max(0, receipt.totalPesewas - amountPaidPesewas);
+        return { receipt, amountOutstandingPesewas, amountPaidPesewas };
+      },
+      IPC_CHANNELS_S14_REPRINT.SALE_GET_RECEIPT,
     ),
   );
 }
@@ -1641,66 +1708,132 @@ export function registerReturnsHandlers(
   );
 }
 
-// --- Wave D: Bonus-unit promotions ---------------------------------------
+// --- Supplier payments admin ----------------------------------------------
 
 import {
-  IPC_CHANNELS_PROMO,
-  type PromoListResponse, type PromoAddRequest, type PromoAddResponse,
-  type PromoDeactivateRequest, type PromoDeactivateResponse,
-  type PromoBonusByDayRequest, type PromoBonusByDayResponse,
+  IPC_CHANNELS_SUP_PAY,
+  type SupplierPaymentListRequest, type SupplierPaymentListResponse,
+  type SupplierPaymentRecordRequest, type SupplierPaymentRecordResponse,
+  type SupplierStatementsListRequest, type SupplierStatementsListResponse,
 } from '../../shared/types/ipc.js';
 import {
-  addPromotion, bonusUnitsByDay, deactivatePromotion, listActivePromotions,
-} from '../services/promotions.js';
+  listSupplierPayments, listSupplierStatements, recordSupplierPayment,
+} from '../services/supplierPaymentsAdmin.js';
 
-export function registerPromoHandlers(
+export function registerSupplierPaymentsHandlers(
   ipcMain: import('electron').IpcMain,
   db: import('better-sqlite3').Database,
   deviceId: string,
 ): void {
-  ipcMain.handle(IPC_CHANNELS_PROMO.PROMO_LIST_ACTIVE,
-    wrap<void, PromoListResponse>(
-      () => { requireWorker(); return { rows: listActivePromotions(db) }; },
-      IPC_CHANNELS_PROMO.PROMO_LIST_ACTIVE,
+  ipcMain.handle(IPC_CHANNELS_SUP_PAY.SUPPLIER_PAYMENT_LIST,
+    wrap<SupplierPaymentListRequest, SupplierPaymentListResponse>(
+      (req) => { requireWorker(); return listSupplierPayments(db, req ?? {}); },
+      IPC_CHANNELS_SUP_PAY.SUPPLIER_PAYMENT_LIST,
     ),
   );
 
-  ipcMain.handle(IPC_CHANNELS_PROMO.PROMO_ADD,
-    wrap<PromoAddRequest, PromoAddResponse>(
+  ipcMain.handle(IPC_CHANNELS_SUP_PAY.SUPPLIER_PAYMENT_RECORD,
+    wrap<SupplierPaymentRecordRequest, SupplierPaymentRecordResponse>(
       (req) => {
-        const w = requireOwnerLike();
-        return addPromotion(db, {
-          productId: req.productId,
-          appliesToUnitId: req.appliesToUnitId ?? null,
-          channel: req.channel ?? null,
-          qtyBuy: req.qtyBuy, qtyGetFree: req.qtyGetFree,
-          validFrom: req.validFrom ?? null, validTo: req.validTo ?? null,
-          supplierId: req.supplierId ?? null, notes: req.notes ?? null,
-          workerId: w.workerId, deviceId,
+        const w = requireWorker();
+        return recordSupplierPayment(db, {
+          supplierId: req.supplierId,
+          amountPesewas: req.amountPesewas,
+          paymentMethod: req.paymentMethod,
+          paymentReference: req.paymentReference ?? null,
+          paidAt: req.paidAt ?? null,
+          notes: req.notes ?? null,
+          actorWorkerId: w.workerId,
+          deviceId,
         });
       },
-      IPC_CHANNELS_PROMO.PROMO_ADD,
+      IPC_CHANNELS_SUP_PAY.SUPPLIER_PAYMENT_RECORD,
     ),
   );
 
-  ipcMain.handle(IPC_CHANNELS_PROMO.PROMO_DEACTIVATE,
-    wrap<PromoDeactivateRequest, PromoDeactivateResponse>(
-      (req) => {
-        const w = requireOwnerLike();
-        deactivatePromotion(db, req.id, w.workerId);
-        return { ok: true };
-      },
-      IPC_CHANNELS_PROMO.PROMO_DEACTIVATE,
-    ),
-  );
-
-  ipcMain.handle(IPC_CHANNELS_PROMO.PROMO_BONUS_BY_DAY,
-    wrap<PromoBonusByDayRequest, PromoBonusByDayResponse>(
+  ipcMain.handle(IPC_CHANNELS_SUP_PAY.SUPPLIER_STATEMENTS_LIST,
+    wrap<SupplierStatementsListRequest, SupplierStatementsListResponse>(
       (req) => {
         requireWorker();
-        return { rows: bonusUnitsByDay(db, req.dateISO) };
+        return { rows: listSupplierStatements(db, req?.includeInactive ?? false) };
       },
-      IPC_CHANNELS_PROMO.PROMO_BONUS_BY_DAY,
+      IPC_CHANNELS_SUP_PAY.SUPPLIER_STATEMENTS_LIST,
+    ),
+  );
+}
+
+// --- Reports / dashboard --------------------------------------------------
+
+import {
+  IPC_CHANNELS_REPORTS,
+  type ReportsOverviewRequest, type ReportsOverviewResponse,
+  type ReportsSalesRequest, type ReportsSalesResponse,
+  type ReportsMarginRequest, type ReportsMarginResponse,
+  type ReportsInventoryRequest, type ReportsInventoryResponse,
+} from '../../shared/types/ipc.js';
+import {
+  getReportsOverview, getSalesReport, getMarginReport, getInventoryReport,
+} from '../services/reports.js';
+
+export function registerReportsHandlers(
+  ipcMain: import('electron').IpcMain,
+  db: import('better-sqlite3').Database,
+  _deviceId: string,
+): void {
+  ipcMain.handle(IPC_CHANNELS_REPORTS.REPORTS_OVERVIEW,
+    wrap<ReportsOverviewRequest, ReportsOverviewResponse>(
+      (req) => {
+        const w = requireWorker();
+        return getReportsOverview(db, {
+          actorWorkerId: w.workerId,
+          locationId: req?.locationId,
+          asOfDateISO: req?.asOfDateISO,
+        });
+      },
+      IPC_CHANNELS_REPORTS.REPORTS_OVERVIEW,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.REPORTS_SALES,
+    wrap<ReportsSalesRequest, ReportsSalesResponse>(
+      (req) => {
+        const w = requireWorker();
+        return getSalesReport(db, {
+          actorWorkerId: w.workerId,
+          fromDate: req.fromDate,
+          toDate: req.toDate,
+          groupBy: req.groupBy,
+        });
+      },
+      IPC_CHANNELS_REPORTS.REPORTS_SALES,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.REPORTS_MARGIN,
+    wrap<ReportsMarginRequest, ReportsMarginResponse>(
+      (req) => {
+        const w = requireWorker();
+        return getMarginReport(db, {
+          actorWorkerId: w.workerId,
+          fromDate: req.fromDate,
+          toDate: req.toDate,
+        });
+      },
+      IPC_CHANNELS_REPORTS.REPORTS_MARGIN,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.REPORTS_INVENTORY,
+    wrap<ReportsInventoryRequest, ReportsInventoryResponse>(
+      (req) => {
+        const w = requireWorker();
+        return getInventoryReport(db, {
+          actorWorkerId: w.workerId,
+          locationId: req?.locationId,
+          velocityWindowDays: req?.velocityWindowDays,
+        });
+      },
+      IPC_CHANNELS_REPORTS.REPORTS_INVENTORY,
     ),
   );
 }

@@ -29,7 +29,7 @@ const F_KEYS: Array<{ k: string; t: string }> = [
 
 export function PinCardsPrintScreen({ onExit }: { onExit: () => void }) {
   const [workers, setWorkers] = useState<Worker[]>([]);
-  const [shopName, setShopName] = useState<string>('Counter');
+  const [shopName] = useState<string>('Counter');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {

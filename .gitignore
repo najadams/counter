@@ -2,31 +2,29 @@ node_modules
 dist
 dist-electron
 build/output
+release/
 *.log
 .DS_Store
 counter.db
 counter.db-shm
 counter.db-wal
+dev.db
+dev.db-shm
+dev.db-wal
 *.db.bak
 .env
 .env.local
 .vite-cache
 coverage
 
-# Sandbox-only verification artifacts (Cowork session 1 — safe to delete):
-_verify.mjs
-_verify_seed.mjs
+# Sandbox-only verification artifacts — pattern catches everything we
+# leave behind during development.
+_verify*.mjs
+_verify*.mts
+_probe*.mjs
+_test_*.mjs
 _diag.mjs
 .write_test
-_verify_auth.mjs
-_verify_shifts.mjs
-_verify_receipt.mts
-_verify_sales.mjs
-_verify_session4.mjs
-_verify_session5.mjs
-_verify_session6.mjs
-_verify_session7.mjs
-_verify_session8.mjs
-_verify_session9a.mjs
-_verify_session9b.mjs
-_verify_session10.mjs
+
+# Vitest re-writes vitest.config.ts.timestamp-*.mjs on every run.
+vitest.config.ts.timestamp*.mjs

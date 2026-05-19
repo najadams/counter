@@ -10,6 +10,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { logAudit } from '../db/audit.js';
 import { insertStockMovement, unitsOnHand } from './stockMovements.js';
 import { getUnit } from './productUnits.js';
+import { assertNotSealed } from './periods.js';
 import { verifyPin } from './workers.js';
 
 const SUPERVISOR_ROLES = new Set(['SUPERVISOR', 'OWNER', 'FOUNDER']);
@@ -91,6 +92,12 @@ export function startStocktake(
   const eventId = `st-${uuidv4()}`;
   const now = new Date().toISOString();
 
+  // Day-lock guard: can't open a stocktake on a sealed business day —
+  // started_at would land in the sealed window and the eventual completion
+  // would emit STOCK_FOUND / STOCKTAKE_VARIANCE_LOSS movements that distort
+  // the sealed-day totals.
+  assertNotSealed(db, input.locationId, now.slice(0, 10), 'starting a stocktake');
+
   const tx = db.transaction(() => {
     db.prepare(
       `INSERT INTO stocktake_events (
@@ -148,7 +155,10 @@ export function recordStocktakeCount(
   productId: string,
   countedQty: number,
   workerId: string,
-  deviceId: string,
+  // Held in the signature for parity with start/commit/adjust which DO log
+  // an audit row per call. recordStocktakeCount currently mutates a draft
+  // line in place and emits no audit row — wire one up before removing.
+  _deviceId: string,
   unitId?: string | null,
 ): { variance: number; varianceValuePesewas: number; canonicalCount: number } {
   if (!Number.isInteger(countedQty) || countedQty < 0) {
@@ -281,6 +291,10 @@ export function completeStocktake(
   let productsCounted = 0;
   let productsWithVariance = 0;
   const now = new Date().toISOString();
+
+  // Day-lock guard: completion emits stock_movements stamped at `now`. If
+  // today is sealed, refuse — the variance would distort sealed-day totals.
+  assertNotSealed(db, event.location_id, now.slice(0, 10), 'completing a stocktake');
 
   const tx = db.transaction(() => {
     for (const line of lines) {

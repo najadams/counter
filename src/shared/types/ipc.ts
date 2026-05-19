@@ -22,6 +22,7 @@ export const IPC_CHANNELS = {
   PRODUCT_GET_STOCK: 'product:get-stock',
   CUSTOMER_SEARCH: 'customer:search',
   SALE_COMPLETE: 'sale:complete',
+  SALE_REPRICE_LINES: 'sale:reprice-lines',
 
   // Voids
   SALE_LIST_RECENT: 'sale:list-recent',
@@ -101,10 +102,20 @@ export interface ShiftCloseResponse {
 export type SaleChannel = 'WALK_IN' | 'WHOLESALE' | 'ROUTE';
 
 export interface ProductSearchRequest { query: string; channel: SaleChannel; limit?: number }
+// Unit fields come from product_units (migration 0029): defaultUnitId is the
+// smallest active sellable unit; defaultUnitFactor converts display-unit
+// quantities to canonical for stock movements; canonicalChannelPricePesewas
+// is the per-canonical-unit price at the requested channel. The renderer
+// MUST round-trip these into the cart line — sales.ts uses them to scale
+// stock_movements quantities correctly. See SaleScreen.tsx addHitToCart.
 export interface ProductSearchResponse {
   products: Array<{
     id: string; sku: string; name: string; brand: string | null; category: string;
     unitPricePesewas: number; costPricePesewas: number; unitsOnHand: number; isReturnable: boolean;
+    defaultUnitId: string | null;
+    defaultUnitName: string;
+    defaultUnitFactor: number;
+    canonicalChannelPricePesewas: number;
   }>;
 }
 export interface ProductGetStockRequest { productId: string }
@@ -151,6 +162,26 @@ export interface SaleCompleteResponse {
   changePesewas: number | null;
   printerFailed: boolean;
   printerError?: string;
+  /** Receipt struct the renderer can render for on-screen / browser-print. */
+  receipt: import('../lib/receipt.js').SaleReceipt;
+}
+
+// Re-price an existing cart's lines for a new channel — no clearing,
+// no quantity changes, just fresh per-unit prices for the new channel.
+export interface SaleRepriceLinesRequest {
+  channel: 'WALK_IN' | 'WHOLESALE' | 'ROUTE';
+  lines: Array<{
+    productId: string;
+    unitId: string | null;
+  }>;
+}
+export interface SaleRepriceLinesResponse {
+  channel: 'WALK_IN' | 'WHOLESALE' | 'ROUTE';
+  lines: Array<{
+    productId: string;
+    unitId: string | null;
+    unitPricePesewas: number;
+  }>;
 }
 
 // --- voids -----------------------------------------------------------------
@@ -317,7 +348,8 @@ export interface StocktakeListRecentResponse {
   events: Array<{ id: string; status: string; startedAt: string; completedAt: string | null;
     productsCounted: number; productsWithVariance: number;
     totalLossValuePesewas: number; totalFoundValuePesewas: number;
-    totalExpectedStockValuePesewas: number; shrinkageRate: number | null }>;
+    totalExpectedStockValuePesewas: number; shrinkageRate: number | null;
+    notes: string | null }>;
 }
 export interface StocktakeGetWithLinesRequest { eventId: string }
 export interface StocktakeGetWithLinesResponse {
@@ -342,11 +374,18 @@ export interface CashDropGetExpectedRequest { shiftId: string }
 export interface CashDropGetExpectedResponse { expectedCashPesewas: number }
 
 export interface DailySummaryGenerateRequest { date: string; locationId?: string }
+// Mirrors the DailySummary shape returned by dailySummaries.ts. The list
+// endpoint deliberately returns a narrower shape with `date` instead of
+// `summaryDate` — keep them separate; do not merge.
 export interface DailySummaryGenerateResponse {
-  date: string; locationId: string;
+  id: string;
+  summaryDate: string; locationId: string;
   totalRevenuePesewas: number; totalCostOfGoodsSoldPesewas: number;
   grossMarginPesewas: number; totalBreakageValuePesewas: number;
-  totalConsumptionValuePesewas: number; cashCountVariancePesewas: number;
+  totalConsumptionValuePesewas: number;
+  totalExpensesValuePesewas: number;
+  expensesByCategory: Array<{ category: string; totalPesewas: number; count: number }>;
+  cashCountVariancePesewas: number;
   stocktakeShrinkageValuePesewas: number | null; stocktakeShrinkageRate: number | null;
   creditExtendedPesewas: number; creditCollectedPesewas: number;
   totalOutstandingCreditPesewas: number;
@@ -356,6 +395,7 @@ export interface DailySummaryGenerateResponse {
   shiftSummaries: Array<{ shiftId: string; workerName: string;
     totalSalesPesewas: number; cashVariancePesewas: number | null; closedAt: string | null }>;
   generatedAt: string;
+  whatsappSentAt: string | null;
 }
 export interface DailySummaryGetRequest { date: string; locationId?: string }
 export type DailySummaryGetResponse = DailySummaryGenerateResponse | null;
@@ -392,7 +432,10 @@ export interface ProductAdminListResponse {
     primarySupplierId: string | null;
     defaultLeadTimeDays: number; shelfLifeDays: number | null;
     countClass: 'A' | 'B' | 'C' | null;
+    primaryPurchaseUnitId: string | null;
+    primarySaleUnitId: string | null;
     active: boolean; unitsOnHand: number;
+    units: Array<{ id: string; unitName: string; conversionFactor: number }>;
   }>;
 }
 
@@ -406,8 +449,24 @@ export interface ProductAddRequest {
   primarySupplierId?: string | null;
   defaultLeadTimeDays?: number; shelfLifeDays?: number | null;
   countClass?: 'A' | 'B' | 'C' | null;
+  /**
+   * Optional sellable/purchasable units (CRATE, PACK, BAG_50KG, etc).
+   * Created in the same transaction as the product.
+   */
+  units?: Array<{
+    unitName: string;
+    conversionFactor: number;
+    pricePesewas: number;
+    isSaleUnit?: boolean;
+    isPurchaseUnit?: boolean;
+    notes?: string | null;
+  }>;
 }
-export interface ProductAddResponse { productId: string; warnings: string[] }
+export interface ProductAddResponse {
+  productId: string;
+  warnings: string[];
+  unitIds: string[];
+}
 
 export interface ProductUpdateRequest {
   productId: string;
@@ -422,6 +481,8 @@ export interface ProductUpdateRequest {
     defaultLeadTimeDays: number; shelfLifeDays: number | null;
     barcode: string | null;
     countClass: 'A' | 'B' | 'C' | null;
+    primaryPurchaseUnitId: string | null;
+    primarySaleUnitId: string | null;
   }>;
 }
 export interface ProductUpdateResponse { warnings: string[] }
@@ -517,6 +578,12 @@ export interface SaleGetLinesResponse {
   lines: Array<{
     productId: string; productSku: string; productName: string;
     quantity: number; unitPricePesewas: number; unitsOnHand: number;
+    // Unit info needed when re-loading into the cart on duplicate. unitId is
+    // null for legacy pre-0015 sales; the renderer should treat those as the
+    // synthetic UNIT (factor 1).
+    unitId: string | null;
+    unitName: string;
+    factor: number;
   }>;
 }
 
@@ -873,6 +940,7 @@ export interface StockHistoryResponse {
 
 export const IPC_CHANNELS_S14_REPRINT = {
   SALE_REPRINT_RECEIPT: 'sale:reprint-receipt',
+  SALE_GET_RECEIPT: 'sale:get-receipt',
 } as const;
 
 export interface SaleReprintRequest { saleId: string }
@@ -880,6 +948,19 @@ export interface SaleReprintResponse {
   ok: boolean;
   printed: boolean;
   error?: string;
+}
+
+export interface SaleGetReceiptRequest { saleId: string }
+export interface SaleGetReceiptResponse {
+  receipt: import('../lib/receipt.js').SaleReceipt;
+  /**
+   * Outstanding balance on this sale (pesewas), 0 for fully-paid credit
+   * sales. NULL for non-credit (cash/MoMo) sales — there's no "outstanding"
+   * concept for them and the UI hides the credit-status block.
+   */
+  amountOutstandingPesewas: number | null;
+  /** Sum of payments against this sale (tenders at sale time + later allocations). */
+  amountPaidPesewas: number;
 }
 
 // --- Session 15: period close (day lock) ---------------------------------
@@ -1221,55 +1302,241 @@ export interface ReturnListRow {
 }
 export interface ReturnListResponse { rows: ReturnListRow[] }
 
-// --- Wave D: Bonus-unit promotions ---------------------------------------
+// --- Supplier payments admin ---------------------------------------------
 
-export const IPC_CHANNELS_PROMO = {
-  PROMO_LIST_ACTIVE: 'promo:list-active',
-  PROMO_ADD: 'promo:add',
-  PROMO_DEACTIVATE: 'promo:deactivate',
-  PROMO_BONUS_BY_DAY: 'promo:bonus-by-day',
+export const IPC_CHANNELS_SUP_PAY = {
+  SUPPLIER_PAYMENT_LIST: 'supplier-payment:list',
+  SUPPLIER_PAYMENT_RECORD: 'supplier-payment:record',
+  SUPPLIER_STATEMENTS_LIST: 'supplier-payment:statements',
 } as const;
 
-export interface PromoListResponse {
-  rows: Array<{
-    id: string;
-    productId: string;
-    productName: string;
-    appliesToUnitId: string | null;
-    unitName: string | null;
-    channel: 'WALK_IN' | 'WHOLESALE' | 'ROUTE' | null;
-    qtyBuy: number;
-    qtyGetFree: number;
-    validFrom: string | null;
-    validTo: string | null;
-    supplierId: string | null;
-    active: boolean;
-    notes: string | null;
-  }>;
+export interface SupplierPaymentRow {
+  id: string;
+  supplierId: string;
+  supplierName: string;
+  amountPesewas: number;
+  paymentMethod: string;
+  paymentReference: string | null;
+  paidAt: string;
+  approvedByWorkerId: string;
+  approvedByName: string;
+  notes: string | null;
+  createdAt: string;
+  allocatedPesewas: number;
 }
 
-export interface PromoAddRequest {
-  productId: string;
-  appliesToUnitId?: string | null;
-  channel?: 'WALK_IN' | 'WHOLESALE' | 'ROUTE' | null;
-  qtyBuy: number;
-  qtyGetFree: number;
-  validFrom?: string | null;
-  validTo?: string | null;
+export interface SupplierPaymentListRequest {
   supplierId?: string | null;
+  fromDate?: string | null;
+  toDate?: string | null;
+  limit?: number;
+  offset?: number;
+}
+
+export interface SupplierPaymentListResponse {
+  payments: SupplierPaymentRow[];
+  totalCount: number;
+}
+
+export interface SupplierPaymentRecordRequest {
+  supplierId: string;
+  amountPesewas: number;
+  paymentMethod: string;
+  paymentReference?: string | null;
+  paidAt?: string | null;
   notes?: string | null;
 }
-export interface PromoAddResponse { id: string }
+export interface SupplierPaymentRecordResponse {
+  paymentId: string;
+  newSupplierBalancePesewas: number;
+}
 
-export interface PromoDeactivateRequest { id: string }
-export interface PromoDeactivateResponse { ok: true }
+export interface SupplierStatementRow {
+  supplierId: string;
+  supplierName: string;
+  active: boolean;
+  paymentTermsDays: number;
+  currentBalancePesewas: number;
+  lifetimePaidPesewas: number;
+  lifetimeReceivedCostPesewas: number;
+  lastPaidAt: string | null;
+  lastReceiptAt: string | null;
+}
+export interface SupplierStatementsListRequest { includeInactive?: boolean }
+export interface SupplierStatementsListResponse { rows: SupplierStatementRow[] }
 
-export interface PromoBonusByDayRequest { dateISO: string }
-export interface PromoBonusByDayResponse {
-  rows: Array<{
-    supplierId: string | null;
-    supplierName: string | null;
-    costPesewas: number;
-    bonusUnits: number;
+// --- Reports / overview dashboard ----------------------------------------
+
+export const IPC_CHANNELS_REPORTS = {
+  REPORTS_OVERVIEW: 'reports:overview',
+  REPORTS_SALES: 'reports:sales',
+  REPORTS_MARGIN: 'reports:margin',
+  REPORTS_INVENTORY: 'reports:inventory',
+} as const;
+
+export interface ReportsOverviewRequest {
+  locationId?: string;
+  /** Test/replay hook: override the "today" date. */
+  asOfDateISO?: string;
+}
+
+export interface ReportsOverviewResponse {
+  generatedAt: string;
+  locationId: string;
+  revenue: {
+    todayPesewas: number; thisWeekPesewas: number; thisMonthPesewas: number;
+    yesterdayPesewas: number; lastWeekPesewas: number; lastMonthPesewas: number;
+    todayChangePct: number | null;
+    thisWeekChangePct: number | null;
+    thisMonthChangePct: number | null;
+    numSalesToday: number; numSalesThisWeek: number; numSalesThisMonth: number;
+  };
+  margin: {
+    revenuePesewas: number; cogsPesewas: number;
+    grossMarginPesewas: number; grossMarginBps: number;
+    revenueLast30dPesewas: number;
+    grossMarginLast30dPesewas: number; grossMarginLast30dBps: number;
+  };
+  cashPosition: {
+    openTillExpectedPesewas: number; openShifts: number;
+    lastClosedVariancePesewas: number | null;
+    lastClosedAt: string | null;
+  };
+  receivables: {
+    totalPesewas: number;
+    bucket0_30Pesewas: number; bucket31_60Pesewas: number;
+    bucket61_90Pesewas: number; bucket90PlusPesewas: number;
+    customerCount: number; overLimitCount: number;
+  };
+  payables: { totalOwedPesewas: number; supplierCount: number };
+  inventory: {
+    totalAtCostPesewas: number; totalAtRetailPesewas: number;
+    activeSkuCount: number; belowReorderCount: number; stockoutCount: number;
+  };
+  revenueSparkline: Array<{ date: string; pesewas: number }>;
+  topSellersThisWeek: Array<{
+    productId: string; sku: string; name: string;
+    unitsSold: number; revenuePesewas: number;
+  }>;
+  slowMovers: Array<{
+    productId: string; sku: string; name: string;
+    unitsOnHand: number; daysSinceLastSale: number | null;
+    stockValueAtCostPesewas: number;
+  }>;
+  recentVarianceEvents: Array<{
+    stocktakeId: string; completedAt: string;
+    lossValuePesewas: number; foundValuePesewas: number;
+    shrinkageRate: number | null;
+    productsWithVariance: number;
   }>;
 }
+
+// --- Reports: Sales ------------------------------------------------------
+
+export type ReportGroupBy = 'day' | 'week' | 'month';
+
+export interface ReportsSalesRequest {
+  fromDate: string;          // YYYY-MM-DD inclusive
+  toDate: string;            // YYYY-MM-DD inclusive
+  groupBy: ReportGroupBy;
+}
+
+export interface ReportsSalesResponse {
+  fromDate: string;
+  toDate: string;
+  groupBy: ReportGroupBy;
+  totalRevenuePesewas: number;
+  totalNumSales: number;
+  totalUniqueCustomers: number;
+  totalAvgBasketPesewas: number | null;
+  buckets: Array<{
+    bucket: string;
+    revenuePesewas: number;
+    numSales: number;
+    numUniqueCustomers: number;
+    walkInPesewas: number;
+    wholesalePesewas: number;
+    routePesewas: number;
+    avgBasketPesewas: number | null;
+  }>;
+  byChannel: Array<{ channel: string; revenuePesewas: number; numSales: number }>;
+  byPaymentMethod: Array<{ method: string; revenuePesewas: number; numSales: number }>;
+  byCashier: Array<{
+    workerId: string; workerName: string;
+    revenuePesewas: number; numSales: number;
+    voidedCount: number;
+  }>;
+}
+
+// --- Reports: Margin -----------------------------------------------------
+
+export interface ReportsMarginRequest {
+  fromDate: string;
+  toDate: string;
+}
+
+export interface ReportsMarginResponse {
+  fromDate: string;
+  toDate: string;
+  totalRevenuePesewas: number;
+  totalCogsPesewas: number;
+  totalMarginPesewas: number;
+  totalMarginBps: number;
+  byProduct: Array<{
+    productId: string; sku: string; name: string; category: string; brand: string | null;
+    unitsSold: number;
+    revenuePesewas: number; cogsPesewas: number; marginPesewas: number; marginBps: number;
+  }>;
+  byCategory: Array<{
+    category: string;
+    unitsSold: number;
+    revenuePesewas: number; cogsPesewas: number; marginPesewas: number; marginBps: number;
+    productCount: number;
+  }>;
+  belowCost: {
+    numLines: number;
+    totalLossPesewas: number;
+    worst: Array<{
+      saleId: string; saleAt: string;
+      productId: string; sku: string; name: string;
+      quantity: number;
+      unitPricePesewas: number; unitCostPesewas: number; marginPesewas: number;
+      workerName: string;
+    }>;
+  };
+}
+
+// --- Reports: Inventory --------------------------------------------------
+
+export interface ReportsInventoryRequest {
+  locationId?: string;
+  velocityWindowDays?: number;
+}
+
+export interface ReportsInventoryResponse {
+  generatedAt: string;
+  locationId: string;
+  velocityWindowDays: number;
+  totalAtCostPesewas: number;
+  totalAtRetailPesewas: number;
+  activeSkuCount: number;
+  stockoutCount: number;
+  belowReorderCount: number;
+  rows: Array<{
+    productId: string; sku: string; name: string;
+    category: string; brand: string | null;
+    unitsOnHand: number;
+    costPerUnitPesewas: number;
+    retailPerUnitPesewas: number;
+    totalAtCostPesewas: number;
+    totalAtRetailPesewas: number;
+    reorderThreshold: number;
+    belowReorder: boolean;
+    stockout: boolean;
+    unitsSoldInWindow: number;
+    daysOfSupply: number | null;
+    lastReceivedAt: string | null;
+    lastSoldAt: string | null;
+  }>;
+}
+

@@ -67,11 +67,6 @@ export default function OpenShiftScreen() {
             className="flex-1 bg-bg-input border border-border-strong px-5 py-4 text-4xl font-mono tnum text-right focus:outline-none focus:border-accent"
           />
         </div>
-        {valid && pesewas !== null && (
-          <div className="text-text-tertiary text-xs tnum">
-            Stored as {pesewas} pesewas.
-          </div>
-        )}
         {!valid && raw.length > 0 && (
           <div className="text-danger text-xs">
             Enter a non-negative number with up to 2 decimals.

@@ -6,7 +6,8 @@ import { useEffect, useState } from 'react';
 import { StockHistoryModal } from '../../components/StockHistoryModal';
 import { counter } from '../../lib/ipc';
 import { useSession } from '../../store/session';
-import { formatMoney, formatMoneyWithCurrency, parseCedisToPesewas } from '../../../shared/lib/money';
+import { formatMoney, parseCedisToPesewas } from '../../../shared/lib/money';
+import { formatStockCompact } from '../../../shared/lib/units';
 
 interface AdminProduct {
   id: string; sku: string; barcode: string | null; name: string;
@@ -19,7 +20,10 @@ interface AdminProduct {
   primarySupplierId: string | null;
   defaultLeadTimeDays: number; shelfLifeDays: number | null;
   countClass: 'A' | 'B' | 'C' | null;
+  primaryPurchaseUnitId: string | null;
+  primarySaleUnitId: string | null;
   active: boolean; unitsOnHand: number;
+  units: Array<{ id: string; unitName: string; conversionFactor: number }>;
 }
 
 const CATEGORIES = [
@@ -122,7 +126,12 @@ export function ProductsTab() {
                   <td className={`px-3 py-2 text-right font-mono tnum ${lowMargin ? 'text-danger' : ''}`}>{formatMoney(p.walkInPricePesewas)}</td>
                   <td className="px-3 py-2 text-right font-mono tnum">{formatMoney(p.wholesalePricePesewas)}</td>
                   <td className="px-3 py-2 text-right font-mono tnum">{formatMoney(p.routePricePesewas)}</td>
-                  <td className={`px-3 py-2 text-right font-mono tnum ${p.unitsOnHand <= p.reorderThreshold && p.reorderThreshold > 0 ? 'text-warning' : ''}`}>{p.unitsOnHand}</td>
+                  <td className={`px-3 py-2 text-right font-mono tnum ${p.unitsOnHand <= p.reorderThreshold && p.reorderThreshold > 0 ? 'text-warning' : ''}`}
+                      title={`${p.unitsOnHand} canonical units`}>
+                    {p.units.length > 1
+                      ? formatStockCompact(p.unitsOnHand, p.units)
+                      : p.unitsOnHand}
+                  </td>
                   <td className="px-3 py-2 text-right font-mono tnum text-text-tertiary">
                     {p.reorderThreshold > 0 ? `≤ ${p.reorderThreshold}` : '—'}
                   </td>
@@ -205,6 +214,45 @@ function ProductFormModal({ mode, existing, onCancel, onDone, onError }: {
   const [shelfLife, setShelfLife] = useState(existing?.shelfLifeDays != null ? String(existing.shelfLifeDays) : '');
   const [submitting, setSubmitting] = useState(false);
 
+  // Draft units for ADD mode — created in the same transaction as the
+  // product so we don't end up with a product that has no sellable units.
+  // In EDIT mode, the existing ProductUnitsEditor handles units against
+  // the live row, so this draft array stays empty there.
+  interface DraftUnit {
+    unitName: string;
+    conversionFactor: number;
+    pricePesewas: number;
+    isSaleUnit: boolean;
+    isPurchaseUnit: boolean;
+  }
+  const [draftUnits, setDraftUnits] = useState<DraftUnit[]>([]);
+  const [du_name, setDuName] = useState('');
+  const [du_factor, setDuFactor] = useState('');
+  const [du_price, setDuPrice] = useState('');
+  const [du_sale, setDuSale] = useState(true);
+  const [du_purchase, setDuPurchase] = useState(true);
+
+  function addDraftUnit() {
+    const name = du_name.trim().toUpperCase();
+    const factor = Number(du_factor.replace(/\D/g, ''));
+    const price = parseCedisToPesewas(du_price);
+    if (!name) { onError('Unit name is required.'); return; }
+    if (!factor || factor <= 0) { onError('Conversion factor must be a positive integer.'); return; }
+    if (price == null) { onError('Price must be a valid amount (e.g. 12.50).'); return; }
+    if (!du_sale && !du_purchase) { onError('Mark the unit as sellable, purchasable, or both.'); return; }
+    if (draftUnits.some((u) => u.unitName === name)) {
+      onError(`Already added a unit called ${name}.`); return;
+    }
+    setDraftUnits([...draftUnits, {
+      unitName: name, conversionFactor: factor, pricePesewas: price,
+      isSaleUnit: du_sale, isPurchaseUnit: du_purchase,
+    }]);
+    setDuName(''); setDuFactor(''); setDuPrice('');
+  }
+  function removeDraftUnit(idx: number) {
+    setDraftUnits(draftUnits.filter((_, i) => i !== idx));
+  }
+
   function parseInt(s: string): number | null {
     if (s === '') return null;
     const n = Number(s);
@@ -244,11 +292,13 @@ function ProductFormModal({ mode, existing, onCancel, onDone, onError }: {
         countClass: countClass || null,
         defaultLeadTimeDays: leadTimeN,
         shelfLifeDays: shelfLifeN,
+        units: draftUnits.length > 0 ? draftUnits : undefined,
       });
       setSubmitting(false);
       if (!r.success) { onError(r.error); return; }
       const warn = r.data.warnings.length > 0 ? ` Warning: ${r.data.warnings.join(', ')}.` : '';
-      onDone(`Product added.${warn}`);
+      const unitNote = r.data.unitIds.length > 0 ? ` (${r.data.unitIds.length} unit${r.data.unitIds.length === 1 ? '' : 's'} added)` : '';
+      onDone(`Product added${unitNote}.${warn}`);
     } else if (existing) {
       const r = await counter.updateProduct({
         productId: existing.id,
@@ -272,11 +322,25 @@ function ProductFormModal({ mode, existing, onCancel, onDone, onError }: {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 overflow-y-auto py-8" onClick={onCancel}>
-      <div className="bg-bg-surface border border-border w-full max-w-2xl p-8 flex flex-col gap-4 my-auto" onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-text-secondary uppercase tracking-wider text-xs">
-          {mode === 'add' ? 'Add product' : `Edit — ${existing?.sku}`}
-        </h3>
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={onCancel}>
+      <div className="bg-bg-surface border border-border w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        {/* Sticky header */}
+        <div className="px-8 py-5 border-b border-border-subtle flex items-center justify-between flex-shrink-0">
+          <div>
+            <h3 className="text-text-secondary uppercase tracking-wider text-xs">
+              {mode === 'add' ? 'Add product' : 'Edit product'}
+            </h3>
+            {mode === 'edit' && existing && (
+              <div className="text-text-primary text-base font-medium font-mono mt-0.5">{existing.sku}</div>
+            )}
+          </div>
+          <button onClick={onCancel}
+            className="text-text-tertiary hover:text-text-primary text-xl leading-none"
+            aria-label="Close">✕</button>
+        </div>
+
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto px-8 py-6 flex flex-col gap-5">
         <div className="grid grid-cols-2 gap-3">
           <Field label="SKU">
             <input value={sku} onChange={(e) => setSku(e.target.value.toUpperCase())}
@@ -380,17 +444,111 @@ function ProductFormModal({ mode, existing, onCancel, onDone, onError }: {
             instead of counting the whole shop every time.
           </div>
         </div>
+        {mode === 'add' && (
+          <div className="border border-border bg-bg-deep p-4 flex flex-col gap-3">
+            <h4 className="text-text-secondary uppercase tracking-wider text-xs">
+              Sellable / purchasable units (optional)
+            </h4>
+            <div className="text-text-tertiary text-xs">
+              Add CRATE, PACK, BAG_50KG, etc. now and they'll be created with the
+              product in one go. You can also add them later from the edit view.
+              Stock is tracked in the canonical single unit; each row's factor
+              multiplies in (e.g. CRATE × 12 means one crate = 12 bottles).
+            </div>
+
+            {draftUnits.length > 0 && (
+              <table className="w-full text-sm border border-border-subtle">
+                <thead>
+                  <tr className="text-text-secondary text-xs uppercase tracking-wider bg-bg-surface/60">
+                    <th className="text-left px-3 py-2">Name</th>
+                    <th className="text-right px-3 py-2">Factor</th>
+                    <th className="text-right px-3 py-2">Price (each)</th>
+                    <th className="text-center px-3 py-2">Sale</th>
+                    <th className="text-center px-3 py-2">Purchase</th>
+                    <th className="px-3 py-2"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {draftUnits.map((u, idx) => (
+                    <tr key={idx} className="border-t border-border-subtle">
+                      <td className="font-mono px-3 py-2">{u.unitName}</td>
+                      <td className="text-right font-mono tnum px-3 py-2">× {u.conversionFactor}</td>
+                      <td className="text-right font-mono tnum px-3 py-2">{formatMoney(u.pricePesewas)}</td>
+                      <td className="text-center px-3 py-2">{u.isSaleUnit ? '✓' : '—'}</td>
+                      <td className="text-center px-3 py-2">{u.isPurchaseUnit ? '✓' : '—'}</td>
+                      <td className="text-right px-3 py-2">
+                        <button onClick={() => removeDraftUnit(idx)}
+                          className="text-text-tertiary hover:text-warning text-xs">
+                          remove
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+
+            <div className="flex flex-col gap-3 border-t border-border pt-3">
+              <div className="grid grid-cols-[1fr_7rem_9rem] gap-3">
+                <div className="flex flex-col gap-1">
+                  <span className="text-text-secondary text-xs uppercase tracking-wider">Unit name</span>
+                  <input value={du_name} onChange={(e) => setDuName(e.target.value.toUpperCase())}
+                    placeholder="CRATE, PACK, BAG_50KG…"
+                    className="bg-bg-input border border-border-strong px-3 py-2 font-mono" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-text-secondary text-xs uppercase tracking-wider">Factor</span>
+                  <input value={du_factor} onChange={(e) => setDuFactor(e.target.value.replace(/\D/g, ''))}
+                    placeholder="12"
+                    className="bg-bg-input border border-border-strong px-3 py-2 font-mono tnum text-right" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-text-secondary text-xs uppercase tracking-wider">Price (cedis)</span>
+                  <input value={du_price} onChange={(e) => setDuPrice(e.target.value)}
+                    placeholder="180.00"
+                    className="bg-bg-input border border-border-strong px-3 py-2 font-mono tnum text-right" />
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-4 text-sm text-text-secondary">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={du_sale} onChange={(e) => setDuSale(e.target.checked)} />
+                    Sellable
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={du_purchase} onChange={(e) => setDuPurchase(e.target.checked)} />
+                    Purchasable
+                  </label>
+                </div>
+                <button type="button" onClick={addDraftUnit}
+                  className="px-4 py-2 border border-border hover:bg-bg-elevated text-sm whitespace-nowrap">
+                  + Add unit
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         {mode === 'edit' && existing && (
-          <ProductUnitsEditor productId={existing.id} onError={onError} />
+          <ProductUnitsEditor
+            productId={existing.id}
+            initialPrimaryPurchaseUnitId={existing.primaryPurchaseUnitId}
+            initialPrimarySaleUnitId={existing.primarySaleUnitId}
+            onError={onError}
+          />
         )}
         {mode === 'edit' && existing && (
           <PricingTiersEditor productId={existing.id} onError={onError} />
         )}
-        <div className="flex gap-3 mt-4">
-          <button onClick={onCancel} className="px-5 py-3 border border-border hover:bg-bg-elevated">Cancel</button>
+        </div>
+        {/* Sticky footer */}
+        <div className="px-8 py-4 border-t border-border-subtle flex gap-3 justify-end flex-shrink-0 bg-bg-deep/30">
+          <button onClick={onCancel}
+            className="px-5 py-2.5 border border-border hover:bg-bg-elevated text-sm">
+            Cancel
+          </button>
           <button onClick={() => void submit()}
             disabled={submitting || !sku.trim() || !name.trim()}
-            className="bg-accent text-bg-deep px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40">
+            className="bg-accent text-bg-deep px-5 py-2.5 font-semibold hover:bg-accent-light disabled:opacity-40 text-sm">
             {submitting ? 'Saving…' : (mode === 'add' ? 'Add product' : 'Save changes')}
           </button>
         </div>
@@ -462,30 +620,33 @@ function PricingTiersEditor({ productId, onError }: { productId: string; onError
 
   return (
     <div className="border border-border bg-bg-deep p-4 flex flex-col gap-3">
-      <h4 className="text-text-secondary uppercase tracking-wider text-xs">Volume tiers</h4>
-      <div className="text-text-tertiary text-xs">
-        Apply automatically when cart line quantity meets the threshold. Channel ALL applies to walk-in, wholesale, and route.
+      <div>
+        <h4 className="text-text-secondary uppercase tracking-wider text-xs mb-1.5">Volume tiers</h4>
+        <div className="text-text-tertiary text-xs">
+          Apply automatically when cart line quantity meets the threshold.
+          Channel ALL applies to walk-in, wholesale, and route.
+        </div>
       </div>
-      <table className="w-full text-sm">
+      <table className="w-full text-sm border border-border-subtle">
         <thead>
-          <tr className="text-text-secondary text-xs uppercase tracking-wider">
-            <th className="text-left">Channel</th>
-            <th className="text-left">Applies to</th>
-            <th className="text-right">Min qty</th>
-            <th className="text-right">Unit price</th>
-            <th className="text-left">Status</th>
-            <th></th>
+          <tr className="text-text-secondary text-xs uppercase tracking-wider bg-bg-surface/60">
+            <th className="text-left px-3 py-2">Channel</th>
+            <th className="text-left px-3 py-2">Applies to</th>
+            <th className="text-right px-3 py-2">Min qty</th>
+            <th className="text-right px-3 py-2">Unit price</th>
+            <th className="text-left px-3 py-2">Status</th>
+            <th className="px-3 py-2"></th>
           </tr>
         </thead>
         <tbody>
           {tiers.map((t) => (
-            <tr key={t.id} className="border-t border-border">
-              <td>{t.channel}</td>
-              <td className="text-text-tertiary text-xs">{unitName(t.appliesToUnitId)}</td>
-              <td className="text-right font-mono tnum">{t.minQuantity}</td>
-              <td className="text-right font-mono tnum">{formatMoney(t.unitPricePesewas)}</td>
-              <td>{t.active ? <span className="text-success">active</span> : <span className="text-text-tertiary">inactive</span>}</td>
-              <td className="text-right">
+            <tr key={t.id} className="border-t border-border-subtle hover:bg-bg-deep/40">
+              <td className="px-3 py-2">{t.channel}</td>
+              <td className="px-3 py-2 text-text-tertiary text-xs">{unitName(t.appliesToUnitId)}</td>
+              <td className="text-right font-mono tnum px-3 py-2">{t.minQuantity}</td>
+              <td className="text-right font-mono tnum px-3 py-2">{formatMoney(t.unitPricePesewas)}</td>
+              <td className="px-3 py-2">{t.active ? <span className="text-success">active</span> : <span className="text-text-tertiary">inactive</span>}</td>
+              <td className="text-right px-3 py-2">
                 {t.active
                   ? <button onClick={() => void deactivate(t)} className="text-text-tertiary hover:text-warning text-xs">deactivate</button>
                   : <button onClick={() => void reactivate(t)} className="text-text-tertiary hover:text-success text-xs">reactivate</button>}
@@ -493,42 +654,48 @@ function PricingTiersEditor({ productId, onError }: { productId: string; onError
             </tr>
           ))}
           {tiers.length === 0 && (
-            <tr><td colSpan={6} className="text-text-tertiary text-center py-2">No tiers yet.</td></tr>
+            <tr><td colSpan={6} className="text-text-tertiary text-center py-4 px-3">No tiers yet.</td></tr>
           )}
         </tbody>
       </table>
-      <div className="grid grid-cols-[1fr_1fr_1fr_1fr_auto] gap-2 items-end">
-        <div className="flex flex-col gap-1">
-          <span className="text-text-secondary text-xs uppercase tracking-wider">Channel</span>
-          <select value={draftChannel} onChange={(e) => setDraftChannel(e.target.value as TierRow['channel'])}
-            className="bg-bg-input border border-border-strong px-3 py-2">
-            {(['ALL', 'WALK_IN', 'WHOLESALE', 'ROUTE'] as const).map((c) => <option key={c}>{c}</option>)}
-          </select>
+      <div className="flex flex-col gap-3 border-t border-border pt-3">
+        <div className="grid grid-cols-4 gap-3">
+          <div className="flex flex-col gap-1">
+            <span className="text-text-secondary text-xs uppercase tracking-wider">Channel</span>
+            <select value={draftChannel} onChange={(e) => setDraftChannel(e.target.value as TierRow['channel'])}
+              className="bg-bg-input border border-border-strong px-3 py-2">
+              {(['ALL', 'WALK_IN', 'WHOLESALE', 'ROUTE'] as const).map((c) => <option key={c}>{c}</option>)}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-text-secondary text-xs uppercase tracking-wider">Applies to</span>
+            <select value={draftUnitId} onChange={(e) => setDraftUnitId(e.target.value)}
+              className="bg-bg-input border border-border-strong px-3 py-2">
+              <option value="">any unit</option>
+              {units.map((u) => (
+                <option key={u.id} value={u.id}>{u.unitName}{u.conversionFactor > 1 ? ` ×${u.conversionFactor}` : ''}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-text-secondary text-xs uppercase tracking-wider">Min qty</span>
+            <input value={draftMinQty} onChange={(e) => setDraftMinQty(e.target.value.replace(/\D/g, ''))}
+              placeholder="e.g. 12"
+              className="bg-bg-input border border-border-strong px-3 py-2 font-mono tnum text-right" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-text-secondary text-xs uppercase tracking-wider">Unit price (cedis)</span>
+            <input value={draftPrice} onChange={(e) => setDraftPrice(e.target.value)}
+              placeholder="e.g. 14.50"
+              className="bg-bg-input border border-border-strong px-3 py-2 font-mono tnum text-right" />
+          </div>
         </div>
-        <div className="flex flex-col gap-1">
-          <span className="text-text-secondary text-xs uppercase tracking-wider">Applies to</span>
-          <select value={draftUnitId} onChange={(e) => setDraftUnitId(e.target.value)}
-            className="bg-bg-input border border-border-strong px-3 py-2">
-            <option value="">any unit</option>
-            {units.map((u) => (
-              <option key={u.id} value={u.id}>{u.unitName}{u.conversionFactor > 1 ? ` ×${u.conversionFactor}` : ''}</option>
-            ))}
-          </select>
+        <div className="flex justify-end">
+          <button onClick={() => void addOne()}
+            className="bg-accent text-bg-deep px-4 py-2 font-semibold hover:bg-accent-light text-sm whitespace-nowrap">
+            + Add tier
+          </button>
         </div>
-        <div className="flex flex-col gap-1">
-          <span className="text-text-secondary text-xs uppercase tracking-wider">Min qty</span>
-          <input value={draftMinQty} onChange={(e) => setDraftMinQty(e.target.value.replace(/\D/g, ''))}
-            className="bg-bg-input border border-border-strong px-3 py-2 font-mono tnum" />
-        </div>
-        <div className="flex flex-col gap-1">
-          <span className="text-text-secondary text-xs uppercase tracking-wider">Unit price (cedis)</span>
-          <input value={draftPrice} onChange={(e) => setDraftPrice(e.target.value)}
-            className="bg-bg-input border border-border-strong px-3 py-2 font-mono tnum" />
-        </div>
-        <button onClick={() => void addOne()}
-          className="bg-accent text-bg-deep px-4 py-2 font-semibold hover:bg-accent-light">
-          Add tier
-        </button>
       </div>
     </div>
   );
@@ -542,19 +709,45 @@ interface UnitRow {
   active: boolean; notes: string | null;
 }
 
-function ProductUnitsEditor({ productId, onError }: { productId: string; onError: (e: string) => void }) {
+function ProductUnitsEditor({
+  productId, initialPrimaryPurchaseUnitId, initialPrimarySaleUnitId, onError,
+}: {
+  productId: string;
+  initialPrimaryPurchaseUnitId: string | null;
+  initialPrimarySaleUnitId: string | null;
+  onError: (e: string) => void;
+}) {
+  const [primarySaved, setPrimarySaved] = useState(false);
   const [units, setUnits] = useState<UnitRow[]>([]);
   const [draftName, setDraftName] = useState('');
   const [draftFactor, setDraftFactor] = useState('');
   const [draftPrice, setDraftPrice] = useState('');
   const [draftIsSale, setDraftIsSale] = useState(true);
   const [draftIsPurchase, setDraftIsPurchase] = useState(true);
+  const [primaryPurchaseUnitId, setPrimaryPurchaseUnitId] = useState<string>(initialPrimaryPurchaseUnitId ?? '');
+  const [primarySaleUnitId, setPrimarySaleUnitId] = useState<string>(initialPrimarySaleUnitId ?? '');
+  const [savingPrimary, setSavingPrimary] = useState(false);
 
   async function refresh() {
     const r = await counter.listProductUnits(productId, false);
     if (r.success) setUnits(r.data.units as UnitRow[]);
   }
   useEffect(() => { void refresh(); }, [productId]);
+
+  async function savePrimaryUnits() {
+    setSavingPrimary(true);
+    const r = await counter.updateProduct({
+      productId,
+      fields: {
+        primaryPurchaseUnitId: primaryPurchaseUnitId || null,
+        primarySaleUnitId: primarySaleUnitId || null,
+      },
+    });
+    setSavingPrimary(false);
+    if (!r.success) { onError(r.error); return; }
+    setPrimarySaved(true);
+    setTimeout(() => setPrimarySaved(false), 2500);
+  }
 
   async function addOne() {
     const factor = Number(draftFactor.replace(/\D/g, ''));
@@ -593,33 +786,37 @@ function ProductUnitsEditor({ productId, onError }: { productId: string; onError
 
   return (
     <div className="border border-border bg-bg-deep p-4 flex flex-col gap-3">
-      <h4 className="text-text-secondary uppercase tracking-wider text-xs">Sellable / purchasable units</h4>
-      <div className="text-text-tertiary text-xs">
-        Define multiple units per product (BOTTLE, CRATE, BAG_50KG, etc). Stock is tracked in the canonical unit;
-        each row's factor multiplies in. Per-unit price is what shows in the sale or receipt flow.
+      <div>
+        <h4 className="text-text-secondary uppercase tracking-wider text-xs mb-1.5">Sellable / purchasable units</h4>
+        <div className="text-text-tertiary text-xs leading-relaxed">
+          Define every way you transact this product — BOTTLE, CRATE, BAG_50KG.
+          Stock is tracked in the smallest unit; the factor is how many smallest-units
+          are in that row (CRATE × 12 = 12 bottles per crate). If you only ever sell
+          whole boxes, just add ONE row with factor 1.
+        </div>
       </div>
-      <table className="w-full text-sm">
+      <table className="w-full text-sm border border-border-subtle">
         <thead>
-          <tr className="text-text-secondary text-xs uppercase tracking-wider">
-            <th className="text-left">Name</th>
-            <th className="text-right">Factor</th>
-            <th className="text-right">Price (each)</th>
-            <th className="text-center">Sale</th>
-            <th className="text-center">Purchase</th>
-            <th className="text-left">Status</th>
-            <th></th>
+          <tr className="text-text-secondary text-xs uppercase tracking-wider bg-bg-deep/60">
+            <th className="text-left px-3 py-2">Name</th>
+            <th className="text-right px-3 py-2">Factor</th>
+            <th className="text-right px-3 py-2">Price (each)</th>
+            <th className="text-center px-3 py-2">Sale</th>
+            <th className="text-center px-3 py-2">Purchase</th>
+            <th className="text-left px-3 py-2">Status</th>
+            <th className="px-3 py-2"></th>
           </tr>
         </thead>
         <tbody>
           {units.map((u) => (
-            <tr key={u.id} className="border-t border-border">
-              <td className="font-mono">{u.unitName}</td>
-              <td className="text-right font-mono tnum">× {u.conversionFactor}</td>
-              <td className="text-right font-mono tnum">{formatMoney(u.pricePesewas)}</td>
-              <td className="text-center">{u.isSaleUnit ? '✓' : '—'}</td>
-              <td className="text-center">{u.isPurchaseUnit ? '✓' : '—'}</td>
-              <td>{u.active ? <span className="text-success">active</span> : <span className="text-text-tertiary">inactive</span>}</td>
-              <td className="text-right">
+            <tr key={u.id} className="border-t border-border-subtle hover:bg-bg-deep/40">
+              <td className="font-mono px-3 py-2">{u.unitName}</td>
+              <td className="text-right font-mono tnum px-3 py-2">× {u.conversionFactor}</td>
+              <td className="text-right font-mono tnum px-3 py-2">{formatMoney(u.pricePesewas)}</td>
+              <td className="text-center px-3 py-2">{u.isSaleUnit ? '✓' : '—'}</td>
+              <td className="text-center px-3 py-2">{u.isPurchaseUnit ? '✓' : '—'}</td>
+              <td className="px-3 py-2">{u.active ? <span className="text-success">active</span> : <span className="text-text-tertiary">inactive</span>}</td>
+              <td className="text-right px-3 py-2">
                 {u.active
                   ? <button onClick={() => void deactivate(u)} className="text-text-tertiary hover:text-warning text-xs">deactivate</button>
                   : <button onClick={() => void reactivate(u)} className="text-text-tertiary hover:text-success text-xs">reactivate</button>}
@@ -627,42 +824,93 @@ function ProductUnitsEditor({ productId, onError }: { productId: string; onError
             </tr>
           ))}
           {units.length === 0 && (
-            <tr><td colSpan={7} className="text-text-tertiary text-center py-2">No units defined yet.</td></tr>
+            <tr><td colSpan={7} className="text-text-tertiary text-center py-4 px-3">No units defined yet.</td></tr>
           )}
         </tbody>
       </table>
-      <div className="grid grid-cols-[1fr_auto_auto_auto_auto_auto] gap-2 items-end">
-        <div className="flex flex-col gap-1">
-          <span className="text-text-secondary text-xs uppercase tracking-wider">Unit name</span>
-          <input value={draftName} onChange={(e) => setDraftName(e.target.value.toUpperCase())}
-            placeholder="CRATE, BAG_50KG, SHOT_50ML…"
-            className="bg-bg-input border border-border-strong px-3 py-2 font-mono" />
+      <div className="flex flex-col gap-3 border-t border-border pt-3">
+        <div className="grid grid-cols-[1fr_7rem_9rem] gap-3">
+          <div className="flex flex-col gap-1">
+            <span className="text-text-secondary text-xs uppercase tracking-wider">Unit name</span>
+            <input value={draftName} onChange={(e) => setDraftName(e.target.value.toUpperCase())}
+              placeholder="CRATE, PACK, BAG_50KG…"
+              className="bg-bg-input border border-border-strong px-3 py-2 font-mono" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-text-secondary text-xs uppercase tracking-wider">Factor</span>
+            <input value={draftFactor} onChange={(e) => setDraftFactor(e.target.value.replace(/\D/g, ''))}
+              placeholder="24"
+              className="bg-bg-input border border-border-strong px-3 py-2 font-mono tnum text-right" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-text-secondary text-xs uppercase tracking-wider">Price (cedis)</span>
+            <input value={draftPrice} onChange={(e) => setDraftPrice(e.target.value)}
+              placeholder="180.00"
+              className="bg-bg-input border border-border-strong px-3 py-2 font-mono tnum text-right" />
+          </div>
         </div>
-        <div className="flex flex-col gap-1 w-24">
-          <span className="text-text-secondary text-xs uppercase tracking-wider">Factor</span>
-          <input value={draftFactor} onChange={(e) => setDraftFactor(e.target.value.replace(/\D/g, ''))}
-            placeholder="24"
-            className="bg-bg-input border border-border-strong px-3 py-2 font-mono tnum text-right" />
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4 text-sm text-text-secondary">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={draftIsSale} onChange={(e) => setDraftIsSale(e.target.checked)} />
+              Sellable
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={draftIsPurchase} onChange={(e) => setDraftIsPurchase(e.target.checked)} />
+              Purchasable
+            </label>
+          </div>
+          <button onClick={() => void addOne()}
+            className="bg-accent text-bg-deep px-4 py-2 font-semibold hover:bg-accent-light text-sm whitespace-nowrap">
+            + Add unit
+          </button>
         </div>
-        <div className="flex flex-col gap-1 w-32">
-          <span className="text-text-secondary text-xs uppercase tracking-wider">Price (cedis)</span>
-          <input value={draftPrice} onChange={(e) => setDraftPrice(e.target.value)}
-            placeholder="180.00"
-            className="bg-bg-input border border-border-strong px-3 py-2 font-mono tnum text-right" />
-        </div>
-        <label className="flex items-center gap-1 text-xs text-text-secondary">
-          <input type="checkbox" checked={draftIsSale} onChange={(e) => setDraftIsSale(e.target.checked)} />
-          sale
-        </label>
-        <label className="flex items-center gap-1 text-xs text-text-secondary">
-          <input type="checkbox" checked={draftIsPurchase} onChange={(e) => setDraftIsPurchase(e.target.checked)} />
-          purchase
-        </label>
-        <button onClick={() => void addOne()}
-          className="bg-accent text-bg-deep px-4 py-2 font-semibold hover:bg-accent-light">
-          Add unit
-        </button>
       </div>
+
+      {units.length > 0 && (
+        <div className="border-t border-border pt-3 mt-1 flex flex-col gap-2">
+          <div className="text-text-secondary uppercase tracking-wider text-xs">Default units</div>
+          <div className="text-text-tertiary text-xs">
+            Pick which unit shows up first at the till (sale) and on the stock-receive screen
+            (purchase). These are display defaults — cashiers can still pick any unit at the moment.
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="flex flex-col gap-1">
+              <span className="text-text-secondary text-xs uppercase tracking-wider">Default at the till</span>
+              <select value={primarySaleUnitId} onChange={(e) => setPrimarySaleUnitId(e.target.value)}
+                className="bg-bg-input border border-border-strong px-3 py-2">
+                <option value="">— smallest (canonical)</option>
+                {units.filter((u) => u.isSaleUnit && u.active).map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.unitName}{u.conversionFactor > 1 ? ` (× ${u.conversionFactor})` : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-text-secondary text-xs uppercase tracking-wider">Default on receive</span>
+              <select value={primaryPurchaseUnitId} onChange={(e) => setPrimaryPurchaseUnitId(e.target.value)}
+                className="bg-bg-input border border-border-strong px-3 py-2">
+                <option value="">— smallest (canonical)</option>
+                {units.filter((u) => u.isPurchaseUnit && u.active).map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.unitName}{u.conversionFactor > 1 ? ` (× ${u.conversionFactor})` : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="flex justify-end items-center gap-3">
+            {primarySaved && (
+              <span className="text-success text-xs">✓ Saved</span>
+            )}
+            <button onClick={() => void savePrimaryUnits()} disabled={savingPrimary}
+              className="px-4 py-2 border border-border hover:bg-bg-elevated text-xs disabled:opacity-40">
+              {savingPrimary ? 'Saving…' : 'Save default units'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

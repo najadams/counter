@@ -11,8 +11,8 @@ import { logAudit } from '../db/audit.js';
 import { insertStockMovement, unitsOnHand } from './stockMovements.js';
 import { bestTierFor } from './pricingTiers.js';
 import { findBestOverride } from './customerPriceOverrides.js';
-import { computeBonusLines } from './promotions.js';
-import { convertToCanonical, defaultSaleUnit, getUnit } from './productUnits.js';
+import { defaultSaleUnit, getUnit, priceForUnit } from './productUnits.js';
+import { assertNotSealed } from './periods.js';
 import { verifyPin } from './workers.js';
 import {
   DISCOUNT_ABS_THRESHOLD_PESEWAS,
@@ -106,15 +106,17 @@ export function searchProducts(
 
   return rows.map((r) => {
     const def = defaultSaleUnit(db, r.id);
+    // Display price for the default sale unit, scaled to the current channel.
+    // Walk-in returns the unit's stored price directly; wholesale/route
+    // scale proportionally to the product's channel canonical ratio.
+    const displayPrice = priceForUnit(db, r.id, def?.id ?? null, channel);
     return {
       id: r.id,
       sku: r.sku,
       name: r.name,
       brand: r.brand,
       category: r.category,
-      // Default sale unit price for display. If no unit defined (shouldn't happen
-      // post-migration but defensive), fall back to channel base.
-      unitPricePesewas: def ? def.pricePesewas : r.unit_price_pesewas,
+      unitPricePesewas: displayPrice,
       costPricePesewas: r.cost_price_pesewas,
       unitsOnHand: unitsOnHand(db, r.id, locationId),
       isReturnable: r.is_returnable === 1,
@@ -177,6 +179,9 @@ export interface CompleteSaleResult {
   changePesewas: number | null;
   printerFailed: boolean;
   printerError?: string;
+  /** The receipt struct used by the auto-print path. Returned so the renderer
+   *  can offer an on-demand reprint via the browser print dialog. */
+  receipt: SaleReceipt;
 }
 
 /**
@@ -463,6 +468,12 @@ export async function completeSale(
   const saleId = `sa-${uuidv4()}`;
   const now = new Date().toISOString();
 
+  // Day-lock guard: refuse new sales after a sealed business day. Same
+  // pattern as voids.ts and breakage.ts — sealed days must never accept
+  // new mutations or the day totals stop matching the audit trail.
+  const businessDate = now.slice(0, 10);
+  assertNotSealed(db, input.locationId, businessDate, 'completing a sale');
+
   // --- atomic transaction ---------------------------------------------------
   const tx = db.transaction(() => {
     db.prepare(
@@ -573,70 +584,6 @@ export async function completeSale(
           .run(line.unitId, new Date().toISOString(), sm.id);
       }
       if (!sm.id) throw new Error(`completeSale: stock movement insert returned no id`);
-    }
-
-    // --- Wave D: bonus-unit promotions --------------------------------
-    // Compute bonus lines from the regular lines just rung up. Bonus lines
-    // are priced at zero but still post a real stock movement (the goods
-    // physically leave the shelf). The applied_promotion_id ties the row
-    // back to the firing promo so reports can attribute supplier rebates.
-    const bonuses = computeBonusLines(
-      db,
-      input.channel,
-      resolvedLines.map((l) => ({
-        productId: l.productId,
-        unitId: l.unitId || null,
-        quantity: l.quantityInUnit,
-      })),
-    );
-    for (const b of bonuses) {
-      // Look up the unit's conversion factor + product cost so the stock
-      // movement is in canonical units and the margin maths stay honest.
-      let factor = 1;
-      if (b.unitId) {
-        const u = db.prepare(
-          `SELECT conversion_factor FROM product_units WHERE id = ?`,
-        ).get(b.unitId) as { conversion_factor: number } | undefined;
-        if (u) factor = u.conversion_factor;
-      }
-      const prodRow = db.prepare(
-        `SELECT cost_price_pesewas FROM products WHERE id = ?`,
-      ).get(b.productId) as { cost_price_pesewas: number } | undefined;
-      const canonicalCost = prodRow ? Math.floor(prodRow.cost_price_pesewas / factor) : 0;
-      const canonicalQty = b.bonusQty * factor;
-      const unitCostForLine = canonicalCost * factor;
-      const margin = -(unitCostForLine * b.bonusQty); // pure cost loss
-
-      const lineId = `sl-${uuidv4()}`;
-      db.prepare(
-        `INSERT INTO sale_lines (
-          id, sale_id, product_id, quantity,
-          unit_price_pesewas, unit_cost_pesewas,
-          line_total_pesewas, margin_pesewas, applied_tier_id, applied_unit_id,
-          kind, applied_promotion_id,
-          created_by, updated_by, device_id
-        ) VALUES (?, ?, ?, ?, 0, ?, 0, ?, NULL, ?, 'BONUS', ?, ?, ?, ?)`,
-      ).run(
-        lineId, saleId, b.productId, b.bonusQty,
-        unitCostForLine, margin, b.unitId, b.promotionId,
-        input.workerId, input.workerId, input.deviceId,
-      );
-
-      const sm = insertStockMovement(db, {
-        productId: b.productId,
-        locationId: input.locationId,
-        quantity: canonicalQty,
-        reasonCode,
-        shiftId: input.shiftId,
-        workerId: input.workerId,
-        saleId,
-        unitCostPesewas: canonicalCost,
-        deviceId: input.deviceId,
-      });
-      if (b.unitId) {
-        db.prepare('UPDATE stock_movements SET source_unit_id = ?, updated_at = ? WHERE id = ?')
-          .run(b.unitId, new Date().toISOString(), sm.id);
-      }
     }
 
     // Update credit balance for credit sales.
@@ -775,7 +722,7 @@ export async function completeSale(
     flagTx();
   }
 
-  return { saleId, totalPesewas, changePesewas, printerFailed, printerError };
+  return { saleId, totalPesewas, changePesewas, printerFailed, printerError, receipt };
 }
 
 /** Convenience: read shop_name / shop_subtitle from device_config. */
@@ -798,6 +745,7 @@ export interface SaleWithLinesForDuplicate {
   lines: Array<{
     productId: string; productSku: string; productName: string;
     quantity: number; unitPricePesewas: number; unitsOnHand: number;
+    unitId: string | null; unitName: string; factor: number;
   }>;
 }
 
@@ -820,18 +768,26 @@ export function getSaleWithLines(db: DB, saleId: string): SaleWithLinesForDuplic
     | undefined;
   if (!sale) throw new Error(`getSaleWithLines: sale ${saleId} not found`);
 
+  // applied_unit_id may be NULL on pre-0015 historic sales — surface that as
+  // unitId=null + unitName='UNIT' + factor=1 so the duplicate path still
+  // round-trips into a cart line with sensible defaults.
   const rows = db
     .prepare(
       `SELECT sl.product_id AS productId, p.sku AS productSku, p.name AS productName,
-              sl.quantity, sl.unit_price_pesewas AS unitPricePesewas
+              sl.quantity, sl.unit_price_pesewas AS unitPricePesewas,
+              sl.applied_unit_id AS unitId,
+              COALESCE(pu.unit_name, 'UNIT') AS unitName,
+              COALESCE(pu.conversion_factor, 1) AS factor
          FROM sale_lines sl
          JOIN products p ON p.id = sl.product_id
+         LEFT JOIN product_units pu ON pu.id = sl.applied_unit_id
          WHERE sl.sale_id = ?
          ORDER BY sl.created_at ASC`,
     )
     .all(saleId) as Array<{
       productId: string; productSku: string; productName: string;
       quantity: number; unitPricePesewas: number;
+      unitId: string | null; unitName: string; factor: number;
     }>;
 
   const lines = rows.map((r) => ({

@@ -16,6 +16,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { Database } from 'better-sqlite3';
 import { verifyPin } from './workers.js';
 import { reconcileCustomerBalance } from './customerCredit.js';
+import { assertNotSealed } from './periods.js';
 
 type DB = Database;
 
@@ -145,6 +146,11 @@ export function recordCustomerReturn(
 
   const totalRefund = resolvedLines.reduce((s, l) => s + l.lineTotalPesewas, 0);
 
+  // Day-lock guard: returns restock items AND reduce customer balance (or
+  // emit a cash drop) — both must be locked once the day is sealed.
+  const todayISO = new Date().toISOString().slice(0, 10);
+  assertNotSealed(db, input.locationId, todayISO, 'recording a customer return');
+
   return db.transaction(() => {
     const returnId = `cr-${uuidv4()}`;
     db.prepare(
@@ -164,17 +170,20 @@ export function recordCustomerReturn(
     // Per-line: stock_movements (positive RETURN_FROM_CUSTOMER) + customer_return_lines.
     for (const l of resolvedLines) {
       const movId = `sm-${uuidv4()}`;
+      // stock_movements has no customer_id column. Customer linkage lives
+      // on customer_returns.customer_id, joined back through
+      // customer_return_lines.stock_movement_id below.
       db.prepare(
         `INSERT INTO stock_movements
            (id, product_id, location_id, quantity, reason_code, worker_id,
             unit_cost_pesewas, total_value_pesewas, supervisor_approval_id,
-            customer_id, created_by, updated_by, device_id)
-         VALUES (?, ?, ?, ?, 'RETURN_FROM_CUSTOMER', ?, ?, ?, ?, ?, ?, ?, ?)`,
+            created_by, updated_by, device_id)
+         VALUES (?, ?, ?, ?, 'RETURN_FROM_CUSTOMER', ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         movId, l.productId, input.locationId, l.quantityCanonical,
         input.workerId, l.canonicalUnitCost,
         l.canonicalUnitCost * l.quantityCanonical,
-        input.supervisorWorkerId, input.customerId,
+        input.supervisorWorkerId,
         input.workerId, input.workerId, input.deviceId,
       );
 
@@ -234,9 +243,13 @@ export function recordCustomerReturn(
         );
         db.prepare(
           `INSERT INTO customer_payment_allocations
-             (payment_id, sale_id, amount_pesewas)
-           VALUES (?, ?, ?)`,
-        ).run(paymentId, s.id, apply);
+             (id, customer_payment_id, sale_id, amount_pesewas,
+              created_by, updated_by, device_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        ).run(
+          `cpa-${uuidv4()}`, paymentId, s.id, apply,
+          input.workerId, input.workerId, input.deviceId,
+        );
         creditAllocations.push({ saleId: s.id, amountPesewas: apply });
         remaining -= apply;
       }

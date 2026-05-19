@@ -80,6 +80,20 @@ export default function StockReceiveScreen({ onExit }: { onExit: () => void }) {
     return () => { cancelled = true; };
   }, [pendingProduct]);
 
+  // Re-derive the cost field whenever the chosen unit changes. The cost
+  // stored on the product is per CANONICAL unit (smallest piece) — when the
+  // user is receiving in a larger unit (e.g. PACK × 2), the displayed cost
+  // must be scaled up so they enter what they actually paid per pack, not
+  // per single piece. Without this the user types "49" thinking it's per
+  // pack and the system silently records half the true cost.
+  useEffect(() => {
+    if (!pendingProduct) return;
+    const unit = pendingProductUnits.find((u) => u.id === pendingUnitId);
+    const factor = unit?.conversionFactor ?? 1;
+    setPendingCost(formatMoney(pendingProduct.costPricePesewas * factor));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingUnitId, pendingProduct?.id, pendingProductUnits.length]);
+
   function addPendingToList() {
     if (!pendingProduct) return;
     const cost = parseCedisToPesewas(pendingCost);
@@ -205,10 +219,12 @@ export default function StockReceiveScreen({ onExit }: { onExit: () => void }) {
           <ul className="max-h-32 overflow-y-auto">
             {hits.slice(0, 5).map((p) => (
               <li key={p.id}>
-                <button onClick={() => { setPendingProduct(p); setPendingCost(formatMoney(p.costPricePesewas)); setPendingQty(0); }}
+                <button onClick={() => { setPendingProduct(p); setPendingQty(0); }}
                   className={`w-full text-left px-3 py-2 flex justify-between border-b border-border ${pendingProduct?.id === p.id ? 'bg-bg-elevated' : 'hover:bg-bg-elevated'}`}>
                   <span>{p.name} <span className="text-text-tertiary text-xs">{p.sku}</span></span>
-                  <span className="text-text-tertiary text-sm">last cost {formatMoney(p.costPricePesewas)}</span>
+                  <span className="text-text-tertiary text-sm" title="Per smallest unit (canonical). Cost field below will scale to the chosen receive unit.">
+                    last cost {formatMoney(p.costPricePesewas)}<span className="opacity-50"> / single</span>
+                  </span>
                 </button>
               </li>
             ))}
@@ -230,8 +246,10 @@ export default function StockReceiveScreen({ onExit }: { onExit: () => void }) {
                 <input type="number" min={1} value={pendingQty || ''} onChange={(e) => setPendingQty(Number(e.target.value))}
                   className="w-full bg-bg-input border border-border-strong px-3 py-2 font-mono tnum" />
               </div>
-              <div className="w-32">
-                <label className="text-text-secondary text-xs uppercase tracking-wider">Cost / unit (cedis)</label>
+              <div className="w-36">
+                <label className="text-text-secondary text-xs uppercase tracking-wider">
+                  Cost / {pendingProductUnits.find((u) => u.id === pendingUnitId)?.unitName ?? 'unit'} (₵)
+                </label>
                 <input value={pendingCost} onChange={(e) => setPendingCost(e.target.value)}
                   className="w-full bg-bg-input border border-border-strong px-3 py-2 font-mono tnum" />
               </div>

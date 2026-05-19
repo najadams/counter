@@ -10,6 +10,8 @@
     "preview": "vite preview",
     "db:reset": "tsx scripts/db-reset.ts",
     "db:migrate": "tsx scripts/db-migrate.ts",
+    "seed:reset": "node scripts/reset-and-seed.cjs",
+    "seed:demo": "node scripts/seed-demo-products.cjs",
     "backup": "node scripts/backup.cjs",
     "test": "vitest",
     "typecheck": "tsc -b --noEmit",

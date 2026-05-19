@@ -15,53 +15,9 @@
 
 import { useEffect, useState } from 'react';
 import { counter } from '../lib/ipc';
-import type { BackupHeartbeat } from '../../shared/types/ipc';
+import { describeHeartbeat, type Banner } from '../../shared/lib/backupHeartbeat';
 
 const DISMISS_KEY = 'counter.backupBanner.dismissedUntil';
-
-const HOUR_MS = 3600_000;
-const DAY_MS = 24 * HOUR_MS;
-
-type Severity = 'warn' | 'danger';
-interface Banner {
-  severity: Severity;
-  headline: string;
-  detail: string;
-}
-
-function describe(heartbeat: BackupHeartbeat): Banner | null {
-  if (heartbeat.neverBackedUp || !heartbeat.lastBackupAt) {
-    return {
-      severity: 'danger',
-      headline: 'No off-site backup yet',
-      detail:
-        'Run the backup script and copy the latest .db file to a USB stick. Without an off-site copy a fire or theft loses everything.',
-    };
-  }
-  const ageMs = Date.now() - new Date(heartbeat.lastBackupAt).getTime();
-  if (ageMs > 7 * DAY_MS) {
-    return {
-      severity: 'danger',
-      headline: `Last off-site backup: ${formatAge(ageMs)} ago — at risk`,
-      detail: 'Backups have not run for over a week. Plug the USB in and run the backup tonight.',
-    };
-  }
-  if (ageMs > 3 * DAY_MS) {
-    return {
-      severity: 'warn',
-      headline: `Last off-site backup: ${formatAge(ageMs)} ago`,
-      detail: 'Take the USB stick home tonight. Recommended cadence is daily.',
-    };
-  }
-  return null; // healthy, no banner
-}
-
-function formatAge(ms: number): string {
-  const days = Math.floor(ms / DAY_MS);
-  const hours = Math.floor((ms % DAY_MS) / HOUR_MS);
-  if (days >= 1) return days === 1 ? '1 day' : `${days} days`;
-  return hours === 1 ? '1 hour' : `${hours} hours`;
-}
 
 function isDismissed(): boolean {
   try {
@@ -96,7 +52,7 @@ export function BackupHealthBanner(): JSX.Element | null {
       const r = await counter.backupGetHeartbeat();
       if (cancelled) return;
       if (!r.success) return; // fail open — don't pester user with internal errors
-      setBanner(describe(r.data));
+      setBanner(describeHeartbeat(r.data));
     })();
     return () => {
       cancelled = true;

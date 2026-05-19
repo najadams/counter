@@ -147,13 +147,16 @@ export default function CustomersScreen({ onExit }: { onExit: () => void }) {
                   : r.oldestUnpaidBucket === 'bucket31_60' ? 'text-warning'
                   : 'text-text-primary';
                 return (
-                  <tr key={r.id} className="border-t border-border">
+                  <tr key={r.id} className="border-t border-border hover:bg-bg-elevated/40 cursor-pointer"
+                      onClick={() => setSelectedCustomer(r.id)}
+                      title="Open customer details (open sales, recent sales, receipts)">
                     <td className="px-4 py-3">
-                      <button onClick={() => setSelectedCustomer(r.id)} className="text-left hover:text-accent">
+                      <button onClick={(e) => { e.stopPropagation(); setSelectedCustomer(r.id); }}
+                        className="text-left text-accent hover:underline font-medium">
                         {r.displayName}
                         {r.needsReconcile && <span className="ml-2 text-warning text-xs">drift</span>}
                       </button>
-                      <div className="text-text-tertiary text-xs">{r.customerType}</div>
+                      <div className="text-text-tertiary text-xs">{r.customerType} · click row for details</div>
                     </td>
                     <td className="px-4 py-3 font-mono tnum">{r.phone}</td>
                     <td className={`px-4 py-3 text-right font-mono tnum ${tone}`}>{formatMoney(r.trueBalancePesewas)}</td>
@@ -169,7 +172,8 @@ export default function CustomersScreen({ onExit }: { onExit: () => void }) {
                         : <span className="text-success">ok</span>}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <button onClick={() => setShowPay({ customerId: r.id, displayName: r.displayName })}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setShowPay({ customerId: r.id, displayName: r.displayName }); }}
                         className="bg-accent text-bg-deep px-3 py-1 hover:bg-accent-light text-xs font-semibold">
                         Take payment
                       </button>

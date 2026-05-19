@@ -1,0 +1,50 @@
+# Run the test suite + typecheck on every PR and every push to main.
+#
+# Why a separate workflow from release.yml: release.yml builds installers on
+# a 3-OS matrix and only runs on push-to-main / tag / manual. We want the
+# faster feedback loop on PRs too, and we don't need the full matrix for
+# unit + integration tests — a single Ubuntu runner is enough.
+#
+# Native module note: postinstall runs `electron-builder install-app-deps`
+# which rebuilds better-sqlite3 against the Electron ABI. vitest runs in
+# Node, so we explicitly `npm rebuild better-sqlite3` afterward to get the
+# Node-ABI binary. Without that, every test errors with
+# "NODE_MODULE_VERSION mismatch".
+
+name: Test
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+jobs:
+  test:
+    name: test + typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Rebuild better-sqlite3 against Node ABI
+        # postinstall already built it against the Electron ABI; vitest
+        # runs in Node so we need the Node ABI binary on top of that.
+        run: npm rebuild better-sqlite3
+
+      - name: Run tests
+        run: npm test -- --run
+
+      - name: Typecheck
+        run: npm run typecheck

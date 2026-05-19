@@ -38,8 +38,11 @@ class ThermalPrinter implements PrinterAdapter {
         message: `node-thermal-printer not installed: ${err instanceof Error ? err.message : String(err)}`,
       };
     }
-    const { printer: { ThermalPrinter, PrinterTypes } } = mod;
-    const printer = new ThermalPrinter({
+    // node-thermal-printer exports ThermalPrinter and PrinterTypes at the
+    // top level (see its .d.ts). Aliased here because the local class above
+    // is also called ThermalPrinter.
+    const { ThermalPrinter: LibThermalPrinter, PrinterTypes } = mod;
+    const printer = new LibThermalPrinter({
       type: PrinterTypes.EPSON,
       interface: this.interfaceSpec,
     });

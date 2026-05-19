@@ -27,8 +27,9 @@ import SettingsScreen from './SettingsScreen';
 import StocktakeScreen from './StocktakeScreen';
 import DailySummaryScreen from './DailySummaryScreen';
 import CustomersScreen from './CustomersScreen';
+import ReportsScreen from './ReportsScreen';
 
-type View = 'home' | 'sale' | 'void' | 'breakage' | 'consumption' | 'stock' | 'settings' | 'stocktake' | 'summary' | 'customers';
+type View = 'home' | 'sale' | 'void' | 'breakage' | 'consumption' | 'stock' | 'settings' | 'stocktake' | 'summary' | 'customers' | 'reports';
 
 export default function HomeScreen() {
   const shiftId = useSession((s) => s.shiftId);
@@ -43,6 +44,14 @@ export default function HomeScreen() {
   const [step, setStep] = useState<'idle' | 'count' | 'reconciled'>('idle');
   const [pendingReprints, setPendingReprints] = useState<Array<{ id: string; saleId: string; saleTotalPesewas: number; reason: string }>>([]);
   const [reprintAck, setReprintAck] = useState(false);
+
+  // Reset the "close anyway" acknowledgement whenever the pending list
+  // changes — a successful reprint or discard alters the count, and the
+  // user should re-affirm against the new state rather than coast on a
+  // stale checkbox.
+  useEffect(() => {
+    setReprintAck(false);
+  }, [pendingReprints.length]);
 
   async function refreshReprints() {
     const r = await counter.listPendingReprints();
@@ -105,6 +114,16 @@ export default function HomeScreen() {
   if (view === 'stocktake') return <StocktakeScreen onExit={() => setView('home')} />;
   if (view === 'summary') return <DailySummaryScreen onExit={() => setView('home')} />;
   if (view === 'customers') return <CustomersScreen onExit={() => setView('home')} />;
+  if (view === 'reports') return (
+    <ReportsScreen
+      onExit={() => setView('home')}
+      onOpenCustomers={() => setView('customers')}
+      onOpenSummary={() => setView('summary')}
+      onOpenStocktake={() => setView('stocktake')}
+      onOpenSupplierPayments={() => setView('settings')}
+      onOpenReorder={() => setView('settings')}
+    />
+  );
 
   async function submitCountAndClose() {
     if (!shiftId) return;
@@ -137,6 +156,7 @@ export default function HomeScreen() {
               <ActionRow label="Expense" caption="Pay a bill or runner from the till (water, transport, etc.)." onClick={() => setShowExpense(true)} />
               <ActionRow label="Drink" hot="F3" caption="Log worker consumption." onClick={() => setView('consumption')} />
               <ActionRow label="Stocktake" hot="F4" caption="Physical count + shrinkage measure." onClick={() => setView('stocktake')} />
+              <ActionRow label="Reports" caption="Overview dashboard: revenue, margin, cash, who owes you." onClick={() => setView('reports')} />
               <ActionRow label="Daily summary" hot="F5" caption="Revenue, margin, shrinkage, alerts." onClick={() => setView('summary')} />
               <ActionRow label="Customers" hot="F6" caption="Debts, take payments, aging." onClick={() => setView('customers')} />
               <ActionRow label="Breakage" hot="F7" caption="Report broken/leaked stock with photo." onClick={() => setView('breakage')} />
@@ -252,7 +272,7 @@ export default function HomeScreen() {
 }
 
 function ActionRow({ kind = 'default', label, hot, caption, onClick }: {
-  kind?: 'default' | 'primary' | 'warn'; label: string; hot: string; caption: string; onClick: () => void;
+  kind?: 'default' | 'primary' | 'warn'; label: string; hot?: string; caption: string; onClick: () => void;
 }) {
   const cls =
     kind === 'primary' ? 'bg-accent text-bg-deep hover:bg-accent-light'
@@ -265,7 +285,7 @@ function ActionRow({ kind = 'default', label, hot, caption, onClick }: {
         <div className={`uppercase tracking-wider text-xs ${kind === 'primary' ? 'opacity-80' : 'text-text-secondary'}`}>{label}</div>
         <div className={`mt-1 text-base ${kind === 'primary' ? '' : 'text-text-primary'}`}>{caption}</div>
       </div>
-      <span className={`kbd ${kind === 'primary' ? 'bg-bg-deep text-accent border-accent' : ''}`}>{hot}</span>
+      {hot && <span className={`kbd ${kind === 'primary' ? 'bg-bg-deep text-accent border-accent' : ''}`}>{hot}</span>}
     </button>
   );
 }

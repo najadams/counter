@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { counter } from '../lib/ipc';
 import { SupervisorPinModal } from './SupervisorPinModal';
-import { formatMoney, formatMoneyWithCurrency, parseCedisToPesewas } from '../../shared/lib/money';
+import { formatMoneyWithCurrency, parseCedisToPesewas } from '../../shared/lib/money';
 
 const COMMON_RECIPIENTS = ['Owner', 'Bank deposit', 'Supplier payment', 'Other'];
 

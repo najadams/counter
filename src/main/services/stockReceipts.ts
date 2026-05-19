@@ -109,6 +109,8 @@ export function receiveStock(
   const now = new Date().toISOString();
 
   const tx = db.transaction(() => {
+    const productsTouched = new Set<string>();
+
     for (const line of input.lines) {
       // Resolve unit + convert to canonical.
       let factor = 1;
@@ -127,9 +129,16 @@ export function receiveStock(
         unitId = u.id;
       }
       const canonicalQty = line.quantity * factor;
-      // Cost per canonical unit. Floor to keep integer math; if there's a
-      // remainder it's effectively absorbed into per-unit cost rounding.
-      const canonicalCost = Math.floor(line.unitCostPesewas / factor);
+
+      // Truth: total spent on this line, in pesewas. EXACT — the user typed
+      // (quantity, per-purchase-unit cost) and we just multiply integers.
+      // No division means no rounding here.
+      const lineTotalPesewas = line.quantity * line.unitCostPesewas;
+      // Display: per-canonical-unit cost, rounded. Used for analysis and as
+      // the cost-snapshot at sale time. May differ from
+      // lineTotalPesewas / canonicalQty by ±0.5 pesewa due to rounding, but
+      // the line total above stays exact.
+      const canonicalUnitCost = Math.round(lineTotalPesewas / canonicalQty);
 
       const sm = insertStockMovement(db, {
         productId: line.productId,
@@ -138,7 +147,12 @@ export function receiveStock(
         reasonCode,
         workerId: input.workerId,
         supervisorApprovalId: input.supervisorApprovalId,
-        unitCostPesewas: canonicalCost,
+        unitCostPesewas: canonicalUnitCost,
+        // Preserve the EXACT total. Without this, total_value would be
+        // canonicalQty × canonicalUnitCost — and for any line whose
+        // box-cost isn't evenly divisible, that quietly understates
+        // (or overstates) what we actually spent.
+        totalValuePesewasOverride: lineTotalPesewas,
         notes: input.notes ?? null,
         deviceId: input.deviceId,
       });
@@ -148,16 +162,38 @@ export function receiveStock(
       }
       movementIds.push(sm.id);
       totalValuePesewas += sm.totalValuePesewas;
+      productsTouched.add(line.productId);
+    }
 
-      // Update last-known cost (per canonical unit).
-      const old = productMap.get(line.productId)!.oldCost;
-      if (old !== canonicalCost) {
-        db.prepare(
-          `UPDATE products
-              SET cost_price_pesewas = ?, updated_at = ?, updated_by = ?
-              WHERE id = ?`,
-        ).run(canonicalCost, now, input.workerId, line.productId);
-        productsUpdated++;
+    // Recompute weighted-average cost for every touched product from the
+    // stock_movements truth. We use only inflow rows (receipts + opening
+    // stock + customer returns) so cost is "what we paid for the units we
+    // brought in," regardless of what's been sold since. This is a
+    // simple-average-cost model — good enough for shop-floor margin
+    // reports without the complexity of true FIFO lots.
+    for (const productId of productsTouched) {
+      const agg = db
+        .prepare(
+          `SELECT COALESCE(SUM(total_value_pesewas), 0) AS sumValue,
+                  COALESCE(SUM(quantity), 0)            AS sumQty
+             FROM stock_movements sm
+             JOIN reason_codes rc ON rc.code = sm.reason_code
+             WHERE sm.product_id = ?
+               AND rc.category = 'inflow'`,
+        )
+        .get(productId) as { sumValue: number; sumQty: number };
+
+      if (agg.sumQty > 0) {
+        const newAvgCost = Math.round(agg.sumValue / agg.sumQty);
+        const old = productMap.get(productId)!.oldCost;
+        if (old !== newAvgCost) {
+          db.prepare(
+            `UPDATE products
+                SET cost_price_pesewas = ?, updated_at = ?, updated_by = ?
+                WHERE id = ?`,
+          ).run(newAvgCost, now, input.workerId, productId);
+          productsUpdated++;
+        }
       }
     }
 

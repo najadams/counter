@@ -19,8 +19,18 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import type { Database } from 'better-sqlite3';
+import { DEFAULT_LOCATION_ID } from '../../shared/lib/constants.js';
+import { assertNotSealed } from './periods.js';
 
 type DB = Database;
+
+// Empties operations affect customer/supplier deposit balances — real money
+// flows. Sealed business days must reject all four mutations the same way
+// expenses and customer payments do.
+function guardEmptiesWrite(db: DB, locationId: string, action: string): void {
+  const todayISO = new Date().toISOString().slice(0, 10);
+  assertNotSealed(db, locationId, todayISO, action);
+}
 
 export type ContainerKind =
   | 'CUSTOMER_TAKES_FULL'
@@ -59,6 +69,9 @@ export function recordCustomerTakesFull(
     throw new Error('recordCustomerTakesFull: quantity must be a positive integer');
   }
   const product = loadProduct(db, input.productId);
+  // Customer-takes paths aren't currently location-tagged — fall back to
+  // DEFAULT_LOCATION_ID, mirroring customerCredit.recordCustomerPayment.
+  guardEmptiesWrite(db, DEFAULT_LOCATION_ID, 'recording customer takes-full');
   return db.transaction(() => {
     const id = `cm-${uuidv4()}`;
     db.prepare(
@@ -119,6 +132,8 @@ export function recordCustomerReturnsEmpty(
     ? product.bottle_deposit_pesewas * input.quantity
     : 0;
 
+  guardEmptiesWrite(db, input.locationId, 'recording customer returns-empty');
+
   return db.transaction(() => {
     const id = `cm-${uuidv4()}`;
     db.prepare(
@@ -176,6 +191,7 @@ export function recordDepotReceivesFull(
     throw new Error('recordDepotReceivesFull: quantity must be a positive integer');
   }
   const product = loadProduct(db, input.productId);
+  guardEmptiesWrite(db, DEFAULT_LOCATION_ID, 'recording depot receives-full');
   const id = `cm-${uuidv4()}`;
   db.prepare(
     `INSERT INTO container_movements
@@ -206,6 +222,7 @@ export function recordDepotReturnsEmpty(
     throw new Error('recordDepotReturnsEmpty: quantity must be a positive integer');
   }
   const product = loadProduct(db, input.productId);
+  guardEmptiesWrite(db, DEFAULT_LOCATION_ID, 'recording depot returns-empty');
   const id = `cm-${uuidv4()}`;
   db.prepare(
     `INSERT INTO container_movements

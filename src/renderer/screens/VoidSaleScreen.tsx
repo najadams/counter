@@ -5,6 +5,8 @@ import { useCart } from '../store/cart';
 import { counter } from '../lib/ipc';
 import { AppHeader } from '../components/AppHeader';
 import { SupervisorPinModal } from '../components/SupervisorPinModal';
+import { ReceiptPrintModal } from '../components/ReceiptPrintModal';
+import type { SaleReceipt } from '../../shared/lib/receipt';
 import { formatMoney, formatMoneyWithCurrency } from '../../shared/lib/money';
 
 interface RecentSale {
@@ -21,6 +23,10 @@ export default function VoidSaleScreen({ onExit, onDuplicate }: { onExit: () => 
   const [askingSupervisor, setAskingSupervisor] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [receiptDetail, setReceiptDetail] = useState<{
+    receipt: SaleReceipt; amountPaidPesewas: number; amountOutstandingPesewas: number | null;
+  } | null>(null);
+  const [loadingReceiptId, setLoadingReceiptId] = useState<string | null>(null);
 
   async function refresh() {
     const r = await counter.listRecentSales(50);
@@ -36,10 +42,20 @@ export default function VoidSaleScreen({ onExit, onDuplicate }: { onExit: () => 
   }, [askingSupervisor, onExit]);
 
   async function reprint(saleId: string) {
-    const r = await counter.reprintSaleReceipt(saleId);
-    if (!r.success) { setError(r.error); setInfo(null); return; }
-    if (r.data.printed) { setInfo(`Receipt for #${saleId.slice(-6)} reprinted.`); setError(null); }
-    else { setError(`Reprint failed: ${r.data.error ?? 'printer offline'}`); setInfo(null); }
+    // Open the on-screen receipt preview; the user prints via the OS dialog
+    // (or saves as PDF). Works on any printer the OS sees — no dependency on
+    // a thermal-printer interface being configured. In production with a
+    // thermal printer set as the OS default, the print dialog still picks it.
+    setError(null);
+    setInfo(null);
+    setLoadingReceiptId(saleId);
+    const r = await counter.getSaleReceipt(saleId);
+    setLoadingReceiptId(null);
+    if (!r.success) {
+      setError(`Could not load receipt: ${r.error}`);
+      return;
+    }
+    setReceiptDetail(r.data);
   }
 
   async function duplicate(saleId: string) {
@@ -50,6 +66,7 @@ export default function VoidSaleScreen({ onExit, onDuplicate }: { onExit: () => 
     loadLines(
       data.lines.map((l) => ({
         productId: l.productId, sku: l.productSku, name: l.productName,
+        unitId: l.unitId, unitName: l.unitName, factor: l.factor,
         basePricePesewas: l.unitPricePesewas, unitPricePesewas: l.unitPricePesewas,
         appliedTierId: null, appliedTierMinQuantity: null,
         quantity: l.quantity, unitsOnHand: l.unitsOnHand,
@@ -108,8 +125,9 @@ export default function VoidSaleScreen({ onExit, onDuplicate }: { onExit: () => 
                     <div className="flex gap-2 justify-end">
                       <button
                         onClick={() => void reprint(s.id)}
-                        className="px-3 py-1 border border-border text-text-tertiary hover:text-accent hover:border-accent text-xs">
-                        Print receipt
+                        disabled={loadingReceiptId === s.id}
+                        className="px-3 py-1 border border-border text-text-tertiary hover:text-accent hover:border-accent text-xs disabled:opacity-50">
+                        {loadingReceiptId === s.id ? 'Loading…' : 'Print receipt'}
                       </button>
                       <button
                         onClick={() => void duplicate(s.id)}
@@ -168,6 +186,15 @@ export default function VoidSaleScreen({ onExit, onDuplicate }: { onExit: () => 
           />
         )}
       </main>
+
+      {receiptDetail && (
+        <ReceiptPrintModal
+          receipt={receiptDetail.receipt}
+          amountPaidPesewas={receiptDetail.amountPaidPesewas}
+          amountOutstandingPesewas={receiptDetail.amountOutstandingPesewas}
+          onClose={() => setReceiptDetail(null)}
+        />
+      )}
     </div>
   );
 }

@@ -59,6 +59,14 @@ export interface CartState {
   setDiscount: (pesewas: number, reason: string) => void;
   applyTier: (productId: string, tier: { id: string; unitPricePesewas: number; minQuantity: number } | null) => void;
   swapUnit: (productId: string, unit: { id: string; unitName: string; conversionFactor: number; pricePesewas: number }) => void;
+  /**
+   * Update the per-unit base price of one or more lines in place. Used when
+   * the channel changes — each line's price is recomputed by the backend
+   * (which applies channel scaling) and pushed back in. Tier discounts get
+   * cleared because they were computed against the old channel; the
+   * SaleScreen's tier-lookup effect will re-evaluate on the next render.
+   */
+  repriceLines: (entries: Array<{ productId: string; unitId: string | null; unitPricePesewas: number }>) => void;
   loadLines: (lines: CartLine[], channel?: SaleChannel, customer?: CartCustomer | null) => void;
   clear: () => void;
 
@@ -140,6 +148,20 @@ export const useCart = create<CartState>((set, get) => ({
           : l.basePricePesewas,
         appliedTierId: tierUnitPrice != null && tierUnitPrice < l.basePricePesewas ? tier!.id : null,
         appliedTierMinQuantity: tierUnitPrice != null && tierUnitPrice < l.basePricePesewas ? tier!.minQuantity : null,
+      };
+    }),
+  })),
+
+  repriceLines: (entries) => set((state) => ({
+    lines: state.lines.map((l) => {
+      const e = entries.find((x) => x.productId === l.productId && (x.unitId ?? null) === (l.unitId ?? null));
+      if (!e) return l;
+      return {
+        ...l,
+        basePricePesewas: e.unitPricePesewas,
+        unitPricePesewas: e.unitPricePesewas,
+        appliedTierId: null,
+        appliedTierMinQuantity: null,
       };
     }),
   })),

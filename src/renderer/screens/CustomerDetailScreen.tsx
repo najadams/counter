@@ -6,6 +6,8 @@ import { AppHeader } from '../components/AppHeader';
 import { CustomerStatementModal } from '../components/CustomerStatementModal';
 import { PriceOverridesModal } from '../components/PriceOverridesModal';
 import { CustomerReturnModal } from '../components/CustomerReturnModal';
+import { ReceiptPrintModal } from '../components/ReceiptPrintModal';
+import type { SaleReceipt } from '../../shared/lib/receipt';
 import { formatMoney, formatMoneyWithCurrency } from '../../shared/lib/money';
 
 interface Overview {
@@ -35,6 +37,20 @@ export default function CustomerDetailScreen({
   const [showStatement, setShowStatement] = useState(false);
   const [showOverrides, setShowOverrides] = useState(false);
   const [showReturn, setShowReturn] = useState(false);
+  const [receiptDetail, setReceiptDetail] = useState<{ receipt: SaleReceipt; amountOutstandingPesewas: number | null; amountPaidPesewas: number } | null>(null);
+  const [loadingReceiptId, setLoadingReceiptId] = useState<string | null>(null);
+
+  async function openReceipt(saleId: string) {
+    setLoadingReceiptId(saleId);
+    const r = await counter.getSaleReceipt(saleId);
+    setLoadingReceiptId(null);
+    if (!r.success) {
+      setInfo(`Failed to load receipt: ${r.error}`);
+      setTimeout(() => setInfo(null), 4000);
+      return;
+    }
+    setReceiptDetail(r.data);
+  }
 
   async function refresh() {
     const o = await counter.customerOverview(customerId);
@@ -147,6 +163,9 @@ export default function CustomerDetailScreen({
 
         {tab === 'open' && (
           <div className="bg-bg-surface border border-border">
+            <div className="px-4 py-2 text-text-tertiary text-xs border-b border-border">
+              Click a row to see the items on that sale.
+            </div>
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-text-secondary text-xs uppercase tracking-wider">
@@ -159,8 +178,17 @@ export default function CustomerDetailScreen({
               </thead>
               <tbody>
                 {openSales.map((s) => (
-                  <tr key={s.saleId} className="border-t border-border">
-                    <td className="px-4 py-2 font-mono tnum">{new Date(s.createdAt).toLocaleString()}<span className="text-text-tertiary ml-2">#{s.saleId.slice(-6)}</span></td>
+                  <tr
+                    key={s.saleId}
+                    onClick={() => void openReceipt(s.saleId)}
+                    className="border-t border-border cursor-pointer hover:bg-bg-elevated"
+                    title="View receipt"
+                  >
+                    <td className="px-4 py-2 font-mono tnum">
+                      {new Date(s.createdAt).toLocaleString()}
+                      <span className="text-text-tertiary ml-2">#{s.saleId.slice(-6)}</span>
+                      {loadingReceiptId === s.saleId && <span className="text-text-tertiary ml-2 text-xs">loading…</span>}
+                    </td>
                     <td className="px-4 py-2 text-right font-mono tnum">{formatMoney(s.totalPesewas)}</td>
                     <td className="px-4 py-2 text-right font-mono tnum text-text-tertiary">{formatMoney(s.paidPesewas)}</td>
                     <td className="px-4 py-2 text-right font-mono tnum text-accent">{formatMoney(s.outstandingPesewas)}</td>
@@ -181,8 +209,17 @@ export default function CustomerDetailScreen({
               <div className="px-4 py-3 text-text-secondary uppercase tracking-wider text-xs border-b border-border">Recent sales</div>
               <ul className="divide-y divide-border text-sm">
                 {overview.recentSales.map((s) => (
-                  <li key={s.id} className={`px-4 py-2 flex justify-between ${s.voided ? 'line-through text-text-tertiary' : ''}`}>
-                    <span className="font-mono tnum text-xs text-text-tertiary">{new Date(s.createdAt).toLocaleDateString()}</span>
+                  <li
+                    key={s.id}
+                    onClick={() => !s.voided && void openReceipt(s.id)}
+                    className={`px-4 py-2 flex justify-between ${s.voided ? 'line-through text-text-tertiary' : 'cursor-pointer hover:bg-bg-elevated'}`}
+                    title={s.voided ? 'Voided sale' : 'View receipt'}
+                  >
+                    <span className="font-mono tnum text-xs text-text-tertiary">
+                      {new Date(s.createdAt).toLocaleDateString()}
+                      <span className="ml-2">#{s.id.slice(-6)}</span>
+                      {loadingReceiptId === s.id && <span className="ml-2">loading…</span>}
+                    </span>
                     <span className="font-mono tnum">{formatMoney(s.totalPesewas)}{s.amountOutstandingPesewas > 0 ? ` (${formatMoney(s.amountOutstandingPesewas)} due)` : ''}</span>
                   </li>
                 ))}
@@ -231,6 +268,14 @@ export default function CustomerDetailScreen({
             setTimeout(() => setInfo(null), 4000);
             void refresh();
           }}
+        />
+      )}
+      {receiptDetail && (
+        <ReceiptPrintModal
+          receipt={receiptDetail.receipt}
+          amountPaidPesewas={receiptDetail.amountPaidPesewas}
+          amountOutstandingPesewas={receiptDetail.amountOutstandingPesewas}
+          onClose={() => setReceiptDetail(null)}
         />
       )}
     </div>

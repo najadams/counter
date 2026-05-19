@@ -10,6 +10,7 @@ import {
   type PingResponse,
   type ProductGetStockResponse, type ProductSearchResponse,
   type SaleCompleteRequest, type SaleCompleteResponse,
+  type SaleRepriceLinesRequest, type SaleRepriceLinesResponse,
   type SaleListRecentResponse, type SaleVoidResponse,
   type ShiftCloseResponse, type ShiftGetOpenResponse,
   type ShiftOpenResponse, type ShiftSubmitCountResponse,
@@ -47,6 +48,7 @@ declare global {
         getProductStock: (productId: string) => Promise<IpcResponse<ProductGetStockResponse>>;
         searchCustomers: (query: string, limit?: number) => Promise<IpcResponse<CustomerSearchResponse>>;
         completeSale: (req: SaleCompleteRequest) => Promise<IpcResponse<SaleCompleteResponse>>;
+        repriceLines: (req: SaleRepriceLinesRequest) => Promise<IpcResponse<SaleRepriceLinesResponse>>;
   
         listRecentSales: (limit?: number) => Promise<IpcResponse<SaleListRecentResponse>>;
         voidSale: (saleId: string, reason: string, supervisorWorkerId: string, supervisorPin: string) =>
@@ -93,11 +95,11 @@ const ERROR_PATTERNS: ErrorPattern[] = [
   { match: /^FOREIGN KEY constraint failed/i,
     replace: () => "That action references a record that doesn't exist or has been removed. Refresh and try again." },
   { match: /^UNIQUE constraint failed:\s*(\w+\.\w+)/i,
-    replace: (m) => `A record with that ${m[1].split('.')[1] || 'value'} already exists. Pick a different value.` },
+    replace: (m) => `A record with that ${m[1]?.split('.')[1] || 'value'} already exists. Pick a different value.` },
   { match: /^CHECK constraint failed:\s*(.+)/i,
-    replace: (m) => `That value isn't allowed (${m[1].trim()}). Check the input and try again.` },
+    replace: (m) => `That value isn't allowed (${m[1]?.trim() ?? 'invalid'}). Check the input and try again.` },
   { match: /^NOT NULL constraint failed:\s*(\w+\.\w+)/i,
-    replace: (m) => `Missing a required field (${m[1].split('.')[1]}). Fill it in and try again.` },
+    replace: (m) => `Missing a required field (${m[1]?.split('.')[1] ?? 'unknown'}). Fill it in and try again.` },
   { match: /^Not authenticated/i,
     replace: () => 'You are signed out. Sign in again to continue.' },
   { match: /No open shift/i,
@@ -337,11 +339,12 @@ declare global {
 }
 
 // --- Session 14: on-demand receipt reprint -------------------------------
-import type { SaleReprintResponse } from '../../shared/types/ipc';
+import type { SaleReprintResponse, SaleGetReceiptResponse } from '../../shared/types/ipc';
 
 declare global {
   interface CounterApi {
-  reprintSaleReceipt: (saleId: string) => Promise<IpcResponse<SaleReprintResponse>>;  }
+  reprintSaleReceipt: (saleId: string) => Promise<IpcResponse<SaleReprintResponse>>;
+  getSaleReceipt: (saleId: string) => Promise<IpcResponse<SaleGetReceiptResponse>>;  }
 }
 
 // --- Session 15: period close --------------------------------------------
@@ -463,4 +466,43 @@ declare global {
   }) => Promise<IpcResponse<ReturnRecordResponse>>;
   listReturnsForCustomer: (customerId: string, limit?: number)
     => Promise<IpcResponse<ReturnListResponse>>;  }
+}
+
+// --- Supplier payments ---------------------------------------------------
+import type {
+  SupplierPaymentListRequest, SupplierPaymentListResponse,
+  SupplierPaymentRecordRequest, SupplierPaymentRecordResponse,
+  SupplierStatementsListRequest, SupplierStatementsListResponse,
+} from '../../shared/types/ipc';
+
+declare global {
+  interface CounterApi {
+  listSupplierPayments: (req: SupplierPaymentListRequest)
+    => Promise<IpcResponse<SupplierPaymentListResponse>>;
+  recordSupplierPayment: (req: SupplierPaymentRecordRequest)
+    => Promise<IpcResponse<SupplierPaymentRecordResponse>>;
+  listSupplierStatements: (req: SupplierStatementsListRequest)
+    => Promise<IpcResponse<SupplierStatementsListResponse>>;
+  }
+}
+
+// --- Reports / dashboard --------------------------------------------------
+import type {
+  ReportsOverviewRequest, ReportsOverviewResponse,
+  ReportsSalesRequest, ReportsSalesResponse,
+  ReportsMarginRequest, ReportsMarginResponse,
+  ReportsInventoryRequest, ReportsInventoryResponse,
+} from '../../shared/types/ipc';
+
+declare global {
+  interface CounterApi {
+  reportsOverview: (req?: ReportsOverviewRequest)
+    => Promise<IpcResponse<ReportsOverviewResponse>>;
+  reportsSales: (req: ReportsSalesRequest)
+    => Promise<IpcResponse<ReportsSalesResponse>>;
+  reportsMargin: (req: ReportsMarginRequest)
+    => Promise<IpcResponse<ReportsMarginResponse>>;
+  reportsInventory: (req?: ReportsInventoryRequest)
+    => Promise<IpcResponse<ReportsInventoryResponse>>;
+  }
 }

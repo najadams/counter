@@ -19,7 +19,18 @@ export interface InsertStockMovementInput {
   purchaseOrderId?: string | null;
   routeRunId?: string | null;
   breakageLogId?: string | null;
+  /** Per-canonical-unit cost. Used for analysis/reports; may be a rounded
+   *  approximation if the underlying transaction was in a larger unit. */
   unitCostPesewas: number;
+  /**
+   * Optional: override the line's total_value_pesewas instead of computing
+   * it from signedQuantity × unitCostPesewas. Use this when the true cost
+   * of the line is denominated in a larger purchase unit (e.g. a box at
+   * ₵70 split across 12 pieces — ₵70 is exact, but 7000/12 isn't an
+   * integer). Sign is applied automatically (negative for outflows). Must
+   * still be a non-negative integer in absolute value.
+   */
+  totalValuePesewasOverride?: number;
   photoUrl?: string | null;
   supervisorApprovalId?: string | null;
   notes?: string | null;
@@ -97,7 +108,20 @@ export function insertStockMovement(
       );
   }
 
-  const totalValuePesewas = signedQuantity * input.unitCostPesewas;
+  let totalValuePesewas: number;
+  if (input.totalValuePesewasOverride !== undefined) {
+    if (!Number.isInteger(input.totalValuePesewasOverride) || input.totalValuePesewasOverride < 0) {
+      throw new Error(
+        `insertStockMovement: totalValuePesewasOverride must be a non-negative integer`,
+      );
+    }
+    // Apply sign based on flow direction.
+    totalValuePesewas = signedQuantity >= 0
+      ? input.totalValuePesewasOverride
+      : -input.totalValuePesewasOverride;
+  } else {
+    totalValuePesewas = signedQuantity * input.unitCostPesewas;
+  }
   const id = `sm-${uuidv4()}`;
 
   db.prepare(

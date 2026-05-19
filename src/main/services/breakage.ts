@@ -283,10 +283,10 @@ export function listBreakageForReview(
        ${wc}
        ORDER BY b.created_at DESC
        LIMIT ? OFFSET ?`,
-  ).all(...params, limit, offset) as Array<BreakageReviewRow & { deductedFromWages: number }>;
+  ).all(...params, limit, offset) as Array<Omit<BreakageReviewRow, 'deductedFromWages'> & { deductedFromWages: number }>;
 
   return {
-    rows: rows.map((r) => ({ ...r, deductedFromWages: r.deductedFromWages === 1 })),
+    rows: rows.map((r): BreakageReviewRow => ({ ...r, deductedFromWages: r.deductedFromWages === 1 })),
     totalCount: summary.n,
     totalLossPesewas: summary.loss,
   };
