@@ -87,6 +87,32 @@ export type ShiftGetOpenResponse =
   | { open: false };
 export interface ShiftSubmitCountRequest { shiftId: string; countedPesewas: number }
 export interface ShiftSubmitCountResponse { cashCountId: string }
+/**
+ * Result of the auto-backup that runs after a 'last close of the day'.
+ * Always present in ShiftCloseResponse; `ran: false` means the trigger
+ * conditions weren't met (e.g. close happened before END_OF_BUSINESS_DAY_HOUR
+ * or a backup already ran today). `ran: true, ok: false` means we tried
+ * and it failed — the shift is still closed, but the cashier should see a
+ * warning so they can resolve the underlying issue (USB unplugged, etc.).
+ */
+export interface ShiftCloseBackupResult {
+  ran: boolean;
+  /** Why we didn't run, when ran=false. e.g. 'before-cutover', 'already-today'. */
+  skippedReason?: 'before-cutover' | 'already-today' | 'disabled';
+  /** Whether the backup write succeeded, when ran=true. */
+  ok?: boolean;
+  /** Destination .db path on success. */
+  dbDest?: string;
+  /** Target directory the backup was written to. */
+  target?: string;
+  /** True if the configured target was unwritable and we fell back to ~/CounterBackups. */
+  fellBackToDefault?: boolean;
+  /** Size of the written .db in bytes. */
+  sizeBytes?: number;
+  /** Error message if ran && !ok. */
+  error?: string;
+}
+
 export interface ShiftCloseRequest { shiftId: string }
 export interface ShiftCloseResponse {
   shiftId: string;
@@ -95,6 +121,8 @@ export interface ShiftCloseResponse {
   variancePesewas: number;
   totalSalesPesewas: number;
   totalBreakageValuePesewas: number;
+  /** Auto-backup result. Always populated. See ShiftCloseBackupResult. */
+  backup: ShiftCloseBackupResult;
 }
 
 // --- sales -----------------------------------------------------------------
@@ -1138,7 +1166,82 @@ export interface RecoveryRegenerateResponse {
 
 export const IPC_CHANNELS_BACKUP = {
   BACKUP_GET_HEARTBEAT: 'backup:get-heartbeat',
+  BACKUP_GET_CONFIG: 'backup:get-config',
+  BACKUP_SET_CONFIG: 'backup:set-config',
+  BACKUP_RUN_NOW: 'backup:run-now',
+  BACKUP_TEST_TARGET: 'backup:test-target',
+  BACKUP_LIST_HISTORY: 'backup:list-history',
+  BACKUP_REVEAL_TARGET: 'backup:reveal-target',
 } as const;
+
+export type BackupLocationClass = 'usb' | 'cloud' | 'local';
+
+export interface BackupConfigResponse {
+  targetDir: string;
+  locationClass: BackupLocationClass;
+  configured: boolean;
+}
+
+export interface BackupSetConfigRequest {
+  targetDir: string;
+  locationClass: BackupLocationClass;
+}
+
+export interface BackupRunNowResponse {
+  ok: boolean;
+  dbDest?: string;
+  sizeBytes?: number;
+  usedVacuum?: boolean;
+  timestamp?: string;
+  error?: string;
+}
+
+export interface BackupTestTargetRequest {
+  /** Optional override; if omitted, tests the currently configured target. */
+  targetDir?: string;
+}
+
+export interface BackupTestTargetResponse {
+  ok: boolean;
+  /** Resolved absolute path that was tested. */
+  targetDir: string;
+  /** Whether the directory existed (vs was created during the probe). */
+  preexisted: boolean;
+  /** Error message if the probe failed. */
+  error?: string;
+}
+
+export interface BackupHistoryEntry {
+  filename: string;
+  fullPath: string;
+  sizeBytes: number;
+  /** ISO timestamp from mtime. */
+  mtime: string;
+  /** Milliseconds since mtime, as of when the list was generated. */
+  ageMs: number;
+}
+
+export interface BackupListHistoryResponse {
+  targetDir: string;
+  entries: BackupHistoryEntry[];
+  /** Set when entries is empty for a reason worth showing. */
+  reason?: 'no-such-dir' | 'no-backups-yet' | 'unreadable';
+  /** Free-text detail when reason='unreadable'. */
+  errorDetail?: string;
+}
+
+export interface BackupRevealTargetRequest {
+  /** Optional override; if omitted, opens the configured target. */
+  path?: string;
+}
+
+export interface BackupRevealTargetResponse {
+  ok: boolean;
+  /** Resolved path that was opened. */
+  path: string;
+  error?: string;
+}
+
 
 export interface BackupHeartbeat {
   /** ISO timestamp when scripts/backup.cjs last ran successfully. Null if no heartbeat file yet. */

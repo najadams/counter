@@ -29,6 +29,7 @@ import {
   type WorkerReactivateRequest, type WorkerResetPinRequest,
   type WorkerSimpleResponse, type WorkerTerminateRequest,
 } from '../../shared/types/ipc.js';
+import { maybeRunShiftCloseBackup } from '../lib/shiftCloseBackup.js';
 import { listLoginCandidates, verifyPin } from '../services/workers.js';
 import {
   computeAndCloseShift, getOpenShift, openShift, submitClosingCount,
@@ -153,7 +154,56 @@ export function registerIpcHandlers(
   ipcMain.handle(IPC_CHANNELS.SHIFT_CLOSE, wrap<ShiftCloseRequest, ShiftCloseResponse>(
     (req) => {
       const w = requireWorker();
-      return computeAndCloseShift(db, req.shiftId, w.workerId, deviceId);
+      const closed = computeAndCloseShift(db, req.shiftId, w.workerId, deviceId);
+      // Auto-backup hook (runs on 'last close of the day'). Returns a
+      // structured result; NEVER throws — a backup failure must not
+      // unwind the shift close, since the close already committed.
+      const userDataDir = app?.getPath('userData') ?? process.cwd();
+      const cfg = getBackupConfig(db);
+      let backup;
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const betterSqlite3Path = require.resolve('better-sqlite3');
+        // Probe the configured target first. If the dir is unwritable (USB
+        // unplugged, network share down, etc.) we fall back to the local
+        // ~/CounterBackups so the cashier never gets stranded without ANY
+        // copy of today's data. The result flags fellBackToDefault so the
+        // UI can warn the owner to plug the USB back in.
+        let target = cfg.targetDir;
+        let fellBackToDefault = false;
+        try {
+          const fsmod = require('node:fs') as typeof import('node:fs');
+          if (!fsmod.existsSync(target)) fsmod.mkdirSync(target, { recursive: true });
+          fsmod.accessSync(target, fsmod.constants.W_OK);
+        } catch {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { defaultBackupTarget } = require('../db/backupConfig.js') as typeof import('../db/backupConfig.js');
+          target = defaultBackupTarget();
+          fellBackToDefault = cfg.targetDir !== target;
+        }
+        const raw = maybeRunShiftCloseBackup({ userDataDir, targetDir: target, betterSqlite3Path });
+        backup = fellBackToDefault && raw.ran ? { ...raw, fellBackToDefault: true } : raw;
+        // Audit log for the auto-backup, if it actually ran.
+        if (raw.ran) {
+          logAudit(db, {
+            workerId: w.workerId,
+            action: raw.ok ? 'BACKUP_RAN_AUTO' : 'BACKUP_FAILED',
+            entityType: 'backup',
+            entityId: 'auto-shift-close',
+            afterValue: raw.ok
+              ? { trigger: 'auto-shift-close', target, dbDest: raw.dbDest, sizeBytes: raw.sizeBytes, fellBackToDefault, configuredTarget: cfg.targetDir }
+              : { trigger: 'auto-shift-close', target, error: raw.error, fellBackToDefault, configuredTarget: cfg.targetDir },
+            deviceId,
+          });
+        }
+      } catch (err) {
+        backup = {
+          ran: true,
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        } as const;
+      }
+      return { ...closed, backup };
     },
     IPC_CHANNELS.SHIFT_CLOSE,
   ));
@@ -1518,11 +1568,25 @@ export function registerSession18RecoveryHandlers(
 
 // --- Wave B.2: Off-site backup heartbeat ---------------------------------
 
-import { IPC_CHANNELS_BACKUP, type BackupHeartbeat } from '../../shared/types/ipc.js';
+import {
+  IPC_CHANNELS_BACKUP,
+  type BackupHeartbeat,
+  type BackupConfigResponse,
+  type BackupSetConfigRequest,
+  type BackupRunNowResponse,
+  type BackupTestTargetRequest,
+  type BackupTestTargetResponse,
+  type BackupListHistoryResponse,
+  type BackupRevealTargetRequest,
+  type BackupRevealTargetResponse,
+} from '../../shared/types/ipc.js';
+import { getBackupConfig, setBackupConfig } from '../db/backupConfig.js';
 
 export function registerBackupHandlers(
   ipcMain: import('electron').IpcMain,
   app: Pick<import('electron').App, 'getPath'>,
+  db: DB,
+  deviceId: string,
 ): void {
   // No auth — the banner shows on login screen too. The heartbeat path is
   // <userData>/last_backup.json, written by scripts/backup.cjs after a
@@ -1551,6 +1615,208 @@ export function registerBackupHandlers(
         }
       },
       IPC_CHANNELS_BACKUP.BACKUP_GET_HEARTBEAT,
+    ),
+  );
+
+  // backup:get-config — anyone signed in can read; the BackupsTab uses it
+  // to pre-fill the form. Returns defaults if nothing is saved yet.
+  ipcMain.handle(IPC_CHANNELS_BACKUP.BACKUP_GET_CONFIG,
+    wrap<void, BackupConfigResponse>(
+      () => {
+        requireWorker();
+        return getBackupConfig(db);
+      },
+      IPC_CHANNELS_BACKUP.BACKUP_GET_CONFIG,
+    ),
+  );
+
+  // backup:set-config — OWNER only. Validates absolute path + enum, writes
+  // device_config, audit-logs BACKUP_CONFIG_CHANGED.
+  ipcMain.handle(IPC_CHANNELS_BACKUP.BACKUP_SET_CONFIG,
+    wrap<BackupSetConfigRequest, BackupConfigResponse>(
+      (req) => {
+        const w = requireWorker();
+        if (w.role !== 'OWNER' && w.role !== 'FOUNDER') {
+          throw new Error('Only OWNER or FOUNDER can change backup settings.');
+        }
+        const before = getBackupConfig(db);
+        setBackupConfig(db, { targetDir: req.targetDir, locationClass: req.locationClass });
+        const after = getBackupConfig(db);
+        logAudit(db, {
+          workerId: w.workerId,
+          action: 'BACKUP_CONFIG_CHANGED',
+          entityType: 'device_config',
+          entityId: 'backup',
+          beforeValue: { targetDir: before.targetDir, locationClass: before.locationClass },
+          afterValue: { targetDir: after.targetDir, locationClass: after.locationClass },
+          deviceId,
+        });
+        return after;
+      },
+      IPC_CHANNELS_BACKUP.BACKUP_SET_CONFIG,
+    ),
+  );
+
+  // backup:run-now — manual trigger. Anyone signed in can run; audited
+  // with the actor. Bypasses cutover/dedup gates of the auto-trigger.
+  ipcMain.handle(IPC_CHANNELS_BACKUP.BACKUP_RUN_NOW,
+    wrap<void, BackupRunNowResponse>(
+      () => {
+        const w = requireWorker();
+        const cfg = getBackupConfig(db);
+        const userDataDir = app.getPath('userData');
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const runner = require('../../../scripts/lib/backup-runner.cjs') as {
+          runBackup: (opts: {
+            sourceDir: string; target: string; betterSqlite3Path?: string;
+            logger?: { log: (m: string) => void; warn: (m: string) => void };
+          }) => { ok: true; dbDest: string; sizeBytes: number; usedVacuum: boolean; timestamp: string }
+            | { ok: false; error: string; code?: string };
+        };
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const betterSqlite3Path = require.resolve('better-sqlite3');
+        const result = runner.runBackup({
+          sourceDir: userDataDir,
+          target: cfg.targetDir,
+          betterSqlite3Path,
+          logger: { log: () => {}, warn: () => {} },
+        });
+        logAudit(db, {
+          workerId: w.workerId,
+          action: result.ok ? 'BACKUP_RAN_MANUAL' : 'BACKUP_FAILED',
+          entityType: 'backup',
+          entityId: 'manual',
+          afterValue: result.ok
+            ? { trigger: 'manual', target: cfg.targetDir, dbDest: result.dbDest, sizeBytes: result.sizeBytes, usedVacuum: result.usedVacuum }
+            : { trigger: 'manual', target: cfg.targetDir, error: result.error, code: result.code },
+          deviceId,
+        });
+        if (!result.ok) {
+          return { ok: false, error: result.error };
+        }
+        return {
+          ok: true,
+          dbDest: result.dbDest,
+          sizeBytes: result.sizeBytes,
+          usedVacuum: result.usedVacuum,
+          timestamp: result.timestamp,
+        };
+      },
+      IPC_CHANNELS_BACKUP.BACKUP_RUN_NOW,
+    ),
+  );
+
+  // backup:test-target — write a tiny probe file to the target dir, read it
+  // back, delete it. Used by the Settings tab to verify a path before
+  // saving config, and to verify a USB stick is currently writable.
+  ipcMain.handle(IPC_CHANNELS_BACKUP.BACKUP_TEST_TARGET,
+    wrap<BackupTestTargetRequest, BackupTestTargetResponse>(
+      (req) => {
+        requireWorker();
+        const fs = require('node:fs') as typeof import('node:fs');
+        const path = require('node:path') as typeof import('node:path');
+        const targetDir = (req && req.targetDir && req.targetDir.trim()) ||
+          getBackupConfig(db).targetDir;
+        const preexisted = fs.existsSync(targetDir);
+        try {
+          if (!preexisted) fs.mkdirSync(targetDir, { recursive: true });
+          const probe = path.join(targetDir, '.counter-probe-' + Date.now());
+          fs.writeFileSync(probe, 'counter-probe');
+          const read = fs.readFileSync(probe, 'utf8');
+          fs.unlinkSync(probe);
+          if (read !== 'counter-probe') {
+            return { ok: false, targetDir, preexisted, error: 'probe content mismatch (filesystem corruption?)' };
+          }
+          return { ok: true, targetDir, preexisted };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return { ok: false, targetDir, preexisted, error: msg };
+        }
+      },
+      IPC_CHANNELS_BACKUP.BACKUP_TEST_TARGET,
+    ),
+  );
+
+  // backup:list-history — read the configured target dir and list recent
+  // counter-*.db files (newest first). Used by the BackupsTab to confirm
+  // backups are actually accumulating.
+  ipcMain.handle(IPC_CHANNELS_BACKUP.BACKUP_LIST_HISTORY,
+    wrap<void, BackupListHistoryResponse>(
+      () => {
+        requireWorker();
+        const fs = require('node:fs') as typeof import('node:fs');
+        const path = require('node:path') as typeof import('node:path');
+        const cfg = getBackupConfig(db);
+        const targetDir = cfg.targetDir;
+        if (!fs.existsSync(targetDir)) {
+          return { targetDir, entries: [], reason: 'no-such-dir' };
+        }
+        let names: string[];
+        try {
+          names = fs.readdirSync(targetDir);
+        } catch (err) {
+          return {
+            targetDir,
+            entries: [],
+            reason: 'unreadable',
+            errorDetail: err instanceof Error ? err.message : String(err),
+          };
+        }
+        const re = /^counter-\d{4}-\d{2}-\d{2}\.db$/;
+        const now = Date.now();
+        const entries = names
+          .filter((n) => re.test(n))
+          .map((filename) => {
+            const fullPath = path.join(targetDir, filename);
+            try {
+              const st = fs.statSync(fullPath);
+              return {
+                filename,
+                fullPath,
+                sizeBytes: st.size,
+                mtime: st.mtime.toISOString(),
+                ageMs: now - st.mtimeMs,
+              };
+            } catch {
+              return null;
+            }
+          })
+          .filter((e): e is NonNullable<typeof e> => e !== null)
+          .sort((a, b) => b.mtime.localeCompare(a.mtime));
+        if (entries.length === 0) {
+          return { targetDir, entries: [], reason: 'no-backups-yet' };
+        }
+        return { targetDir, entries };
+      },
+      IPC_CHANNELS_BACKUP.BACKUP_LIST_HISTORY,
+    ),
+  );
+
+  // backup:reveal-target — open the target dir (or a specific file) in
+  // the OS file browser. Electron handles cross-platform dispatch.
+  ipcMain.handle(IPC_CHANNELS_BACKUP.BACKUP_REVEAL_TARGET,
+    wrap<BackupRevealTargetRequest, BackupRevealTargetResponse>(
+      async (req) => {
+        requireWorker();
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { shell } = require('electron') as typeof import('electron');
+        const fs = require('node:fs') as typeof import('node:fs');
+        const target = (req && req.path && req.path.trim()) || getBackupConfig(db).targetDir;
+        if (!fs.existsSync(target)) {
+          return { ok: false, path: target, error: 'Path does not exist (no backups taken yet?).' };
+        }
+        const st = fs.statSync(target);
+        // shell.openPath opens directories directly; for files, use
+        // showItemInFolder so the file is selected in Finder/Explorer.
+        if (st.isDirectory()) {
+          const err = await shell.openPath(target);
+          if (err) return { ok: false, path: target, error: err };
+        } else {
+          shell.showItemInFolder(target);
+        }
+        return { ok: true, path: target };
+      },
+      IPC_CHANNELS_BACKUP.BACKUP_REVEAL_TARGET,
     ),
   );
 }

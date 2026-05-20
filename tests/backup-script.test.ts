@@ -2,13 +2,11 @@
 //   1. The script runs against a sandboxed userData dir
 //   2. It writes <userData>/last_backup.json
 //   3. The JSON shape matches what the IPC heartbeat handler reads back
+//   4. The runner's integrity check passes on a real SQLite source (the
+//      whole point of having it).
 //
 // Ports the prior root-level _verify_backup_heartbeat.mjs scratch script
 // into the vitest suite so it runs in CI.
-//
-// VACUUM INTO will fail against the stub counter.db this test creates
-// (it's not a valid SQLite file). The script catches that and falls back
-// to file copy, which is exactly the path the test wants to exercise.
 
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
@@ -16,6 +14,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import Database from 'better-sqlite3';
 
 const __filename = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(__filename), '..');
@@ -39,13 +38,14 @@ beforeEach(() => {
     userDataDir = path.join(tmp, 'Counter');
   }
   fs.mkdirSync(userDataDir, { recursive: true });
-  // Stub counter.db — VACUUM INTO will fail against this and the script
-  // falls back to plain file copy, which is the path we want to exercise
-  // in a sandboxed test.
-  fs.writeFileSync(
-    path.join(userDataDir, 'counter.db'),
-    Buffer.concat([Buffer.from('SQLite format 3\0'), Buffer.alloc(100)]),
-  );
+  // Real SQLite source — needed because the runner integrity-checks the
+  // destination via PRAGMA quick_check after VACUUM INTO. A stub byte blob
+  // would correctly fail that check.
+  const sourcePath = path.join(userDataDir, 'counter.db');
+  const db = new Database(sourcePath);
+  db.exec('CREATE TABLE t (id INTEGER PRIMARY KEY, x TEXT)');
+  db.prepare('INSERT INTO t (x) VALUES (?)').run('hello');
+  db.close();
   target = path.join(tmp, 'Backups');
 });
 
@@ -97,5 +97,67 @@ describe('scripts/backup.cjs', () => {
       (JSON.parse(fs.readFileSync(heartbeatPath, 'utf8')) as { timestamp: string }).timestamp,
     );
     expect(secondTs).toBeGreaterThan(firstTs);
+  });
+});
+
+describe('runner integrity check', () => {
+  // Driving runBackup() directly here (not the CLI) so we can inspect the
+  // structured failure code without an exit-code dance.
+  type RunnerResult =
+    | { ok: true; dbDest: string; sizeBytes: number; usedVacuum: boolean }
+    | { ok: false; error: string; code?: string };
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { runBackup } = require(
+    path.join(repoRoot, 'scripts/lib/backup-runner.cjs'),
+  ) as {
+    runBackup: (opts: {
+      sourceDir: string;
+      target: string;
+      betterSqlite3Path?: string;
+    }) => RunnerResult;
+  };
+  const betterSqlite3Path = path.join(repoRoot, 'node_modules/better-sqlite3');
+
+  it('rejects + deletes a corrupt destination, no heartbeat written', () => {
+    // Replace the valid source set up in beforeEach with garbage so VACUUM
+    // INTO fails, the file-copy fallback fires, and the integrity check
+    // catches the corrupt destination it produced.
+    fs.writeFileSync(
+      path.join(userDataDir, 'counter.db'),
+      Buffer.concat([Buffer.from('SQLite format 3\0'), Buffer.alloc(100)]),
+    );
+
+    const r = runBackup({
+      sourceDir: userDataDir,
+      target,
+      betterSqlite3Path,
+    });
+
+    expect(r.ok).toBe(false);
+    if (r.ok) throw new Error('expected failure');
+    expect(r.code).toBe('INTEGRITY_FAILED');
+    expect(r.error).toMatch(/integrity|quick_check|cannot open/i);
+    // Heartbeat MUST NOT be written on integrity failure — the home-screen
+    // banner should keep warning.
+    expect(fs.existsSync(path.join(userDataDir, 'last_backup.json'))).toBe(false);
+    // Corrupt destination file should have been removed.
+    const dest = fs.readdirSync(target).filter((n) => /^counter-.*\.db$/.test(n));
+    expect(dest).toEqual([]);
+  });
+
+  it('passes integrity check on a real SQLite source and writes heartbeat', () => {
+    // beforeEach already created a valid source. Just run the backup.
+    const r = runBackup({
+      sourceDir: userDataDir,
+      target,
+      betterSqlite3Path,
+    });
+
+    expect(r.ok).toBe(true);
+    if (!r.ok) throw new Error(r.error);
+    expect(r.usedVacuum).toBe(true);
+    expect(fs.existsSync(path.join(userDataDir, 'last_backup.json'))).toBe(true);
+    // No leftover .tmp file from the atomic heartbeat write.
+    expect(fs.existsSync(path.join(userDataDir, 'last_backup.json.tmp'))).toBe(false);
   });
 });

@@ -27,6 +27,13 @@ export const DEFAULT_CONSUMPTION_ALLOWANCE_UNITS = 8;
 export const PIN_MAX_ATTEMPTS = 5;
 export const PIN_LOCKOUT_MINUTES = 15;
 
+/** Auto-backup trigger: shift closes at or after this local hour (24h) count
+ *  as "last close of the day" and trigger an automatic backup, provided no
+ *  backup heartbeat has been written for today yet. Closes before this hour
+ *  do not trigger — they're assumed to be mid-day handovers, not end-of-day.
+ *  Default 18 (6pm); adjust here if the shop typically closes earlier. */
+export const END_OF_BUSINESS_DAY_HOUR = 18;
+
 /** Discount thresholds. Above either, the sale needs supervisor approval.
  *  Both thresholds are checked against the discount amount; whichever is
  *  larger wins (so a small bill doesn't trigger supervisor for a 50p discount,

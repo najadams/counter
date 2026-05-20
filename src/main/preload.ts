@@ -277,6 +277,18 @@ const api = {
   // --- Wave B.2: Off-site backup heartbeat ---
   backupGetHeartbeat: () =>
     ipcRenderer.invoke(IPC_CHANNELS_BACKUP.BACKUP_GET_HEARTBEAT, {}),
+  backupGetConfig: () =>
+    ipcRenderer.invoke(IPC_CHANNELS_BACKUP.BACKUP_GET_CONFIG, {}),
+  backupSetConfig: (targetDir: string, locationClass: 'usb' | 'cloud' | 'local') =>
+    ipcRenderer.invoke(IPC_CHANNELS_BACKUP.BACKUP_SET_CONFIG, { targetDir, locationClass }),
+  backupRunNow: () =>
+    ipcRenderer.invoke(IPC_CHANNELS_BACKUP.BACKUP_RUN_NOW, {}),
+  backupTestTarget: (targetDir?: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS_BACKUP.BACKUP_TEST_TARGET, { targetDir }),
+  backupListHistory: () =>
+    ipcRenderer.invoke(IPC_CHANNELS_BACKUP.BACKUP_LIST_HISTORY, {}),
+  backupRevealTarget: (path?: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS_BACKUP.BACKUP_REVEAL_TARGET, { path }),
 
   // --- Wave C.1: Printable customer statement ---
   customerStatement: (customerId: string, asOfDate?: string, monthsOfHistory?: number) =>

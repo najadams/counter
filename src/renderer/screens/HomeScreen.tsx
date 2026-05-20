@@ -18,6 +18,7 @@ import { CashDropModal } from '../components/CashDropModal';
 import { ExpenseModal } from '../components/ExpenseModal';
 import { BackupHealthBanner } from '../components/BackupHealthBanner';
 import { formatMoney, formatMoneyWithCurrency, parseCedisToPesewas } from '../../shared/lib/money';
+import type { ShiftCloseBackupResult } from '../../shared/types/ipc';
 import SaleScreen from './SaleScreen';
 import VoidSaleScreen from './VoidSaleScreen';
 import BreakageScreen from './BreakageScreen';
@@ -84,7 +85,11 @@ export default function HomeScreen() {
   const [reconciled, setReconciled] = useState<{
     countedPesewas: number; expectedPesewas: number; variancePesewas: number;
     totalSalesPesewas: number; totalBreakageValuePesewas: number;
+    backup: ShiftCloseBackupResult;
   } | null>(null);
+  // Cashier must acknowledge a failed backup before the reconciled screen
+  // can be dismissed — see the red banner below.
+  const [backupAcked, setBackupAcked] = useState(false);
 
   useEffect(() => {
     if (view !== 'home' || step !== 'idle' || showCashDrop) return;
@@ -138,7 +143,7 @@ export default function HomeScreen() {
     setReconciled(close.data); setStep('reconciled');
   }
   function finishReconciled() {
-    setReconciled(null); setStep('idle'); setCounted(''); clearShift();
+    setReconciled(null); setBackupAcked(false); setStep('idle'); setCounted(''); clearShift();
   }
 
   return (
@@ -248,8 +253,12 @@ export default function HomeScreen() {
               <Row label="Total sales" value={formatMoneyWithCurrency(reconciled.totalSalesPesewas)} />
               <Row label="Breakage value" value={formatMoneyWithCurrency(reconciled.totalBreakageValuePesewas)} />
             </div>
+
+            <BackupResultBlock backup={reconciled.backup} acked={backupAcked} onAck={() => setBackupAcked(true)} />
+
             <button onClick={finishReconciled}
-              className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light self-start">Done</button>
+              disabled={reconciled.backup.ran && reconciled.backup.ok === false && !backupAcked}
+              className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light self-start disabled:opacity-50 disabled:cursor-not-allowed">Done</button>
           </div>
         )}
       </main>
@@ -268,6 +277,88 @@ export default function HomeScreen() {
         />
       )}
     </div>
+  );
+}
+
+
+function BackupResultBlock({
+  backup,
+  acked,
+  onAck,
+}: {
+  backup: ShiftCloseBackupResult;
+  acked: boolean;
+  onAck: () => void;
+}) {
+  // Silent on the skip paths — backup doesn't need to advertise itself
+  // every time the cashier closes a mid-day shift. The home-screen
+  // BackupHealthBanner is the long-term feedback channel.
+  if (!backup.ran) return null;
+
+  if (backup.ok) {
+    const dest = backup.dbDest ?? '';
+    const fname = dest.split(/[\\/]/).pop() ?? dest;
+    const size = backup.sizeBytes ? formatBytes(backup.sizeBytes) : '';
+    if (backup.fellBackToDefault) {
+      return (
+        <div className="border border-warning bg-warning/10 text-warning px-4 py-3 text-sm space-y-1">
+          <div className="flex items-center justify-between gap-2">
+            <div className="font-semibold">Backup saved locally — configured target was unavailable</div>
+            {backup.dbDest && <RevealLink path={backup.dbDest} />}
+          </div>
+          <div className="text-xs text-text-secondary break-all">{fname}{size ? ' \u00b7 ' + size : ''}</div>
+          <div className="text-xs text-text-secondary">Plug your USB stick in (or restore the network share) and the next backup will land there again. Today's data is safe in ~/CounterBackups.</div>
+        </div>
+      );
+    }
+    return (
+      <div className="border border-success bg-success/10 text-success px-4 py-3 text-sm">
+        <div className="flex items-center justify-between gap-2">
+          <div className="font-semibold">Backup saved</div>
+          {backup.dbDest && <RevealLink path={backup.dbDest} />}
+        </div>
+        <div className="text-xs text-text-secondary mt-1 break-all">{fname}{size ? ' \u00b7 ' + size : ''}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border border-danger bg-danger/10 text-danger px-4 py-3 text-sm space-y-2">
+      <div className="font-semibold">Backup failed — shift is closed but no off-site copy was written</div>
+      <div className="text-xs text-text-secondary">{backup.error ?? 'Unknown error.'}</div>
+      <div className="text-xs text-text-secondary">
+        The shift cash reconciliation is already saved. Resolve the backup
+        target (USB plugged in? disk full?) and run <code>npm run backup</code> manually,
+        or wait for the nightly job to retry.
+      </div>
+      {!acked && (
+        <button onClick={onAck}
+          className="text-xs border border-danger px-3 py-1 hover:bg-danger/20">
+          Acknowledge & continue
+        </button>
+      )}
+    </div>
+  );
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return n + ' B';
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+  return (n / 1024 / 1024).toFixed(1) + ' MB';
+}
+
+
+function RevealLink({ path }: { path: string }) {
+  const label = /Mac|iPhone|iPad/.test(
+    typeof navigator === 'undefined' ? '' : (navigator.platform || navigator.userAgent),
+  ) ? 'Show in Finder' : 'Show in file browser';
+  return (
+    <button
+      onClick={() => { void counter.backupRevealTarget(path); }}
+      className="text-xs underline text-text-secondary hover:text-text-primary"
+    >
+      {label}
+    </button>
   );
 }
 

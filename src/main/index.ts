@@ -133,7 +133,7 @@ app.whenReady().then(() => {
   registerSession16ReorderHandlers(ipcMain, db, deviceId);
   registerSession17ExpenseHandlers(ipcMain, db, deviceId, app);
   registerSession18RecoveryHandlers(ipcMain, db, deviceId);
-  registerBackupHandlers(ipcMain, app);
+  registerBackupHandlers(ipcMain, app, db, deviceId);
   registerStatementHandlers(ipcMain, db);
   registerCpoHandlers(ipcMain, db, deviceId);
   registerReturnsHandlers(ipcMain, db, deviceId);

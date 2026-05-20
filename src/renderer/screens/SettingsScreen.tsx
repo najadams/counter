@@ -13,9 +13,10 @@ import { ReprintQueueTab } from './settings/ReprintQueueTab';
 import { ExceptionsTab } from './settings/ExceptionsTab';
 import { ReorderTab } from './settings/ReorderTab';
 import { AppearanceTab } from './settings/AppearanceTab';
+import { BackupsTab } from './settings/BackupsTab';
 import { RunbookPrintScreen } from './RunbookPrintScreen';
 
-type Tab = 'workers' | 'products' | 'tiers' | 'suppliers' | 'supplier-pay' | 'audit' | 'breakage' | 'reprints' | 'exceptions' | 'reorder' | 'appearance';
+type Tab = 'workers' | 'products' | 'tiers' | 'suppliers' | 'supplier-pay' | 'audit' | 'breakage' | 'reprints' | 'exceptions' | 'reorder' | 'appearance' | 'backups';
 
 export default function SettingsScreen({ onExit }: { onExit: () => void }) {
   const [tab, setTab] = useState<Tab>('workers');
@@ -61,6 +62,7 @@ export default function SettingsScreen({ onExit }: { onExit: () => void }) {
             <TabBtn active={tab === 'exceptions'} onClick={() => setTab('exceptions')}>Exceptions</TabBtn>
             <TabBtn active={tab === 'reorder'} onClick={() => setTab('reorder')}>Reorder</TabBtn>
             <TabBtn active={tab === 'appearance'} onClick={() => setTab('appearance')}>Appearance</TabBtn>
+            <TabBtn active={tab === 'backups'} onClick={() => setTab('backups')}>Backups</TabBtn>
           </div>
           <div className="flex gap-3 shrink-0">
             <button onClick={() => setShowRunbook(true)}
@@ -88,6 +90,7 @@ export default function SettingsScreen({ onExit }: { onExit: () => void }) {
           {tab === 'exceptions' && <ExceptionsTab />}
           {tab === 'reorder' && <ReorderTab />}
           {tab === 'appearance' && <AppearanceTab />}
+          {tab === 'backups' && <BackupsTab />}
         </div>
       </main>
     </div>

@@ -415,11 +415,26 @@ declare global {
 }
 
 // --- Wave B.2: Off-site backup heartbeat ---------------------------------
-import type { BackupHeartbeat } from '../../shared/types/ipc';
+import type {
+  BackupHeartbeat,
+  BackupConfigResponse,
+  BackupLocationClass,
+  BackupRunNowResponse,
+  BackupTestTargetResponse,
+  BackupListHistoryResponse,
+  BackupRevealTargetResponse,
+} from '../../shared/types/ipc';
 
 declare global {
   interface CounterApi {
-  backupGetHeartbeat: () => Promise<IpcResponse<BackupHeartbeat>>;  }
+    backupGetHeartbeat: () => Promise<IpcResponse<BackupHeartbeat>>;
+    backupGetConfig: () => Promise<IpcResponse<BackupConfigResponse>>;
+    backupSetConfig: (targetDir: string, locationClass: BackupLocationClass) => Promise<IpcResponse<BackupConfigResponse>>;
+    backupRunNow: () => Promise<IpcResponse<BackupRunNowResponse>>;
+    backupTestTarget: (targetDir?: string) => Promise<IpcResponse<BackupTestTargetResponse>>;
+    backupListHistory: () => Promise<IpcResponse<BackupListHistoryResponse>>;
+    backupRevealTarget: (path?: string) => Promise<IpcResponse<BackupRevealTargetResponse>>;
+  }
 }
 
 // --- Wave C.1: Printable customer statement ------------------------------
