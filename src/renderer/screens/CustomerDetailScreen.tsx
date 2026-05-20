@@ -87,7 +87,7 @@ export default function CustomerDetailScreen({
           </div>
           <div className="flex items-center gap-3">
             <button onClick={() => onRecordPayment({ customerId: overview.id, displayName: overview.displayName })}
-              className="bg-accent text-bg-deep px-4 py-2 font-semibold hover:bg-accent-light">
+              className="bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light">
               Record payment
             </button>
             <button onClick={() => setShowStatement(true)}
@@ -112,7 +112,7 @@ export default function CustomerDetailScreen({
         {overview.driftPesewas !== 0 && (
           <div className="bg-bg-surface border border-warning px-4 py-3 text-warning text-sm flex items-center justify-between">
             <span>Cached balance ({formatMoney(overview.cachedBalancePesewas)}) differs from truth ({formatMoney(overview.trueBalancePesewas)}) by {formatMoney(overview.driftPesewas)} pesewas.</span>
-            <button onClick={() => void reconcile()} className="px-3 py-1 border border-warning hover:bg-warning hover:text-bg-deep">
+            <button onClick={() => void reconcile()} className="px-3 py-1 border border-warning hover:bg-warning hover:text-ink">
               Reconcile
             </button>
           </div>

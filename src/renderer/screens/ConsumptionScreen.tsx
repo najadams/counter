@@ -144,7 +144,7 @@ export default function ConsumptionScreen({ onExit }: { onExit: () => void }) {
               <button
                 onClick={() => void submit()}
                 disabled={submitting}
-                className="bg-accent text-bg-deep px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40">
+                className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40">
                 {submitting ? 'Logging…' : willCrossThreshold ? 'Get supervisor approval' : 'Log consumption'}
               </button>
             </div>

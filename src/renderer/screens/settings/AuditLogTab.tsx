@@ -132,7 +132,7 @@ export function AuditLogTab() {
       <div className="flex items-center justify-between">
         <div className="flex gap-2">
           <button onClick={() => { setPage(0); void refresh(); }}
-            className="bg-accent text-bg-deep px-4 py-2 font-semibold hover:bg-accent-light text-sm">
+            className="bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light text-sm">
             Apply filters
           </button>
           <button onClick={() => {
@@ -161,7 +161,7 @@ export function AuditLogTab() {
         </div>
       </div>
 
-      {error && <div className="bg-red-950/30 border border-red-900/50 text-red-300 text-sm px-3 py-2 rounded">{error}</div>}
+      {error && <div className="bg-danger/10 border border-danger/40 text-danger text-sm px-3 py-2 rounded">{error}</div>}
 
       <div className="bg-bg-elevated rounded border border-border-subtle overflow-hidden">
         <table className="w-full text-sm">

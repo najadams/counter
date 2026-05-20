@@ -37,7 +37,7 @@ export function StockHistoryModal({
   }, [productId]);
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-6 z-50">
+    <div className="fixed inset-0 bg-scrim flex items-center justify-center p-6 z-50">
       <div className="bg-bg-elevated rounded-lg shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col">
         <div className="px-6 py-4 border-b border-border-subtle flex items-center justify-between">
           <div>
@@ -49,7 +49,7 @@ export function StockHistoryModal({
 
         <div className="flex-1 overflow-auto p-4">
           {loading && <div className="text-center text-text-tertiary py-6">Loading…</div>}
-          {error && <div className="text-sm text-red-400 bg-red-950/30 border border-red-900/50 rounded px-3 py-2 mb-2">{error}</div>}
+          {error && <div className="text-sm text-danger bg-danger/10 border border-danger/40 rounded px-3 py-2 mb-2">{error}</div>}
           {!loading && rows.length === 0 && (
             <div className="text-text-tertiary py-6 text-center">No stock movements recorded yet.</div>
           )}
@@ -70,7 +70,7 @@ export function StockHistoryModal({
               <tbody>
                 {rows.map((r) => {
                   const sign = r.signedQuantity > 0 ? '+' : '';
-                  const tone = r.signedQuantity > 0 ? 'text-emerald-400' : 'text-red-400';
+                  const tone = r.signedQuantity > 0 ? 'text-success' : 'text-danger';
                   return (
                     <tr key={r.movementId} className="border-t border-border-subtle hover:bg-bg-deep/40">
                       <td className="px-3 py-2 font-mono text-xs text-text-secondary">

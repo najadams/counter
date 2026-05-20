@@ -254,7 +254,7 @@ export default function StockReceiveScreen({ onExit }: { onExit: () => void }) {
                   className="w-full bg-bg-input border border-border-strong px-3 py-2 font-mono tnum" />
               </div>
               <button onClick={addPendingToList}
-                className="bg-accent text-bg-deep px-4 py-2 font-semibold hover:bg-accent-light">
+                className="bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light">
                 Add line
               </button>
             </div>
@@ -271,7 +271,7 @@ export default function StockReceiveScreen({ onExit }: { onExit: () => void }) {
           <button
             onClick={() => setAskingSupervisor(true)}
             disabled={submitting || lines.length === 0 || (!isOpeningStock && !supplierId)}
-            className="bg-accent text-bg-deep px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40">
+            className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40">
             Confirm with supervisor
           </button>
         </div>

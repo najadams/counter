@@ -90,7 +90,7 @@ export function MarginTab() {
         <DateRangePicker value={range} onChange={setRange} />
       </div>
 
-      {error && <div className="bg-red-950/30 border border-red-900/50 text-red-300 text-sm px-3 py-2">{error}</div>}
+      {error && <div className="bg-danger/10 border border-danger/40 text-danger text-sm px-3 py-2">{error}</div>}
       {loading && !data && <div className="text-text-tertiary text-sm">Loading…</div>}
 
       {data && (

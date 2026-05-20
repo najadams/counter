@@ -71,8 +71,8 @@ export function ReprintQueueTab() {
         </button>
       </div>
 
-      {error && <div className="bg-red-950/30 border border-red-900/50 text-red-300 text-sm px-3 py-2 rounded">{error}</div>}
-      {info && <div className="bg-emerald-950/30 border border-emerald-900/50 text-emerald-300 text-sm px-3 py-2 rounded">{info}</div>}
+      {error && <div className="bg-danger/10 border border-danger/40 text-danger text-sm px-3 py-2 rounded">{error}</div>}
+      {info && <div className="bg-success/10 border border-success/40 text-success text-sm px-3 py-2 rounded">{info}</div>}
 
       <div className="bg-bg-elevated rounded border border-border-subtle overflow-hidden">
         <table className="w-full text-sm">
@@ -108,11 +108,11 @@ export function ReprintQueueTab() {
                 <td className="px-3 py-2 text-right">
                   <div className="flex gap-2 justify-end">
                     <button onClick={() => void retry(r)}
-                      className="text-xs px-3 py-1 bg-accent text-bg-deep font-semibold hover:bg-accent-light">
+                      className="text-xs px-3 py-1 bg-accent text-ink font-semibold hover:bg-accent-light">
                       Print now
                     </button>
                     <button onClick={() => setDiscarding(r)}
-                      className="text-xs px-3 py-1 border border-border hover:bg-bg-elevated text-red-400">
+                      className="text-xs px-3 py-1 border border-border hover:bg-bg-elevated text-danger">
                       Discard
                     </button>
                   </div>
@@ -151,7 +151,7 @@ function DiscardModal({ reprint, onCancel, onDone }: {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-6 z-50">
+    <div className="fixed inset-0 bg-scrim flex items-center justify-center p-6 z-50">
       <div className="bg-bg-elevated rounded-lg shadow-xl w-full max-w-md p-6 space-y-4">
         <h2 className="text-lg font-semibold">Discard pending receipt</h2>
         <p className="text-sm text-text-secondary">
@@ -166,12 +166,12 @@ function DiscardModal({ reprint, onCancel, onDone }: {
             placeholder="customer left, paper out for hours, etc."
             className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle" />
         </label>
-        {err && <div className="text-sm text-red-400 bg-red-950/30 border border-red-900/50 rounded px-3 py-2">{err}</div>}
+        {err && <div className="text-sm text-danger bg-danger/10 border border-danger/40 rounded px-3 py-2">{err}</div>}
         <div className="flex justify-end gap-3">
           <button type="button" onClick={onCancel} disabled={busy}
             className="px-4 py-2 border border-border hover:bg-bg-deep text-sm">Cancel</button>
           <button type="button" onClick={() => void submit()} disabled={busy}
-            className="px-4 py-2 bg-red-600 text-white font-semibold hover:bg-red-500 text-sm disabled:opacity-50">
+            className="px-4 py-2 bg-danger text-ink font-semibold hover:opacity-90 text-sm disabled:opacity-50">
             {busy ? 'Discarding…' : 'Discard'}
           </button>
         </div>

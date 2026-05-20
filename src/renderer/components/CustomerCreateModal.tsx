@@ -81,7 +81,7 @@ export function CustomerCreateModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60] overflow-y-auto py-8" onClick={onCancel}>
+    <div className="fixed inset-0 bg-scrim flex items-center justify-center z-[60] overflow-y-auto py-8" onClick={onCancel}>
       <div className="bg-bg-surface border border-border w-full max-w-md p-8 flex flex-col gap-4 my-auto" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-text-secondary uppercase tracking-wider text-xs">New customer</h3>
         <input autoFocus value={displayName} onChange={(e) => setDisplayName(e.target.value)}
@@ -130,7 +130,7 @@ export function CustomerCreateModal({
           <button onClick={onCancel} className="px-5 py-3 border border-border hover:bg-bg-elevated">Cancel</button>
           <button onClick={() => void submit()}
             disabled={submitting || !displayName.trim() || !phone.trim()}
-            className="bg-accent text-bg-deep px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40">
+            className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40">
             {submitting ? 'Creating…' : 'Create customer'}
           </button>
         </div>

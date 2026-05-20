@@ -228,7 +228,7 @@ export default function HomeScreen() {
               <button onClick={() => void submitCountAndClose()}
                 disabled={closing || (pendingReprints.length > 0 && !reprintAck)}
                 title={pendingReprints.length > 0 && !reprintAck ? 'Resolve pending receipts or acknowledge first' : ''}
-                className="bg-accent text-bg-deep px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed">
+                className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed">
                 {closing ? 'Reconciling…' : 'Confirm count'}
               </button>
             </div>
@@ -249,7 +249,7 @@ export default function HomeScreen() {
               <Row label="Breakage value" value={formatMoneyWithCurrency(reconciled.totalBreakageValuePesewas)} />
             </div>
             <button onClick={finishReconciled}
-              className="bg-accent text-bg-deep px-5 py-3 font-semibold hover:bg-accent-light self-start">Done</button>
+              className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light self-start">Done</button>
           </div>
         )}
       </main>
@@ -275,7 +275,7 @@ function ActionRow({ kind = 'default', label, hot, caption, onClick }: {
   kind?: 'default' | 'primary' | 'warn'; label: string; hot?: string; caption: string; onClick: () => void;
 }) {
   const cls =
-    kind === 'primary' ? 'bg-accent text-bg-deep hover:bg-accent-light'
+    kind === 'primary' ? 'bg-accent text-ink hover:bg-accent-light'
     : kind === 'warn'  ? 'bg-bg-deep border border-warning text-warning hover:bg-bg-elevated'
     : 'bg-bg-surface border border-border text-text-primary hover:bg-bg-elevated';
   return (

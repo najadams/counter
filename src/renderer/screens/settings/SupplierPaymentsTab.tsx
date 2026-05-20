@@ -86,13 +86,13 @@ export function SupplierPaymentsTab() {
           onClick={() => isAdmin && setShowRecord({})}
           disabled={!isAdmin}
           title={isAdmin ? '' : 'OWNER or FOUNDER role required to record payments'}
-          className="bg-accent text-bg-deep px-4 py-2 font-semibold hover:bg-accent-light text-sm disabled:opacity-40 disabled:cursor-not-allowed">
+          className="bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light text-sm disabled:opacity-40 disabled:cursor-not-allowed">
           + Record payment
         </button>
       </div>
 
-      {error && <div className="bg-red-950/30 border border-red-900/50 text-red-300 text-sm px-3 py-2 rounded">{error}</div>}
-      {info && <div className="bg-emerald-950/30 border border-emerald-900/50 text-emerald-300 text-sm px-3 py-2 rounded">{info}</div>}
+      {error && <div className="bg-danger/10 border border-danger/40 text-danger text-sm px-3 py-2 rounded">{error}</div>}
+      {info && <div className="bg-success/10 border border-success/40 text-success text-sm px-3 py-2 rounded">{info}</div>}
 
       {/* Statements: who do we owe? */}
       <section>
@@ -124,8 +124,8 @@ export function SupplierPaymentsTab() {
                     <td className="px-4 py-3 font-medium">{r.supplierName}</td>
                     <td className="px-4 py-3 text-right tabular-nums">
                       <span className={
-                        owe > 0 ? 'text-amber-300'
-                        : owe < 0 ? 'text-emerald-400'
+                        owe > 0 ? 'text-warning'
+                        : owe < 0 ? 'text-success'
                         : 'text-text-tertiary'
                       }>
                         {formatMoneyWithCurrency(owe)}
@@ -285,7 +285,7 @@ function RecordPaymentModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-6 z-50">
+    <div className="fixed inset-0 bg-scrim flex items-center justify-center p-6 z-50">
       <form onSubmit={submit}
         className="bg-bg-elevated rounded-lg shadow-xl w-full max-w-lg p-6 space-y-4">
         <h2 className="text-xl font-semibold">Record supplier payment</h2>
@@ -339,7 +339,7 @@ function RecordPaymentModal({
             className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle" />
         </label>
 
-        {err && <div className="text-sm text-red-400 bg-red-950/30 border border-red-900/50 rounded px-3 py-2">{err}</div>}
+        {err && <div className="text-sm text-danger bg-danger/10 border border-danger/40 rounded px-3 py-2">{err}</div>}
 
         <div className="flex justify-end gap-3 pt-2">
           <button type="button" onClick={onClose} disabled={busy}
@@ -347,7 +347,7 @@ function RecordPaymentModal({
             Cancel
           </button>
           <button type="submit" disabled={busy || suppliers.length === 0}
-            className="px-4 py-2 bg-accent text-bg-deep font-semibold hover:bg-accent-light text-sm disabled:opacity-50">
+            className="px-4 py-2 bg-accent text-ink font-semibold hover:bg-accent-light text-sm disabled:opacity-50">
             {busy ? 'Saving…' : 'Record payment'}
           </button>
         </div>

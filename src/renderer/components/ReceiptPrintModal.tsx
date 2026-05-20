@@ -102,7 +102,7 @@ export function ReceiptPrintModal({ receipt, onClose, amountPaidPesewas, amountO
   );
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-[70] receipt-print-overlay" onClick={onClose}>
+    <div className="fixed inset-0 bg-scrim flex items-center justify-center p-4 z-[70] receipt-print-overlay" onClick={onClose}>
       <style>{`
         @media print {
           body * { visibility: hidden; }

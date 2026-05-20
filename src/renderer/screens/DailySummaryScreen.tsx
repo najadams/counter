@@ -126,15 +126,15 @@ export default function DailySummaryScreen({ onExit }: { onExit: () => void }) {
             <input type="date" value={selectedDate} onChange={(e) => void loadDetail(e.target.value)}
               className="bg-bg-input border border-border-strong px-3 py-2 font-mono tnum" />
             <button onClick={() => void generate()}
-              className="bg-accent text-bg-deep px-4 py-2 font-semibold hover:bg-accent-light">
+              className="bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light">
               Generate / refresh
             </button>
             {activeClose ? (
-              <span className="ml-auto inline-flex items-center gap-2 px-3 py-1 bg-emerald-950/30 border border-emerald-900/50 text-emerald-300 text-xs">
+              <span className="ml-auto inline-flex items-center gap-2 px-3 py-1 bg-success/10 border border-success/40 text-success text-xs">
                 Sealed by {activeClose.sealedByName} · {new Date(activeClose.sealedAt).toLocaleString()}
                 {isOwner && (
                   <button onClick={() => setShowReopen(true)}
-                    className="ml-2 underline hover:text-emerald-100">
+                    className="ml-2 underline hover:text-success">
                     Reopen
                   </button>
                 )}
@@ -161,7 +161,7 @@ export default function DailySummaryScreen({ onExit }: { onExit: () => void }) {
                 <button onClick={() => { setShowReopen(false); setReopenReason(''); }}
                   className="px-3 py-1 border border-border text-sm">Cancel</button>
                 <button onClick={() => void reopenDay()}
-                  className="px-3 py-1 bg-warning text-bg-deep font-semibold text-sm">Reopen</button>
+                  className="px-3 py-1 bg-warning text-ink font-semibold text-sm">Reopen</button>
               </div>
             </div>
           )}

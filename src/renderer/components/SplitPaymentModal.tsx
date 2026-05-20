@@ -115,7 +115,7 @@ export function SplitPaymentModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-6 z-50">
+    <div className="fixed inset-0 bg-scrim flex items-center justify-center p-6 z-50">
       <div className="bg-bg-elevated rounded-lg shadow-xl w-full max-w-2xl p-6 space-y-4">
         <div className="flex items-baseline justify-between">
           <h2 className="text-xl font-semibold">Split payment</h2>
@@ -165,7 +165,7 @@ export function SplitPaymentModal({
               )}
               <button onClick={() => removeRow(r.id)}
                 disabled={rows.length === 1}
-                className="text-xs px-2 py-2 border border-border text-text-tertiary hover:text-red-400 disabled:opacity-30">
+                className="text-xs px-2 py-2 border border-border text-text-tertiary hover:text-danger disabled:opacity-30">
                 ✕
               </button>
             </div>
@@ -182,13 +182,13 @@ export function SplitPaymentModal({
             <span className="font-mono">{formatMoneyWithCurrency(tenderTotal)}</span>
             <span className="text-text-tertiary mx-2">·</span>
             <span className="text-text-tertiary">Remaining:</span>{' '}
-            <span className={`font-mono ${remaining === 0 ? 'text-emerald-400' : remaining > 0 ? 'text-warning' : 'text-red-400'}`}>
+            <span className={`font-mono ${remaining === 0 ? 'text-success' : remaining > 0 ? 'text-warning' : 'text-danger'}`}>
               {formatMoneyWithCurrency(remaining)}
             </span>
           </div>
         </div>
 
-        {error && <div className="text-sm text-red-400 bg-red-950/30 border border-red-900/50 rounded px-3 py-2">{error}</div>}
+        {error && <div className="text-sm text-danger bg-danger/10 border border-danger/40 rounded px-3 py-2">{error}</div>}
 
         <div className="flex justify-end gap-3 pt-2">
           <button onClick={onCancel}
@@ -197,7 +197,7 @@ export function SplitPaymentModal({
           </button>
           <button onClick={submit}
             disabled={remaining !== 0}
-            className="px-4 py-2 bg-accent text-bg-deep font-semibold hover:bg-accent-light text-sm disabled:opacity-40">
+            className="px-4 py-2 bg-accent text-ink font-semibold hover:bg-accent-light text-sm disabled:opacity-40">
             {remaining === 0 ? 'Complete sale' : `Need ${formatMoney(Math.abs(remaining))} more`}
           </button>
         </div>

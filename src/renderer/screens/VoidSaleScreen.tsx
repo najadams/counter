@@ -138,7 +138,7 @@ export default function VoidSaleScreen({ onExit, onDuplicate }: { onExit: () => 
                         ? <span className="text-danger text-xs self-center">VOIDED</span>
                         : <button
                             onClick={() => { setSelected(s); setReason(''); setError(null); setInfo(null); }}
-                            className="px-3 py-1 border border-danger text-danger hover:bg-danger hover:text-bg-deep text-xs">
+                            className="px-3 py-1 border border-danger text-danger hover:bg-danger hover:text-ink text-xs">
                             Void
                           </button>}
                     </div>
@@ -171,7 +171,7 @@ export default function VoidSaleScreen({ onExit, onDuplicate }: { onExit: () => 
               <button
                 onClick={() => setAskingSupervisor(true)}
                 disabled={reason.trim().length < 3}
-                className="bg-danger text-bg-deep px-5 py-3 font-semibold hover:opacity-90 disabled:opacity-40">
+                className="bg-danger text-ink px-5 py-3 font-semibold hover:opacity-90 disabled:opacity-40">
                 Get supervisor approval
               </button>
             </div>

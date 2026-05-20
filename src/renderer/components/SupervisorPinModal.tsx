@@ -39,7 +39,7 @@ export function SupervisorPinModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={onCancel}>
+    <div className="fixed inset-0 bg-scrim flex items-center justify-center z-50" onClick={onCancel}>
       <div className="bg-bg-surface border border-border w-full max-w-md p-8 flex flex-col gap-5" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-text-secondary uppercase tracking-wider text-xs">{title}</h3>
         {candidates.length === 0 && (
@@ -77,7 +77,7 @@ export function SupervisorPinModal({
           <button
             onClick={submit}
             disabled={candidates.length === 0 || pin.length < 4}
-            className="bg-accent text-bg-deep px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed"
+            className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed"
           >Approve</button>
         </div>
       </div>

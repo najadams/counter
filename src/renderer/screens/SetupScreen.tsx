@@ -87,7 +87,7 @@ export default function SetupScreen() {
             </div>
           </div>
 
-          <div className="bg-amber-950/30 border border-amber-900/50 rounded p-3 text-amber-300 text-sm">
+          <div className="bg-warning/10 border border-warning/40 rounded p-3 text-warning text-sm">
             <strong>Save it somewhere safe:</strong> a locked drawer, a photo
             on your phone, an envelope at home. Without it, a forgotten PIN
             means restoring the whole database from a backup.
@@ -105,7 +105,7 @@ export default function SetupScreen() {
           <button
             onClick={continueAfterRecovery}
             disabled={!acknowledgedRecovery}
-            className="w-full py-3 rounded bg-accent text-bg-deep font-semibold disabled:opacity-50">
+            className="w-full py-3 rounded bg-accent text-ink font-semibold disabled:opacity-50">
             Continue to Counter
           </button>
         </div>
@@ -182,7 +182,7 @@ export default function SetupScreen() {
         </div>
 
         {err && (
-          <div className="text-sm text-red-400 bg-red-950/30 border border-red-900/50 rounded px-3 py-2">
+          <div className="text-sm text-danger bg-danger/10 border border-danger/40 rounded px-3 py-2">
             {err}
           </div>
         )}
@@ -190,7 +190,7 @@ export default function SetupScreen() {
         <button
           type="submit"
           disabled={busy}
-          className="w-full py-3 rounded bg-accent-primary text-bg-deep font-semibold disabled:opacity-50"
+          className="w-full py-3 rounded bg-accent-primary text-ink font-semibold disabled:opacity-50"
         >
           {busy ? 'Creating account…' : 'Create owner account'}
         </button>

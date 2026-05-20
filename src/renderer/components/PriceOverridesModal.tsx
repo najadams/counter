@@ -59,7 +59,7 @@ export function PriceOverridesModal({ customerId, customerName, onClose }: Props
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-6 z-50">
+    <div className="fixed inset-0 bg-scrim flex items-center justify-center p-6 z-50">
       <div className="bg-bg-surface rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-auto border border-border">
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <div>
@@ -120,7 +120,7 @@ export function PriceOverridesModal({ customerId, customerName, onClose }: Props
 
           {isOwner && !adding && (
             <button onClick={() => setAdding(true)}
-              className="bg-accent text-bg-deep px-4 py-2 font-semibold text-sm hover:bg-accent-light">
+              className="bg-accent text-ink px-4 py-2 font-semibold text-sm hover:bg-accent-light">
               + Add override
             </button>
           )}
@@ -277,7 +277,7 @@ function AddOverrideForm({
         <button onClick={onCancel}
           className="px-3 py-2 border border-border text-sm hover:bg-bg-elevated">Cancel</button>
         <button onClick={() => void submit()} disabled={!picked || !unitId || !priceCedis}
-          className="px-4 py-2 bg-accent text-bg-deep font-semibold text-sm disabled:opacity-50">
+          className="px-4 py-2 bg-accent text-ink font-semibold text-sm disabled:opacity-50">
           Save
         </button>
       </div>

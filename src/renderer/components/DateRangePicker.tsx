@@ -114,7 +114,7 @@ export function DateRangePicker({ value, onChange }: Props) {
             className={[
               'px-3 py-1.5 text-xs border rounded-sm',
               value.presetKey === p.key
-                ? 'bg-accent text-bg-deep border-accent font-semibold'
+                ? 'bg-accent text-ink border-accent font-semibold'
                 : 'border-border text-text-secondary hover:text-text-primary hover:border-border-strong',
             ].join(' ')}
           >

@@ -149,7 +149,7 @@ export default function BreakageScreen({ onExit }: { onExit: () => void }) {
             <div className="flex flex-col gap-2">
               <label className="text-text-secondary text-xs uppercase tracking-wider">Photo (required)</label>
               <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={pickFile}
-                className="text-text-primary file:bg-accent file:text-bg-deep file:border-0 file:px-4 file:py-2 file:font-semibold file:cursor-pointer" />
+                className="text-text-primary file:bg-accent file:text-ink file:border-0 file:px-4 file:py-2 file:font-semibold file:cursor-pointer" />
               {photoPreview && (
                 <img src={photoPreview} alt="evidence preview"
                   className="max-h-48 border border-border object-contain bg-bg-deep" />
@@ -161,7 +161,7 @@ export default function BreakageScreen({ onExit }: { onExit: () => void }) {
               <button
                 onClick={() => void submit()}
                 disabled={!photoB64 || submitting}
-                className="bg-danger text-bg-deep px-5 py-3 font-semibold hover:opacity-90 disabled:opacity-40">
+                className="bg-danger text-ink px-5 py-3 font-semibold hover:opacity-90 disabled:opacity-40">
                 {submitting ? 'Logging…' : 'Report breakage'}
               </button>
             </div>

@@ -54,7 +54,7 @@ export function RecoveryResetModal({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-6 z-50">
+    <div className="fixed inset-0 bg-scrim flex items-center justify-center p-6 z-50">
       <div className="bg-bg-elevated rounded-lg shadow-xl w-full max-w-lg p-6 space-y-4">
         {step === 'pick' && (
           <>
@@ -89,13 +89,13 @@ export function RecoveryResetModal({ onClose }: { onClose: () => void }) {
                 ))}
               </div>
             )}
-            {error && <div className="text-sm text-red-400 bg-red-950/30 border border-red-900/50 rounded px-3 py-2">{error}</div>}
+            {error && <div className="text-sm text-danger bg-danger/10 border border-danger/40 rounded px-3 py-2">{error}</div>}
             <div className="flex justify-end gap-3 pt-2">
               <button onClick={onClose} className="px-4 py-2 border border-border hover:bg-bg-deep text-sm">Cancel</button>
               <button
                 disabled={!workerId}
                 onClick={() => setStep('reset')}
-                className="px-4 py-2 bg-accent text-bg-deep font-semibold text-sm disabled:opacity-50">
+                className="px-4 py-2 bg-accent text-ink font-semibold text-sm disabled:opacity-50">
                 Continue
               </button>
             </div>
@@ -136,12 +136,12 @@ export function RecoveryResetModal({ onClose }: { onClose: () => void }) {
                   className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle font-mono tracking-widest" />
               </label>
             </div>
-            {error && <div className="text-sm text-red-400 bg-red-950/30 border border-red-900/50 rounded px-3 py-2">{error}</div>}
+            {error && <div className="text-sm text-danger bg-danger/10 border border-danger/40 rounded px-3 py-2">{error}</div>}
             <div className="flex justify-end gap-3 pt-2">
               <button onClick={() => setStep('pick')} disabled={busy}
                 className="px-4 py-2 border border-border hover:bg-bg-deep text-sm">Back</button>
               <button onClick={() => void submit()} disabled={busy}
-                className="px-4 py-2 bg-accent text-bg-deep font-semibold text-sm disabled:opacity-50">
+                className="px-4 py-2 bg-accent text-ink font-semibold text-sm disabled:opacity-50">
                 {busy ? 'Resetting…' : 'Reset PIN'}
               </button>
             </div>
@@ -173,7 +173,7 @@ export function RecoveryResetModal({ onClose }: { onClose: () => void }) {
             </label>
             <div className="flex justify-end pt-2">
               <button onClick={onClose} disabled={!acknowledged}
-                className="px-4 py-2 bg-accent text-bg-deep font-semibold text-sm disabled:opacity-50">
+                className="px-4 py-2 bg-accent text-ink font-semibold text-sm disabled:opacity-50">
                 Done — sign in with new PIN
               </button>
             </div>

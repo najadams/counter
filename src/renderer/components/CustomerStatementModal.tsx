@@ -55,7 +55,7 @@ export function CustomerStatementModal({ customerId, onClose }: Props): JSX.Elem
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50 statement-overlay">
+    <div className="fixed inset-0 bg-scrim flex items-center justify-center p-4 z-50 statement-overlay">
       <style>{`
         @media print {
           body * { visibility: hidden; }

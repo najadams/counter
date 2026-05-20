@@ -247,7 +247,7 @@ export function PricingTiersTab() {
                           <div className="flex gap-1 justify-end">
                             <button
                               onClick={() => saveEdit(t)}
-                              className="bg-accent text-bg-deep px-2 py-1 text-xs rounded hover:bg-accent-light"
+                              className="bg-accent text-ink px-2 py-1 text-xs rounded hover:bg-accent-light"
                             >
                               Save
                             </button>
@@ -358,7 +358,7 @@ export function PricingTiersTab() {
                   </Field>
                   <button
                     onClick={add}
-                    className="bg-accent text-bg-deep px-5 py-2 rounded text-sm font-semibold hover:bg-accent-light h-[38px]"
+                    className="bg-accent text-ink px-5 py-2 rounded text-sm font-semibold hover:bg-accent-light h-[38px]"
                   >
                     Add
                   </button>

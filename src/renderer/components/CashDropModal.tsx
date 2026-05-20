@@ -46,7 +46,7 @@ export function CashDropModal({ shiftId, onClose, onDone }: {
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={onClose}>
+      <div className="fixed inset-0 bg-scrim flex items-center justify-center z-50" onClick={onClose}>
         <div className="bg-bg-surface border border-border w-full max-w-md p-8 flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
           <h3 className="text-text-secondary uppercase tracking-wider text-xs">Cash drop</h3>
           {expected !== null && (
@@ -78,7 +78,7 @@ export function CashDropModal({ shiftId, onClose, onDone }: {
           <div className="flex gap-3">
             <button onClick={onClose} className="px-5 py-3 border border-border hover:bg-bg-elevated">Cancel</button>
             <button onClick={() => setAskingSupervisor(true)} disabled={!valid}
-              className="bg-accent text-bg-deep px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed">
+              className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed">
               Get supervisor approval
             </button>
           </div>

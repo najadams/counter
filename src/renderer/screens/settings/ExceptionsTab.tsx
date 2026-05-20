@@ -79,7 +79,7 @@ export function ExceptionsTab() {
             className="px-3 py-2 rounded bg-bg-deep border border-border-subtle text-sm" />
         </label>
         <button onClick={() => void refresh()}
-          className="self-end bg-accent text-bg-deep px-4 py-2 font-semibold hover:bg-accent-light text-sm">
+          className="self-end bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light text-sm">
           {loading ? 'Loading…' : 'Refresh'}
         </button>
         <div className="self-end ml-auto flex gap-2">
@@ -88,7 +88,7 @@ export function ExceptionsTab() {
           <button className="px-3 py-2 border border-border text-sm" onClick={() => { setFromDate(daysAgoIso(30)); setToDate(todayIso()); setTimeout(() => void refresh(), 0); }}>30d</button>
         </div>
       </div>
-      {error && <div className="bg-red-950/30 border border-red-900/50 text-red-300 text-sm px-3 py-2 rounded">{error}</div>}
+      {error && <div className="bg-danger/10 border border-danger/40 text-danger text-sm px-3 py-2 rounded">{error}</div>}
 
       <Section title="Voids by cashier" subtitle="Who's voiding the most. Outliers ≠ proof, but always worth asking.">
         <Table headers={['Cashier', 'Role', 'Voids', 'Voided value']}>
@@ -138,7 +138,7 @@ export function ExceptionsTab() {
               <td className="px-3 py-2 font-mono text-xs">{r.businessDate}</td>
               <td className="px-3 py-2">{r.workerName}</td>
               <td className="px-3 py-2">{r.productName}</td>
-              <td className="px-3 py-2 font-mono text-right text-red-400">{r.voidCount}</td>
+              <td className="px-3 py-2 font-mono text-right text-danger">{r.voidCount}</td>
             </tr>
           ))}
         </Table>

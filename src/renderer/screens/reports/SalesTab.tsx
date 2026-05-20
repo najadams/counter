@@ -73,7 +73,7 @@ export function SalesTab() {
                 className={[
                   'px-3 py-1.5 border rounded-sm uppercase tracking-wider',
                   groupBy === g
-                    ? 'bg-accent text-bg-deep border-accent font-semibold'
+                    ? 'bg-accent text-ink border-accent font-semibold'
                     : 'border-border text-text-secondary hover:text-text-primary',
                 ].join(' ')}>
                 Per {g}
@@ -87,7 +87,7 @@ export function SalesTab() {
         </div>
       </div>
 
-      {error && <div className="bg-red-950/30 border border-red-900/50 text-red-300 text-sm px-3 py-2">{error}</div>}
+      {error && <div className="bg-danger/10 border border-danger/40 text-danger text-sm px-3 py-2">{error}</div>}
       {loading && !data && <div className="text-text-tertiary text-sm">Loading…</div>}
 
       {data && (

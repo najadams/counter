@@ -81,9 +81,9 @@ export default function App() {
   if (bootError) {
     return (
       <div className="min-h-screen bg-bg-deep text-text-primary flex items-center justify-center p-6">
-        <div className="max-w-2xl bg-red-950/30 border border-red-900/50 rounded p-6">
-          <h1 className="text-xl font-semibold text-red-300 mb-3">Boot failed</h1>
-          <pre className="text-sm text-red-200 whitespace-pre-wrap break-words font-mono">
+        <div className="max-w-2xl bg-danger/10 border border-danger/40 rounded p-6">
+          <h1 className="text-xl font-semibold text-danger mb-3">Boot failed</h1>
+          <pre className="text-sm text-danger-light whitespace-pre-wrap break-words font-mono">
             {bootError}
           </pre>
           <p className="text-xs text-text-tertiary mt-4">

@@ -108,7 +108,7 @@ export function ExpenseModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-6 z-50">
+    <div className="fixed inset-0 bg-scrim flex items-center justify-center p-6 z-50">
       <div className="bg-bg-elevated rounded-lg shadow-xl w-full max-w-lg p-6 space-y-4">
         <h2 className="text-xl font-semibold">Petty cash expense</h2>
         <p className="text-sm text-text-tertiary">
@@ -146,7 +146,7 @@ export function ExpenseModal({
             </span>
             <input type="file" accept="image/*" onChange={onPickPhoto}
               className="w-full text-sm text-text-secondary" />
-            {photoBase64 && <div className="text-xs text-emerald-400 mt-1">Photo attached.</div>}
+            {photoBase64 && <div className="text-xs text-success mt-1">Photo attached.</div>}
           </label>
         )}
 
@@ -183,13 +183,13 @@ export function ExpenseModal({
             className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle text-sm" />
         </label>
 
-        {error && <div className="text-sm text-red-400 bg-red-950/30 border border-red-900/50 rounded px-3 py-2">{error}</div>}
+        {error && <div className="text-sm text-danger bg-danger/10 border border-danger/40 rounded px-3 py-2">{error}</div>}
 
         <div className="flex justify-end gap-3">
           <button onClick={onCancel} disabled={submitting}
             className="px-4 py-2 border border-border hover:bg-bg-deep text-sm">Cancel</button>
           <button onClick={() => void submit()} disabled={submitting || amount == null || amount <= 0}
-            className="px-4 py-2 bg-accent text-bg-deep font-semibold text-sm disabled:opacity-50">
+            className="px-4 py-2 bg-accent text-ink font-semibold text-sm disabled:opacity-50">
             {submitting ? 'Recording…' : amount != null && amount > 0 ? `Record ${formatMoney(amount)}` : 'Record expense'}
           </button>
         </div>

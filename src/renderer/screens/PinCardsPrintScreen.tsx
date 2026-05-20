@@ -90,7 +90,7 @@ export function PinCardsPrintScreen({ onExit }: { onExit: () => void }) {
           <h1 className="text-text-secondary uppercase tracking-wider text-xs">PIN cards — {workers.length} active worker(s)</h1>
           <div className="flex gap-3">
             <button onClick={() => window.print()}
-              className="bg-accent text-bg-deep px-4 py-2 font-semibold hover:bg-accent-light text-sm">
+              className="bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light text-sm">
               Print
             </button>
             <button onClick={onExit}
@@ -100,7 +100,7 @@ export function PinCardsPrintScreen({ onExit }: { onExit: () => void }) {
           </div>
         </div>
         {error && (
-          <div className="max-w-3xl mx-auto px-12 mb-4 bg-red-950/30 border border-red-900/50 text-red-300 px-3 py-2 rounded text-sm">
+          <div className="max-w-3xl mx-auto px-12 mb-4 bg-danger/10 border border-danger/40 text-danger px-3 py-2 rounded text-sm">
             {error}
           </div>
         )}
@@ -112,7 +112,7 @@ export function PinCardsPrintScreen({ onExit }: { onExit: () => void }) {
 
       <div className="bg-white">
         {workers.length === 0 && (
-          <div className="text-center text-gray-500 p-12 no-print">No active workers to print.</div>
+          <div className="text-center text-text-tertiary p-12 no-print">No active workers to print.</div>
         )}
         {workers.map((w) => (
           <div key={w.id} className="pin-card-page">

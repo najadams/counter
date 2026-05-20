@@ -57,13 +57,13 @@ export function SuppliersTab() {
           onClick={() => isAdmin && setShowAdd(true)}
           disabled={!isAdmin}
           title={isAdmin ? '' : 'OWNER or FOUNDER role required to add suppliers'}
-          className="bg-accent text-bg-deep px-4 py-2 font-semibold hover:bg-accent-light text-sm disabled:opacity-40 disabled:cursor-not-allowed">
+          className="bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light text-sm disabled:opacity-40 disabled:cursor-not-allowed">
           + Add supplier
         </button>
       </div>
 
-      {error && <div className="bg-red-950/30 border border-red-900/50 text-red-300 text-sm px-3 py-2 rounded">{error}</div>}
-      {info && <div className="bg-emerald-950/30 border border-emerald-900/50 text-emerald-300 text-sm px-3 py-2 rounded">{info}</div>}
+      {error && <div className="bg-danger/10 border border-danger/40 text-danger text-sm px-3 py-2 rounded">{error}</div>}
+      {info && <div className="bg-success/10 border border-success/40 text-success text-sm px-3 py-2 rounded">{info}</div>}
 
       <div className="bg-bg-elevated rounded border border-border-subtle overflow-hidden">
         <table className="w-full text-sm">
@@ -95,7 +95,7 @@ export function SuppliersTab() {
                 </td>
                 <td className="px-4 py-3">
                   {s.active
-                    ? <span className="text-emerald-400">Active</span>
+                    ? <span className="text-success">Active</span>
                     : <span className="text-text-tertiary">Inactive</span>}
                 </td>
                 <td className="px-4 py-3 text-right">
@@ -107,11 +107,11 @@ export function SuppliersTab() {
                       </button>
                       {s.active
                         ? <button onClick={() => deactivate(s.id)}
-                            className="text-xs px-3 py-1 border border-border hover:bg-bg-elevated text-red-400">
+                            className="text-xs px-3 py-1 border border-border hover:bg-bg-elevated text-danger">
                             Deactivate
                           </button>
                         : <button onClick={() => reactivate(s.id)}
-                            className="text-xs px-3 py-1 border border-border hover:bg-bg-elevated text-emerald-400">
+                            className="text-xs px-3 py-1 border border-border hover:bg-bg-elevated text-success">
                             Reactivate
                           </button>}
                     </div>
@@ -197,7 +197,7 @@ function SupplierFormModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-6 z-50">
+    <div className="fixed inset-0 bg-scrim flex items-center justify-center p-6 z-50">
       <form onSubmit={submit} className="bg-bg-elevated rounded-lg shadow-xl w-full max-w-lg p-6 space-y-4">
         <h2 className="text-xl font-semibold">{mode === 'add' ? 'Add supplier' : 'Edit supplier'}</h2>
 
@@ -242,7 +242,7 @@ function SupplierFormModal({
             className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle" />
         </label>
 
-        {err && <div className="text-sm text-red-400 bg-red-950/30 border border-red-900/50 rounded px-3 py-2">{err}</div>}
+        {err && <div className="text-sm text-danger bg-danger/10 border border-danger/40 rounded px-3 py-2">{err}</div>}
 
         <div className="flex justify-end gap-3 pt-2">
           <button type="button" onClick={onClose} disabled={busy}
@@ -250,7 +250,7 @@ function SupplierFormModal({
             Cancel
           </button>
           <button type="submit" disabled={busy}
-            className="px-4 py-2 bg-accent text-bg-deep font-semibold hover:bg-accent-light text-sm disabled:opacity-50">
+            className="px-4 py-2 bg-accent text-ink font-semibold hover:bg-accent-light text-sm disabled:opacity-50">
             {busy ? 'Saving…' : (mode === 'add' ? 'Add supplier' : 'Save changes')}
           </button>
         </div>

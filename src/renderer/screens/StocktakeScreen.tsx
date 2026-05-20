@@ -169,7 +169,7 @@ export default function StocktakeScreen({ onExit }: { onExit: () => void }) {
                 <option value="C">Class C only (long tail)</option>
               </select>
               <button onClick={() => void start()}
-                className="bg-accent text-bg-deep px-5 py-3 font-semibold hover:bg-accent-light">
+                className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light">
                 Start stocktake
               </button>
             </div>
@@ -277,7 +277,7 @@ export default function StocktakeScreen({ onExit }: { onExit: () => void }) {
                 </span>
               )}
               <button onClick={() => setAskingSupervisor(true)}
-                className="bg-accent text-bg-deep px-5 py-3 font-semibold hover:bg-accent-light">
+                className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light">
                 Complete with supervisor
               </button>
             </div>

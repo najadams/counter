@@ -36,7 +36,7 @@ export function OverviewTab({
   useEffect(() => { registerRefresh?.(refresh, loading); /* eslint-disable-next-line */ }, [loading]);
 
   if (error) return (
-    <div className="bg-red-950/30 border border-red-900/50 text-red-300 text-sm px-3 py-2 rounded">{error}</div>
+    <div className="bg-danger/10 border border-danger/40 text-danger text-sm px-3 py-2 rounded">{error}</div>
   );
   if (!data) return <div className="text-text-tertiary text-sm">Loading dashboard…</div>;
 

@@ -117,7 +117,7 @@ export function BreakageReviewTab() {
         </label>
         <div className="flex items-end gap-2">
           <button onClick={() => { setPage(0); void refresh(); }}
-            className="bg-accent text-bg-deep px-4 py-2 font-semibold hover:bg-accent-light text-sm">
+            className="bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light text-sm">
             Apply
           </button>
           <button onClick={() => {
@@ -147,7 +147,7 @@ export function BreakageReviewTab() {
         )}
       </div>
 
-      {error && <div className="bg-red-950/30 border border-red-900/50 text-red-300 text-sm px-3 py-2 rounded">{error}</div>}
+      {error && <div className="bg-danger/10 border border-danger/40 text-danger text-sm px-3 py-2 rounded">{error}</div>}
 
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
         {loading && <div className="col-span-full text-center text-text-tertiary py-6">Loading…</div>}

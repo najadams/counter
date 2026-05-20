@@ -88,7 +88,7 @@ export function ProductsTab() {
           onClick={() => isAdmin && setShowAdd(true)}
           disabled={!isAdmin}
           title={isAdmin ? '' : 'OWNER or FOUNDER role required to add products'}
-          className="bg-accent text-bg-deep px-4 py-2 font-semibold hover:bg-accent-light text-sm disabled:opacity-40 disabled:cursor-not-allowed">
+          className="bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light text-sm disabled:opacity-40 disabled:cursor-not-allowed">
           + Add product
         </button>
       </div>
@@ -322,7 +322,7 @@ function ProductFormModal({ mode, existing, onCancel, onDone, onError }: {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={onCancel}>
+    <div className="fixed inset-0 bg-scrim flex items-center justify-center z-50 p-4" onClick={onCancel}>
       <div className="bg-bg-surface border border-border w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl" onClick={(e) => e.stopPropagation()}>
         {/* Sticky header */}
         <div className="px-8 py-5 border-b border-border-subtle flex items-center justify-between flex-shrink-0">
@@ -548,7 +548,7 @@ function ProductFormModal({ mode, existing, onCancel, onDone, onError }: {
           </button>
           <button onClick={() => void submit()}
             disabled={submitting || !sku.trim() || !name.trim()}
-            className="bg-accent text-bg-deep px-5 py-2.5 font-semibold hover:bg-accent-light disabled:opacity-40 text-sm">
+            className="bg-accent text-ink px-5 py-2.5 font-semibold hover:bg-accent-light disabled:opacity-40 text-sm">
             {submitting ? 'Saving…' : (mode === 'add' ? 'Add product' : 'Save changes')}
           </button>
         </div>
@@ -692,7 +692,7 @@ function PricingTiersEditor({ productId, onError }: { productId: string; onError
         </div>
         <div className="flex justify-end">
           <button onClick={() => void addOne()}
-            className="bg-accent text-bg-deep px-4 py-2 font-semibold hover:bg-accent-light text-sm whitespace-nowrap">
+            className="bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light text-sm whitespace-nowrap">
             + Add tier
           </button>
         </div>
@@ -861,7 +861,7 @@ function ProductUnitsEditor({
             </label>
           </div>
           <button onClick={() => void addOne()}
-            className="bg-accent text-bg-deep px-4 py-2 font-semibold hover:bg-accent-light text-sm whitespace-nowrap">
+            className="bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light text-sm whitespace-nowrap">
             + Add unit
           </button>
         </div>

@@ -125,7 +125,7 @@ export default function LoginScreen() {
             type="button"
             onClick={() => void submit()}
             disabled={submitting || pin.length < 4 || lockedUntil !== null}
-            className="bg-accent text-bg-deep px-5 py-3 font-semibold tracking-wide hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed"
+            className="bg-accent text-ink px-5 py-3 font-semibold tracking-wide hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {submitting ? 'Signing in…' : 'Sign in'}
           </button>

@@ -117,7 +117,7 @@ export function ReorderTab() {
           </select>
         </label>
         <button onClick={() => void refresh()}
-          className="self-end bg-accent text-bg-deep px-4 py-2 font-semibold hover:bg-accent-light text-sm">
+          className="self-end bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light text-sm">
           {loading ? 'Loading…' : 'Refresh suggestions'}
         </button>
         <div className="self-end text-text-tertiary text-xs ml-auto">
@@ -125,8 +125,8 @@ export function ReorderTab() {
         </div>
       </div>
 
-      {error && <div className="bg-red-950/30 border border-red-900/50 text-red-300 text-sm px-3 py-2 rounded">{error}</div>}
-      {info && <div className="bg-emerald-950/30 border border-emerald-900/50 text-emerald-300 text-sm px-3 py-2 rounded">{info}</div>}
+      {error && <div className="bg-danger/10 border border-danger/40 text-danger text-sm px-3 py-2 rounded">{error}</div>}
+      {info && <div className="bg-success/10 border border-success/40 text-success text-sm px-3 py-2 rounded">{info}</div>}
 
       {[...groups.values()].length === 0 && !loading && (
         <div className="bg-bg-elevated border border-border-subtle p-6 rounded text-text-tertiary text-sm">
@@ -144,7 +144,7 @@ export function ReorderTab() {
             </div>
             {isOwner && g.supplierId && (
               <button onClick={() => void createPOForSupplier(g.supplierId, g.rows)}
-                className="px-4 py-2 bg-accent text-bg-deep font-semibold text-sm hover:bg-accent-light">
+                className="px-4 py-2 bg-accent text-ink font-semibold text-sm hover:bg-accent-light">
                 Create draft PO
               </button>
             )}
@@ -168,7 +168,7 @@ export function ReorderTab() {
                   const qty = orderQty[r.productId] ?? r.suggestedQty;
                   const value = qty * r.lastCostPesewas;
                   const onHandClass =
-                    r.currentOnHand <= 0 ? 'text-red-400' :
+                    r.currentOnHand <= 0 ? 'text-danger' :
                     r.currentOnHand < r.reorderThreshold / 2 ? 'text-warning' : '';
                   return (
                     <tr key={r.productId} className="border-t border-border-subtle">

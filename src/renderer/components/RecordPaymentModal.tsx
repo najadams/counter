@@ -109,7 +109,7 @@ export function RecordPaymentModal({
   const totalOutstanding = openSales.reduce((s, l) => s + l.outstandingPesewas, 0);
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 overflow-y-auto py-8" onClick={onCancel}>
+    <div className="fixed inset-0 bg-scrim flex items-center justify-center z-50 overflow-y-auto py-8" onClick={onCancel}>
       <div className="bg-bg-surface border border-border w-full max-w-2xl p-8 flex flex-col gap-4 my-auto" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-text-secondary uppercase tracking-wider text-xs">Record payment — {customerName}</h3>
         <div className="text-text-tertiary text-sm">
@@ -205,7 +205,7 @@ export function RecordPaymentModal({
           <button onClick={onCancel} className="px-5 py-3 border border-border hover:bg-bg-elevated">Cancel</button>
           <button onClick={() => void submit()}
             disabled={submitting || amountPesewas == null || amountPesewas <= 0}
-            className="bg-accent text-bg-deep px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40">
+            className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40">
             {submitting ? 'Recording…' : 'Record payment'}
           </button>
         </div>

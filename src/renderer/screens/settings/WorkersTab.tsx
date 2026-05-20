@@ -90,7 +90,7 @@ export function WorkersTab() {
           onClick={() => isAdmin && setShowAdd(true)}
           disabled={!isAdmin}
           title={isAdmin ? '' : 'OWNER or FOUNDER role required to add workers'}
-          className="bg-accent text-bg-deep px-4 py-2 font-semibold hover:bg-accent-light text-sm disabled:opacity-40 disabled:cursor-not-allowed">
+          className="bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light text-sm disabled:opacity-40 disabled:cursor-not-allowed">
           + Add worker
         </button>
       </div>
@@ -187,7 +187,7 @@ export function WorkersTab() {
         />
       )}
       {regeneratedCode && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-6 z-50">
+        <div className="fixed inset-0 bg-scrim flex items-center justify-center p-6 z-50">
           <div className="bg-bg-surface rounded-lg shadow-xl w-full max-w-lg p-6 space-y-4 border border-border">
             <h2 className="text-xl font-semibold">New recovery code</h2>
             <p className="text-sm text-text-secondary">
@@ -209,7 +209,7 @@ export function WorkersTab() {
               <button
                 disabled={!regenAck}
                 onClick={() => { setRegeneratedCode(null); setRegenAck(false); flash('Recovery code regenerated.', 'info'); }}
-                className="px-4 py-2 bg-accent text-bg-deep font-semibold text-sm disabled:opacity-50">
+                className="px-4 py-2 bg-accent text-ink font-semibold text-sm disabled:opacity-50">
                 Done
               </button>
             </div>
@@ -241,7 +241,7 @@ function AddWorkerModal({ onCancel, onAdded, onError }: { onCancel: () => void; 
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={onCancel}>
+    <div className="fixed inset-0 bg-scrim flex items-center justify-center z-50" onClick={onCancel}>
       <div className="bg-bg-surface border border-border w-full max-w-md p-8 flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-text-secondary uppercase tracking-wider text-xs">Add worker</h3>
         <input autoFocus value={fullName} onChange={(e) => setFullName(e.target.value)}
@@ -262,7 +262,7 @@ function AddWorkerModal({ onCancel, onAdded, onError }: { onCancel: () => void; 
         <div className="flex gap-3 mt-2">
           <button onClick={onCancel} className="px-5 py-3 border border-border hover:bg-bg-elevated">Cancel</button>
           <button onClick={() => void submit()} disabled={submitting || pin.length < 4 || !fullName.trim()}
-            className="bg-accent text-bg-deep px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40">
+            className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40">
             {submitting ? 'Adding…' : 'Add worker'}
           </button>
         </div>
@@ -278,7 +278,7 @@ function ResetPinModal({ worker, onCancel, onDone, onError }: { worker: AdminWor
     if (!r.success) onError(r.error); else onDone();
   }
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={onCancel}>
+    <div className="fixed inset-0 bg-scrim flex items-center justify-center z-50" onClick={onCancel}>
       <div className="bg-bg-surface border border-border w-full max-w-md p-8 flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-text-secondary uppercase tracking-wider text-xs">Reset PIN — {worker.fullName}</h3>
         <input autoFocus type="password" inputMode="numeric" value={pin} maxLength={6}
@@ -289,7 +289,7 @@ function ResetPinModal({ worker, onCancel, onDone, onError }: { worker: AdminWor
         <div className="flex gap-3">
           <button onClick={onCancel} className="px-5 py-3 border border-border hover:bg-bg-elevated">Cancel</button>
           <button onClick={() => void submit()} disabled={pin.length < 4}
-            className="bg-accent text-bg-deep px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40">
+            className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40">
             Reset
           </button>
         </div>
@@ -305,7 +305,7 @@ function TerminateModal({ worker, onCancel, onDone, onError }: { worker: AdminWo
     if (!r.success) onError(r.error); else onDone();
   }
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={onCancel}>
+    <div className="fixed inset-0 bg-scrim flex items-center justify-center z-50" onClick={onCancel}>
       <div className="bg-bg-surface border border-border w-full max-w-md p-8 flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-text-secondary uppercase tracking-wider text-xs">Terminate — {worker.fullName}</h3>
         <div className="text-text-tertiary text-sm">
@@ -317,7 +317,7 @@ function TerminateModal({ worker, onCancel, onDone, onError }: { worker: AdminWo
         <div className="flex gap-3">
           <button onClick={onCancel} className="px-5 py-3 border border-border hover:bg-bg-elevated">Cancel</button>
           <button onClick={() => void submit()} disabled={reason.trim().length < 3}
-            className="bg-danger text-bg-deep px-5 py-3 font-semibold disabled:opacity-40">
+            className="bg-danger text-ink px-5 py-3 font-semibold disabled:opacity-40">
             Terminate
           </button>
         </div>
@@ -334,7 +334,7 @@ function ChangeMyPinModal({ onCancel, onDone, onError }: { onCancel: () => void;
     if (!r.success) onError(r.error); else onDone();
   }
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50" onClick={onCancel}>
+    <div className="fixed inset-0 bg-scrim flex items-center justify-center z-50" onClick={onCancel}>
       <div className="bg-bg-surface border border-border w-full max-w-md p-8 flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-text-secondary uppercase tracking-wider text-xs">Change my PIN</h3>
         <input type="password" inputMode="numeric" value={oldPin} maxLength={6}
@@ -348,7 +348,7 @@ function ChangeMyPinModal({ onCancel, onDone, onError }: { onCancel: () => void;
         <div className="flex gap-3">
           <button onClick={onCancel} className="px-5 py-3 border border-border hover:bg-bg-elevated">Cancel</button>
           <button onClick={() => void submit()} disabled={oldPin.length < 4 || newPin.length < 4}
-            className="bg-accent text-bg-deep px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40">
+            className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40">
             Update
           </button>
         </div>

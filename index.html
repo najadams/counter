@@ -7,6 +7,12 @@
     <title>Counter</title>
     <link rel="preconnect" href="https://rsms.me/" />
     <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
+    <!--
+      Theme application happens in src/renderer/store/theme.ts at module
+      load. An inline boot script would prevent the brief flash, but the
+      page CSP (default-src 'self') blocks inline scripts and we don't
+      want to relax that for a few milliseconds of cosmetic gain.
+    -->
   </head>
   <body class="bg-bg-deep text-text-primary">
     <div id="root"></div>

@@ -77,7 +77,7 @@ export default function OpenShiftScreen() {
             type="button"
             onClick={() => void submit()}
             disabled={!valid || submitting}
-            className="bg-accent text-bg-deep px-6 py-3 font-semibold tracking-wide hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed"
+            className="bg-accent text-ink px-6 py-3 font-semibold tracking-wide hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {submitting ? 'Opening shift…' : 'Open shift'} <span className="kbd">F2</span>
           </button>

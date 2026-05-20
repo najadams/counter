@@ -12,9 +12,10 @@ import { BreakageReviewTab } from './settings/BreakageReviewTab';
 import { ReprintQueueTab } from './settings/ReprintQueueTab';
 import { ExceptionsTab } from './settings/ExceptionsTab';
 import { ReorderTab } from './settings/ReorderTab';
+import { AppearanceTab } from './settings/AppearanceTab';
 import { RunbookPrintScreen } from './RunbookPrintScreen';
 
-type Tab = 'workers' | 'products' | 'tiers' | 'suppliers' | 'supplier-pay' | 'audit' | 'breakage' | 'reprints' | 'exceptions' | 'reorder';
+type Tab = 'workers' | 'products' | 'tiers' | 'suppliers' | 'supplier-pay' | 'audit' | 'breakage' | 'reprints' | 'exceptions' | 'reorder' | 'appearance';
 
 export default function SettingsScreen({ onExit }: { onExit: () => void }) {
   const [tab, setTab] = useState<Tab>('workers');
@@ -59,6 +60,7 @@ export default function SettingsScreen({ onExit }: { onExit: () => void }) {
             <TabBtn active={tab === 'reprints'} onClick={() => setTab('reprints')}>Reprint queue</TabBtn>
             <TabBtn active={tab === 'exceptions'} onClick={() => setTab('exceptions')}>Exceptions</TabBtn>
             <TabBtn active={tab === 'reorder'} onClick={() => setTab('reorder')}>Reorder</TabBtn>
+            <TabBtn active={tab === 'appearance'} onClick={() => setTab('appearance')}>Appearance</TabBtn>
           </div>
           <div className="flex gap-3 shrink-0">
             <button onClick={() => setShowRunbook(true)}
@@ -85,6 +87,7 @@ export default function SettingsScreen({ onExit }: { onExit: () => void }) {
           {tab === 'reprints' && <ReprintQueueTab />}
           {tab === 'exceptions' && <ExceptionsTab />}
           {tab === 'reorder' && <ReorderTab />}
+          {tab === 'appearance' && <AppearanceTab />}
         </div>
       </main>
     </div>

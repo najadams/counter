@@ -47,7 +47,7 @@ export function RunbookPrintScreen({ onExit }: { onExit: () => void }) {
           <h1 className="text-text-secondary uppercase tracking-wider text-xs">Worker handbook — printable</h1>
           <div className="flex gap-3">
             <button onClick={() => window.print()}
-              className="bg-accent text-bg-deep px-4 py-2 font-semibold hover:bg-accent-light text-sm">
+              className="bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light text-sm">
               Print
             </button>
             <button onClick={onExit}

@@ -530,7 +530,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
                 <span>{customer?.displayName} prefers <span className="font-semibold">{channelSwitchBanner.replace('_', ' ')}</span> pricing.</span>
                 <button
                   onClick={() => attemptChannelChange(channelSwitchBanner)}
-                  className="px-2 py-0.5 border border-warning text-warning hover:bg-warning hover:text-bg-deep">
+                  className="px-2 py-0.5 border border-warning text-warning hover:bg-warning hover:text-ink">
                   Switch
                 </button>
               </div>
@@ -570,7 +570,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
                   >{l.unitName}</button>
                   <span>× {formatMoney(l.unitPricePesewas)}</span>
                   {l.appliedTierId && l.appliedTierMinQuantity != null && (
-                    <span className="bg-accent-dim text-bg-deep px-1.5 py-0.5 text-[10px] uppercase tracking-wider">
+                    <span className="bg-accent-dim text-ink px-1.5 py-0.5 text-[10px] uppercase tracking-wider">
                       ≥ {l.appliedTierMinQuantity} tier
                     </span>
                   )}
@@ -644,7 +644,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
             <button
               onClick={() => void submitSale()}
               disabled={submitting || lines.length === 0 || !paymentMethod}
-              className="bg-accent text-bg-deep px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed mt-2"
+              className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed mt-2"
             >
               {submitting ? 'Completing…' : 'Complete sale'} <span className="kbd">F2</span>
             </button>
@@ -659,7 +659,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
                   <button
                     type="button"
                     onClick={() => setShowReceiptPrint(true)}
-                    className="border border-success px-3 py-1 text-xs hover:bg-success hover:text-bg-deep">
+                    className="border border-success px-3 py-1 text-xs hover:bg-success hover:text-ink">
                     Print receipt <span className="kbd">F8</span>
                   </button>
                 )}
@@ -777,7 +777,7 @@ function CustomerPickerModal({
   }, [query]);
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60]" onClick={onCancel}>
+    <div className="fixed inset-0 bg-scrim flex items-center justify-center z-[60]" onClick={onCancel}>
       <div className="bg-bg-surface border border-border w-full max-w-lg p-6 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-text-secondary uppercase tracking-wider text-xs">Pick customer</h3>
         <input
@@ -872,7 +872,7 @@ function UnitSwapModal({
   }, [productId]);
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[60]" onClick={onCancel}>
+    <div className="fixed inset-0 bg-scrim flex items-center justify-center z-[60]" onClick={onCancel}>
       <div className="bg-bg-surface border border-border w-full max-w-md p-6 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-text-secondary uppercase tracking-wider text-xs">Sellable units</h3>
         {units.length === 0 && <div className="text-text-tertiary text-sm">No sellable units defined.</div>}
@@ -1038,7 +1038,7 @@ function PaymentModal(p: PaymentModalProps) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center" onClick={p.onClose}>
+    <div className="fixed inset-0 bg-scrim flex items-center justify-center" onClick={p.onClose}>
       <div className="bg-bg-surface border border-border w-full max-w-md p-8 flex flex-col gap-5" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-text-secondary uppercase tracking-wider text-xs">
           {isCash && 'Cash'}
@@ -1165,7 +1165,7 @@ function PaymentModal(p: PaymentModalProps) {
               (isMomo && refRaw.trim() === '') ||
               (isCredit && !p.customer)
             }
-            className="bg-accent text-bg-deep px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed"
+            className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Confirm
           </button>

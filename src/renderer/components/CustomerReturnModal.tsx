@@ -93,7 +93,7 @@ export function CustomerReturnModal({ customerId, customerName, onClose, onRecor
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-6 z-50">
+    <div className="fixed inset-0 bg-scrim flex items-center justify-center p-6 z-50">
       <div className="bg-bg-surface rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-auto border border-border">
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <div>
@@ -201,7 +201,7 @@ export function CustomerReturnModal({ customerId, customerName, onClose, onRecor
             <button onClick={onClose}
               className="px-4 py-2 border border-border text-sm hover:bg-bg-elevated">Cancel</button>
             <button onClick={tryRecord} disabled={lines.length === 0 || !reason.trim()}
-              className="px-4 py-2 bg-accent text-bg-deep font-semibold text-sm disabled:opacity-50">
+              className="px-4 py-2 bg-accent text-ink font-semibold text-sm disabled:opacity-50">
               Record return ({formatMoney(total)})
             </button>
           </div>
@@ -321,7 +321,7 @@ function LinePicker({ onAdd }: { onAdd: (line: Line) => void }) {
             placeholder="₵ / unit"
             className="bg-bg-surface border border-border px-2 py-2 text-sm font-mono text-right" />
           <button onClick={add} disabled={!unitId || qty <= 0 || !priceCedis}
-            className="bg-accent text-bg-deep px-3 py-2 font-semibold text-sm disabled:opacity-50">
+            className="bg-accent text-ink px-3 py-2 font-semibold text-sm disabled:opacity-50">
             Add
           </button>
         </div>

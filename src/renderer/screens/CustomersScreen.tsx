@@ -81,7 +81,7 @@ export default function CustomersScreen({ onExit }: { onExit: () => void }) {
           <div className="flex items-center gap-3">
             <button
               onClick={() => setShowAdd(true)}
-              className="bg-accent text-bg-deep px-4 py-2 font-semibold hover:bg-accent-light text-sm">
+              className="bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light text-sm">
               + Add customer
             </button>
             <span className="text-text-tertiary text-xs"><span className="kbd">F9</span> back</span>
@@ -174,7 +174,7 @@ export default function CustomersScreen({ onExit }: { onExit: () => void }) {
                     <td className="px-4 py-3 text-right">
                       <button
                         onClick={(e) => { e.stopPropagation(); setShowPay({ customerId: r.id, displayName: r.displayName }); }}
-                        className="bg-accent text-bg-deep px-3 py-1 hover:bg-accent-light text-xs font-semibold">
+                        className="bg-accent text-ink px-3 py-1 hover:bg-accent-light text-xs font-semibold">
                         Take payment
                       </button>
                     </td>
