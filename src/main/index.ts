@@ -1,6 +1,6 @@
 // Electron main entry. Boots the app, creates the BrowserWindow, wires IPC.
 
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -30,14 +30,39 @@ function resolveMigrationsDir(): string {
   return defaultMigrationsDir();
 }
 
+function resolveWindowIconPath(): string | undefined {
+  // Linux X11 reads the taskbar / window-frame icon from BrowserWindow.icon.
+  // macOS uses the .icns bundled into the .app and ignores this. Windows
+  // picks the icon out of the embedded .ico in the .exe, so this is also a
+  // no-op there at runtime — but providing the path is harmless.
+  if (app.isPackaged) {
+    const packaged = path.join(process.resourcesPath, 'icon.png');
+    if (fs.existsSync(packaged)) return packaged;
+  } else {
+    const dev = path.join(__dirname, '../../build/icon.png');
+    if (fs.existsSync(dev)) return dev;
+  }
+  return undefined;
+}
+
+function pickStartupBackground(): string {
+  // The renderer reads the chosen theme from localStorage and applies the
+  // matching CSS variables, but that happens *after* the window is shown.
+  // For the brief pre-render moment, fall back to the OS-level preference
+  // so we don't flash a wrong-coloured frame.
+  return nativeTheme.shouldUseDarkColors ? '#0A0C10' : '#EDEDF3';
+}
+
 function createMainWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
     minWidth: 1024,
     minHeight: 720,
-    backgroundColor: '#0A0C10',
+    backgroundColor: pickStartupBackground(),
+    icon: resolveWindowIconPath(),
     autoHideMenuBar: true,
+    title: 'Counter',
     webPreferences: {
       preload: path.join(__dirname, '../preload/preload.js'),
       contextIsolation: true,

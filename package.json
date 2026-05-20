@@ -2,6 +2,12 @@
   "name": "counter",
   "version": "0.1.0",
   "description": "Keyboard-first Electron POS for a Ghanaian beverage shop. Anti-shrinkage forensics on every cedi.",
+  "author": {
+    "name": "Counter POS",
+    "email": "najmadams1706@gmail.com"
+  },
+  "homepage": "https://github.com/najadams/counter",
+  "license": "UNLICENSED",
   "private": true,
   "main": "dist-electron/main/index.js",
   "scripts": {
@@ -13,12 +19,13 @@
     "seed:reset": "node scripts/reset-and-seed.cjs",
     "seed:demo": "node scripts/seed-demo-products.cjs",
     "backup": "node scripts/backup.cjs",
+    "icons": "node scripts/build-icons.cjs",
     "test": "vitest",
     "typecheck": "tsc -b --noEmit",
-    "dist:win": "npm run build && electron-builder --win --x64 --publish never",
-    "dist:mac": "npm run build && electron-builder --mac --publish never",
-    "dist:linux": "npm run build && electron-builder --linux --publish never",
-    "dist:all": "npm run build && electron-builder -mwl --publish never",
+    "dist:win": "npm run icons && npm run build && electron-builder --win --x64 --publish never",
+    "dist:mac": "npm run icons && npm run build && electron-builder --mac --publish never",
+    "dist:linux": "npm run icons && npm run build && electron-builder --linux --publish never",
+    "dist:all": "npm run icons && npm run build && electron-builder -mwl --publish never",
     "postinstall": "electron-builder install-app-deps",
     "clean": "rm -rf dist-electron dist",
     "predev": "rm -rf dist-electron"
@@ -59,7 +66,7 @@
   "build": {
     "appId": "com.counter.pos",
     "productName": "Counter",
-    "copyright": "Copyright (c) 2026",
+    "copyright": "Copyright (c) 2026 Counter POS",
     "asar": true,
     "asarUnpack": [
       "node_modules/better-sqlite3/**/*"
@@ -81,9 +88,14 @@
         "filter": [
           "**/*.sql"
         ]
+      },
+      {
+        "from": "build/icon.png",
+        "to": "icon.png"
       }
     ],
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         {
           "target": "nsis",
@@ -93,7 +105,8 @@
         }
       ],
       "artifactName": "Counter-Setup-${version}-${arch}.${ext}",
-      "publisherName": "Counter POS"
+      "publisherName": "Counter POS",
+      "fileAssociations": []
     },
     "nsis": {
       "oneClick": false,
@@ -103,9 +116,13 @@
       "createStartMenuShortcut": true,
       "shortcutName": "Counter",
       "deleteAppDataOnUninstall": false,
-      "runAfterFinish": true
+      "runAfterFinish": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "uninstallDisplayName": "Counter POS ${version}"
     },
     "mac": {
+      "icon": "build/icon.icns",
       "target": [
         {
           "target": "dmg",
@@ -116,9 +133,25 @@
         }
       ],
       "category": "public.app-category.business",
-      "artifactName": "Counter-${version}-${arch}.${ext}"
+      "artifactName": "Counter-${version}-${arch}.${ext}",
+      "darkModeSupport": true,
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "dmg": {
+      "icon": "build/icon.icns",
+      "title": "Counter ${version}",
+      "window": {
+        "width": 540,
+        "height": 380
+      },
+      "contents": [
+        { "x": 140, "y": 200, "type": "file" },
+        { "x": 400, "y": 200, "type": "link", "path": "/Applications" }
+      ]
     },
     "linux": {
+      "icon": "build/icons",
       "target": [
         {
           "target": "AppImage",
@@ -127,8 +160,16 @@
           ]
         }
       ],
-      "category": "Office",
-      "artifactName": "Counter-${version}-${arch}.${ext}"
+      "category": "Office;Finance",
+      "artifactName": "Counter-${version}-${arch}.${ext}",
+      "synopsis": "Keyboard-first POS for beverage retail.",
+      "description": "Counter is an offline-first point-of-sale for small beverage shops. Tracks every cedi from sale to bank, with anti-shrinkage audit trails.",
+      "desktop": {
+        "Name": "Counter",
+        "Comment": "Keyboard-first POS",
+        "Categories": "Office;Finance;",
+        "StartupWMClass": "Counter"
+      }
     }
   }
 }
