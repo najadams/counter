@@ -13,6 +13,7 @@ import { completeSale } from '../src/main/services/sales';
 import { _setPrinter, _resetPrinter } from '../src/main/printer/printer';
 import { listRecentSales, voidSale } from '../src/main/services/voids';
 import { unitsOnHand } from '../src/main/services/stockMovements';
+import { addUnit } from '../src/main/services/productUnits';
 import { PIN_BCRYPT_ROUNDS } from '../src/shared/lib/constants';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -145,6 +146,124 @@ describe('voidSale', () => {
     voidSale(db, { saleId: sale.saleId, reason: 'r', supervisorWorkerId: SUP, supervisorPin: '9999', workerId: W, deviceId: D });
     const a = db.prepare(`SELECT action FROM audit_log WHERE entity_id = ? AND action = 'SALE_VOIDED'`).get(sale.saleId);
     expect(a).toBeDefined();
+  });
+
+  it('restores CANONICAL quantity for a multi-unit sale (CRATE void)', async () => {
+    // The pre-fix bug: voidSale read sale_lines.quantity (in unit-qty, e.g.
+    // 1 for one crate) and inserted it as the reversal stock-movement
+    // quantity. The original sale's outflow was in canonical (−24). Void
+    // would restore only +1, leaving the on-hand 23 PCS short. With the
+    // fix we multiply by the applied unit's conversion_factor.
+    //
+    // Need an OWNER to call addUnit().
+    const owner = 'dev-owner-for-void-test';
+    db.prepare(
+      `INSERT INTO workers (id, full_name, phone, role, pin_hash,
+        base_salary_pesewas, consumption_allowance_units, active,
+        hired_at, created_by, updated_by, device_id)
+        VALUES (?, ?, ?, 'OWNER', ?, 0, 0, 1, '2026-01-01', 'sys-system', 'sys-system', 'seed')`,
+    ).run(owner, 'Void Test Owner', '+233555000099', bcrypt.hashSync('1111', PIN_BCRYPT_ROUNDS));
+
+    const star = pickProduct('STAR-330');
+    const crateId = addUnit(db, {
+      productId: star.id, unitName: 'CRATE', conversionFactor: 24,
+      pricePesewas: 18000, isPurchaseUnit: true, isSaleUnit: true,
+      actorWorkerId: owner, deviceId: D,
+    }).unitId;
+
+    expect(unitsOnHand(db, star.id, L)).toBe(24);
+
+    const sale = await completeSale(db, {
+      shiftId, workerId: W, workerName: 'Naj', locationId: L, channel: 'WALK_IN',
+      lines: [{ productId: star.id, unitId: crateId, quantity: 1, unitPricePesewas: 18000 }],
+      paymentMethod: 'CASH', cashGivenPesewas: 18000, deviceId: D, shopName: 'T',
+    });
+    expect(unitsOnHand(db, star.id, L)).toBe(0); // sold the whole 24-bottle crate
+
+    voidSale(db, {
+      saleId: sale.saleId, reason: 'wrong crate',
+      supervisorWorkerId: SUP, supervisorPin: '9999',
+      workerId: W, deviceId: D,
+    });
+
+    // FULL canonical restore — not 1, not partial. The pre-fix value would
+    // have been 1 (on-hand 1 PCS, short by 23).
+    expect(unitsOnHand(db, star.id, L)).toBe(24);
+
+    // And the reversal movement itself carries the canonical qty.
+    const sm = db
+      .prepare(
+        `SELECT quantity, total_value_pesewas FROM stock_movements
+           WHERE sale_id = ? AND reason_code = 'SALE_VOID_REVERSAL'`,
+      )
+      .get(sale.saleId) as { quantity: number; total_value_pesewas: number };
+    expect(sm.quantity).toBe(24);
+    // Cost basis matches the original outflow line cost (sale_line.unit_cost
+    // × sale_line.quantity = 14400 × 1 = 14400). Positive on the inflow.
+    expect(sm.total_value_pesewas).toBe(14400);
+  });
+
+  it('mixed-unit cart void restores each line in its own canonical', async () => {
+    // 1 crate (-24 canonical) + 6 implicit-canonical bottles (-6) on the
+    // same sale. After void, on-hand must return to the opening total.
+    // Note: leaving unitId off the bottle line lets completeSale fall
+    // through to canonical-only (the legacy path: sale_lines.applied_unit_id
+    // stays NULL → void's LEFT JOIN gives factor=1, restoring 6).
+    const owner = 'dev-owner-mixed-void';
+    db.prepare(
+      `INSERT INTO workers (id, full_name, phone, role, pin_hash,
+        base_salary_pesewas, consumption_allowance_units, active,
+        hired_at, created_by, updated_by, device_id)
+        VALUES (?, ?, ?, 'OWNER', ?, 0, 0, 1, '2026-01-01', 'sys-system', 'sys-system', 'seed')`,
+    ).run(owner, 'Mixed Test Owner', '+233555000098', bcrypt.hashSync('1111', PIN_BCRYPT_ROUNDS));
+
+    const star = pickProduct('STAR-330');
+    // Pre-existing test-harness wart: runSeed inserts products AFTER
+    // migration 0015's UNIT backfill, so seeded products have no canonical
+    // product_units row. Add one explicitly so defaultSaleUnit (used by
+    // completeSale when unitId is omitted) returns the BOTTLE row, not the
+    // CRATE we add below.
+    db.prepare(
+      `INSERT INTO product_units (
+        id, product_id, unit_name, conversion_factor, price_pesewas,
+        is_purchase_unit, is_sale_unit, display_order,
+        created_by, updated_by, device_id
+      ) VALUES (?, ?, 'UNIT', 1, 800, 1, 1, 0, ?, ?, ?)`,
+    ).run(`pu-bottle-${star.id}`, star.id, owner, owner, D);
+
+    const crateId = addUnit(db, {
+      productId: star.id, unitName: 'CRATE', conversionFactor: 24,
+      pricePesewas: 18000, isPurchaseUnit: true, isSaleUnit: true,
+      actorWorkerId: owner, deviceId: D,
+    }).unitId;
+
+    // Bump stock so the mixed cart fits comfortably (need 30 canonical).
+    db.prepare(
+      `INSERT INTO stock_movements (id, product_id, location_id, quantity, reason_code,
+        worker_id, unit_cost_pesewas, total_value_pesewas, supervisor_approval_id,
+        created_by, updated_by, device_id)
+        VALUES (?, ?, ?, 24, 'RECEIVED_FROM_SUPPLIER', ?, 600, 14400, ?, ?, ?, ?)`,
+    ).run('sm-mixed-top-up', star.id, L, SUP, SUP, W, W, D);
+    expect(unitsOnHand(db, star.id, L)).toBe(48);
+
+    const sale = await completeSale(db, {
+      shiftId, workerId: W, workerName: 'Naj', locationId: L, channel: 'WALK_IN',
+      lines: [
+        { productId: star.id, unitId: crateId, quantity: 1, unitPricePesewas: 18000 },
+        // unitId omitted on purpose — legacy canonical-only path.
+        { productId: star.id, quantity: 6, unitPricePesewas: 800 },
+      ],
+      paymentMethod: 'CASH', cashGivenPesewas: 22800, deviceId: D, shopName: 'T',
+    });
+    expect(unitsOnHand(db, star.id, L)).toBe(48 - 24 - 6); // 18
+
+    const r = voidSale(db, {
+      saleId: sale.saleId, reason: 'mixed void',
+      supervisorWorkerId: SUP, supervisorPin: '9999',
+      workerId: W, deviceId: D,
+    });
+    expect(r.reversalMovementCount).toBe(2);
+    expect(unitsOnHand(db, star.id, L)).toBe(48); // full restore
   });
 
   it('listRecentSales surfaces voided=true after void', async () => {

@@ -164,6 +164,32 @@ describe('CRATE unit (24×)', () => {
     })).rejects.toThrow(/inactive/);
   });
 
+  it('margin: sale_lines.unit_cost = per-canonical × factor; margin = (price-cost)×qty', async () => {
+    // STAR-330 seeds with cost_price_pesewas = 600/bottle. Canonical = BOTTLE,
+    // factor = 24 for the CRATE we just added. So unit_cost on a 1-CRATE
+    // sale_line should be 600 × 24 = 14400, NOT 600 (which would mean the
+    // system thinks a CRATE costs the same as a single bottle — the
+    // pre-fix bug that secretly inflated reported margin ~30×).
+    const r = await completeSale(db, {
+      shiftId, workerId: W, workerName: 'Naj', locationId: L, channel: 'WALK_IN',
+      lines: [{ productId: starId, unitId: crateId, quantity: 1, unitPricePesewas: 18000 }],
+      paymentMethod: 'CASH', cashGivenPesewas: 18000, deviceId: D, shopName: 'T',
+    });
+    const sl = db
+      .prepare('SELECT unit_cost_pesewas, margin_pesewas, line_total_pesewas FROM sale_lines WHERE sale_id = ?')
+      .get(r.saleId) as { unit_cost_pesewas: number; margin_pesewas: number; line_total_pesewas: number };
+    expect(sl.unit_cost_pesewas).toBe(600 * 24);          // 14400, not 480
+    expect(sl.line_total_pesewas).toBe(18000);
+    expect(sl.margin_pesewas).toBe((18000 - 14400) * 1);  // 3600, not 17520
+    // And the stock_movement records per-canonical cost (600), with the
+    // total_value matching the line cost basis on the sale_line.
+    const sm = db
+      .prepare('SELECT unit_cost_pesewas, total_value_pesewas FROM stock_movements WHERE sale_id = ?')
+      .get(r.saleId) as { unit_cost_pesewas: number; total_value_pesewas: number };
+    expect(sm.unit_cost_pesewas).toBe(600);
+    expect(sm.total_value_pesewas).toBe(-14400);          // outflow, signed
+  });
+
   it('SALE_COMPLETED audit unitsSummary is captured', async () => {
     const defUnit = (db.prepare(`SELECT id FROM product_units WHERE product_id = ? AND unit_name = 'UNIT'`).get(starId) as { id: string }).id;
     const r = await completeSale(db, {

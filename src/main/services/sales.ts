@@ -327,9 +327,14 @@ export async function completeSale(
     }
     const factor = unit ? unit.conversionFactor : 1;
     const productRow = productRows.get(l.productId)!;
-    // Cost per canonical unit. Floor to keep integer math; the per-line cost
-    // is then quantityCanonical * canonicalUnitCost.
-    const canonicalCost = Math.floor(productRow.cost / factor);
+    // products.cost_price_pesewas is ALREADY the per-canonical-unit cost
+    // (see stockReceipts.ts, which sets it via sumValue/sumQty across
+    // canonical movements). Do not divide by factor again — that bug was
+    // silently floor-rounding cost to near-zero for any non-canonical sale
+    // (factor=24 CASE → 483/24=20, then 20×24=480 stored as the per-case
+    // cost basis, wildly inflating margin). When factor=1 the old math was
+    // a no-op so all existing factor=1 tests still pass.
+    const canonicalCost = productRow.cost;
     const quantityCanonical = l.quantity * factor;
 
     // Volume tier: lookup is canonical-quantity, channel-aware, AND

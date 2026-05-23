@@ -74,13 +74,22 @@ export function voidSale(db: DB, input: VoidSaleInput): VoidSaleResult {
   const businessDate = sale.created_at.slice(0, 10);
   assertNotSealed(db, sale.location_id, businessDate, `voiding sale ${input.saleId}`);
 
+  // sale_lines.quantity is in the UNIT the cashier sold (1 CASE, 2 PACK,
+  // 5 PCS). Stock_movements are in canonical units. To restore inventory
+  // we must scale by the conversion_factor of the applied unit. Pre-0015
+  // sale_lines (legacy, no applied_unit_id) get factor=1 from the LEFT JOIN,
+  // matching the canonical-only behaviour they had at sale time.
   const lines = db
     .prepare(
-      `SELECT id, product_id, quantity, unit_cost_pesewas
-         FROM sale_lines WHERE sale_id = ?`,
+      `SELECT sl.id, sl.product_id, sl.quantity, sl.unit_cost_pesewas,
+              COALESCE(pu.conversion_factor, 1) AS conversion_factor
+         FROM sale_lines sl
+         LEFT JOIN product_units pu ON pu.id = sl.applied_unit_id
+         WHERE sl.sale_id = ?`,
     )
     .all(input.saleId) as Array<{
-      id: string; product_id: string; quantity: number; unit_cost_pesewas: number;
+      id: string; product_id: string; quantity: number;
+      unit_cost_pesewas: number; conversion_factor: number;
     }>;
   if (lines.length === 0) throw new Error(`voidSale: sale has no lines (corrupt)`);
 
@@ -89,16 +98,30 @@ export function voidSale(db: DB, input: VoidSaleInput): VoidSaleResult {
   let reversalMovementCount = 0;
 
   const tx = db.transaction(() => {
-    // 1) Reversing stock movements (positive, SALE_VOID_REVERSAL).
+    // 1) Reversing stock movements (positive, SALE_VOID_REVERSAL). Canonical
+    //    quantity = sale_lines.quantity × conversion_factor of the applied
+    //    unit. Per-canonical cost = sale_lines.unit_cost_pesewas ÷ factor —
+    //    after the sales.ts fix this is an exact integer; we use Math.round
+    //    defensively in case of legacy data written before that fix landed.
+    //    To keep the cost basis of the reversal exactly equal to the cost
+    //    basis of the original sale_line, we override total_value_pesewas
+    //    with line.unit_cost_pesewas × line.quantity instead of letting it
+    //    compute from rounded per-canonical cost × canonical quantity.
     for (const line of lines) {
+      const canonicalQty = line.quantity * line.conversion_factor;
+      const perCanonicalCost = line.conversion_factor === 1
+        ? line.unit_cost_pesewas
+        : Math.round(line.unit_cost_pesewas / line.conversion_factor);
+      const lineValuePesewas = line.unit_cost_pesewas * line.quantity;
       insertStockMovement(db, {
         productId: line.product_id,
         locationId: sale.location_id,
-        quantity: line.quantity,
+        quantity: canonicalQty,
         reasonCode: 'SALE_VOID_REVERSAL',
         workerId: input.workerId,
         saleId: sale.id,
-        unitCostPesewas: line.unit_cost_pesewas,
+        unitCostPesewas: perCanonicalCost,
+        totalValuePesewasOverride: lineValuePesewas,
         supervisorApprovalId: input.supervisorWorkerId,
         notes: input.reason.slice(0, 200),
         deviceId: input.deviceId,
