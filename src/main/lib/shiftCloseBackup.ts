@@ -16,12 +16,29 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { END_OF_BUSINESS_DAY_HOUR } from '../../shared/lib/constants.js';
 import type { ShiftCloseBackupResult } from '../../shared/types/ipc.js';
 
+// Resolve scripts/lib/backup-runner.cjs against the project root by walking
+// up from this file at runtime. Source layout is src/main/lib/ (three dirs
+// to root); bundled layout is dist-electron/main/ (two dirs). Walk up until
+// we find scripts/lib/backup-runner.cjs so both layouts work.
+export function findBackupRunner(): string {
+  const start = path.dirname(fileURLToPath(import.meta.url));
+  for (let dir = start, depth = 0; depth < 6; depth++) {
+    const candidate = path.join(dir, 'scripts', 'lib', 'backup-runner.cjs');
+    if (fs.existsSync(candidate)) return candidate;
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  throw new Error('Could not locate scripts/lib/backup-runner.cjs from ' + start);
+}
+
 // CommonJS interop — the runner is a .cjs module so the CLI and main share it.
 // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
-const runner = require('../../../scripts/lib/backup-runner.cjs') as {
+const runner = require(findBackupRunner()) as {
   runBackup: (opts: {
     sourceDir: string;
     target: string;

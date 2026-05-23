@@ -14,9 +14,10 @@ import { ExceptionsTab } from './settings/ExceptionsTab';
 import { ReorderTab } from './settings/ReorderTab';
 import { AppearanceTab } from './settings/AppearanceTab';
 import { BackupsTab } from './settings/BackupsTab';
+import { DataTransferTab } from './settings/DataTransferTab';
 import { RunbookPrintScreen } from './RunbookPrintScreen';
 
-type Tab = 'workers' | 'products' | 'tiers' | 'suppliers' | 'supplier-pay' | 'audit' | 'breakage' | 'reprints' | 'exceptions' | 'reorder' | 'appearance' | 'backups';
+type Tab = 'workers' | 'products' | 'tiers' | 'suppliers' | 'supplier-pay' | 'audit' | 'breakage' | 'reprints' | 'exceptions' | 'reorder' | 'appearance' | 'backups' | 'transfer';
 
 export default function SettingsScreen({ onExit }: { onExit: () => void }) {
   const [tab, setTab] = useState<Tab>('workers');
@@ -63,6 +64,7 @@ export default function SettingsScreen({ onExit }: { onExit: () => void }) {
             <TabBtn active={tab === 'reorder'} onClick={() => setTab('reorder')}>Reorder</TabBtn>
             <TabBtn active={tab === 'appearance'} onClick={() => setTab('appearance')}>Appearance</TabBtn>
             <TabBtn active={tab === 'backups'} onClick={() => setTab('backups')}>Backups</TabBtn>
+            <TabBtn active={tab === 'transfer'} onClick={() => setTab('transfer')}>Import / Export</TabBtn>
           </div>
           <div className="flex gap-3 shrink-0">
             <button onClick={() => setShowRunbook(true)}
@@ -91,6 +93,7 @@ export default function SettingsScreen({ onExit }: { onExit: () => void }) {
           {tab === 'reorder' && <ReorderTab />}
           {tab === 'appearance' && <AppearanceTab />}
           {tab === 'backups' && <BackupsTab />}
+          {tab === 'transfer' && <DataTransferTab />}
         </div>
       </main>
     </div>

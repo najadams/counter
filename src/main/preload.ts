@@ -1,7 +1,7 @@
 // Preload: the only bridge between renderer and main.
 
 import { contextBridge, ipcRenderer } from 'electron';
-import { IPC_CHANNELS, IPC_CHANNELS_S5, IPC_CHANNELS_S6, IPC_CHANNELS_S7, IPC_CHANNELS_S8, IPC_CHANNELS_S9, IPC_CHANNELS_S11, IPC_CHANNELS_S11_SUP, IPC_CHANNELS_S12_AUDIT, IPC_CHANNELS_S12_BREAK, IPC_CHANNELS_S12_REPRINT, IPC_CHANNELS_S12_STOCK, IPC_CHANNELS_S14_REPRINT, IPC_CHANNELS_S15_PERIOD, IPC_CHANNELS_S15_EXC, IPC_CHANNELS_S16_REORDER, IPC_CHANNELS_S17_EXPENSES, IPC_CHANNELS_S18_RECOVERY, IPC_CHANNELS_BACKUP, IPC_CHANNELS_STATEMENT, IPC_CHANNELS_CPO, IPC_CHANNELS_RETURNS, IPC_CHANNELS_SUP_PAY, IPC_CHANNELS_REPORTS } from '../shared/types/ipc.js';
+import { IPC_CHANNELS, IPC_CHANNELS_S5, IPC_CHANNELS_S6, IPC_CHANNELS_S7, IPC_CHANNELS_S8, IPC_CHANNELS_S9, IPC_CHANNELS_S11, IPC_CHANNELS_S11_SUP, IPC_CHANNELS_S12_AUDIT, IPC_CHANNELS_S12_BREAK, IPC_CHANNELS_S12_REPRINT, IPC_CHANNELS_S12_STOCK, IPC_CHANNELS_S14_REPRINT, IPC_CHANNELS_S15_PERIOD, IPC_CHANNELS_S15_EXC, IPC_CHANNELS_S16_REORDER, IPC_CHANNELS_S17_EXPENSES, IPC_CHANNELS_S18_RECOVERY, IPC_CHANNELS_BACKUP, IPC_CHANNELS_STATEMENT, IPC_CHANNELS_CPO, IPC_CHANNELS_RETURNS, IPC_CHANNELS_SUP_PAY, IPC_CHANNELS_REPORTS, IPC_CHANNELS_CATALOG } from '../shared/types/ipc.js';
 import type {
   BreakageReportRequest, CashDropRecordRequest, ConsumptionLogRequest,
   CustomerCreateRequest, CustomerUpdateRequest,
@@ -22,6 +22,7 @@ import type {
   SupplierStatementsListRequest,
   ReportsOverviewRequest,
   ReportsSalesRequest, ReportsMarginRequest, ReportsInventoryRequest,
+  CatalogExportRequest, CatalogImportApplyRequest,
 } from '../shared/types/ipc.js';
 
 const api = {
@@ -338,6 +339,14 @@ const api = {
     ipcRenderer.invoke(IPC_CHANNELS_REPORTS.REPORTS_MARGIN, req),
   reportsInventory: (req: ReportsInventoryRequest = {}) =>
     ipcRenderer.invoke(IPC_CHANNELS_REPORTS.REPORTS_INVENTORY, req),
+
+  // --- Catalog data transfer ---
+  catalogExport: (req: CatalogExportRequest = {}) =>
+    ipcRenderer.invoke(IPC_CHANNELS_CATALOG.CATALOG_EXPORT, req),
+  catalogImportPick: () =>
+    ipcRenderer.invoke(IPC_CHANNELS_CATALOG.CATALOG_IMPORT_PICK, {}),
+  catalogImportApply: (req: CatalogImportApplyRequest) =>
+    ipcRenderer.invoke(IPC_CHANNELS_CATALOG.CATALOG_IMPORT_APPLY, req),
 };
 
 contextBridge.exposeInMainWorld('counter', api);

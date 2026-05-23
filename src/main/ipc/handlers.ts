@@ -1665,8 +1665,13 @@ export function registerBackupHandlers(
         const w = requireWorker();
         const cfg = getBackupConfig(db);
         const userDataDir = app.getPath('userData');
+        // Re-use the same runtime-walk lookup that shiftCloseBackup uses,
+        // so source layout (src/main/ipc/) and bundled layout
+        // (dist-electron/main/) both resolve correctly.
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const runner = require('../../../scripts/lib/backup-runner.cjs') as {
+        const { findBackupRunner } = require('../lib/shiftCloseBackup.js') as typeof import('../lib/shiftCloseBackup.js');
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const runner = require(findBackupRunner()) as {
           runBackup: (opts: {
             sourceDir: string; target: string; betterSqlite3Path?: string;
             logger?: { log: (m: string) => void; warn: (m: string) => void };
@@ -2100,6 +2105,180 @@ export function registerReportsHandlers(
         });
       },
       IPC_CHANNELS_REPORTS.REPORTS_INVENTORY,
+    ),
+  );
+}
+
+// --- Catalog data transfer (export / import) -----------------------------
+
+import {
+  IPC_CHANNELS_CATALOG,
+  type CatalogExportRequest, type CatalogExportResponse,
+  type CatalogImportPickResponse, type CatalogImportApplyRequest,
+  type CatalogImportApplyResponse, type CatalogExportPayload,
+} from '../../shared/types/ipc.js';
+import { exportCatalog } from '../services/catalogExport.js';
+import { applyCatalogImport } from '../services/catalogImport.js';
+
+export function registerCatalogTransferHandlers(
+  ipcMain: import('electron').IpcMain,
+  db: import('better-sqlite3').Database,
+  app: Pick<import('electron').App, 'getPath' | 'getVersion'>,
+  deviceId: string,
+): void {
+  function requireOwner(): { workerId: string; fullName: string; role: string } {
+    const w = requireWorker();
+    if (w.role !== 'OWNER' && w.role !== 'FOUNDER') {
+      throw new Error('Only OWNER or FOUNDER can export or import catalog data.');
+    }
+    return w;
+  }
+
+  // catalog:export — opens a save dialog, writes the JSON file, returns
+  // the chosen path + counts.
+  ipcMain.handle(IPC_CHANNELS_CATALOG.CATALOG_EXPORT,
+    wrap<CatalogExportRequest, CatalogExportResponse>(
+      async (req) => {
+        const w = requireOwner();
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { dialog, BrowserWindow } = require('electron') as typeof import('electron');
+        const fs = require('node:fs') as typeof import('node:fs');
+        const path = require('node:path') as typeof import('node:path');
+
+        const shop = getShopHeader(db);
+        const payload = exportCatalog(db, {
+          tables: req?.tables,
+          includeInactive: req?.includeInactive === true,
+          deviceId,
+          shopName: shop.shopName ?? null,
+          appVersion: app.getVersion?.() ?? null,
+        });
+
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        const defaultName = `counter-catalog-${stamp}.json`;
+        const focused = BrowserWindow.getFocusedWindow();
+        const result = focused
+          ? await dialog.showSaveDialog(focused, {
+              title: 'Export catalog',
+              defaultPath: path.join(app.getPath('documents'), defaultName),
+              filters: [{ name: 'Counter catalog (JSON)', extensions: ['json'] }],
+            })
+          : await dialog.showSaveDialog({
+              title: 'Export catalog',
+              defaultPath: path.join(app.getPath('documents'), defaultName),
+              filters: [{ name: 'Counter catalog (JSON)', extensions: ['json'] }],
+            });
+        if (result.canceled || !result.filePath) {
+          return { filePath: '', sizeBytes: 0, counts: {}, cancelled: true };
+        }
+
+        const json = JSON.stringify(payload, null, 2);
+        fs.writeFileSync(result.filePath, json, 'utf8');
+        const counts: CatalogExportResponse['counts'] = {};
+        for (const [key, rows] of Object.entries(payload.tables)) {
+          if (Array.isArray(rows)) counts[key as keyof CatalogExportResponse['counts']] = rows.length;
+        }
+        logAudit(db, {
+          workerId: w.workerId,
+          action: 'CATALOG_EXPORTED',
+          entityType: 'catalog',
+          entityId: 'export',
+          afterValue: { filePath: result.filePath, sizeBytes: json.length, counts },
+          deviceId,
+        });
+        return { filePath: result.filePath, sizeBytes: json.length, counts };
+      },
+      IPC_CHANNELS_CATALOG.CATALOG_EXPORT,
+    ),
+  );
+
+  // catalog:import-pick — opens an open dialog, parses the file, runs the
+  // importer in dry-run mode, returns the report. Nothing is written.
+  ipcMain.handle(IPC_CHANNELS_CATALOG.CATALOG_IMPORT_PICK,
+    wrap<void, CatalogImportPickResponse>(
+      async () => {
+        const w = requireOwner();
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { dialog, BrowserWindow } = require('electron') as typeof import('electron');
+        const fs = require('node:fs') as typeof import('node:fs');
+
+        const focused = BrowserWindow.getFocusedWindow();
+        const opts = {
+          title: 'Import catalog',
+          filters: [{ name: 'Counter catalog (JSON)', extensions: ['json'] }],
+          properties: ['openFile' as const],
+        };
+        const r = focused
+          ? await dialog.showOpenDialog(focused, opts)
+          : await dialog.showOpenDialog(opts);
+        if (r.canceled || r.filePaths.length === 0) return { cancelled: true };
+
+        const filePath = r.filePaths[0]!;
+        let raw: string;
+        try {
+          raw = fs.readFileSync(filePath, 'utf8');
+        } catch (err) {
+          return { error: `Could not read file: ${err instanceof Error ? err.message : String(err)}` };
+        }
+        let parsed: CatalogExportPayload;
+        try {
+          parsed = JSON.parse(raw) as CatalogExportPayload;
+        } catch (err) {
+          return { error: `File is not valid JSON: ${err instanceof Error ? err.message : String(err)}` };
+        }
+        if (typeof parsed !== 'object' || parsed === null || parsed.schemaVersion !== 1) {
+          return { error: `Unsupported file format (expected schemaVersion 1, got ${(parsed as { schemaVersion?: unknown })?.schemaVersion}).` };
+        }
+        const dry = applyCatalogImport(db, parsed, {
+          dryRun: true,
+          updateExisting: false,
+          actorWorkerId: w.workerId,
+          deviceId,
+        });
+        const stat = fs.statSync(filePath);
+        return {
+          filePath,
+          sizeBytes: stat.size,
+          header: {
+            schemaVersion: parsed.schemaVersion,
+            exportedAt: parsed.exportedAt,
+            source: parsed.source,
+          },
+          report: dry.report,
+        };
+      },
+      IPC_CHANNELS_CATALOG.CATALOG_IMPORT_PICK,
+    ),
+  );
+
+  // catalog:import-apply — read the previously-picked file, apply for real
+  // inside a single transaction.
+  ipcMain.handle(IPC_CHANNELS_CATALOG.CATALOG_IMPORT_APPLY,
+    wrap<CatalogImportApplyRequest, CatalogImportApplyResponse>(
+      (req) => {
+        const w = requireOwner();
+        const fs = require('node:fs') as typeof import('node:fs');
+        let raw: string;
+        try {
+          raw = fs.readFileSync(req.filePath, 'utf8');
+        } catch (err) {
+          return {
+            ok: false, report: [], durationMs: 0,
+            error: `Could not read file: ${err instanceof Error ? err.message : String(err)}`,
+          };
+        }
+        const parsed = JSON.parse(raw) as CatalogExportPayload;
+        const t0 = Date.now();
+        const result = applyCatalogImport(db, parsed, {
+          dryRun: false,
+          updateExisting: req.updateExisting === true,
+          tables: req.tables,
+          actorWorkerId: w.workerId,
+          deviceId,
+        });
+        return { ok: true, report: result.report, durationMs: Date.now() - t0 };
+      },
+      IPC_CHANNELS_CATALOG.CATALOG_IMPORT_APPLY,
     ),
   );
 }

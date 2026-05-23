@@ -1643,3 +1643,206 @@ export interface ReportsInventoryResponse {
   }>;
 }
 
+// --- Catalog data transfer (export / import) -----------------------------
+//
+// Selective JSON export of the master-data tables (catalog only, no sales
+// or operational history). Used to clone catalog state from one Counter
+// instance to another — e.g. seeding a second shop from the first.
+//
+// Rows are keyed by natural keys at the file level (product SKU, supplier
+// name, customer phone, unit name) so the file is portable across
+// instances with different internal UUIDs. Internal `id` columns are NOT
+// included in the file; the importer mints fresh UUIDs locally.
+
+export const IPC_CHANNELS_CATALOG = {
+  CATALOG_EXPORT: 'catalog:export',
+  CATALOG_IMPORT_PICK: 'catalog:import-pick',
+  CATALOG_IMPORT_APPLY: 'catalog:import-apply',
+} as const;
+
+/** Tables the user may opt into during export. */
+export type CatalogTable =
+  | 'suppliers' | 'products' | 'productUnits'
+  | 'pricingTiers' | 'customers' | 'customerPriceOverrides';
+
+export interface CatalogExportRequest {
+  /** Tables to include. Default: all. */
+  tables?: CatalogTable[];
+  /** Include rows with active=0 / soft-deleted=false. Default: false. */
+  includeInactive?: boolean;
+}
+
+export interface CatalogExportResponse {
+  /** Where the file was written. */
+  filePath: string;
+  /** Bytes on disk. */
+  sizeBytes: number;
+  /** Per-table row counts in the file. */
+  counts: Partial<Record<CatalogTable, number>>;
+  /** Set if the user cancelled the save dialog. */
+  cancelled?: boolean;
+}
+
+/** One supplier row in the export file. Natural key: name. */
+export interface CatalogSupplier {
+  name: string;
+  contactPerson: string | null;
+  phone: string | null;
+  email: string | null;
+  paymentTermsDays: number;
+  notes: string | null;
+  active: boolean;
+}
+
+/** One product. Natural key: sku. */
+export interface CatalogProduct {
+  sku: string;
+  barcode: string | null;
+  name: string;
+  category: string;
+  brand: string | null;
+  packSizeUnits: number;
+  unitVolumeMl: number | null;
+  isReturnable: boolean;
+  bottleDepositPesewas: number;
+  costPricePesewas: number;
+  walkInPricePesewas: number;
+  wholesalePricePesewas: number;
+  routePricePesewas: number;
+  reorderThreshold: number;
+  reorderQuantity: number;
+  defaultLeadTimeDays: number;
+  shelfLifeDays: number | null;
+  canonicalUnit: string;
+  countClass: 'A' | 'B' | 'C' | null;
+  active: boolean;
+  /** Reference by supplier name (resolved at import). */
+  primarySupplierName: string | null;
+  /** Reference by product_units.unit_name (resolved after units are imported). */
+  primaryPurchaseUnitName: string | null;
+  primarySaleUnitName: string | null;
+}
+
+/** One product_unit. Natural key: (productSku, unitName). */
+export interface CatalogProductUnit {
+  productSku: string;
+  unitName: string;
+  conversionFactor: number;
+  pricePesewas: number;
+  isPurchaseUnit: boolean;
+  isSaleUnit: boolean;
+  displayOrder: number;
+  notes: string | null;
+  active: boolean;
+}
+
+/** Volume pricing tier. Natural key: (productSku, channel, minQuantity, appliesToUnitName). */
+export interface CatalogPricingTier {
+  productSku: string;
+  channel: 'WALK_IN' | 'WHOLESALE' | 'ROUTE' | 'ALL';
+  minQuantity: number;
+  unitPricePesewas: number;
+  priority: number;
+  appliesToUnitName: string | null;
+  notes: string | null;
+  active: boolean;
+}
+
+/** One customer. Natural key: phone (normalized). */
+export interface CatalogCustomer {
+  displayName: string;
+  phone: string;
+  alternatePhone: string | null;
+  customerType: 'WALK_IN_REGULAR' | 'WHOLESALE' | 'ROUTE' | 'STAFF_FAMILY';
+  businessName: string | null;
+  locationDescription: string | null;
+  geoLat: number | null;
+  geoLng: number | null;
+  creditLimitPesewas: number;
+  creditTermsDays: number;
+  preferredChannel: 'WALK_IN' | 'WHOLESALE' | 'ROUTE' | null;
+  blocked: boolean;
+  blockedReason: string | null;
+  notes: string | null;
+}
+
+/** Per-customer price override. Natural key: (customerPhone, productSku, unitName, channel). */
+export interface CatalogCustomerPriceOverride {
+  customerPhone: string;
+  productSku: string;
+  unitName: string;
+  channel: 'WALK_IN' | 'WHOLESALE' | 'ROUTE' | null;
+  pricePesewas: number;
+  notes: string | null;
+  active: boolean;
+}
+
+/** Top-level shape of an export file. */
+export interface CatalogExportPayload {
+  schemaVersion: 1;
+  exportedAt: string;
+  source: {
+    deviceId: string;
+    shopName: string | null;
+    appVersion: string | null;
+  };
+  tables: {
+    suppliers?: CatalogSupplier[];
+    products?: CatalogProduct[];
+    productUnits?: CatalogProductUnit[];
+    pricingTiers?: CatalogPricingTier[];
+    customers?: CatalogCustomer[];
+    customerPriceOverrides?: CatalogCustomerPriceOverride[];
+  };
+}
+
+/** Per-table summary returned for both dry-run and apply. */
+export interface CatalogImportTableReport {
+  table: CatalogTable;
+  /** Rows in the file. */
+  inFile: number;
+  /** Rows that would be (or were) inserted. */
+  toInsert: number;
+  /** Rows that match an existing record by natural key. */
+  matched: number;
+  /** Rows that would be (or were) updated when updateExisting=true. */
+  toUpdate: number;
+  /** Rows skipped due to validation or because of missing FK targets. */
+  skipped: number;
+  /** Up to 20 human-readable reasons for skipped rows. */
+  warnings: string[];
+}
+
+export interface CatalogImportPickResponse {
+  /** Set if the user cancelled the open dialog. */
+  cancelled?: boolean;
+  filePath?: string;
+  sizeBytes?: number;
+  /** Parsed file header (without the rows). */
+  header?: {
+    schemaVersion: number;
+    exportedAt: string;
+    source: { deviceId: string; shopName: string | null; appVersion: string | null };
+  };
+  /** Per-table dry-run report. */
+  report?: CatalogImportTableReport[];
+  /** Set if the file failed to parse or is incompatible. */
+  error?: string;
+}
+
+export interface CatalogImportApplyRequest {
+  filePath: string;
+  /** If true, overwrite existing rows on natural-key match. Default false. */
+  updateExisting?: boolean;
+  /** Subset of tables to apply. Default: all tables present in the file. */
+  tables?: CatalogTable[];
+}
+
+export interface CatalogImportApplyResponse {
+  ok: boolean;
+  report: CatalogImportTableReport[];
+  /** Wall-clock duration of the import transaction, ms. */
+  durationMs: number;
+  error?: string;
+}
+

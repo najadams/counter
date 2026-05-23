@@ -521,3 +521,20 @@ declare global {
     => Promise<IpcResponse<ReportsInventoryResponse>>;
   }
 }
+
+// --- Catalog data transfer ------------------------------------------------
+import type {
+  CatalogExportRequest, CatalogExportResponse,
+  CatalogImportPickResponse,
+  CatalogImportApplyRequest, CatalogImportApplyResponse,
+} from '../../shared/types/ipc';
+
+declare global {
+  interface CounterApi {
+    catalogExport: (req?: CatalogExportRequest)
+      => Promise<IpcResponse<CatalogExportResponse>>;
+    catalogImportPick: () => Promise<IpcResponse<CatalogImportPickResponse>>;
+    catalogImportApply: (req: CatalogImportApplyRequest)
+      => Promise<IpcResponse<CatalogImportApplyResponse>>;
+  }
+}
