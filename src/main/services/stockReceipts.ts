@@ -110,6 +110,13 @@ export function receiveStock(
 
   const tx = db.transaction(() => {
     const productsTouched = new Set<string>();
+    // Per-receipt cost accumulator: productId -> { value (pesewas), qty (canonical) }.
+    // Used below to set the new canonical cost = sum value / sum canonical
+    // qty across JUST this receipt's lines for that product. "Latest
+    // receipt wins" semantics — prior inflows do not influence the new
+    // cost. Multi-line receipts for the same product (rare but allowed)
+    // get a weighted average of just this receipt's lines.
+    const receiptCost = new Map<string, { value: number; qty: number }>();
 
     for (const line of input.lines) {
       // Resolve unit + convert to canonical.
@@ -163,37 +170,36 @@ export function receiveStock(
       movementIds.push(sm.id);
       totalValuePesewas += sm.totalValuePesewas;
       productsTouched.add(line.productId);
+
+      // Accumulate this line into the receipt-cost map.
+      const acc = receiptCost.get(line.productId) ?? { value: 0, qty: 0 };
+      acc.value += lineTotalPesewas;
+      acc.qty += canonicalQty;
+      receiptCost.set(line.productId, acc);
     }
 
-    // Recompute weighted-average cost for every touched product from the
-    // stock_movements truth. We use only inflow rows (receipts + opening
-    // stock + customer returns) so cost is "what we paid for the units we
-    // brought in," regardless of what's been sold since. This is a
-    // simple-average-cost model — good enough for shop-floor margin
-    // reports without the complexity of true FIFO lots.
+    // Latest-receipt-wins cost recompute. The new canonical cost is the
+    // weighted average of JUST this receipt's lines for the product —
+    // not an average across history. Rationale: cost should reflect
+    // what we most recently paid, so margin reports track current
+    // supplier pricing instead of lagging behind it indefinitely.
+    //
+    // Customer returns and other non-receipt inflows do not affect cost
+    // at all under this model (they don't go through receiveStock).
+    // Multi-line receipts for the same product get an honest weighted
+    // average across just those lines.
     for (const productId of productsTouched) {
-      const agg = db
-        .prepare(
-          `SELECT COALESCE(SUM(total_value_pesewas), 0) AS sumValue,
-                  COALESCE(SUM(quantity), 0)            AS sumQty
-             FROM stock_movements sm
-             JOIN reason_codes rc ON rc.code = sm.reason_code
-             WHERE sm.product_id = ?
-               AND rc.category = 'inflow'`,
-        )
-        .get(productId) as { sumValue: number; sumQty: number };
-
-      if (agg.sumQty > 0) {
-        const newAvgCost = Math.round(agg.sumValue / agg.sumQty);
-        const old = productMap.get(productId)!.oldCost;
-        if (old !== newAvgCost) {
-          db.prepare(
-            `UPDATE products
-                SET cost_price_pesewas = ?, updated_at = ?, updated_by = ?
-                WHERE id = ?`,
-          ).run(newAvgCost, now, input.workerId, productId);
-          productsUpdated++;
-        }
+      const acc = receiptCost.get(productId);
+      if (!acc || acc.qty <= 0) continue;
+      const newCost = Math.round(acc.value / acc.qty);
+      const old = productMap.get(productId)!.oldCost;
+      if (old !== newCost) {
+        db.prepare(
+          `UPDATE products
+              SET cost_price_pesewas = ?, updated_at = ?, updated_by = ?
+              WHERE id = ?`,
+        ).run(newCost, now, input.workerId, productId);
+        productsUpdated++;
       }
     }
 

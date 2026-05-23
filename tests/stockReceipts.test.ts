@@ -61,6 +61,105 @@ describe('receiveStock', () => {
     expect(updated.cost_price_pesewas).toBe(650);
   });
 
+  it('latest-receipt-wins: new receipt at higher price overrides existing cost, ignoring prior inflows', () => {
+    // STAR-330 starts seeded with cost_price_pesewas = 600. Pre-seed a
+    // bulk opening-stock receipt at the old cost so there's real history
+    // for the old weighted-avg model to anchor on. Then a fresh receipt
+    // at a higher per-canonical cost should win cleanly, not be diluted.
+    const p = star();
+    db.prepare(
+      `INSERT INTO stock_movements (
+        id, product_id, location_id, quantity, reason_code,
+        worker_id, unit_cost_pesewas, total_value_pesewas, supervisor_approval_id,
+        created_by, updated_by, device_id
+      ) VALUES (?, ?, ?, 240, 'OPENING_STOCK', ?, 600, 144000, ?, ?, ?, ?)`,
+    ).run('sm-history', p.id, L, SUP, SUP, W, W, D);
+
+    receiveStock(db, {
+      supplierId: supplierId(), locationId: L, workerId: W, supervisorApprovalId: SUP,
+      lines: [{ productId: p.id, quantity: 24, unitCostPesewas: 800 }],
+      deviceId: D,
+    });
+    const updated = (db.prepare('SELECT cost_price_pesewas FROM products WHERE id = ?').get(p.id) as { cost_price_pesewas: number }).cost_price_pesewas;
+    // Old model would have computed (240*600 + 24*800) / (240+24) ≈ 618.
+    // New model: cost = THIS receipt's per-canonical = 19200/24 = 800.
+    expect(updated).toBe(800);
+  });
+
+  it('latest-receipt-wins: receipt in a purchase unit sets cost by larger-unit price ÷ factor', async () => {
+    // User receives 10 PACKs at 36.00 (= 3600 pesewas) each; PACK has
+    // factor 6. New per-canonical cost should be 3600 / 6 = 600 pesewas,
+    // regardless of any prior stock at a different price.
+    const owner = 'dev-owner-receipt-test';
+    db.prepare(
+      `INSERT INTO workers (id, full_name, phone, role, pin_hash,
+        base_salary_pesewas, consumption_allowance_units, active,
+        hired_at, created_by, updated_by, device_id)
+        VALUES (?, ?, ?, 'OWNER', '$2a$04$placeholder', 0, 0, 1,
+                '2026-01-01', 'sys-system', 'sys-system', 'seed')`,
+    ).run(owner, 'Receipt Test Owner', '+233555000077');
+
+    const voltic = db
+      .prepare("SELECT id FROM products WHERE sku = 'VOLTIC-1L'")
+      .get() as { id: string };
+    // Pre-seed some old-price inflow so weighted-avg would give a different answer.
+    db.prepare(
+      `INSERT INTO stock_movements (
+        id, product_id, location_id, quantity, reason_code,
+        worker_id, unit_cost_pesewas, total_value_pesewas, supervisor_approval_id,
+        created_by, updated_by, device_id
+      ) VALUES (?, ?, ?, 120, 'OPENING_STOCK', ?, 483, 57960, ?, ?, ?, ?)`,
+    ).run('sm-voltic-old', voltic.id, L, SUP, SUP, W, W, D);
+
+    const { addUnit } = await import('../src/main/services/productUnits');
+    const packId = addUnit(db, {
+      productId: voltic.id, unitName: 'PACK', conversionFactor: 6,
+      pricePesewas: 3300, isPurchaseUnit: true, isSaleUnit: true,
+      actorWorkerId: owner, deviceId: D,
+    }).unitId;
+
+    receiveStock(db, {
+      supplierId: supplierId(), locationId: L, workerId: W, supervisorApprovalId: SUP,
+      lines: [{ productId: voltic.id, quantity: 10, unitId: packId, unitCostPesewas: 3600 }],
+      deviceId: D,
+    });
+    const updated = (db.prepare('SELECT cost_price_pesewas FROM products WHERE id = ?').get(voltic.id) as { cost_price_pesewas: number }).cost_price_pesewas;
+    expect(updated).toBe(600);
+  });
+
+  it('multi-line same-product receipt uses weighted avg of just THIS receipt', async () => {
+    // 10 packs @ 3600 + 5 packs @ 3800 = (36000 + 19000) / (60 + 30) = 611.11 → 611.
+    const owner = 'dev-owner-multiline';
+    db.prepare(
+      `INSERT INTO workers (id, full_name, phone, role, pin_hash,
+        base_salary_pesewas, consumption_allowance_units, active,
+        hired_at, created_by, updated_by, device_id)
+        VALUES (?, ?, ?, 'OWNER', '$2a$04$placeholder', 0, 0, 1,
+                '2026-01-01', 'sys-system', 'sys-system', 'seed')`,
+    ).run(owner, 'Multiline Test Owner', '+233555000078');
+
+    const voltic = db
+      .prepare("SELECT id FROM products WHERE sku = 'VOLTIC-1L'")
+      .get() as { id: string };
+    const { addUnit } = await import('../src/main/services/productUnits');
+    const packId = addUnit(db, {
+      productId: voltic.id, unitName: 'PACK', conversionFactor: 6,
+      pricePesewas: 3300, isPurchaseUnit: true, isSaleUnit: true,
+      actorWorkerId: owner, deviceId: D,
+    }).unitId;
+
+    receiveStock(db, {
+      supplierId: supplierId(), locationId: L, workerId: W, supervisorApprovalId: SUP,
+      lines: [
+        { productId: voltic.id, quantity: 10, unitId: packId, unitCostPesewas: 3600 },
+        { productId: voltic.id, quantity: 5,  unitId: packId, unitCostPesewas: 3800 },
+      ],
+      deviceId: D,
+    });
+    const updated = (db.prepare('SELECT cost_price_pesewas FROM products WHERE id = ?').get(voltic.id) as { cost_price_pesewas: number }).cost_price_pesewas;
+    expect(updated).toBe(Math.round((36000 + 19000) / (60 + 30))); // 611
+  });
+
   it('does NOT update cost when same as current', () => {
     const p = star();
     const r = receiveStock(db, {
