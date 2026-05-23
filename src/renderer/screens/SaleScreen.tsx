@@ -410,7 +410,15 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
   }
 
   return (
-    <div className="min-h-screen bg-bg-deep text-text-primary flex flex-col">
+    // The cashier (often standing, in low warehouse light) reported text was
+    // too small to read at a glance. Scale the entire SaleScreen up via CSS
+    // zoom — applies uniformly to fonts, icons, and spacing while leaving
+    // every other screen unchanged. 1.15 ≈ a single macOS "Scaled" notch;
+    // bump or lower the factor here if the counter PC needs more/less.
+    <div
+      className="min-h-screen bg-bg-deep text-text-primary flex flex-col"
+      style={{ zoom: 1.15 }}
+    >
       <AppHeader subtitle="sale" />
       <main className="flex-1 grid grid-cols-[2fr_1fr] gap-0">
         {/* Left: search + results */}
