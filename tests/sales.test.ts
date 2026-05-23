@@ -121,7 +121,10 @@ describe('completeSale — atomicity', () => {
     });
     expect(r.saleId).toMatch(/^sa-/);
     expect(r.totalPesewas).toBe(1600);
-    expect(r.changePesewas).toBe(0);
+    // changePesewas is null when no cash overpay (exact change). The old
+    // "always 0" semantic was changed to distinguish "no change due" from
+    // "no cash tender at all" — see completeSale aggregation.
+    expect(r.changePesewas).toBeNull();
     expect(r.printerFailed).toBe(false);
 
     expect(rowCount('sales') - before.sales).toBe(1);
@@ -302,30 +305,44 @@ describe('completeSale — validation', () => {
   });
 
   it('rejects CREDIT without customer', async () => {
+    // Error message wording changed from "credit sale requires" to
+    // "credit tender requires" when the split-tender refactor (0019)
+    // introduced the payments[] array.
     const star = pickProduct('STAR-330');
     await expect(completeSale(db, {
       shiftId, workerId: W, workerName: 'Naj', locationId: L, channel: 'WALK_IN',
       lines: [{ productId: star.id, quantity: 1, unitPricePesewas: 800 }],
       paymentMethod: 'CREDIT', deviceId: D, shopName: 'TEST',
-    })).rejects.toThrow(/credit sale requires a customer/);
+    })).rejects.toThrow(/credit tender requires a customer/);
   });
 
-  it('rejects CASH without cashGivenPesewas', async () => {
+  it('legacy CASH without cashGivenPesewas assumes exact change (no throw)', async () => {
+    // The single-tender legacy path used to require cashGivenPesewas, but
+    // the split-payment refactor (0019) treats the absence as "customer
+    // paid exact change" — the implicit cashGiven equals the sale total
+    // so there's nothing to validate. New payments[] callers still
+    // validate explicit values via the < tender check below.
     const star = pickProduct('STAR-330');
-    await expect(completeSale(db, {
+    const r = await completeSale(db, {
       shiftId, workerId: W, workerName: 'Naj', locationId: L, channel: 'WALK_IN',
       lines: [{ productId: star.id, quantity: 1, unitPricePesewas: 800 }],
       paymentMethod: 'CASH', deviceId: D, shopName: 'TEST',
-    })).rejects.toThrow(/cashGivenPesewas/);
+    });
+    expect(r.totalPesewas).toBe(800);
+    expect(r.changePesewas).toBeNull();
   });
 
-  it('rejects CASH where cashGiven < total', async () => {
+  it('rejects CASH where cashGiven < tender amount', async () => {
+    // Old wording: "cash given (X) less than total (Y)". New wording
+    // after 0019: "cash given (X) less than tender (Y)" since the sale
+    // total may now be split across multiple tenders.
     const star = pickProduct('STAR-330');
     await expect(completeSale(db, {
       shiftId, workerId: W, workerName: 'Naj', locationId: L, channel: 'WALK_IN',
       lines: [{ productId: star.id, quantity: 1, unitPricePesewas: 800 }],
-      paymentMethod: 'CASH', cashGivenPesewas: 500, deviceId: D, shopName: 'TEST',
-    })).rejects.toThrow(/less than total/);
+      payments: [{ method: 'CASH', amountPesewas: 800, cashGivenPesewas: 500 }],
+      deviceId: D, shopName: 'TEST',
+    })).rejects.toThrow(/less than tender/);
   });
 
   it('rejects discount > 0 without reason', async () => {

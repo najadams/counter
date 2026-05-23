@@ -67,14 +67,26 @@ export function addTier(db: DB, input: AddTierInput): { tierId: string } {
   if (!product) throw new Error(`product ${input.productId} not found or inactive`);
 
   // UNIQUE constraint catches dupes, but give a clearer message.
-  const dup = db
-    .prepare(
-      'SELECT id FROM pricing_tiers WHERE product_id = ? AND channel = ? AND min_quantity = ?',
-    )
-    .get(input.productId, input.channel, input.minQuantity);
+  // Uniqueness key was widened in 0031 to include applies_to_unit_id so
+  // an "any unit" tier and a unit-specific tier can coexist at the same
+  // threshold. We mirror that here. For unit-agnostic rows (applies_to_unit_id
+  // IS NULL) we use `IS NULL`, since SQL `= NULL` is always false.
+  const unitId = input.appliesToUnitId ?? null;
+  const dup = unitId === null
+    ? db.prepare(
+        `SELECT id FROM pricing_tiers
+           WHERE product_id = ? AND channel = ? AND min_quantity = ?
+             AND applies_to_unit_id IS NULL`,
+      ).get(input.productId, input.channel, input.minQuantity)
+    : db.prepare(
+        `SELECT id FROM pricing_tiers
+           WHERE product_id = ? AND channel = ? AND min_quantity = ?
+             AND applies_to_unit_id = ?`,
+      ).get(input.productId, input.channel, input.minQuantity, unitId);
   if (dup) {
+    const target = unitId ? ` (unit ${unitId})` : ' (any unit)';
     throw new Error(
-      `tier already exists for ${input.channel} at min_qty ${input.minQuantity}; update or deactivate it instead`,
+      `tier already exists for ${input.channel} at min_qty ${input.minQuantity}${target}; update or deactivate it instead`,
     );
   }
 

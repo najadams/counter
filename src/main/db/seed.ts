@@ -134,13 +134,33 @@ export function runSeed(db: DB, opts: SeedOptions): void {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
 
+    // Migration 0015 backfills a canonical UNIT row for every product that
+    // existed at migration time, but this seed runs AFTER migrations. New
+    // seeded products therefore had no product_units row, leaving
+    // defaultSaleUnit() returning null and any unit-aware test reaching
+    // for a UNIT row hitting undefined. Mirror the 0015 backfill shape
+    // here so every fresh seed-product starts with a valid canonical row.
+    const insertUnit = db.prepare(
+      `INSERT INTO product_units (
+        id, product_id, unit_name, conversion_factor, price_pesewas,
+        is_purchase_unit, is_sale_unit, display_order,
+        created_by, updated_by, device_id
+      ) VALUES (?, ?, 'UNIT', 1, ?, 1, 1, 0, ?, ?, ?)`,
+    );
     for (const p of products) {
+      const productId = `prod-${uuidv4()}`;
       insertProduct.run(
-        `prod-${uuidv4()}`,
+        productId,
         p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7],
         p[8], p[9], p[10], p[11],
         p[12], p[13],
         supplierId,
+        SYSTEM_WORKER_ID, SYSTEM_WORKER_ID, deviceId,
+      );
+      insertUnit.run(
+        `pu-default-${productId}`,
+        productId,
+        p[9], // price_pesewas = walk_in_price_pesewas (same as 0015 backfill)
         SYSTEM_WORKER_ID, SYSTEM_WORKER_ID, deviceId,
       );
     }

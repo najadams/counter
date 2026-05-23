@@ -218,19 +218,8 @@ describe('voidSale', () => {
     ).run(owner, 'Mixed Test Owner', '+233555000098', bcrypt.hashSync('1111', PIN_BCRYPT_ROUNDS));
 
     const star = pickProduct('STAR-330');
-    // Pre-existing test-harness wart: runSeed inserts products AFTER
-    // migration 0015's UNIT backfill, so seeded products have no canonical
-    // product_units row. Add one explicitly so defaultSaleUnit (used by
-    // completeSale when unitId is omitted) returns the BOTTLE row, not the
-    // CRATE we add below.
-    db.prepare(
-      `INSERT INTO product_units (
-        id, product_id, unit_name, conversion_factor, price_pesewas,
-        is_purchase_unit, is_sale_unit, display_order,
-        created_by, updated_by, device_id
-      ) VALUES (?, ?, 'UNIT', 1, 800, 1, 1, 0, ?, ?, ?)`,
-    ).run(`pu-bottle-${star.id}`, star.id, owner, owner, D);
-
+    // Seed now creates a canonical UNIT row per fixture product (see
+    // src/main/db/seed.ts), so no need to insert one manually here.
     const crateId = addUnit(db, {
       productId: star.id, unitName: 'CRATE', conversionFactor: 24,
       pricePesewas: 18000, isPurchaseUnit: true, isSaleUnit: true,

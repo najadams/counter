@@ -36,12 +36,21 @@ beforeEach(() => {
 afterEach(() => { db.close(); });
 
 function addCashSale(amountPesewas: number) {
+  // After 0019 introduced sale_payments, getCurrentExpectedCash sums from
+  // there (the source of truth for tender breakdowns). Insert BOTH rows so
+  // the helper still simulates a complete cash sale.
+  const saleId = `sa-${uuidv4()}`;
   db.prepare(
     `INSERT INTO sales (id, shift_id, worker_id, location_id, channel,
       subtotal_pesewas, total_pesewas, payment_method,
       created_by, updated_by, device_id)
       VALUES (?, ?, ?, ?, 'WALK_IN', ?, ?, 'CASH', ?, ?, ?)`,
-  ).run(`sa-${uuidv4()}`, shiftId, W, L, amountPesewas, amountPesewas, W, W, D);
+  ).run(saleId, shiftId, W, L, amountPesewas, amountPesewas, W, W, D);
+  db.prepare(
+    `INSERT INTO sale_payments (id, sale_id, payment_method, amount_pesewas,
+      created_by, updated_by, device_id)
+      VALUES (?, ?, 'CASH', ?, ?, ?, ?)`,
+  ).run(`sp-${uuidv4()}`, saleId, amountPesewas, W, W, D);
 }
 
 describe('recordCashDrop', () => {

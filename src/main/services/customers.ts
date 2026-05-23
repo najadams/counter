@@ -1,6 +1,7 @@
 // Customer search for the credit-sale flow.
 
 import type { Database as DB } from 'better-sqlite3';
+import { normalizePhone } from '../../shared/lib/phone.js';
 
 export interface CustomerSearchResult {
   id: string;
@@ -26,7 +27,12 @@ export function searchCustomers(
   const trimmed = query.trim();
   if (trimmed === '') return [];
 
+  // Phones are stored in +233XXXXXXXXX form. A cashier typing the local
+  // "024..." or "024 422 2000" needs to find the same customer, so we
+  // attempt normalization too and OR it into the WHERE. Falls back to
+  // raw-substring matching if the query doesn't look phone-like.
   const like = `%${trimmed}%`;
+  const normalizedPhone = normalizePhone(trimmed);
   const rows = db
     .prepare(
       `SELECT id, display_name AS displayName, phone, customer_type AS customerType,
@@ -36,11 +42,13 @@ export function searchCustomers(
               preferred_channel AS preferredChannel
          FROM customers
          WHERE deleted_at IS NULL
-           AND (display_name LIKE ? COLLATE NOCASE OR phone LIKE ?)
+           AND (display_name LIKE ? COLLATE NOCASE
+                OR phone LIKE ?
+                OR (? IS NOT NULL AND phone = ?))
          ORDER BY display_name ASC
          LIMIT ?`,
     )
-    .all(like, like, limit) as Array<{
+    .all(like, like, normalizedPhone, normalizedPhone, limit) as Array<{
       id: string;
       displayName: string;
       phone: string;

@@ -92,7 +92,10 @@ describe('recordConsumption — over allowance', () => {
     expect(r.rowsInserted).toBe(2);
     expect(r.costToWorkerPesewas).toBe(2 * 800); // walk-in price * paid units
 
-    const reasons = db.prepare(`SELECT reason_code FROM stock_movements WHERE worker_id = ? AND reason_code LIKE 'WORKER_CONSUMED%' ORDER BY created_at`).all(W).map((r: any) => r.reason_code);
+    // FREE row is inserted before PAID inside the same transaction;
+    // created_at can collide at the ms boundary so use rowid as
+    // tiebreaker to keep the assertion order-stable.
+    const reasons = db.prepare(`SELECT reason_code FROM stock_movements WHERE worker_id = ? AND reason_code LIKE 'WORKER_CONSUMED%' ORDER BY created_at, rowid`).all(W).map((r: any) => r.reason_code);
     expect(reasons).toEqual(['WORKER_CONSUMED_FREE', 'WORKER_CONSUMED_PAID']);
   });
 

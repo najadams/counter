@@ -153,11 +153,17 @@ describe('blind cash count + reconciliation', () => {
 
   it('expected = opening + cash sales when no drops', () => {
     const { shiftId } = openShift(db, { workerId: WORKER, locationId: LOC, shiftType: 'COUNTER', openingCashPesewas: 5000, deviceId: DEVICE });
-    // Insert a cash sale of 1500 on this shift.
+    // Insert a cash sale of 1500 on this shift. computeAndCloseShift reads
+    // cash from sale_payments (since 0019), so we need both rows.
+    const saleId1 = `sa-${uuidv4()}`;
     db.prepare(
       `INSERT INTO sales (id, shift_id, worker_id, location_id, channel, subtotal_pesewas, total_pesewas, payment_method, created_by, updated_by, device_id)
        VALUES (?, ?, ?, ?, 'WALK_IN', 1500, 1500, 'CASH', ?, ?, ?)`,
-    ).run(`sa-${uuidv4()}`, shiftId, WORKER, LOC, WORKER, WORKER, DEVICE);
+    ).run(saleId1, shiftId, WORKER, LOC, WORKER, WORKER, DEVICE);
+    db.prepare(
+      `INSERT INTO sale_payments (id, sale_id, payment_method, amount_pesewas, created_by, updated_by, device_id)
+       VALUES (?, ?, 'CASH', 1500, ?, ?, ?)`,
+    ).run(`sp-${uuidv4()}`, saleId1, WORKER, WORKER, DEVICE);
     submitClosingCount(db, shiftId, 6500, WORKER, DEVICE);
     const r = computeAndCloseShift(db, shiftId, WORKER, DEVICE);
     expect(r.expectedPesewas).toBe(6500);
@@ -194,10 +200,15 @@ describe('blind cash count + reconciliation', () => {
 
   it('variance is counted - expected (negative on a short)', () => {
     const { shiftId } = openShift(db, { workerId: WORKER, locationId: LOC, shiftType: 'COUNTER', openingCashPesewas: 5000, deviceId: DEVICE });
+    const saleIdVar = `sa-${uuidv4()}`;
     db.prepare(
       `INSERT INTO sales (id, shift_id, worker_id, location_id, channel, subtotal_pesewas, total_pesewas, payment_method, created_by, updated_by, device_id)
        VALUES (?, ?, ?, ?, 'WALK_IN', 1000, 1000, 'CASH', ?, ?, ?)`,
-    ).run(`sa-${uuidv4()}`, shiftId, WORKER, LOC, WORKER, WORKER, DEVICE);
+    ).run(saleIdVar, shiftId, WORKER, LOC, WORKER, WORKER, DEVICE);
+    db.prepare(
+      `INSERT INTO sale_payments (id, sale_id, payment_method, amount_pesewas, created_by, updated_by, device_id)
+       VALUES (?, ?, 'CASH', 1000, ?, ?, ?)`,
+    ).run(`sp-${uuidv4()}`, saleIdVar, WORKER, WORKER, DEVICE);
     submitClosingCount(db, shiftId, 5800, WORKER, DEVICE); // expected 6000, short by 200
     const r = computeAndCloseShift(db, shiftId, WORKER, DEVICE);
     expect(r.expectedPesewas).toBe(6000);

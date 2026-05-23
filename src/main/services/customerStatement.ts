@@ -117,7 +117,7 @@ export function buildCustomerStatement(
               payment_method AS paymentMethod, payment_reference AS paymentReference
          FROM customer_payments
         WHERE customer_id = ? AND received_at >= ?
-        ORDER BY received_at DESC`,
+        ORDER BY received_at DESC, rowid DESC`,
     )
     .all(cust.id, cutoffISO) as Array<{
     id: string;
