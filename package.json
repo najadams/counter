@@ -79,6 +79,7 @@
       "dist/**/*",
       "dist-electron/**/*",
       "migrations/**/*",
+      "scripts/lib/**/*",
       "package.json"
     ],
     "extraResources": [

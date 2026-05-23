@@ -22,8 +22,9 @@ import type { ShiftCloseBackupResult } from '../../shared/types/ipc.js';
 
 // Resolve scripts/lib/backup-runner.cjs against the project root by walking
 // up from this file at runtime. Source layout is src/main/lib/ (three dirs
-// to root); bundled layout is dist-electron/main/ (two dirs). Walk up until
-// we find scripts/lib/backup-runner.cjs so both layouts work.
+// to root); bundled layout is dist-electron/main/ inside app.asar (also
+// reachable when scripts/lib/**/* is included in electron-builder files).
+// Walk up until we find scripts/lib/backup-runner.cjs so both layouts work.
 export function findBackupRunner(): string {
   const start = path.dirname(fileURLToPath(import.meta.url));
   for (let dir = start, depth = 0; depth < 6; depth++) {
@@ -36,9 +37,10 @@ export function findBackupRunner(): string {
   throw new Error('Could not locate scripts/lib/backup-runner.cjs from ' + start);
 }
 
-// CommonJS interop — the runner is a .cjs module so the CLI and main share it.
-// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
-const runner = require(findBackupRunner()) as {
+// Runner type — extracted so both the lazy loader and the result mapper can
+// reference it. CommonJS interop is needed because the runner is a .cjs so
+// the CLI script and the main process share one implementation.
+type BackupRunnerModule = {
   runBackup: (opts: {
     sourceDir: string;
     target: string;
@@ -57,6 +59,27 @@ const runner = require(findBackupRunner()) as {
   } | { ok: false; error: string; code?: string };
   defaultBackupTarget: () => string;
 };
+
+// Lazy-load the runner the first time it's needed. Earlier this module
+// loaded the runner eagerly at top level, so a missing/misnamed file
+// (e.g. a bad electron-builder packaging where scripts/lib wasn't
+// shipped) threw during main-process startup and surfaced as a fatal
+// "JavaScript error in the main process" dialog before the user could
+// even open the app. Loading lazily lets the rest of the main process
+// boot normally; the auto-backup just degrades to a soft failure and
+// the backup-heartbeat banner on the home screen alerts the user.
+let cachedRunner: BackupRunnerModule | { error: string } | null = null;
+function loadRunner(): BackupRunnerModule | { error: string } {
+  if (cachedRunner !== null) return cachedRunner;
+  try {
+    const runnerPath = findBackupRunner();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
+    cachedRunner = require(runnerPath) as BackupRunnerModule;
+  } catch (err) {
+    cachedRunner = { error: err instanceof Error ? err.message : String(err) };
+  }
+  return cachedRunner;
+}
 
 /**
  * Inputs the trigger needs from the runtime environment. Kept narrow so
@@ -94,7 +117,13 @@ export function maybeRunShiftCloseBackup(
   }
 
   // 3. Run.
-  const target = deps.targetDir ?? defaultTarget();
+  const runner = loadRunner();
+  if ('error' in runner) {
+    // backup-runner.cjs is missing or unloadable. Surface as a soft
+    // failure — the shift close itself must still succeed.
+    return { ran: true, ok: false, error: `backup module unavailable: ${runner.error}` };
+  }
+  const target = deps.targetDir ?? defaultTarget(runner);
   let result: ReturnType<typeof runner.runBackup>;
   try {
     result = runner.runBackup({
@@ -153,7 +182,7 @@ function heartbeatExistsForDate(userDataDir: string, dateKey: string): boolean {
   }
 }
 
-function defaultTarget(): string {
+function defaultTarget(runner: BackupRunnerModule): string {
   return runner.defaultBackupTarget();
 }
 
