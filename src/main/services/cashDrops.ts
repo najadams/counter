@@ -73,13 +73,19 @@ export function recordCashDrop(
   if (shift.closed_at) throw new Error(`recordCashDrop: shift already closed`);
 
   // Compute current expected cash:
-  //  opening + cash sales so far - prior cash drops
+  //  opening + cash sales + debt payments in cash - drops - expenses
   const cashSales = (db
     .prepare(
       `SELECT COALESCE(SUM(sp.amount_pesewas), 0) AS total
          FROM sale_payments sp
          JOIN sales s ON s.id = sp.sale_id
          WHERE s.shift_id = ? AND sp.payment_method = 'CASH' AND s.voided = 0`,
+    )
+    .get(input.shiftId) as { total: number }).total;
+  const debtPaymentsCash = (db
+    .prepare(
+      `SELECT COALESCE(SUM(amount_pesewas), 0) AS total FROM customer_payments
+         WHERE shift_id = ? AND payment_method = 'CASH'`,
     )
     .get(input.shiftId) as { total: number }).total;
   const priorDrops = (db
@@ -98,7 +104,8 @@ export function recordCashDrop(
     .get(input.shiftId) as { total: number };
   const expensesPrior = expensesPriorRow.total;
 
-  const currentExpected = shift.opening_cash_pesewas + cashSales - priorDrops - expensesPrior;
+  const currentExpected =
+    shift.opening_cash_pesewas + cashSales + debtPaymentsCash - priorDrops - expensesPrior;
   if (input.amountPesewas > currentExpected) {
     throw new Error(
       `recordCashDrop: drop amount (${input.amountPesewas}) exceeds current expected cash (${currentExpected})`,
@@ -195,11 +202,20 @@ export function getCurrentExpectedCash(db: DB, shiftId: string): number {
          WHERE s.shift_id = ? AND sp.payment_method = 'CASH' AND s.voided = 0`,
     )
     .get(shiftId) as { total: number }).total;
+  // Cash brought into the till by customers paying down credit balances.
+  // Must match the inclusion in recordCashDrop and computeAndCloseShift —
+  // otherwise the three views of "expected cash" disagree.
+  const debtPaymentsCash = (db
+    .prepare(
+      `SELECT COALESCE(SUM(amount_pesewas), 0) AS total FROM customer_payments
+         WHERE shift_id = ? AND payment_method = 'CASH'`,
+    )
+    .get(shiftId) as { total: number }).total;
   const drops = (db
     .prepare(
       `SELECT COALESCE(SUM(counted_pesewas), 0) AS total FROM cash_counts
          WHERE shift_id = ? AND count_type = 'CASH_DROP'`,
     )
     .get(shiftId) as { total: number }).total;
-  return shift.opening_cash_pesewas + cashSales - drops;
+  return shift.opening_cash_pesewas + cashSales + debtPaymentsCash - drops;
 }

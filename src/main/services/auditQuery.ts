@@ -30,12 +30,24 @@ export interface AuditEntry {
   action: string;
   entityType: string;
   entityId: string;
+  /** Display name for the entity_id (customers.display_name, workers.full_name,
+   *  products.name, suppliers.name). Null for entity types we don't resolve. */
+  entityName: string | null;
   beforeValue: unknown | null;
   afterValue: unknown | null;
   deviceId: string;
   notes: string | null;
   createdAt: string;
 }
+
+/**
+ * Map of ID → display name covering every customer/worker/product/supplier
+ * referenced anywhere in the page of audit entries (entityId AND any IDs
+ * embedded in JSON before/after values like `customerId`, `productId`,
+ * `supervisorWorkerId`). Renderer uses this to swap raw IDs for names when
+ * pretty-printing JSON blobs in the expanded row view.
+ */
+export type AuditNameMap = Record<string, string>;
 
 export interface AuditFilters {
   workerId?: string | null;
@@ -56,7 +68,7 @@ export function listAuditEntries(
   db: DB,
   actorId: string,
   filters: AuditFilters,
-): { entries: AuditEntry[]; totalCount: number } {
+): { entries: AuditEntry[]; totalCount: number; idNames: AuditNameMap } {
   requireViewer(db, actorId);
 
   const where: string[] = [];
@@ -133,6 +145,7 @@ export function listAuditEntries(
     action: r.action,
     entityType: r.entityType,
     entityId: r.entityId,
+    entityName: null,
     beforeValue: r.beforeValueRaw ? safeJSON(r.beforeValueRaw) : null,
     afterValue: r.afterValueRaw ? safeJSON(r.afterValueRaw) : null,
     deviceId: r.deviceId,
@@ -140,7 +153,90 @@ export function listAuditEntries(
     createdAt: r.createdAt,
   }));
 
-  return { entries, totalCount: total.n };
+  // -------------------------------------------------------------------------
+  // Resolve every ID we can to a human-readable name. Two passes:
+  //   1. entity_id by entity_type   →   AuditEntry.entityName
+  //   2. IDs embedded in before/after JSON   →   AuditNameMap returned to
+  //      the renderer (it swaps IDs for names while pretty-printing JSON).
+  //
+  // We collect IDs across the whole page first so we can issue one query
+  // per kind (customers / workers / products / suppliers) instead of N
+  // queries per row.
+  // -------------------------------------------------------------------------
+
+  type Kind = 'customers' | 'workers' | 'products' | 'suppliers';
+  const idsByKind: Record<Kind, Set<string>> = {
+    customers: new Set(), workers: new Set(),
+    products: new Set(), suppliers: new Set(),
+  };
+  const entityTypeToKind: Record<string, Kind | undefined> = {
+    customers: 'customers',
+    workers: 'workers',
+    products: 'products',
+    suppliers: 'suppliers',
+  };
+  // Field-name → kind map for IDs embedded in JSON. Maintained by hand to
+  // cover the field names actually used by audit-writers across the
+  // services (sales.ts, voids.ts, customerCredit.ts, workers.ts, etc.).
+  const fieldNameToKind: Record<string, Kind> = {
+    customerId: 'customers',
+    workerId: 'workers',
+    supervisorWorkerId: 'workers',
+    targetWorkerId: 'workers',
+    voidedBy: 'workers',
+    receivedBy: 'workers',
+    productId: 'products',
+    supplierId: 'suppliers',
+    primarySupplierId: 'suppliers',
+  };
+
+  function collectFromValue(v: unknown): void {
+    if (v === null || typeof v !== 'object') return;
+    if (Array.isArray(v)) { for (const x of v) collectFromValue(x); return; }
+    for (const [key, val] of Object.entries(v)) {
+      const kind = fieldNameToKind[key];
+      if (kind && typeof val === 'string' && val) {
+        idsByKind[kind].add(val);
+      } else if (typeof val === 'object') {
+        collectFromValue(val);
+      }
+    }
+  }
+
+  for (const e of entries) {
+    const kind = entityTypeToKind[e.entityType];
+    if (kind && e.entityId) idsByKind[kind].add(e.entityId);
+    collectFromValue(e.beforeValue);
+    collectFromValue(e.afterValue);
+  }
+
+  const idNames: AuditNameMap = {};
+  function bulkResolve(kind: Kind, table: string, nameCol: string): void {
+    const ids = [...idsByKind[kind]];
+    if (ids.length === 0) return;
+    // chunk the IN clause so we don't bump SQLite's 999-parameter limit.
+    for (let i = 0; i < ids.length; i += 500) {
+      const chunk = ids.slice(i, i + 500);
+      const placeholders = chunk.map(() => '?').join(',');
+      const rows = db
+        .prepare(`SELECT id, ${nameCol} AS name FROM ${table} WHERE id IN (${placeholders})`)
+        .all(...chunk) as Array<{ id: string; name: string | null }>;
+      for (const row of rows) {
+        if (row.name) idNames[row.id] = row.name;
+      }
+    }
+  }
+  bulkResolve('customers', 'customers', 'display_name');
+  bulkResolve('workers',   'workers',   'full_name');
+  bulkResolve('products',  'products',  'name');
+  bulkResolve('suppliers', 'suppliers', 'name');
+
+  for (const e of entries) {
+    const kind = entityTypeToKind[e.entityType];
+    if (kind && e.entityId in idNames) e.entityName = idNames[e.entityId];
+  }
+
+  return { entries, totalCount: total.n, idNames };
 }
 
 export function listAuditDistinctActions(db: DB, actorId: string): string[] {

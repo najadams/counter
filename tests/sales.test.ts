@@ -86,6 +86,14 @@ describe('searchProducts', () => {
     expect(searchProducts(db, 'voltic', 'WALK_IN', L).map((h) => h.sku)).toContain('VOLTIC-1L');
   });
 
+  it('matches by SKU substring, not just prefix', () => {
+    // Typing the middle/suffix of a SKU should still find the product.
+    // Pre-fix this used `sku LIKE 'query%'` (prefix-only) and returned
+    // empty — cashiers who didn't remember the brand prefix got nothing.
+    expect(searchProducts(db, '330', 'WALK_IN', L).map((h) => h.sku)).toContain('STAR-330');
+    expect(searchProducts(db, '1L', 'WALK_IN', L).map((h) => h.sku)).toContain('VOLTIC-1L');
+  });
+
   it('excludes inactive and deleted products', () => {
     const cl = db.prepare('SELECT id FROM products WHERE sku = ?').get('CLUB-330') as { id: string };
     db.prepare('UPDATE products SET active = 0 WHERE id = ?').run(cl.id);

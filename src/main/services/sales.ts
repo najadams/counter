@@ -78,6 +78,10 @@ export function searchProducts(
   } else {
     const like = `%${trimmed}%`;
     const skuPrefix = `${trimmed}%`;
+    // SKU matches substring (not prefix-only) so typing the middle of a
+    // SKU still finds the product. ORDER BY keeps prefix matches on top
+    // so an exact SKU prefix still surfaces first. Name + barcode kept
+    // the same.
     sql = `
       SELECT id, sku, name, brand, category,
              ${priceCol} AS unit_price_pesewas,
@@ -90,7 +94,7 @@ export function searchProducts(
           CASE WHEN sku LIKE ? COLLATE NOCASE THEN 0 ELSE 1 END,
           name ASC
         LIMIT ?`;
-    params = [skuPrefix, like, trimmed, skuPrefix, limit];
+    params = [like, like, trimmed, skuPrefix, limit];
   }
 
   const rows = db.prepare(sql).all(...params) as Array<{

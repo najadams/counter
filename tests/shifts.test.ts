@@ -260,3 +260,42 @@ describe('reconciliation atomicity (sale-transaction integration scaffold)', () 
     ).toThrow(/UNIQUE constraint/);
   });
 });
+
+describe('expected cash includes customer credit payments received in cash', () => {
+  it('debt payment in cash bumps expected up by that amount, MoMo does not', async () => {
+    // Seed a customer + an open credit balance to pay against.
+    const customerId = `cu-${uuidv4()}`;
+    db.prepare(
+      `INSERT INTO customers (id, display_name, phone, customer_type,
+        current_balance_pesewas, credit_limit_pesewas, blocked,
+        empties_owed_count, created_by, updated_by, device_id)
+        VALUES (?, ?, ?, 'WALK_IN_REGULAR', 5000, 100000, 0, 0, ?, ?, ?)`,
+    ).run(customerId, 'Debt Payer', '+233555199001', WORKER, WORKER, DEVICE);
+
+    const shift = openShift(db, {
+      workerId: WORKER, locationId: LOC, shiftType: 'COUNTER',
+      openingCashPesewas: 10000, deviceId: DEVICE,
+    });
+
+    // 30.00 in cash, 20.00 via MoMo (should NOT increase expected cash).
+    const { recordCustomerPayment } = await import('../src/main/services/customerCredit');
+    recordCustomerPayment(db, {
+      customerId, amountPesewas: 3000, paymentMethod: 'CASH',
+      workerId: WORKER, shiftId: shift.shiftId, deviceId: DEVICE,
+    });
+    recordCustomerPayment(db, {
+      customerId, amountPesewas: 2000, paymentMethod: 'MOMO_MTN',
+      paymentReference: 'TXN-DBT', workerId: WORKER,
+      shiftId: shift.shiftId, deviceId: DEVICE,
+    });
+
+    // Cashier counts what's actually in the till: opening 10000 + 3000 cash debt = 13000.
+    submitClosingCount(db, shift.shiftId, 13000, WORKER, DEVICE);
+    const close = computeAndCloseShift(db, shift.shiftId, WORKER, DEVICE);
+
+    // Expected = opening 10000 + cash debt payments 3000 = 13000.
+    // (MoMo 2000 was received but is NOT in the till.)
+    expect(close.expectedPesewas).toBe(13000);
+    expect(close.variancePesewas).toBe(0);
+  });
+});

@@ -253,10 +253,25 @@ export function getReportsOverview(db: DB, input: GetReportsOverviewInput): Repo
 
   let openTillExpected = 0;
   for (const s of openShiftsRow) {
+    // Tender-by-tender, not sale-by-sale: a split 70 cash + 30 MoMo sale
+    // contributes 70 to cashSales, not the full 100. Matches the same
+    // accounting fix applied in byPaymentMethod / computeAndCloseShift.
     const cashSales = db
       .prepare(
-        `SELECT COALESCE(SUM(total_pesewas), 0) AS s FROM sales
-           WHERE shift_id = ? AND voided = 0 AND payment_method = 'CASH'`,
+        `SELECT COALESCE(SUM(sp.amount_pesewas), 0) AS s
+           FROM sale_payments sp
+           JOIN sales sa ON sa.id = sp.sale_id
+           WHERE sa.shift_id = ? AND sa.voided = 0 AND sp.payment_method = 'CASH'`,
+      )
+      .get(s.id) as { s: number };
+    // Customers paying down their credit balances in cash inflate the till
+    // during the shift. Must be added here so the "Cash in tills" KPI on
+    // the home Overview matches what computeAndCloseShift will compute on
+    // close. RETURN_CREDIT (synthetic) and MOMO/BANK are excluded.
+    const debtPaymentsCash = db
+      .prepare(
+        `SELECT COALESCE(SUM(amount_pesewas), 0) AS s FROM customer_payments
+           WHERE shift_id = ? AND payment_method = 'CASH'`,
       )
       .get(s.id) as { s: number };
     const drops = db
@@ -271,7 +286,8 @@ export function getReportsOverview(db: DB, input: GetReportsOverviewInput): Repo
            WHERE shift_id = ?`,
       )
       .get(s.id) as { s: number };
-    openTillExpected += s.openingCashPesewas + cashSales.s - drops.s - expenses.s;
+    openTillExpected +=
+      s.openingCashPesewas + cashSales.s + debtPaymentsCash.s - drops.s - expenses.s;
   }
 
   const lastClosed = db

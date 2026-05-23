@@ -9,6 +9,7 @@ import { useSession } from '../../store/session';
 interface Entry {
   id: string; workerId: string; workerName: string; workerRole: string;
   action: string; entityType: string; entityId: string;
+  entityName: string | null;
   beforeValue: unknown | null; afterValue: unknown | null;
   deviceId: string; notes: string | null; createdAt: string;
 }
@@ -19,6 +20,7 @@ export function AuditLogTab() {
   const isViewer = myRole === 'OWNER' || myRole === 'FOUNDER';
 
   const [entries, setEntries] = useState<Entry[]>([]);
+  const [idNames, setIdNames] = useState<Record<string, string>>({});
   const [totalCount, setTotalCount] = useState(0);
   const [actions, setActions] = useState<string[]>([]);
   const [entityTypes, setEntityTypes] = useState<string[]>([]);
@@ -55,6 +57,7 @@ export function AuditLogTab() {
     if (!r.success) { setError(r.error); return; }
     setEntries(r.data.entries);
     setTotalCount(r.data.totalCount);
+    setIdNames(r.data.idNames ?? {});
   }
 
   useEffect(() => {
@@ -183,7 +186,7 @@ export function AuditLogTab() {
               <tr><td colSpan={6} className="px-4 py-6 text-center text-text-tertiary">No entries match these filters.</td></tr>
             )}
             {entries.map((e) => (
-              <RowExpandable key={e.id} entry={e}
+              <RowExpandable key={e.id} entry={e} idNames={idNames}
                 expanded={expanded === e.id}
                 onToggle={() => setExpanded(expanded === e.id ? null : e.id)} />
             ))}
@@ -194,11 +197,33 @@ export function AuditLogTab() {
   );
 }
 
-function RowExpandable({ entry, expanded, onToggle }: {
+// Recursively walk a JSON value and replace any string that's a known ID
+// with "ID (Name)". Keeps the original ID visible — names are the readable
+// part, IDs stay for traceability.
+function annotateIds(value: unknown, idNames: Record<string, string>): unknown {
+  if (value === null || value === undefined) return value;
+  if (typeof value === 'string') {
+    const name = idNames[value];
+    return name ? `${value}  (${name})` : value;
+  }
+  if (Array.isArray(value)) return value.map((v) => annotateIds(v, idNames));
+  if (typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value)) out[k] = annotateIds(v, idNames);
+    return out;
+  }
+  return value;
+}
+
+function RowExpandable({ entry, expanded, onToggle, idNames }: {
   entry: Entry; expanded: boolean; onToggle: () => void;
+  idNames: Record<string, string>;
 }) {
   const ts = new Date(entry.createdAt);
   const dateStr = ts.toLocaleString();
+  // Friendly label for the entity column: prefer the resolved name; fall back
+  // to the raw ID for entity types we don't know how to look up.
+  const entityLabel = entry.entityName ?? entry.entityId;
   return (
     <>
       <tr className="border-t border-border-subtle hover:bg-bg-deep/40 cursor-pointer"
@@ -211,7 +236,7 @@ function RowExpandable({ entry, expanded, onToggle }: {
         <td className="px-3 py-2 font-medium">{entry.action}</td>
         <td className="px-3 py-2">
           <div className="text-text-secondary">{entry.entityType}</div>
-          <div className="text-xs text-text-tertiary font-mono">{entry.entityId}</div>
+          <div className="text-xs text-text-tertiary font-mono">{entityLabel}</div>
         </td>
         <td className="px-3 py-2 text-text-secondary">{entry.notes ?? '—'}</td>
         <td className="px-3 py-2 text-right text-text-tertiary text-xs">{expanded ? '▲' : '▼'}</td>
@@ -223,18 +248,19 @@ function RowExpandable({ entry, expanded, onToggle }: {
               <div>
                 <div className="text-xs text-text-tertiary uppercase tracking-wider mb-1">Before</div>
                 {entry.beforeValue
-                  ? <pre className="text-xs bg-bg-deep rounded p-2 overflow-x-auto">{JSON.stringify(entry.beforeValue, null, 2)}</pre>
+                  ? <pre className="text-xs bg-bg-deep rounded p-2 overflow-x-auto">{JSON.stringify(annotateIds(entry.beforeValue, idNames), null, 2)}</pre>
                   : <div className="text-text-tertiary text-sm italic">(none — create action)</div>}
               </div>
               <div>
                 <div className="text-xs text-text-tertiary uppercase tracking-wider mb-1">After</div>
                 {entry.afterValue
-                  ? <pre className="text-xs bg-bg-deep rounded p-2 overflow-x-auto">{JSON.stringify(entry.afterValue, null, 2)}</pre>
+                  ? <pre className="text-xs bg-bg-deep rounded p-2 overflow-x-auto">{JSON.stringify(annotateIds(entry.afterValue, idNames), null, 2)}</pre>
                   : <div className="text-text-tertiary text-sm italic">(none — delete action)</div>}
               </div>
             </div>
             <div className="mt-2 text-xs text-text-tertiary">
               entry id: <span className="font-mono">{entry.id}</span> · device: <span className="font-mono">{entry.deviceId}</span>
+              {entry.entityName && <> · entity: <span className="font-mono">{entry.entityId}</span></>}
             </div>
           </td>
         </tr>

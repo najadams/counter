@@ -832,6 +832,9 @@ export interface AuditEntry {
   action: string;
   entityType: string;
   entityId: string;
+  /** Display name for entity_id (customer/worker/product/supplier). Null
+   *  for entity types we don't resolve (sales, shifts, stock_movements). */
+  entityName: string | null;
   beforeValue: unknown | null;
   afterValue: unknown | null;
   deviceId: string;
@@ -853,6 +856,10 @@ export interface AuditListRequest {
 export interface AuditListResponse {
   entries: AuditEntry[];
   totalCount: number;
+  /** ID → display name for every customer/worker/product/supplier referenced
+   *  in entries[] (entityId AND IDs embedded in JSON values). Renderer uses
+   *  this to swap IDs for names when pretty-printing the before/after JSON. */
+  idNames: Record<string, string>;
 }
 export interface AuditListActionsResponse { actions: string[] }
 export interface AuditListEntityTypesResponse { entityTypes: string[] }
