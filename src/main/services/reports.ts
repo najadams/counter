@@ -288,10 +288,17 @@ export function getReportsOverview(db: DB, input: GetReportsOverviewInput): Repo
   // outstanding amount goes into the bucket matching its age. Customer
   // balance cache is reliable for the total but doesn't give us age, so we
   // re-derive from sales for the bucket split.
+  //
+  // Outstanding = (sum of CREDIT tenders on the sale) − (allocations paid
+  // against the sale). The credit-tender sum replaces sale.total_pesewas
+  // for the same reason completeSale now bumps balance by the credit
+  // portion only: on a CASH 100 + CREDIT 500 sale, only the 500 is owed.
   const openCredit = db
     .prepare(
       `SELECT s.created_at,
-              s.total_pesewas
+              COALESCE((SELECT SUM(amount_pesewas)
+                          FROM sale_payments
+                          WHERE sale_id = s.id AND payment_method = 'CREDIT'), 0)
                 - COALESCE((SELECT SUM(amount_pesewas)
                               FROM customer_payment_allocations
                               WHERE sale_id = s.id), 0) AS outstanding

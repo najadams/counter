@@ -167,9 +167,71 @@ describe('completeSale — split payments', () => {
     expect(reversal.quantity).toBe(2);
   });
 
-  it.todo(
-    'CASH + CREDIT split should move only the credit portion to customer balance — see task #33 (current behavior moves the FULL sale total, which is symmetric on void but wrong between sale and void)',
-  );
+  it('CASH + CREDIT split bumps customer balance by the CREDIT portion only', async () => {
+    // 1000 cash + 600 credit on a 1600-cedi sale: customer should owe
+    // 600, not 1600. The cash 1000 is in the till already.
+    const before = (db.prepare('SELECT current_balance_pesewas FROM customers WHERE id = ?').get(customerId) as { current_balance_pesewas: number }).current_balance_pesewas;
+    expect(before).toBe(0);
+    await completeSale(db, {
+      shiftId, workerId: W, workerName: 'Naj', locationId: L, channel: 'WALK_IN',
+      lines: [{ productId: starId, quantity: 2, unitPricePesewas: 800 }], // 1600
+      payments: [
+        { method: 'CASH', amountPesewas: 1000, cashGivenPesewas: 1000 },
+        { method: 'CREDIT', amountPesewas: 600 },
+      ],
+      customerId,
+      deviceId: D, shopName: 'TEST',
+    });
+    const after = (db.prepare('SELECT current_balance_pesewas FROM customers WHERE id = ?').get(customerId) as { current_balance_pesewas: number }).current_balance_pesewas;
+    expect(after).toBe(600);
+  });
+
+  it('void of CASH + CREDIT split reverses ONLY the credit portion', async () => {
+    const r = await completeSale(db, {
+      shiftId, workerId: W, workerName: 'Naj', locationId: L, channel: 'WALK_IN',
+      lines: [{ productId: starId, quantity: 2, unitPricePesewas: 800 }],
+      payments: [
+        { method: 'CASH', amountPesewas: 1000, cashGivenPesewas: 1000 },
+        { method: 'CREDIT', amountPesewas: 600 },
+      ],
+      customerId,
+      deviceId: D, shopName: 'TEST',
+    });
+    expect((db.prepare('SELECT current_balance_pesewas FROM customers WHERE id = ?').get(customerId) as { current_balance_pesewas: number }).current_balance_pesewas).toBe(600);
+
+    const vr = voidSale(db, {
+      saleId: r.saleId, reason: 'returned',
+      supervisorWorkerId: SUP, supervisorPin: '9999',
+      workerId: W, deviceId: D,
+    });
+    expect(vr.customerBalanceDelta).toBe(-600);
+    expect((db.prepare('SELECT current_balance_pesewas FROM customers WHERE id = ?').get(customerId) as { current_balance_pesewas: number }).current_balance_pesewas).toBe(0);
+  });
+
+  it('aging report outstanding uses CREDIT portion, not sale total', async () => {
+    // Make the customer overdue by backdating the sale 45 days. We do it
+    // by directly updating sales.created_at after the fact; the aging
+    // logic reads created_at to bucket into 0-30 / 31-60 / 61-90 / 90+.
+    const r = await completeSale(db, {
+      shiftId, workerId: W, workerName: 'Naj', locationId: L, channel: 'WALK_IN',
+      lines: [{ productId: starId, quantity: 2, unitPricePesewas: 800 }],
+      payments: [
+        { method: 'CASH', amountPesewas: 1000, cashGivenPesewas: 1000 },
+        { method: 'CREDIT', amountPesewas: 600 },
+      ],
+      customerId,
+      deviceId: D, shopName: 'TEST',
+    });
+    db.prepare("UPDATE sales SET created_at = datetime('now', '-45 days') WHERE id = ?").run(r.saleId);
+
+    const { getReportsOverview } = await import('../src/main/services/reports');
+    const ov = getReportsOverview(db, { actorWorkerId: SUP, locationId: L });
+    // Total outstanding equals the credit portion (600), not the sale total (1600).
+    expect(ov.receivables.totalPesewas).toBe(600);
+    // 45 days falls in 31-60.
+    expect(ov.receivables.bucket31_60Pesewas).toBe(600);
+    expect(ov.receivables.bucket0_30Pesewas).toBe(0);
+  });
 });
 
 describe('getSalesReport — byPaymentMethod respects split tenders', () => {

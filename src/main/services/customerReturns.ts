@@ -208,8 +208,15 @@ export function recordCustomerReturn(
       // FIFO allocate against the customer's open credit sales: oldest first,
       // up to totalRefund. Any leftover stays as customer credit (negative
       // balance) — reconcileCustomerBalance below recomputes the cache.
+      // Outstanding = sum of CREDIT tenders − allocations already applied.
+      // For pure-CREDIT sales this equals s.total_pesewas; for split-tender
+      // sales the cash/MoMo portions are NOT owed (they were paid up
+      // front), so we mustn't allocate refund credit against them.
       const open = db.prepare(
-        `SELECT s.id, s.total_pesewas
+        `SELECT s.id,
+                COALESCE((SELECT SUM(amount_pesewas)
+                            FROM sale_payments
+                            WHERE sale_id = s.id AND payment_method = 'CREDIT'), 0)
                 - COALESCE((SELECT SUM(amount_pesewas)
                               FROM customer_payment_allocations
                              WHERE sale_id = s.id), 0)

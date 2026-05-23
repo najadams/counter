@@ -591,15 +591,22 @@ export async function completeSale(
       if (!sm.id) throw new Error(`completeSale: stock movement insert returned no id`);
     }
 
-    // Update credit balance for credit sales.
+    // Bump customer balance by the CREDIT-tender portion only, not the
+    // full sale total. For a split CASH 100 + CREDIT 500 sale the customer
+    // owes 500, not 600 — the 100 cash is already in the till.
     if (isCredit && input.customerId) {
-      db.prepare(
-        `UPDATE customers
-           SET current_balance_pesewas = current_balance_pesewas + ?,
-               updated_at = ?,
-               updated_by = ?
-           WHERE id = ?`,
-      ).run(totalPesewas, now, input.workerId, input.customerId);
+      const creditAmount = payments
+        .filter((p) => p.method === 'CREDIT')
+        .reduce((sum, p) => sum + p.amountPesewas, 0);
+      if (creditAmount > 0) {
+        db.prepare(
+          `UPDATE customers
+             SET current_balance_pesewas = current_balance_pesewas + ?,
+                 updated_at = ?,
+                 updated_by = ?
+             WHERE id = ?`,
+        ).run(creditAmount, now, input.workerId, input.customerId);
+      }
     }
 
     if (discount > 0) {

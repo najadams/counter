@@ -129,16 +129,30 @@ export function voidSale(db: DB, input: VoidSaleInput): VoidSaleResult {
       reversalMovementCount++;
     }
 
-    // 2) Reverse customer balance if originally credit.
+    // 2) Reverse customer balance — but only the CREDIT-tender portion of
+    //    the original sale. Mirrors completeSale, which now bumps the
+    //    balance by the credit tenders only (not the full sale total).
+    //    For a pure-CREDIT sale the two amounts coincide; for a split
+    //    they differ and the void must reverse what was actually added.
     if (sale.is_credit === 1 && sale.customer_id) {
-      db.prepare(
-        `UPDATE customers
-            SET current_balance_pesewas = current_balance_pesewas - ?,
-                updated_at = ?,
-                updated_by = ?
-            WHERE id = ?`,
-      ).run(sale.total_pesewas, now, input.workerId, sale.customer_id);
-      customerDelta = -sale.total_pesewas;
+      const creditRow = db
+        .prepare(
+          `SELECT COALESCE(SUM(amount_pesewas), 0) AS creditAmount
+             FROM sale_payments
+             WHERE sale_id = ? AND payment_method = 'CREDIT'`,
+        )
+        .get(sale.id) as { creditAmount: number };
+      const creditAmount = creditRow.creditAmount;
+      if (creditAmount > 0) {
+        db.prepare(
+          `UPDATE customers
+              SET current_balance_pesewas = current_balance_pesewas - ?,
+                  updated_at = ?,
+                  updated_by = ?
+              WHERE id = ?`,
+        ).run(creditAmount, now, input.workerId, sale.customer_id);
+        customerDelta = -creditAmount;
+      }
     }
 
     // 3) Mark sale voided.
