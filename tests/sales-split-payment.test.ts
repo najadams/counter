@@ -171,3 +171,65 @@ describe('completeSale — split payments', () => {
     'CASH + CREDIT split should move only the credit portion to customer balance — see task #33 (current behavior moves the FULL sale total, which is symmetric on void but wrong between sale and void)',
   );
 });
+
+describe('getSalesReport — byPaymentMethod respects split tenders', () => {
+  it('reports per-tender totals from sale_payments, not the primary method on sales', async () => {
+    // One sale, paid 1000 CASH + 600 MoMo. The "primary" tender on the
+    // sales row is CASH (largest amount). Old report query bucketed the
+    // whole 1600 as CASH and showed MoMo = 0. New query reads
+    // sale_payments → CASH = 1000, MoMo = 600. Total sums to 1600.
+    await completeSale(db, {
+      shiftId, workerId: W, workerName: 'Naj', locationId: L, channel: 'WALK_IN',
+      lines: [{ productId: starId, quantity: 2, unitPricePesewas: 800 }],
+      payments: [
+        { method: 'CASH', amountPesewas: 1000, cashGivenPesewas: 1000 },
+        { method: 'MOMO_MTN', amountPesewas: 600, reference: 'TXN-RPT' },
+      ],
+      deviceId: D, shopName: 'TEST',
+    });
+
+    const { getSalesReport } = await import('../src/main/services/reports');
+    const today = new Date().toISOString().slice(0, 10);
+    const r = getSalesReport(db, {
+      actorWorkerId: SUP, fromDate: today, toDate: today, groupBy: 'day',
+    });
+
+    const cash = r.byPaymentMethod.find((m) => m.method === 'CASH');
+    const momo = r.byPaymentMethod.find((m) => m.method === 'MOMO_MTN');
+    expect(cash?.revenuePesewas).toBe(1000);
+    expect(momo?.revenuePesewas).toBe(600);
+    // numSales = distinct sales that touched the method (= 1 for each here,
+    // not 2 tenders for MoMo and not 2 sales for CASH).
+    expect(cash?.numSales).toBe(1);
+    expect(momo?.numSales).toBe(1);
+    // Sum across methods equals the sale total — invariant we rely on.
+    const sum = r.byPaymentMethod.reduce((acc, m) => acc + m.revenuePesewas, 0);
+    expect(sum).toBe(1600);
+  });
+
+  it('voided split-tender sale drops out of byPaymentMethod entirely', async () => {
+    const sale = await completeSale(db, {
+      shiftId, workerId: W, workerName: 'Naj', locationId: L, channel: 'WALK_IN',
+      lines: [{ productId: starId, quantity: 2, unitPricePesewas: 800 }],
+      payments: [
+        { method: 'CASH', amountPesewas: 1000, cashGivenPesewas: 1000 },
+        { method: 'MOMO_MTN', amountPesewas: 600, reference: 'TXN-VOID' },
+      ],
+      deviceId: D, shopName: 'TEST',
+    });
+    voidSale(db, {
+      saleId: sale.saleId, reason: 'test void',
+      supervisorWorkerId: SUP, supervisorPin: '9999',
+      workerId: W, deviceId: D,
+    });
+
+    const { getSalesReport } = await import('../src/main/services/reports');
+    const today = new Date().toISOString().slice(0, 10);
+    const r = getSalesReport(db, {
+      actorWorkerId: SUP, fromDate: today, toDate: today, groupBy: 'day',
+    });
+    // Voided sale's tenders should not appear — we join s.voided = 0.
+    expect(r.byPaymentMethod.find((m) => m.method === 'CASH')?.revenuePesewas ?? 0).toBe(0);
+    expect(r.byPaymentMethod.find((m) => m.method === 'MOMO_MTN')?.revenuePesewas ?? 0).toBe(0);
+  });
+});

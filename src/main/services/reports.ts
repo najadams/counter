@@ -630,14 +630,23 @@ export function getSalesReport(db: DB, input: SalesReportInput): SalesReportResu
     )
     .all(fromISO, toExclusiveISO) as SalesByChannel[];
 
+  // Read tender-by-tender from sale_payments instead of bucketing the
+  // whole sale by its "primary" (largest) tender. Without this, a sale
+  // paid 70 cash + 30 MoMo would attribute 100 cedis to CASH and 0 to
+  // MoMo — masking real MoMo throughput. SUM(amount_pesewas) gives the
+  // honest revenue per method; COUNT(DISTINCT sale_id) keeps numSales
+  // meaning "sales that touched this method" so the UI's "5 sales"
+  // label stays accurate (vs. counting tenders, which would double-
+  // count split-payment sales).
   const byPaymentMethod = db
     .prepare(
-      `SELECT s.payment_method AS method,
-              COALESCE(SUM(s.total_pesewas), 0) AS revenuePesewas,
-              COUNT(*) AS numSales
-         FROM sales s
+      `SELECT sp.payment_method AS method,
+              COALESCE(SUM(sp.amount_pesewas), 0) AS revenuePesewas,
+              COUNT(DISTINCT sp.sale_id) AS numSales
+         FROM sale_payments sp
+         JOIN sales s ON s.id = sp.sale_id
          WHERE s.voided = 0 AND s.created_at >= ? AND s.created_at < ?
-         GROUP BY s.payment_method
+         GROUP BY sp.payment_method
          ORDER BY revenuePesewas DESC`,
     )
     .all(fromISO, toExclusiveISO) as SalesByPaymentMethod[];
