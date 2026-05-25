@@ -233,7 +233,11 @@ export function listAuditEntries(
 
   for (const e of entries) {
     const kind = entityTypeToKind[e.entityType];
-    if (kind && e.entityId in idNames) e.entityName = idNames[e.entityId];
+    if (!kind) continue;
+    const name = idNames[e.entityId];
+    // truthy-narrow `string | undefined` → `string`; satisfies the
+    // entityName: string | null field type under noUncheckedIndexedAccess.
+    if (name) e.entityName = name;
   }
 
   return { entries, totalCount: total.n, idNames };
