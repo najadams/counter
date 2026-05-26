@@ -138,6 +138,7 @@ export function pendingReprintCount(db: DB): number {
 
 import type { SaleReceipt } from '../printer/receipt.js';
 import { getShopHeader } from './sales.js';
+import { getReceiptConfig } from './receiptConfig.js';
 
 /** Reconstruct a printable SaleReceipt from a stored sale. Used by reprint
  *  queue retry. Walks sale_lines + sales + customers in one read. */
@@ -204,10 +205,17 @@ export function buildSaleReceiptForReprint(
   }>;
 
   const shop = getShopHeader(db);
+  const cfg = getReceiptConfig(db);
 
   return {
-    shopName: shop.shopName,
-    shopSubtitle: shop.shopSubtitle,
+    shopName: cfg.shopName || shop.shopName,
+    shopSubtitle: cfg.shopSubtitle ?? shop.shopSubtitle,
+    headerLine3: cfg.headerLine3,
+    headerLine4: cfg.headerLine4,
+    footerText: cfg.footerText,
+    showCashier: cfg.showCashier,
+    showChannel: cfg.showChannel,
+    showCustomer: cfg.showCustomer,
     receiptId: sale.id,
     workerName: sale.workerName,
     saleAt: sale.saleAt,

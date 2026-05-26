@@ -1261,6 +1261,33 @@ export interface BackupHeartbeat {
   neverBackedUp: boolean;
 }
 
+// --- Receipt customization (shop header / footer / layout) ---------------
+
+export const IPC_CHANNELS_RECEIPT = {
+  RECEIPT_GET_CONFIG: 'receipt:get-config',
+  RECEIPT_SET_CONFIG: 'receipt:set-config',
+} as const;
+
+export type ReceiptPaperWidth = 58 | 80;
+export type ReceiptDensity = 'compact' | 'normal' | 'spacious';
+
+export interface ReceiptConfigResponse {
+  shopName: string;
+  shopSubtitle: string | null;
+  headerLine3: string | null;
+  headerLine4: string | null;
+  footerText: string;
+  paperWidthMm: ReceiptPaperWidth;
+  sideMarginMm: number;
+  density: ReceiptDensity;
+  bold: boolean;
+  showCashier: boolean;
+  showChannel: boolean;
+  showCustomer: boolean;
+}
+
+export type ReceiptSetConfigRequest = ReceiptConfigResponse;
+
 // --- Wave C.1: Printable customer statement ------------------------------
 
 export const IPC_CHANNELS_STATEMENT = {

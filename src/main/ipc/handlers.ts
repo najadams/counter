@@ -2282,3 +2282,54 @@ export function registerCatalogTransferHandlers(
     ),
   );
 }
+
+// --- Receipt customization handlers --------------------------------------
+
+import {
+  IPC_CHANNELS_RECEIPT,
+  type ReceiptConfigResponse, type ReceiptSetConfigRequest,
+} from '../../shared/types/ipc.js';
+import { getReceiptConfig, setReceiptConfig } from '../services/receiptConfig.js';
+
+export function registerReceiptConfigHandlers(
+  ipcMain: import('electron').IpcMain,
+  db: import('better-sqlite3').Database,
+  deviceId: string,
+): void {
+  // Read — any signed-in worker. Cashier UIs may want it eventually (e.g.
+  // to show the shop header in confirmation modals), and reading is harmless.
+  ipcMain.handle(IPC_CHANNELS_RECEIPT.RECEIPT_GET_CONFIG,
+    wrap<void, ReceiptConfigResponse>(
+      () => {
+        requireWorker();
+        return getReceiptConfig(db);
+      },
+      IPC_CHANNELS_RECEIPT.RECEIPT_GET_CONFIG,
+    ),
+  );
+
+  // Write — OWNER/FOUNDER only. Shop branding is owner-decided.
+  ipcMain.handle(IPC_CHANNELS_RECEIPT.RECEIPT_SET_CONFIG,
+    wrap<ReceiptSetConfigRequest, ReceiptConfigResponse>(
+      (req) => {
+        const w = requireWorker();
+        if (w.role !== 'OWNER' && w.role !== 'FOUNDER') {
+          throw new Error('Only OWNER or FOUNDER can change receipt settings.');
+        }
+        const before = getReceiptConfig(db);
+        const after = setReceiptConfig(db, req);
+        logAudit(db, {
+          workerId: w.workerId,
+          action: 'RECEIPT_CONFIG_CHANGED',
+          entityType: 'device_config',
+          entityId: 'receipt',
+          beforeValue: before,
+          afterValue: after,
+          deviceId,
+        });
+        return after;
+      },
+      IPC_CHANNELS_RECEIPT.RECEIPT_SET_CONFIG,
+    ),
+  );
+}

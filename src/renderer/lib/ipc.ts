@@ -538,3 +538,15 @@ declare global {
       => Promise<IpcResponse<CatalogImportApplyResponse>>;
   }
 }
+
+// --- Receipt customization ------------------------------------------------
+import type {
+  ReceiptConfigResponse, ReceiptSetConfigRequest,
+} from '../../shared/types/ipc';
+
+declare global {
+  interface CounterApi {
+    receiptGetConfig: () => Promise<IpcResponse<ReceiptConfigResponse>>;
+    receiptSetConfig: (req: ReceiptSetConfigRequest) => Promise<IpcResponse<ReceiptConfigResponse>>;
+  }
+}

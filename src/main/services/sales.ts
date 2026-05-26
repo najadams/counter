@@ -20,6 +20,7 @@ import {
 } from '../../shared/lib/constants.js';
 import { getPrinter } from '../printer/printer.js';
 import type { SaleReceipt } from '../printer/receipt.js';
+import { getReceiptConfig } from './receiptConfig.js';
 
 export type SaleChannel = 'WALK_IN' | 'WHOLESALE' | 'ROUTE';
 
@@ -659,9 +660,16 @@ export async function completeSale(
     customerName = r?.display_name ?? null;
   }
 
+  const cfg = getReceiptConfig(db);
   const receipt: SaleReceipt = {
-    shopName: input.shopName,
-    shopSubtitle: input.shopSubtitle ?? null,
+    shopName: cfg.shopName || input.shopName,
+    shopSubtitle: cfg.shopSubtitle ?? input.shopSubtitle ?? null,
+    headerLine3: cfg.headerLine3,
+    headerLine4: cfg.headerLine4,
+    footerText: cfg.footerText,
+    showCashier: cfg.showCashier,
+    showChannel: cfg.showChannel,
+    showCustomer: cfg.showCustomer,
     receiptId: saleId,
     workerName: input.workerName,
     saleAt: now,

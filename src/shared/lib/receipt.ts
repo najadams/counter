@@ -31,6 +31,9 @@ export interface ReceiptTender {
 export interface SaleReceipt {
   shopName: string;
   shopSubtitle?: string | null;
+  /** Optional extra header lines (e.g. phone, address). */
+  headerLine3?: string | null;
+  headerLine4?: string | null;
   receiptId: string;        // sale_id (typically uuid; we'll show the last 8)
   workerName: string;
   saleAt: string;           // ISO timestamp
@@ -45,6 +48,11 @@ export interface SaleReceipt {
   /** New: one entry per tender. If absent or single-row, formatter falls back to `payment`. */
   payments?: ReceiptTender[];
   printerFailedNotice?: boolean;
+  /** Customization. All optional — defaults preserve the legacy output. */
+  footerText?: string | null;
+  showCashier?: boolean;
+  showChannel?: boolean;
+  showCustomer?: boolean;
 }
 
 const W = RECEIPT_COLUMNS;
@@ -102,6 +110,8 @@ export function formatReceipt(r: SaleReceipt): string[] {
 
   lines.push(center(r.shopName.toUpperCase().slice(0, W)));
   if (r.shopSubtitle) lines.push(center(r.shopSubtitle.slice(0, W)));
+  if (r.headerLine3) lines.push(center(r.headerLine3.slice(0, W)));
+  if (r.headerLine4) lines.push(center(r.headerLine4.slice(0, W)));
   lines.push(divider('='));
 
   lines.push(`Receipt #${r.receiptId.slice(-8)}`);
@@ -109,12 +119,17 @@ export function formatReceipt(r: SaleReceipt): string[] {
   // Compact "YYYY-MM-DD HH:mm" — local time, padded.
   const pad = (n: number) => n.toString().padStart(2, '0');
   const dtStr = `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())} ${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
-  lines.push(leftRight(dtStr, r.workerName.slice(0, W - dtStr.length - 1)));
+  const showCashier = r.showCashier !== false;
+  if (showCashier) {
+    lines.push(leftRight(dtStr, r.workerName.slice(0, W - dtStr.length - 1)));
+  } else {
+    lines.push(dtStr);
+  }
 
-  if (r.channel !== 'WALK_IN') {
+  if (r.showChannel !== false && r.channel !== 'WALK_IN') {
     lines.push(`Channel: ${r.channel}`);
   }
-  if (r.customerName) {
+  if (r.showCustomer !== false && r.customerName) {
     lines.push(`Customer: ${r.customerName.slice(0, W - 10)}`);
   }
   lines.push(divider('-'));
@@ -172,7 +187,8 @@ export function formatReceipt(r: SaleReceipt): string[] {
     lines.push(center('** REPRINT — PRINTER FAILED **'));
     lines.push('');
   }
-  lines.push(center('Thank you. Come again.'));
+  const footer = (r.footerText ?? 'Thank you. Come again.').trim();
+  if (footer) lines.push(center(footer.slice(0, W)));
 
   return lines;
 }

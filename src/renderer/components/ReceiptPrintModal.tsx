@@ -1,28 +1,42 @@
-// ReceiptPrintModal — clean, readable receipt preview with a Print button
-// that opens the OS print dialog via window.print().
+// ReceiptPrintModal — on-screen receipt preview with a Print button that
+// opens the OS print dialog via window.print().
 //
-// Why this exists: on-counter PCs without a configured thermal printer can
-// still hand the customer a receipt by printing to any installed printer
-// (or "Save as PDF"). This is the manual escape hatch when the auto-print
-// path in completeSale falls back to console (dev) or fails.
+// The shape is configurable via ReceiptConfig (paper width, side margin,
+// density, font weight, header/footer text, visibility toggles). The print
+// CSS uses `@page { size: <width>mm auto; margin: 0 }` so the OS treats the
+// output as a continuous roll — no page break in the middle of the
+// receipt, no fixed page margins eating paper.
 //
-// The on-screen layout is intentionally simple: a clear shop header, a small
-// meta block (date / cashier / customer), an item table with right-aligned
-// money, totals, and the payment summary. @media print rules carry the same
-// layout to paper with black text on white.
+// ReceiptBody is the pure renderer; the AppearanceTab preview reuses it.
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { type SaleReceipt } from '../../shared/lib/receipt';
 import { formatMoneyWithCurrency } from '../../shared/lib/money';
+import { counter } from '../lib/ipc';
+import type { ReceiptConfigResponse } from '../../shared/types/ipc';
+
+const FALLBACK_CONFIG: ReceiptConfigResponse = {
+  shopName: 'COUNTER SHOP',
+  shopSubtitle: null,
+  headerLine3: null,
+  headerLine4: null,
+  footerText: 'Thank you. Come again.',
+  paperWidthMm: 80,
+  sideMarginMm: 2,
+  density: 'normal',
+  bold: true,
+  showCashier: true,
+  showChannel: true,
+  showCustomer: true,
+};
 
 interface Props {
   receipt: SaleReceipt;
   onClose: () => void;
-  /** Optional: when viewing a past sale (e.g. from the customer-debt page),
-   *  pass the outstanding balance so the receipt makes the credit status
-   *  obvious. Omit for a freshly-completed sale. */
   amountPaidPesewas?: number | null;
   amountOutstandingPesewas?: number | null;
+  /** Optional override — when omitted, fetches via IPC on mount. */
+  config?: ReceiptConfigResponse;
 }
 
 function paymentLabel(method: string): string {
@@ -46,39 +60,38 @@ function fmtDateTime(iso: string): string {
   });
 }
 
-export function ReceiptPrintModal({ receipt, onClose, amountPaidPesewas, amountOutstandingPesewas }: Props): JSX.Element {
-  function doPrint(): void {
-    window.print();
+interface DensityTokens {
+  rowGap: string;       // gap between meta rows
+  sectionGap: string;   // margin between sections
+  itemRow: string;      // padding between item rows
+  headerGap: string;    // gap below the shop header
+  lineHeight: string;
+}
+
+function densityTokens(d: ReceiptConfigResponse['density']): DensityTokens {
+  switch (d) {
+    case 'compact':
+      return { rowGap: '1px', sectionGap: '4px', itemRow: '1px', headerGap: '4px', lineHeight: '1.15' };
+    case 'spacious':
+      return { rowGap: '5px', sectionGap: '14px', itemRow: '5px', headerGap: '12px', lineHeight: '1.45' };
+    case 'normal':
+    default:
+      return { rowGap: '3px', sectionGap: '8px', itemRow: '3px', headerGap: '8px', lineHeight: '1.3' };
   }
+}
 
-  const printBtnRef = useRef<HTMLButtonElement>(null);
-  const closeBtnRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    // Focus the Print button on mount so the primary action is one Enter away.
-    printBtnRef.current?.focus();
-
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') { e.preventDefault(); onClose(); return; }
-      if (e.key === 'F8') { e.preventDefault(); doPrint(); return; }
-      // Trap Tab inside the modal — without this, Tab leaks to the background
-      // and a keyboard-only operator loses context.
-      if (e.key === 'Tab') {
-        const first = printBtnRef.current;
-        const last = closeBtnRef.current;
-        if (!first || !last) return;
-        if (e.shiftKey && document.activeElement === first) {
-          e.preventDefault();
-          last.focus();
-        } else if (!e.shiftKey && document.activeElement === last) {
-          e.preventDefault();
-          first.focus();
-        }
-      }
-    }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+/** Receipt content — used inside the modal and inside the AppearanceTab preview. */
+export function ReceiptBody({
+  receipt, config, amountPaidPesewas, amountOutstandingPesewas,
+}: {
+  receipt: SaleReceipt;
+  config: ReceiptConfigResponse;
+  amountPaidPesewas?: number | null;
+  amountOutstandingPesewas?: number | null;
+}): JSX.Element {
+  const tokens = densityTokens(config.density);
+  const baseWeight = config.bold ? 700 : 500;
+  const strongWeight = config.bold ? 800 : 700;
 
   const tenders = receipt.payments && receipt.payments.length > 0
     ? receipt.payments
@@ -102,37 +115,247 @@ export function ReceiptPrintModal({ receipt, onClose, amountPaidPesewas, amountO
   );
 
   return (
-    <div className="fixed inset-0 bg-scrim flex items-center justify-center p-4 z-[70] receipt-print-overlay" onClick={onClose}>
-      <style>{`
-        @media print {
-          body * { visibility: hidden; }
-          .receipt-print-overlay,
-          .receipt-print-overlay * { visibility: visible; }
-          .receipt-print-overlay {
-            position: static !important;
-            background: white !important;
-            padding: 0 !important;
-            inset: auto !important;
-            display: block !important;
-          }
-          .receipt-print-card {
-            box-shadow: none !important;
-            border: none !important;
-            max-height: none !important;
-            max-width: none !important;
-            width: auto !important;
-            background: white !important;
-            color: black !important;
-            overflow: visible !important;
-          }
-          .receipt-print-controls { display: none !important; }
-          .receipt-print-body { padding: 0 !important; }
-          .receipt-print-body * { color: black !important; }
-          @page { margin: 12mm; }
+    <div
+      className="receipt-print-body text-black"
+      style={{
+        padding: `${tokens.sectionGap} ${config.sideMarginMm}mm`,
+        fontFamily: '"Helvetica Neue", Arial, sans-serif',
+        fontWeight: baseWeight,
+        fontSize: '12pt',
+        lineHeight: tokens.lineHeight,
+      }}
+    >
+      {/* Shop header */}
+      <div style={{ textAlign: 'center', marginBottom: tokens.headerGap }}>
+        <div style={{ fontSize: '15pt', fontWeight: 900, letterSpacing: '0.5px' }}>
+          {config.shopName || receipt.shopName}
+        </div>
+        {(config.shopSubtitle ?? receipt.shopSubtitle) && (
+          <div style={{ fontWeight: baseWeight }}>{config.shopSubtitle ?? receipt.shopSubtitle}</div>
+        )}
+        {config.headerLine3 && <div style={{ fontWeight: baseWeight }}>{config.headerLine3}</div>}
+        {config.headerLine4 && <div style={{ fontWeight: baseWeight }}>{config.headerLine4}</div>}
+      </div>
+
+      <Hr />
+
+      {/* Meta block */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.rowGap, marginTop: tokens.rowGap, marginBottom: tokens.sectionGap }}>
+        <Row left="Date" right={fmtDateTime(receipt.saleAt)} weight={baseWeight} />
+        <Row left="Receipt" right={`#${receipt.receiptId.slice(-8)}`} weight={baseWeight} mono />
+        {config.showCashier && <Row left="Cashier" right={receipt.workerName} weight={baseWeight} />}
+        {config.showChannel && receipt.channel !== 'WALK_IN' && (
+          <Row left="Channel" right={receipt.channel.replace('_', ' ').toLowerCase()} weight={baseWeight} />
+        )}
+        {config.showCustomer && receipt.customerName && (
+          <Row left="Customer" right={receipt.customerName} weight={baseWeight} />
+        )}
+      </div>
+
+      <Hr />
+
+      {/* Items — no column header to save space; price-per-unit shown inline */}
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: tokens.rowGap, marginBottom: tokens.sectionGap, fontWeight: baseWeight }}>
+        <tbody>
+          {receipt.lines.map((line, i) => (
+            <tr key={i} style={{ verticalAlign: 'top' }}>
+              <td style={{ padding: `${tokens.itemRow} 4px ${tokens.itemRow} 0`, width: '2em', fontVariantNumeric: 'tabular-nums' }}>
+                {line.quantity}
+              </td>
+              <td style={{ padding: `${tokens.itemRow} 4px` }}>
+                <div>{line.name}</div>
+                {line.quantity > 1 && (
+                  <div style={{ fontSize: '10pt', fontWeight: 500 }}>
+                    @ {formatMoneyWithCurrency(line.unitPricePesewas)}
+                  </div>
+                )}
+              </td>
+              <td style={{ padding: `${tokens.itemRow} 0 ${tokens.itemRow} 4px`, textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', fontWeight: strongWeight }}>
+                {formatMoneyWithCurrency(line.lineTotalPesewas)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <Hr />
+
+      {/* Totals */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.rowGap, marginTop: tokens.rowGap }}>
+        <Row left="Subtotal" right={formatMoneyWithCurrency(receipt.subtotalPesewas)} weight={baseWeight} mono />
+        {receipt.discountPesewas > 0 && (
+          <Row left="Discount" right={`−${formatMoneyWithCurrency(receipt.discountPesewas)}`} weight={baseWeight} mono />
+        )}
+        <Row
+          left="TOTAL"
+          right={formatMoneyWithCurrency(receipt.totalPesewas)}
+          weight={900}
+          fontSize="13pt"
+          mono
+        />
+      </div>
+
+      <Hr />
+
+      {/* Payment block */}
+      <div style={{ marginTop: tokens.rowGap, display: 'flex', flexDirection: 'column', gap: tokens.rowGap }}>
+        {tenders.map((t, i) => (
+          <Row
+            key={i}
+            left={`${paymentLabel(t.method)}${t.reference ? ` · ${t.reference}` : ''}`}
+            right={formatMoneyWithCurrency(t.amountPesewas)}
+            weight={strongWeight}
+            mono
+          />
+        ))}
+        {totalCashGiven > 0 && (
+          <>
+            <Row left="Cash given" right={formatMoneyWithCurrency(totalCashGiven)} weight={baseWeight} mono />
+            {totalChange > 0 && (
+              <Row left="Change" right={formatMoneyWithCurrency(totalChange)} weight={strongWeight} mono />
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Credit status (only shown when reviewing a past sale) */}
+      {amountOutstandingPesewas != null && (
+        <>
+          <Hr />
+          <div style={{ marginTop: tokens.rowGap, display: 'flex', flexDirection: 'column', gap: tokens.rowGap }}>
+            <Row left="Paid" right={formatMoneyWithCurrency(amountPaidPesewas ?? 0)} weight={baseWeight} mono />
+            <Row
+              left="Outstanding"
+              right={formatMoneyWithCurrency(amountOutstandingPesewas)}
+              weight={strongWeight}
+              mono
+            />
+          </div>
+        </>
+      )}
+
+      <Hr />
+
+      {/* Footer */}
+      <div style={{ textAlign: 'center', marginTop: tokens.sectionGap, fontWeight: baseWeight }}>
+        {config.footerText}
+      </div>
+    </div>
+  );
+}
+
+function Hr(): JSX.Element {
+  return (
+    <div
+      aria-hidden
+      style={{ borderTop: '1px dashed #000', margin: '0' }}
+    />
+  );
+}
+
+function Row({
+  left, right, weight, mono, fontSize,
+}: { left: string; right: string; weight: number; mono?: boolean; fontSize?: string }): JSX.Element {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '6px', fontWeight: weight, fontSize }}>
+      <span>{left}</span>
+      <span style={mono ? { fontVariantNumeric: 'tabular-nums' } : undefined}>{right}</span>
+    </div>
+  );
+}
+
+export function ReceiptPrintModal({ receipt, onClose, amountPaidPesewas, amountOutstandingPesewas, config: configProp }: Props): JSX.Element {
+  const [config, setConfig] = useState<ReceiptConfigResponse>(configProp ?? FALLBACK_CONFIG);
+  const [configLoaded, setConfigLoaded] = useState<boolean>(!!configProp);
+
+  useEffect(() => {
+    if (configProp) {
+      setConfig(configProp);
+      setConfigLoaded(true);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const r = await counter.receiptGetConfig();
+      if (cancelled) return;
+      if (r.success) setConfig(r.data);
+      setConfigLoaded(true);
+    })();
+    return () => { cancelled = true; };
+  }, [configProp]);
+
+  function doPrint(): void {
+    window.print();
+  }
+
+  const printBtnRef = useRef<HTMLButtonElement>(null);
+  const closeBtnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    printBtnRef.current?.focus();
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') { e.preventDefault(); onClose(); return; }
+      if (e.key === 'F8') { e.preventDefault(); doPrint(); return; }
+      if (e.key === 'Tab') {
+        const first = printBtnRef.current;
+        const last = closeBtnRef.current;
+        if (!first || !last) return;
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
         }
-      `}</style>
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  // Print CSS — continuous-roll page sized to the paper width, zero
+  // margin so the OS doesn't break the receipt into separate pages.
+  const printCss = `
+    @media print {
+      @page { size: ${config.paperWidthMm}mm auto; margin: 0; }
+      html, body { background: white !important; margin: 0 !important; padding: 0 !important; }
+      body * { visibility: hidden; }
+      .receipt-print-overlay,
+      .receipt-print-overlay * { visibility: visible; }
+      .receipt-print-overlay {
+        position: static !important;
+        background: white !important;
+        padding: 0 !important;
+        inset: auto !important;
+        display: block !important;
+      }
+      .receipt-print-card {
+        box-shadow: none !important;
+        border: none !important;
+        border-radius: 0 !important;
+        max-height: none !important;
+        max-width: none !important;
+        width: ${config.paperWidthMm}mm !important;
+        background: white !important;
+        color: black !important;
+        overflow: visible !important;
+      }
+      .receipt-print-card > div { width: 100% !important; max-width: 100% !important; margin: 0 !important; }
+      .receipt-print-controls { display: none !important; }
+      .receipt-print-body { color: black !important; }
+      .receipt-print-body * { color: black !important; }
+    }
+  `;
+
+  // Screen preview width — approximate the paper roll in CSS px (96dpi → ~3.78 px/mm).
+  const previewPx = Math.round(config.paperWidthMm * 3.78);
+
+  return (
+    <div className="fixed inset-0 bg-scrim flex items-center justify-center p-4 z-[70] receipt-print-overlay" onClick={onClose}>
+      <style>{printCss}</style>
       <div
-        className="receipt-print-card bg-white text-gray-900 rounded-lg shadow-2xl max-w-md w-full max-h-[90vh] overflow-auto"
+        className="receipt-print-card bg-white text-gray-900 rounded-lg shadow-2xl max-h-[90vh] overflow-auto"
+        style={{ width: `${previewPx + 20}px` }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Toolbar (hidden on print) */}
@@ -145,6 +368,7 @@ export function ReceiptPrintModal({ receipt, onClose, amountPaidPesewas, amountO
               ref={printBtnRef}
               onClick={doPrint}
               className="px-4 py-1.5 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700"
+              disabled={!configLoaded}
             >
               Print
             </button>
@@ -158,150 +382,15 @@ export function ReceiptPrintModal({ receipt, onClose, amountPaidPesewas, amountO
           </div>
         </div>
 
-        {/* Receipt body */}
-        <div className="receipt-print-body px-6 py-6 text-gray-900">
-          {/* Shop header */}
-          <div className="text-center mb-5">
-            <h1 className="text-xl font-bold tracking-wide">{receipt.shopName}</h1>
-            {receipt.shopSubtitle && (
-              <div className="text-sm text-gray-600 mt-0.5">{receipt.shopSubtitle}</div>
-            )}
-          </div>
-
-          {/* Meta block */}
-          <div className="text-sm space-y-1 mb-5 border-t border-b border-gray-200 py-3">
-            <div className="flex justify-between">
-              <span className="text-gray-500">Date</span>
-              <span>{fmtDateTime(receipt.saleAt)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">Receipt</span>
-              <span className="font-mono">#{receipt.receiptId.slice(-8)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">Cashier</span>
-              <span>{receipt.workerName}</span>
-            </div>
-            {receipt.channel !== 'WALK_IN' && (
-              <div className="flex justify-between">
-                <span className="text-gray-500">Channel</span>
-                <span>{receipt.channel.replace('_', ' ').toLowerCase()}</span>
-              </div>
-            )}
-            {receipt.customerName && (
-              <div className="flex justify-between">
-                <span className="text-gray-500">Customer</span>
-                <span>{receipt.customerName}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Items */}
-          <table className="w-full text-sm mb-4">
-            <thead>
-              <tr className="text-gray-500 text-xs uppercase tracking-wider">
-                <th className="text-left font-medium pb-2 w-10">Qty</th>
-                <th className="text-left font-medium pb-2">Item</th>
-                <th className="text-right font-medium pb-2">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {receipt.lines.map((line, i) => (
-                <tr key={i} className="align-top">
-                  <td className="py-1.5 font-mono tabular-nums">{line.quantity}</td>
-                  <td className="py-1.5 pr-2">
-                    <div>{line.name}</div>
-                    {line.quantity > 1 && (
-                      <div className="text-xs text-gray-500">
-                        @ {formatMoneyWithCurrency(line.unitPricePesewas)}
-                      </div>
-                    )}
-                  </td>
-                  <td className="py-1.5 text-right font-mono tabular-nums whitespace-nowrap">
-                    {formatMoneyWithCurrency(line.lineTotalPesewas)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          {/* Totals */}
-          <div className="border-t border-gray-300 pt-3 text-sm space-y-1">
-            <div className="flex justify-between">
-              <span className="text-gray-600">Subtotal</span>
-              <span className="font-mono tabular-nums">{formatMoneyWithCurrency(receipt.subtotalPesewas)}</span>
-            </div>
-            {receipt.discountPesewas > 0 && (
-              <div className="flex justify-between">
-                <span className="text-gray-600">Discount</span>
-                <span className="font-mono tabular-nums">−{formatMoneyWithCurrency(receipt.discountPesewas)}</span>
-              </div>
-            )}
-            <div className="flex justify-between text-base font-bold pt-1 border-t border-gray-300 mt-1">
-              <span>Total</span>
-              <span className="font-mono tabular-nums">{formatMoneyWithCurrency(receipt.totalPesewas)}</span>
-            </div>
-          </div>
-
-          {/* Payment block */}
-          <div className="mt-5 pt-4 border-t border-gray-200 text-sm">
-            <div className="text-xs uppercase tracking-wider text-gray-500 mb-2">Payment</div>
-            <div className="space-y-1">
-              {tenders.map((t, i) => (
-                <div key={i} className="flex justify-between">
-                  <span>
-                    {paymentLabel(t.method)}
-                    {t.reference && (
-                      <span className="text-gray-500 text-xs ml-1.5">· {t.reference}</span>
-                    )}
-                  </span>
-                  <span className="font-mono tabular-nums">
-                    {formatMoneyWithCurrency(t.amountPesewas)}
-                  </span>
-                </div>
-              ))}
-              {totalCashGiven > 0 && (
-                <>
-                  <div className="flex justify-between text-gray-600 pt-1">
-                    <span>Cash given</span>
-                    <span className="font-mono tabular-nums">{formatMoneyWithCurrency(totalCashGiven)}</span>
-                  </div>
-                  {totalChange > 0 && (
-                    <div className="flex justify-between font-medium">
-                      <span>Change</span>
-                      <span className="font-mono tabular-nums">{formatMoneyWithCurrency(totalChange)}</span>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* Credit status (only shown when reviewing a past sale) */}
-          {amountOutstandingPesewas != null && (
-            <div className="mt-5 pt-4 border-t border-gray-200 text-sm">
-              <div className="text-xs uppercase tracking-wider text-gray-500 mb-2">Credit status</div>
-              <div className="space-y-1">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Paid</span>
-                  <span className="font-mono tabular-nums">
-                    {formatMoneyWithCurrency(amountPaidPesewas ?? 0)}
-                  </span>
-                </div>
-                <div className={`flex justify-between font-medium ${amountOutstandingPesewas > 0 ? 'text-red-700' : 'text-green-700'}`}>
-                  <span>Outstanding</span>
-                  <span className="font-mono tabular-nums">
-                    {formatMoneyWithCurrency(amountOutstandingPesewas)}
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Footer */}
-          <div className="mt-6 pt-4 border-t border-gray-200 text-center text-xs text-gray-500">
-            Thank you. Come again.
-          </div>
+        {/* Receipt body — width capped to the paper roll so the preview
+            matches what prints. */}
+        <div style={{ width: `${previewPx}px`, margin: '0 auto', background: 'white' }}>
+          <ReceiptBody
+            receipt={receipt}
+            config={config}
+            amountPaidPesewas={amountPaidPesewas}
+            amountOutstandingPesewas={amountOutstandingPesewas}
+          />
         </div>
       </div>
     </div>
