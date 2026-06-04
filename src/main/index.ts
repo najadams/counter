@@ -10,6 +10,7 @@ import { runMigrations } from './db/migrations.js';
 import { getDeviceId } from './db/deviceId.js';
 import { reconcileAllCustomersOnBoot } from './services/boot.js';
 import { HandlerRegistry } from './ipc/registry.js';
+import { startHttpServer } from './http/server.js';
 import { registerIpcHandlers, registerSession5Handlers, registerSession6Handlers, registerSession7Handlers, registerSession8Handlers, registerSession9Handlers, registerSession11Handlers, registerSession11SuppliersHandlers, registerSession12AuditHandlers, registerSession12BreakageHandlers, registerSession12ReprintHandlers, registerSession12StockHandlers, registerSession14ReprintHandlers, registerSession15PeriodHandlers, registerSession15ExcHandlers, registerSession16ReorderHandlers, registerSession17ExpenseHandlers, registerSession18RecoveryHandlers, registerBackupHandlers, registerStatementHandlers, registerCpoHandlers, registerReturnsHandlers, registerSupplierPaymentsHandlers, registerReportsHandlers, registerCatalogTransferHandlers, registerReceiptConfigHandlers } from './ipc/handlers.js';
 
 log.initialize();
@@ -146,6 +147,20 @@ app.whenReady().then(() => {
   registerCatalogTransferHandlers(registry, db, app, deviceId);
   registerReceiptConfigHandlers(registry, db, deviceId);
   log.info(`[main] IPC handlers registered: ${registry.handlers.size} channels`);
+
+  // Phase 1 embedded HTTP transport (loopback only). Opt-in via COUNTER_HTTP=1
+  // so production desktop builds don't open a socket until Phase 2 hardening.
+  if (process.env['COUNTER_HTTP'] === '1') {
+    startHttpServer({
+      db,
+      deviceId,
+      registry,
+      distDir: path.join(__dirname, '../../dist'),
+      host: '127.0.0.1',
+      port: Number(process.env['COUNTER_HTTP_PORT'] ?? 4317),
+      proxyTarget: isDev ? process.env['VITE_DEV_SERVER_URL'] : undefined,
+    });
+  }
 
   createMainWindow();
 

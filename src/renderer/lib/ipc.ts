@@ -6,16 +6,27 @@
 // pass over error strings before they reach the till UI.
 
 import { IPC_CHANNELS, type IpcResponse } from '../../shared/types/ipc';
-import type { CounterApi } from '../../shared/counterApi';
+import { createCounterApi, type CounterApi } from '../../shared/counterApi';
+import { httpInvoke } from './httpInvoke';
 
 declare global {
   interface Window { counter: CounterApi }
 }
 
-if (typeof window !== 'undefined' && !window.counter) {
-  const stub: IpcResponse<unknown> = { success: false, error: 'IPC bridge not initialized (not in Electron)' };
-  const stubFn = () => Promise.resolve(stub);
-  (window as unknown as { counter: unknown }).counter = new Proxy({}, { get: () => stubFn });
+/** Pick the transport. Inside Electron, preload has set window.counter (IPC).
+ *  In a plain browser (a LAN device) there is no preload, so build the API
+ *  over HTTP from the same factory. `?http` forces HTTP even under Electron,
+ *  for validating the embedded server against the desktop renderer. */
+function selectRawCounter(): CounterApi {
+  if (typeof window === 'undefined') {
+    return new Proxy({}, {
+      get: () => () => Promise.resolve<IpcResponse<unknown>>({ success: false, error: 'No transport available' }),
+    }) as CounterApi;
+  }
+  let forceHttp = false;
+  try { forceHttp = new URLSearchParams(window.location.search).has('http'); } catch { /* noop */ }
+  if (window.counter && !forceHttp) return window.counter; // Electron IPC
+  return createCounterApi(httpInvoke); // browser / forced HTTP
 }
 
 // --- Friendly error translation ------------------------------------------
@@ -64,7 +75,7 @@ export function humanizeError(err: string): string {
   return err;
 }
 
-const _rawCounter = (typeof window !== 'undefined' ? window.counter : ({} as Window['counter']));
+const _rawCounter = selectRawCounter();
 
 /** counter — humanizing wrapper. Calls the underlying IPC, then if the
  *  response is { success: false, error }, runs `humanizeError` on the
@@ -99,8 +110,6 @@ function buildHumanizingCounter(raw: Window['counter']): Window['counter'] {
   return out as unknown as Window['counter'];
 }
 
-export const counter: Window['counter'] = (typeof window !== 'undefined' && window.counter)
-  ? buildHumanizingCounter(_rawCounter)
-  : _rawCounter;
+export const counter: Window['counter'] = buildHumanizingCounter(_rawCounter);
 
 export { IPC_CHANNELS };
