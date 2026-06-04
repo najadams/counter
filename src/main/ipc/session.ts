@@ -14,9 +14,10 @@ import { randomUUID } from 'node:crypto';
 
 export type Session = { workerId: string; fullName: string; role: string } | null;
 
-/** Request-scoped session for non-IPC transports. Set by the HTTP dispatcher
- *  for the duration of one request; unset everywhere else. */
-export const requestSession = new AsyncLocalStorage<{ session: Session }>();
+/** Request-scoped context for non-IPC transports. Set by the HTTP dispatcher
+ *  for the duration of one request; unset everywhere else. Carries the session
+ *  and the remote device id so handlers/audit attribute to the right device. */
+export const requestSession = new AsyncLocalStorage<{ session: Session; deviceId?: string }>();
 
 /** Desktop single-window session. */
 let globalSession: Session = null;
@@ -29,6 +30,13 @@ export function setGlobalSession(session: Session): void {
 export function currentSession(): Session {
   const scoped = requestSession.getStore();
   return scoped ? scoped.session : globalSession;
+}
+
+/** The device id in effect for the current call: the remote device on the
+ *  HTTP path, else the supplied host id (IPC, or HTTP requests with no device
+ *  header). Lets audit attribute remote actions to the device that did them. */
+export function currentDeviceId(fallback: string): string {
+  return requestSession.getStore()?.deviceId ?? fallback;
 }
 
 // --- Token store (HTTP transport) ------------------------------------------

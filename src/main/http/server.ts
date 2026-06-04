@@ -202,7 +202,7 @@ async function dispatchApi(
     return;
   }
   const session: Session = resolveToken(token);
-  const out = await requestSession.run({ session }, () =>
+  const out = await requestSession.run({ session, deviceId }, () =>
     (fn as (e: unknown, p: unknown) => Promise<IpcResponse<unknown>>)({}, payload),
   );
   sendJson(res, 200, out);
