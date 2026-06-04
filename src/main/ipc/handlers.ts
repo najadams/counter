@@ -3,6 +3,7 @@
 import type { App } from 'electron';
 import type { Database as DB } from 'better-sqlite3';
 import type { IpcRegistrar } from './registry.js';
+import { currentSession, setGlobalSession, type Session } from './session.js';
 import {
   IPC_CHANNELS,
   type BreakageListRecentResponse, type BreakageReportRequest, type BreakageReportResponse,
@@ -50,11 +51,11 @@ import {
 import { DEFAULT_LOCATION_ID } from '../../shared/lib/constants.js';
 import { logAudit } from '../db/audit.js';
 
-type Session = { workerId: string; fullName: string; role: string } | null;
-let currentSession: Session = null;
-
-export function _setSession(session: Session) { currentSession = session; }
-export function _getSession(): Session { return currentSession; }
+// Session state lives in ./session.ts so both transports share it. These thin
+// re-exports preserve the legacy handler/test surface; they drive the desktop
+// (global) session — the HTTP transport sets its session via request scope.
+export function _setSession(session: Session) { setGlobalSession(session); }
+export function _getSession(): Session { return currentSession(); }
 
 export function wrap<Req, Res>(
   fn: (req: Req) => Promise<Res> | Res,
@@ -74,8 +75,9 @@ export function wrap<Req, Res>(
 }
 
 function requireWorker(): { workerId: string; fullName: string; role: string } {
-  if (!currentSession) throw new Error('Not authenticated. Log in first.');
-  return currentSession;
+  const session = currentSession();
+  if (!session) throw new Error('Not authenticated. Log in first.');
+  return session;
 }
 
 function requireOpenShift(db: DB): { shiftId: string; locationId: string } {
@@ -109,18 +111,21 @@ export function registerIpcHandlers(
     (req) => {
       const result = verifyPin(db, req.workerId, req.pin, deviceId);
       if (result.ok) {
-        currentSession = { workerId: result.workerId, fullName: result.fullName, role: result.role };
+        setGlobalSession({ workerId: result.workerId, fullName: result.fullName, role: result.role });
       }
       return result;
     },
     IPC_CHANNELS.WORKER_LOGIN,
   ));
   ipcMain.handle(IPC_CHANNELS.WORKER_LOGOUT, wrap<unknown, WorkerLogoutResponse>(
-    () => { currentSession = null; return { ok: true }; },
+    () => { setGlobalSession(null); return { ok: true }; },
     IPC_CHANNELS.WORKER_LOGOUT,
   ));
   ipcMain.handle(IPC_CHANNELS.WORKER_GET_CURRENT, wrap<unknown, WorkerGetCurrentResponse>(
-    () => currentSession ? { workerId: currentSession.workerId, fullName: currentSession.fullName, role: currentSession.role } : { workerId: null },
+    () => {
+      const s = currentSession();
+      return s ? { workerId: s.workerId, fullName: s.fullName, role: s.role } : { workerId: null };
+    },
     IPC_CHANNELS.WORKER_GET_CURRENT,
   ));
 
