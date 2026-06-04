@@ -69,7 +69,7 @@ export default function LoginScreen() {
   return (
     <div className="min-h-screen bg-bg-deep text-text-primary flex flex-col">
       <AppHeader subtitle="sign in" />
-      <main className="flex-1 grid grid-cols-2 gap-12 px-12 py-10 max-w-5xl mx-auto w-full">
+      <main className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 px-5 py-6 sm:px-12 sm:py-10 max-w-5xl mx-auto w-full">
         <section>
           <h2 className="text-text-secondary uppercase tracking-wider text-xs mb-4">Workers</h2>
           {loading && <div className="text-text-tertiary">Loading…</div>}
@@ -98,7 +98,7 @@ export default function LoginScreen() {
               );
             })}
           </ul>
-          <div className="mt-4 text-text-tertiary text-xs">
+          <div className="hidden sm:block mt-4 text-text-tertiary text-xs">
             <span className="kbd">↑</span> <span className="kbd">↓</span> select worker
           </div>
         </section>

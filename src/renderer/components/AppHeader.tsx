@@ -10,13 +10,13 @@ export function AppHeader({ subtitle }: { subtitle?: string }) {
   const opening = useSession((s) => s.shiftOpeningCashPesewas);
 
   return (
-    <header className="flex items-center justify-between border-b border-border px-8 py-5 bg-bg-surface">
+    <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 border-b border-border px-5 py-3 sm:px-8 sm:py-5 bg-bg-surface">
       <div className="flex items-baseline gap-3">
         <h1 className="text-2xl font-semibold tracking-tight text-accent">Counter</h1>
         {subtitle && <span className="text-text-tertiary text-sm">{subtitle}</span>}
       </div>
       {worker && (
-        <div className="flex items-center gap-6 text-sm">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
           {shiftOpened && opening !== null && (
             <div className="flex items-baseline gap-2">
               <span className="text-text-secondary uppercase tracking-wider text-xs">Shift</span>

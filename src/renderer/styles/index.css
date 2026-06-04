@@ -161,6 +161,12 @@
    * a lighter alpha on light theme so modal contents still pop. */
   .bg-scrim { background-color: rgb(var(--c-scrim) / 0.70); }
   :root[data-theme='light'] .bg-scrim { background-color: rgb(var(--c-scrim) / 0.40); }
+
+  /* Counter-PC zoom for the dense sale screen. `zoom` also scales width, so
+   * on phones (LAN browser access) it forces horizontal overflow — drop it
+   * below the lg breakpoint where the layout switches to a single column. */
+  .sale-zoom { zoom: 1.15; }
+  @media (max-width: 1023px) { .sale-zoom { zoom: 1; } }
 }
 
 /* Sale completion feedback flashes — applied briefly to body via JS.

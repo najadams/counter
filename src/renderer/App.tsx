@@ -38,13 +38,16 @@ export default function App() {
       try {
         // eslint-disable-next-line no-console
         console.log('[boot] starting setupNeedsOwner probe…');
-        if (!window.counter) {
-          throw new Error('window.counter is not defined — preload bridge missing.');
-        }
-        if (typeof window.counter.setupNeedsOwner !== 'function') {
+        // The transport is resolved in lib/ipc.ts: window.counter under
+        // Electron, an HTTP client in a plain browser (LAN access). Validate
+        // the resolved `counter`, not the Electron-only bridge — otherwise
+        // browser devices can never boot.
+        if (typeof counter?.setupNeedsOwner !== 'function') {
           throw new Error(
-            'window.counter.setupNeedsOwner is not a function — preload bundle is stale. ' +
-            'Stop the dev server (Ctrl-C) and run: rm -rf dist-electron && npm run dev',
+            window.counter
+              ? 'window.counter.setupNeedsOwner is not a function — preload bundle is stale. ' +
+                'Stop the dev server (Ctrl-C) and run: rm -rf dist-electron && npm run dev'
+              : 'No Counter transport available — the app could not reach the host server.',
           );
         }
         const probe = await counter.setupNeedsOwner();

@@ -149,14 +149,14 @@ export default function HomeScreen() {
   return (
     <div className="min-h-screen bg-bg-deep text-text-primary flex flex-col">
       <AppHeader subtitle="home" />
-      <main className="flex-1 max-w-4xl w-full mx-auto px-12 py-10 flex flex-col gap-4">
+      <main className="flex-1 max-w-4xl w-full mx-auto px-4 py-6 sm:px-12 sm:py-10 flex flex-col gap-4">
         {step === 'idle' && (
           <>
             {info && <div className="bg-bg-surface border border-success px-5 py-3 text-success text-sm">{info}</div>}
             <BackupHealthBanner />
 
             <ActionRow kind="primary" label="Sale" hot="F1" caption="Search SKUs, build cart, take payment." onClick={() => setView('sale')} />
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <ActionRow label="Cash drop" hot="F2" caption="Hand cash to owner, safe, or supplier." onClick={() => setShowCashDrop(true)} />
               <ActionRow label="Expense" caption="Pay a bill or runner from the till (water, transport, etc.)." onClick={() => setShowExpense(true)} />
               <ActionRow label="Drink" hot="F3" caption="Log worker consumption." onClick={() => setView('consumption')} />

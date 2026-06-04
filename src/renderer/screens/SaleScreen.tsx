@@ -415,14 +415,12 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
     // zoom — applies uniformly to fonts, icons, and spacing while leaving
     // every other screen unchanged. 1.15 ≈ a single macOS "Scaled" notch;
     // bump or lower the factor here if the counter PC needs more/less.
-    <div
-      className="min-h-screen bg-bg-deep text-text-primary flex flex-col"
-      style={{ zoom: 1.15 }}
-    >
+    <div className="min-h-screen bg-bg-deep text-text-primary flex flex-col sale-zoom">
       <AppHeader subtitle="sale" />
-      <main className="flex-1 grid grid-cols-[2fr_1fr] gap-0">
+      {/* One column on phones (LAN access), two panes on desktop. */}
+      <main className="flex-1 grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-0">
         {/* Left: search + results */}
-        <section className="border-r border-border flex flex-col">
+        <section className="border-b lg:border-b-0 lg:border-r border-border flex flex-col">
           <div className="px-6 py-4 border-b border-border bg-bg-surface">
             <input
               ref={searchRef}
@@ -433,7 +431,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
               placeholder="Search by SKU or name…"
               className="w-full bg-bg-input border border-border-strong px-4 py-3 text-lg focus:outline-none focus:border-accent"
             />
-            <div className="text-text-tertiary text-xs mt-2">
+            <div className="hidden sm:block text-text-tertiary text-xs mt-2">
               <span className="kbd">↑</span><span className="kbd">↓</span> move ·
               <span className="kbd">Enter</span> add ·
               <span className="kbd">F4</span> Cash ·
@@ -445,7 +443,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
               <span className="kbd">Esc</span> Clear
             </div>
           </div>
-          <ul className="flex-1 overflow-y-auto">
+          <ul className="flex-1 overflow-y-auto max-h-[45vh] lg:max-h-none">
             {hits.length === 0 && (
               <li className="px-6 py-4 text-text-tertiary">No products match.</li>
             )}
@@ -544,7 +542,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
               </div>
             )}
           </div>
-          <ul className="flex-1 overflow-y-auto">
+          <ul className="flex-1 overflow-y-auto max-h-[40vh] lg:max-h-none">
             {lines.length === 0 && (
               <li className="px-6 py-6 text-text-tertiary">Empty.</li>
             )}
@@ -554,7 +552,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
                   <span className="text-text-primary truncate">{l.name}</span>
                   <span className="font-mono tnum">{formatMoney(l.unitPricePesewas * l.quantity)}</span>
                 </div>
-                <div className="flex items-center gap-2 mt-1 text-text-tertiary text-xs">
+                <div className="flex flex-wrap items-center gap-2 mt-1 text-text-tertiary text-xs">
                   <button
                     onClick={() => bumpQuantity(l.productId, -1)}
                     className="px-2 py-0.5 border border-border hover:bg-bg-elevated text-text-primary"
