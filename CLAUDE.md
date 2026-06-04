@@ -250,3 +250,48 @@ flow was used.
 
 `electron-builder install-app-deps` runs in `postinstall` and handles the
 Electron-ABI rebuild automatically.
+
+## 9. Network access — other devices on the same wi-fi
+
+Counter can serve its full UI over HTTP so a phone or tablet on the same
+network can use it through a browser (no app install). The host PC running
+Counter is the server; it holds the one database and the receipt printer.
+This is **off by default** — the desktop app opens no network socket unless
+you ask it to.
+
+### Turning it on
+
+Set environment variables before launching Counter:
+
+| Variable              | Default       | Meaning                                            |
+|-----------------------|---------------|----------------------------------------------------|
+| `COUNTER_HTTP`        | (unset)       | `1` enables the embedded server.                   |
+| `COUNTER_HTTP_HOST`   | `127.0.0.1`   | `0.0.0.0` exposes it to the LAN. Loopback = this PC only. |
+| `COUNTER_HTTP_PORT`   | `4317`        | Port to listen on.                                 |
+| `COUNTER_HTTPS_KEY`   | (unset)       | Path to a TLS private key (PEM). Enables HTTPS.    |
+| `COUNTER_HTTPS_CERT`  | (unset)       | Path to a TLS certificate (PEM). Enables HTTPS.    |
+
+- **This PC only (proof / kiosk):** `COUNTER_HTTP=1` then open
+  `http://127.0.0.1:4317` in a browser.
+- **LAN (other devices):** `COUNTER_HTTP=1 COUNTER_HTTP_HOST=0.0.0.0`. On
+  startup the main log prints every reachable URL, e.g.
+  `[http] reachable on LAN at http://192.168.1.20:4317`. Open that on the
+  phone. (Log location: §6 — `%APPDATA%\Counter\logs\main.log`.)
+
+### Security notes (read before exposing on the LAN)
+
+- **Use a trusted private network.** Without TLS, PINs travel unencrypted
+  over the wi-fi; the log warns you when you bind to the LAN without a cert.
+  Supply `COUNTER_HTTPS_KEY`/`COUNTER_HTTPS_CERT` to encrypt.
+- **PIN lockout is per device.** Each browser gets its own device id, so a
+  cashier's phone hitting the 5-attempt lockout (§6) does **not** lock that
+  worker on the counter PC. An OWNER reset still works for all.
+- **Login is rate-limited** to 10 attempts / 5 minutes per device IP to slow
+  guessing; further attempts get a "try again later" until the window clears.
+- Sessions are independent per device — two people can be signed in as
+  different workers at once. Sign-in tokens expire after 2h idle / 12h max
+  and are lost on a host restart (everyone re-signs-in), which is fine.
+
+Still **not** built yet (don't promise these): a touch-optimised layout —
+the till UI is keyboard-first, so a phone is usable but cramped — and remote
+receipt printing. Phones can ring up sales; the receipt prints on the host.
