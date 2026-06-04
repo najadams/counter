@@ -33,30 +33,42 @@ export function currentSession(): Session {
 
 // --- Token store (HTTP transport) ------------------------------------------
 // In-memory and opaque (server-side lookup, not signed). Tokens die with the
-// process, so remote clients re-login after a host restart — acceptable for
-// v1; Phase 2 hardening can add rotation and persist across restarts.
+// process, so remote clients re-login after a host restart. Two ceilings: an
+// idle window (refreshed on use) and an absolute lifetime (never refreshed),
+// so a captured-and-kept-alive token still expires within a day.
 
-const TOKEN_TTL_MS = 12 * 60 * 60 * 1000; // 12h idle window
-type TokenEntry = { session: NonNullable<Session>; lastSeen: number };
+const TOKEN_IDLE_MS = 2 * 60 * 60 * 1000;    // 2h since last use
+const TOKEN_MAX_AGE_MS = 12 * 60 * 60 * 1000; // 12h since issue, hard cap
+
+type TokenEntry = {
+  session: NonNullable<Session>;
+  /** Remote device id the token was issued to (audit / future binding). */
+  deviceId: string;
+  createdAt: number;
+  lastSeen: number;
+};
 const tokens = new Map<string, TokenEntry>();
 
-export function mintToken(session: NonNullable<Session>): string {
+export function mintToken(session: NonNullable<Session>, deviceId: string): string {
   const token = randomUUID();
-  tokens.set(token, { session, lastSeen: Date.now() });
+  const now = Date.now();
+  tokens.set(token, { session, deviceId, createdAt: now, lastSeen: now });
   return token;
 }
 
 /** Resolve a bearer token to its session, refreshing the idle window. Returns
- *  null for unknown or expired tokens (and reaps the expired entry). */
+ *  null for unknown or expired tokens (and reaps the expired entry). Expiry is
+ *  whichever comes first: idle timeout or absolute max age. */
 export function resolveToken(token?: string): Session {
   if (!token) return null;
   const entry = tokens.get(token);
   if (!entry) return null;
-  if (Date.now() - entry.lastSeen > TOKEN_TTL_MS) {
+  const now = Date.now();
+  if (now - entry.lastSeen > TOKEN_IDLE_MS || now - entry.createdAt > TOKEN_MAX_AGE_MS) {
     tokens.delete(token);
     return null;
   }
-  entry.lastSeen = Date.now();
+  entry.lastSeen = now;
   return entry.session;
 }
 

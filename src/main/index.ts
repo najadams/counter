@@ -148,17 +148,30 @@ app.whenReady().then(() => {
   registerReceiptConfigHandlers(registry, db, deviceId);
   log.info(`[main] IPC handlers registered: ${registry.handlers.size} channels`);
 
-  // Phase 1 embedded HTTP transport (loopback only). Opt-in via COUNTER_HTTP=1
-  // so production desktop builds don't open a socket until Phase 2 hardening.
+  // Embedded HTTP transport. Opt-in via COUNTER_HTTP=1 so production desktop
+  // builds don't open a socket unless asked. Defaults to loopback; set
+  // COUNTER_HTTP_HOST=0.0.0.0 to expose on the LAN. Optional TLS via
+  // COUNTER_HTTPS_KEY / COUNTER_HTTPS_CERT (PEM file paths).
   if (process.env['COUNTER_HTTP'] === '1') {
+    let tls: { key: Buffer; cert: Buffer } | undefined;
+    const keyPath = process.env['COUNTER_HTTPS_KEY'];
+    const certPath = process.env['COUNTER_HTTPS_CERT'];
+    if (keyPath && certPath) {
+      try {
+        tls = { key: fs.readFileSync(keyPath), cert: fs.readFileSync(certPath) };
+      } catch (err) {
+        log.error('[http] failed to read TLS key/cert; starting without TLS:', err);
+      }
+    }
     startHttpServer({
       db,
       deviceId,
       registry,
       distDir: path.join(__dirname, '../../dist'),
-      host: '127.0.0.1',
+      host: process.env['COUNTER_HTTP_HOST'] ?? '127.0.0.1',
       port: Number(process.env['COUNTER_HTTP_PORT'] ?? 4317),
       proxyTarget: isDev ? process.env['VITE_DEV_SERVER_URL'] : undefined,
+      tls,
     });
   }
 

@@ -12,7 +12,22 @@ import { IPC_CHANNELS, type IpcResponse } from '../../shared/types/ipc';
 import type { Invoke } from '../../shared/counterApi';
 
 const TOKEN_HEADER = 'x-counter-token';
+const DEVICE_HEADER = 'x-counter-device';
+const DEVICE_KEY = 'counter.deviceId';
 let token: string | null = null;
+
+/** A stable per-browser device id so PIN lockout and audit scope to this
+ *  device, not the shared host. Persisted in localStorage; regenerated only if
+ *  cleared. Falls back to an ephemeral id if storage is unavailable. */
+function deviceId(): string {
+  try {
+    let id = localStorage.getItem(DEVICE_KEY);
+    if (!id) { id = crypto.randomUUID(); localStorage.setItem(DEVICE_KEY, id); }
+    return id;
+  } catch {
+    return 'browser-ephemeral';
+  }
+}
 
 export const httpInvoke: Invoke = async <T>(
   channel: string,
@@ -24,6 +39,7 @@ export const httpInvoke: Invoke = async <T>(
       method: 'POST',
       headers: {
         'content-type': 'application/json',
+        [DEVICE_HEADER]: deviceId(),
         ...(token ? { authorization: `Bearer ${token}` } : {}),
       },
       body: JSON.stringify(payload ?? {}),

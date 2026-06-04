@@ -1,4 +1,4 @@
-// Phase 1 HTTP transport.
+// Phase 1/2 HTTP transport.
 //
 // Serves the built renderer and exposes every IPC channel over POST /api/<ch>,
 // dispatching against the SAME HandlerRegistry the desktop uses — same db,
@@ -7,11 +7,14 @@
 // the desktop global), and every other request runs inside requestSession.run
 // so requireWorker() sees the token's session.
 //
-// Phase 1 binds to loopback only; LAN exposure + TLS is Phase 2.
+// Phase 2 hardening: optional LAN bind (with reachable-address logging and a
+// cleartext warning), per-IP login rate limiting, per-remote-device PIN
+// lockout scoping, and opt-in TLS.
 
 import http from 'node:http';
 import https from 'node:https';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import log from 'electron-log/main';
 import type { Database as DB } from 'better-sqlite3';
@@ -21,9 +24,16 @@ import {
   mintToken, resolveToken, revokeToken, requestSession, type Session,
 } from '../ipc/session.js';
 import type { HandlerRegistry } from '../ipc/registry.js';
+import { SlidingWindowLimiter } from './rateLimit.js';
 
 const TOKEN_HEADER = 'x-counter-token';
+const DEVICE_HEADER = 'x-counter-device';
 const MAX_BODY_BYTES = 50 * 1024 * 1024; // generous: breakage photos ride along
+
+// Login throttle per client IP: blunts worker-name enumeration and one-PIN-
+// many-workers spraying that the per-(worker,device) lockout can't see.
+const LOGIN_MAX_PER_WINDOW = 10;
+const LOGIN_WINDOW_MS = 5 * 60 * 1000;
 
 export interface HttpServerDeps {
   db: DB;
@@ -35,6 +45,8 @@ export interface HttpServerDeps {
   port: number;
   /** Dev only: proxy non-API GETs to the vite dev server for one-origin HMR. */
   proxyTarget?: string;
+  /** Opt-in TLS. When present an https server is created instead of http. */
+  tls?: { key: Buffer; cert: Buffer };
 }
 
 const MIME: Record<string, string> = {
@@ -93,6 +105,20 @@ function bearer(req: http.IncomingMessage): string | undefined {
   return h.replace(/^Bearer\s+/i, '');
 }
 
+/** The remote client's self-assigned device id (persisted in its localStorage)
+ *  so PIN lockout and audit scope per device, not per host. Validated to a
+ *  conservative shape; anything odd is dropped so it can't poison keys. */
+function deviceHeader(req: http.IncomingMessage): string | undefined {
+  const raw = req.headers[DEVICE_HEADER];
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (value && /^[A-Za-z0-9._-]{8,128}$/.test(value)) return value;
+  return undefined;
+}
+
+function clientIp(req: http.IncomingMessage): string {
+  return req.socket.remoteAddress ?? 'unknown';
+}
+
 /** Serve a file from distDir, with a path-traversal guard and SPA fallback to
  *  index.html for routes that don't map to a real file. */
 function serveStatic(distDir: string, urlPath: string, res: http.ServerResponse): void {
@@ -127,20 +153,27 @@ function proxyGet(target: string, req: http.IncomingMessage, res: http.ServerRes
 
 async function dispatchApi(
   deps: HttpServerDeps,
+  loginLimiter: SlidingWindowLimiter,
   channel: string,
   req: http.IncomingMessage,
   res: http.ServerResponse,
 ): Promise<void> {
-  const { db, deviceId, registry } = deps;
+  const { db, registry } = deps;
   const token = bearer(req);
+  // Remote device id scopes lockout/audit; fall back to the host id if absent.
+  const deviceId = deviceHeader(req) ?? deps.deviceId;
   const payload = await readBody(req);
 
   // --- auth channels: owned by the token store, never the desktop global ---
   if (channel === IPC_CHANNELS.WORKER_LOGIN) {
+    if (!loginLimiter.check(clientIp(req))) {
+      sendJson(res, 429, { success: false, error: 'Too many login attempts. Wait a few minutes and try again.' });
+      return;
+    }
     const { workerId, pin } = (payload ?? {}) as { workerId?: string; pin?: string };
     const result = verifyPin(db, workerId ?? '', pin ?? '', deviceId);
     if (result.ok) {
-      const t = mintToken({ workerId: result.workerId, fullName: result.fullName, role: result.role });
+      const t = mintToken({ workerId: result.workerId, fullName: result.fullName, role: result.role }, deviceId);
       sendJson(res, 200, { success: true, data: result }, { [TOKEN_HEADER]: t });
     } else {
       // Mirror IPC: wrap() returns success:true with the result as data.
@@ -175,14 +208,29 @@ async function dispatchApi(
   sendJson(res, 200, out);
 }
 
+/** Reachable IPv4 addresses for operator-facing "open this URL" logging. */
+function lanAddresses(): string[] {
+  const out: string[] = [];
+  for (const iface of Object.values(os.networkInterfaces())) {
+    for (const info of iface ?? []) {
+      if (info.family === 'IPv4' && !info.internal) out.push(info.address);
+    }
+  }
+  return out;
+}
+
 export function startHttpServer(deps: HttpServerDeps): http.Server {
-  const server = http.createServer((req, res) => {
+  const loginLimiter = new SlidingWindowLimiter(LOGIN_MAX_PER_WINDOW, LOGIN_WINDOW_MS);
+  const sweep = setInterval(() => loginLimiter.sweep(), LOGIN_WINDOW_MS);
+  sweep.unref?.();
+
+  const onRequest = (req: http.IncomingMessage, res: http.ServerResponse): void => {
     const url = req.url ?? '/';
     void (async () => {
       try {
         if (req.method === 'POST' && url.startsWith('/api/')) {
           const channel = decodeURIComponent(url.slice('/api/'.length).split('?')[0] || '');
-          await dispatchApi(deps, channel, req, res);
+          await dispatchApi(deps, loginLimiter, channel, req, res);
           return;
         }
         if (req.method === 'GET') {
@@ -197,12 +245,29 @@ export function startHttpServer(deps: HttpServerDeps): http.Server {
         if (!res.headersSent) sendJson(res, 500, { success: false, error: message });
       }
     })();
-  });
+  };
+
+  const scheme = deps.tls ? 'https' : 'http';
+  const server = deps.tls
+    ? https.createServer({ key: deps.tls.key, cert: deps.tls.cert }, onRequest)
+    : http.createServer(onRequest);
+  server.on('close', () => clearInterval(sweep));
+
   server.listen(deps.port, deps.host, () => {
     const addr = server.address();
     const boundPort = typeof addr === 'object' && addr ? addr.port : deps.port;
-    log.info(`[http] listening on http://${deps.host}:${boundPort}` +
+    const exposed = deps.host === '0.0.0.0' || deps.host === '::';
+    log.info(`[http] listening on ${scheme}://${deps.host}:${boundPort}` +
       (deps.proxyTarget ? ` (proxying GET -> ${deps.proxyTarget})` : ` (serving ${deps.distDir})`));
+    if (exposed) {
+      for (const ip of lanAddresses()) {
+        log.info(`[http] reachable on LAN at ${scheme}://${ip}:${boundPort}`);
+      }
+      if (!deps.tls) {
+        log.warn('[http] bound to the LAN over plain HTTP — PINs and data travel ' +
+          'UNENCRYPTED. Use a trusted private network, or supply TLS (COUNTER_HTTPS_KEY/CERT).');
+      }
+    }
   });
-  return server;
+  return server as http.Server;
 }
