@@ -1,7 +1,8 @@
 // IPC handler registration.
 
-import type { IpcMain, App } from 'electron';
+import type { App } from 'electron';
 import type { Database as DB } from 'better-sqlite3';
+import type { IpcRegistrar } from './registry.js';
 import {
   IPC_CHANNELS,
   type BreakageListRecentResponse, type BreakageReportRequest, type BreakageReportResponse,
@@ -85,7 +86,7 @@ function requireOpenShift(db: DB): { shiftId: string; locationId: string } {
 }
 
 export function registerIpcHandlers(
-  ipcMain: IpcMain,
+  ipcMain: IpcRegistrar,
   db: DB,
   deviceId: string,
   /** Used by photo storage to know where userData lives. Optional for tests. */
@@ -450,7 +451,7 @@ import {
 } from '../services/dailySummaries.js';
 
 export function registerSession5Handlers(
-  ipcMain: import('electron').IpcMain,
+  ipcMain: IpcRegistrar,
   db: import('better-sqlite3').Database,
   deviceId: string,
 ): void {
@@ -567,7 +568,7 @@ import {
 } from '../services/customersAdmin.js';
 
 export function registerSession6Handlers(
-  ipcMain: import('electron').IpcMain,
+  ipcMain: IpcRegistrar,
   db: import('better-sqlite3').Database,
   deviceId: string,
 ): void {
@@ -659,7 +660,7 @@ import {
 import { getSaleWithLines } from '../services/sales.js';
 
 export function registerSession7Handlers(
-  ipcMain: import('electron').IpcMain,
+  ipcMain: IpcRegistrar,
   db: import('better-sqlite3').Database,
   deviceId: string,
 ): void {
@@ -741,7 +742,7 @@ import {
 } from '../services/customerCredit.js';
 
 export function registerSession8Handlers(
-  ipcMain: import('electron').IpcMain,
+  ipcMain: IpcRegistrar,
   db: import('better-sqlite3').Database,
   deviceId: string,
 ): void {
@@ -801,7 +802,7 @@ import {
 } from '../services/productUnits.js';
 
 export function registerSession9Handlers(
-  ipcMain: import('electron').IpcMain,
+  ipcMain: IpcRegistrar,
   db: import('better-sqlite3').Database,
   deviceId: string,
 ): void {
@@ -862,7 +863,7 @@ import {
 } from '../../shared/types/ipc.js';
 
 export function registerSession11Handlers(
-  ipcMain: import('electron').IpcMain,
+  ipcMain: IpcRegistrar,
   db: import('better-sqlite3').Database,
   deviceId: string,
 ): void {
@@ -902,7 +903,7 @@ import {
 } from '../services/suppliersAdmin.js';
 
 export function registerSession11SuppliersHandlers(
-  ipcMain: import('electron').IpcMain,
+  ipcMain: IpcRegistrar,
   db: import('better-sqlite3').Database,
   deviceId: string,
 ): void {
@@ -962,7 +963,7 @@ import {
 } from '../services/auditQuery.js';
 
 export function registerSession12AuditHandlers(
-  ipcMain: import('electron').IpcMain,
+  ipcMain: IpcRegistrar,
   db: import('better-sqlite3').Database,
   _deviceId: string,
 ): void {
@@ -1009,7 +1010,7 @@ import {
 import { readPhotoAsDataUri } from '../db/photos.js';
 
 export function registerSession12BreakageHandlers(
-  ipcMain: import('electron').IpcMain,
+  ipcMain: IpcRegistrar,
   db: import('better-sqlite3').Database,
   _deviceId: string,
   app: import('electron').App,
@@ -1061,7 +1062,7 @@ import {
 import { getPrinter } from '../printer/printer.js';
 
 export function registerSession12ReprintHandlers(
-  ipcMain: import('electron').IpcMain,
+  ipcMain: IpcRegistrar,
   db: import('better-sqlite3').Database,
   deviceId: string,
 ): void {
@@ -1132,7 +1133,7 @@ import {
 import { listStockHistoryForProduct } from '../services/stockHistory.js';
 
 export function registerSession12StockHandlers(
-  ipcMain: import('electron').IpcMain,
+  ipcMain: IpcRegistrar,
   db: import('better-sqlite3').Database,
   _deviceId: string,
 ): void {
@@ -1156,7 +1157,7 @@ import {
 } from '../../shared/types/ipc.js';
 
 export function registerSession14ReprintHandlers(
-  ipcMain: import('electron').IpcMain,
+  ipcMain: IpcRegistrar,
   db: import('better-sqlite3').Database,
   deviceId: string,
 ): void {
@@ -1256,7 +1257,7 @@ import {
 } from '../services/periods.js';
 
 export function registerSession15PeriodHandlers(
-  ipcMain: import('electron').IpcMain,
+  ipcMain: IpcRegistrar,
   db: import('better-sqlite3').Database,
   deviceId: string,
 ): void {
@@ -1321,7 +1322,7 @@ import {
 } from '../services/exceptionReports.js';
 
 export function registerSession15ExcHandlers(
-  ipcMain: import('electron').IpcMain,
+  ipcMain: IpcRegistrar,
   db: import('better-sqlite3').Database,
   _deviceId: string,
 ): void {
@@ -1370,7 +1371,7 @@ import {
 } from '../services/reorderSuggestions.js';
 
 export function registerSession16ReorderHandlers(
-  ipcMain: import('electron').IpcMain,
+  ipcMain: IpcRegistrar,
   db: import('better-sqlite3').Database,
   deviceId: string,
 ): void {
@@ -1433,7 +1434,7 @@ import {
 import { savePhoto } from '../db/photos.js';
 
 export function registerSession17ExpenseHandlers(
-  ipcMain: import('electron').IpcMain,
+  ipcMain: IpcRegistrar,
   db: import('better-sqlite3').Database,
   deviceId: string,
   app: import('electron').App,
@@ -1524,7 +1525,7 @@ import {
 } from '../services/recovery.js';
 
 export function registerSession18RecoveryHandlers(
-  ipcMain: import('electron').IpcMain,
+  ipcMain: IpcRegistrar,
   db: import('better-sqlite3').Database,
   deviceId: string,
 ): void {
@@ -1583,7 +1584,7 @@ import {
 import { getBackupConfig, setBackupConfig } from '../db/backupConfig.js';
 
 export function registerBackupHandlers(
-  ipcMain: import('electron').IpcMain,
+  ipcMain: IpcRegistrar,
   app: Pick<import('electron').App, 'getPath'>,
   db: DB,
   deviceId: string,
@@ -1835,7 +1836,7 @@ import {
 import { buildCustomerStatement } from '../services/customerStatement.js';
 
 export function registerStatementHandlers(
-  ipcMain: import('electron').IpcMain,
+  ipcMain: IpcRegistrar,
   db: import('better-sqlite3').Database,
 ): void {
   ipcMain.handle(IPC_CHANNELS_STATEMENT.CUSTOMER_STATEMENT,
@@ -1871,7 +1872,7 @@ function requireOwnerLike() {
 }
 
 export function registerCpoHandlers(
-  ipcMain: import('electron').IpcMain,
+  ipcMain: IpcRegistrar,
   db: import('better-sqlite3').Database,
   deviceId: string,
 ): void {
@@ -1938,7 +1939,7 @@ import {
 } from '../services/customerReturns.js';
 
 export function registerReturnsHandlers(
-  ipcMain: import('electron').IpcMain,
+  ipcMain: IpcRegistrar,
   db: import('better-sqlite3').Database,
   deviceId: string,
 ): void {
@@ -1992,7 +1993,7 @@ import {
 } from '../services/supplierPaymentsAdmin.js';
 
 export function registerSupplierPaymentsHandlers(
-  ipcMain: import('electron').IpcMain,
+  ipcMain: IpcRegistrar,
   db: import('better-sqlite3').Database,
   deviceId: string,
 ): void {
@@ -2047,7 +2048,7 @@ import {
 } from '../services/reports.js';
 
 export function registerReportsHandlers(
-  ipcMain: import('electron').IpcMain,
+  ipcMain: IpcRegistrar,
   db: import('better-sqlite3').Database,
   _deviceId: string,
 ): void {
@@ -2121,7 +2122,7 @@ import { exportCatalog } from '../services/catalogExport.js';
 import { applyCatalogImport } from '../services/catalogImport.js';
 
 export function registerCatalogTransferHandlers(
-  ipcMain: import('electron').IpcMain,
+  ipcMain: IpcRegistrar,
   db: import('better-sqlite3').Database,
   app: Pick<import('electron').App, 'getPath' | 'getVersion'>,
   deviceId: string,
@@ -2292,7 +2293,7 @@ import {
 import { getReceiptConfig, setReceiptConfig } from '../services/receiptConfig.js';
 
 export function registerReceiptConfigHandlers(
-  ipcMain: import('electron').IpcMain,
+  ipcMain: IpcRegistrar,
   db: import('better-sqlite3').Database,
   deviceId: string,
 ): void {

@@ -9,6 +9,7 @@ import { connect, defaultDbPath, defaultMigrationsDir } from './db/connection.js
 import { runMigrations } from './db/migrations.js';
 import { getDeviceId } from './db/deviceId.js';
 import { reconcileAllCustomersOnBoot } from './services/boot.js';
+import { HandlerRegistry } from './ipc/registry.js';
 import { registerIpcHandlers, registerSession5Handlers, registerSession6Handlers, registerSession7Handlers, registerSession8Handlers, registerSession9Handlers, registerSession11Handlers, registerSession11SuppliersHandlers, registerSession12AuditHandlers, registerSession12BreakageHandlers, registerSession12ReprintHandlers, registerSession12StockHandlers, registerSession14ReprintHandlers, registerSession15PeriodHandlers, registerSession15ExcHandlers, registerSession16ReorderHandlers, registerSession17ExpenseHandlers, registerSession18RecoveryHandlers, registerBackupHandlers, registerStatementHandlers, registerCpoHandlers, registerReturnsHandlers, registerSupplierPaymentsHandlers, registerReportsHandlers, registerCatalogTransferHandlers, registerReceiptConfigHandlers } from './ipc/handlers.js';
 
 log.initialize();
@@ -115,32 +116,36 @@ app.whenReady().then(() => {
     log.error('[main] reconcile failed (non-fatal):', err);
   }
 
-  registerIpcHandlers(ipcMain, db, deviceId, app);
-  registerSession5Handlers(ipcMain, db, deviceId);
-  registerSession6Handlers(ipcMain, db, deviceId);
-  registerSession7Handlers(ipcMain, db, deviceId);
-  registerSession8Handlers(ipcMain, db, deviceId);
-  registerSession9Handlers(ipcMain, db, deviceId);
-  registerSession11Handlers(ipcMain, db, deviceId);
-  registerSession11SuppliersHandlers(ipcMain, db, deviceId);
-  registerSession12AuditHandlers(ipcMain, db, deviceId);
-  registerSession12BreakageHandlers(ipcMain, db, deviceId, app);
-  registerSession12ReprintHandlers(ipcMain, db, deviceId);
-  registerSession12StockHandlers(ipcMain, db, deviceId);
-  registerSession14ReprintHandlers(ipcMain, db, deviceId);
-  registerSession15PeriodHandlers(ipcMain, db, deviceId);
-  registerSession15ExcHandlers(ipcMain, db, deviceId);
-  registerSession16ReorderHandlers(ipcMain, db, deviceId);
-  registerSession17ExpenseHandlers(ipcMain, db, deviceId, app);
-  registerSession18RecoveryHandlers(ipcMain, db, deviceId);
-  registerBackupHandlers(ipcMain, app, db, deviceId);
-  registerStatementHandlers(ipcMain, db);
-  registerCpoHandlers(ipcMain, db, deviceId);
-  registerReturnsHandlers(ipcMain, db, deviceId);
-  registerSupplierPaymentsHandlers(ipcMain, db, deviceId);
-  registerReportsHandlers(ipcMain, db, deviceId);
-  registerCatalogTransferHandlers(ipcMain, db, app, deviceId);
-  registerReceiptConfigHandlers(ipcMain, db, deviceId);
+  // One registry tees every handler to the live ipcMain (desktop IPC) and
+  // into a channel map the Phase 1 HTTP server can dispatch against.
+  const registry = new HandlerRegistry(ipcMain);
+  registerIpcHandlers(registry, db, deviceId, app);
+  registerSession5Handlers(registry, db, deviceId);
+  registerSession6Handlers(registry, db, deviceId);
+  registerSession7Handlers(registry, db, deviceId);
+  registerSession8Handlers(registry, db, deviceId);
+  registerSession9Handlers(registry, db, deviceId);
+  registerSession11Handlers(registry, db, deviceId);
+  registerSession11SuppliersHandlers(registry, db, deviceId);
+  registerSession12AuditHandlers(registry, db, deviceId);
+  registerSession12BreakageHandlers(registry, db, deviceId, app);
+  registerSession12ReprintHandlers(registry, db, deviceId);
+  registerSession12StockHandlers(registry, db, deviceId);
+  registerSession14ReprintHandlers(registry, db, deviceId);
+  registerSession15PeriodHandlers(registry, db, deviceId);
+  registerSession15ExcHandlers(registry, db, deviceId);
+  registerSession16ReorderHandlers(registry, db, deviceId);
+  registerSession17ExpenseHandlers(registry, db, deviceId, app);
+  registerSession18RecoveryHandlers(registry, db, deviceId);
+  registerBackupHandlers(registry, app, db, deviceId);
+  registerStatementHandlers(registry, db);
+  registerCpoHandlers(registry, db, deviceId);
+  registerReturnsHandlers(registry, db, deviceId);
+  registerSupplierPaymentsHandlers(registry, db, deviceId);
+  registerReportsHandlers(registry, db, deviceId);
+  registerCatalogTransferHandlers(registry, db, app, deviceId);
+  registerReceiptConfigHandlers(registry, db, deviceId);
+  log.info(`[main] IPC handlers registered: ${registry.handlers.size} channels`);
 
   createMainWindow();
 
