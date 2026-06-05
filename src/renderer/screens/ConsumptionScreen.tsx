@@ -86,7 +86,7 @@ export default function ConsumptionScreen({ onExit }: { onExit: () => void }) {
   return (
     <div className="min-h-screen bg-bg-deep text-text-primary flex flex-col">
       <AppHeader subtitle="log drink" />
-      <main className="flex-1 max-w-3xl w-full mx-auto px-12 py-8 flex flex-col gap-5">
+      <main className="flex-1 max-w-3xl w-full mx-auto px-4 sm:px-12 py-8 flex flex-col gap-5">
         <div className="flex items-baseline justify-between">
           <h2 className="text-text-secondary uppercase tracking-wider text-xs">Worker consumption</h2>
           <span className="text-text-tertiary text-xs"><span className="kbd">F9</span> back</span>

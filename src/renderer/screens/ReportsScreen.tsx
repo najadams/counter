@@ -44,7 +44,7 @@ export default function ReportsScreen({
   return (
     <div className="min-h-screen bg-bg-deep text-text-primary flex flex-col">
       <AppHeader subtitle={`reports — ${tab}`} />
-      <main className="flex-1 max-w-7xl w-full mx-auto px-8 py-6 flex flex-col gap-5">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-8 py-6 flex flex-col gap-5">
         <div className="flex items-center justify-between">
           <div className="flex">
             <TabBtn active={tab === 'overview'} onClick={() => setTab('overview')}>Overview</TabBtn>

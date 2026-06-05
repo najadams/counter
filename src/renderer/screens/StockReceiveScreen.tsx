@@ -139,7 +139,7 @@ export default function StockReceiveScreen({ onExit }: { onExit: () => void }) {
   return (
     <div className="min-h-screen bg-bg-deep text-text-primary flex flex-col">
       <AppHeader subtitle="receive stock" />
-      <main className="flex-1 max-w-4xl w-full mx-auto px-12 py-8 flex flex-col gap-5">
+      <main className="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-12 py-8 flex flex-col gap-5">
         <div className="flex items-baseline justify-between">
           <h2 className="text-text-secondary uppercase tracking-wider text-xs">Stock receipt</h2>
           <span className="text-text-tertiary text-xs"><span className="kbd">F9</span> back</span>
@@ -230,7 +230,7 @@ export default function StockReceiveScreen({ onExit }: { onExit: () => void }) {
             ))}
           </ul>
           {pendingProduct && (
-            <div className="grid grid-cols-[1fr_auto_auto_auto] gap-3 items-end">
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto_auto] gap-3 items-end">
               <div>
                 <label className="text-text-secondary text-xs uppercase tracking-wider">Unit</label>
                 <select value={pendingUnitId ?? ''} onChange={(e) => setPendingUnitId(e.target.value || null)}

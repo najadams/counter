@@ -79,7 +79,7 @@ export default function CustomerDetailScreen({
   return (
     <div className="min-h-screen bg-bg-deep text-text-primary flex flex-col">
       <AppHeader subtitle="customer detail" />
-      <main className="flex-1 max-w-5xl w-full mx-auto px-12 py-6 flex flex-col gap-5">
+      <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-12 py-6 flex flex-col gap-5">
         <div className="flex items-baseline justify-between">
           <div>
             <div className="text-2xl font-semibold">{overview.displayName}</div>
@@ -123,7 +123,7 @@ export default function CustomerDetailScreen({
           </div>
         )}
 
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <div className="bg-bg-surface border border-border p-4">
             <div className="text-text-secondary uppercase tracking-wider text-xs">Owed to us</div>
             <div className="font-mono tnum text-3xl text-accent mt-1">{formatMoneyWithCurrency(overview.trueBalancePesewas)}</div>

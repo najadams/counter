@@ -75,7 +75,7 @@ export default function CustomersScreen({ onExit }: { onExit: () => void }) {
   return (
     <div className="min-h-screen bg-bg-deep text-text-primary flex flex-col">
       <AppHeader subtitle="customers — credit" />
-      <main className="flex-1 max-w-6xl w-full mx-auto px-12 py-6 flex flex-col gap-5">
+      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-12 py-6 flex flex-col gap-5">
         <div className="flex items-center justify-between">
           <h2 className="text-text-secondary uppercase tracking-wider text-xs">Open balances</h2>
           <div className="flex items-center gap-3">

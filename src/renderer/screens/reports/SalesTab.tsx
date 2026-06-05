@@ -92,7 +92,7 @@ export function SalesTab() {
 
       {data && (
         <>
-          <section className="grid grid-cols-4 gap-4">
+          <section className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <Stat label="Revenue" value={formatMoneyWithCurrency(data.totalRevenuePesewas)} />
             <Stat label="Sales" value={String(data.totalNumSales)} />
             <Stat label="Unique customers" value={String(data.totalUniqueCustomers)} />
@@ -165,7 +165,7 @@ export function SalesTab() {
           </section>
 
           {/* Breakdown grid */}
-          <section className="grid grid-cols-3 gap-4">
+          <section className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             <BreakdownTable
               title="By channel" totalRev={data.totalRevenuePesewas}
               rows={data.byChannel.map((c) => ({ label: c.channel, rev: c.revenuePesewas, sub: `${c.numSales} sale${c.numSales === 1 ? '' : 's'}` }))}

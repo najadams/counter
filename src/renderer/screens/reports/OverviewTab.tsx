@@ -47,7 +47,7 @@ export function OverviewTab({
       </div>
 
       {/* --- KPI cards (3×2) --- */}
-      <section className="grid grid-cols-3 gap-4">
+      <section className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         <KpiCard
           label="Revenue · today"
           value={formatMoneyWithCurrency(data.revenue.todayPesewas)}
@@ -314,7 +314,7 @@ function ReceivablesCard({ data, onClick }: { data: ReportsOverviewResponse; onC
           )}
         </div>
       </div>
-      <div className="grid grid-cols-4 gap-2 text-xs">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
         <AgingPill label="0–30" amount={r.bucket0_30Pesewas} tone="" />
         <AgingPill label="31–60" amount={r.bucket31_60Pesewas} tone="text-text-secondary" />
         <AgingPill label="61–90" amount={r.bucket61_90Pesewas} tone="text-warning" />

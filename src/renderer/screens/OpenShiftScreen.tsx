@@ -48,7 +48,7 @@ export default function OpenShiftScreen() {
   return (
     <div className="min-h-screen bg-bg-deep text-text-primary flex flex-col">
       <AppHeader subtitle="open shift" />
-      <main className="flex-1 max-w-2xl w-full mx-auto px-12 py-12 flex flex-col gap-6">
+      <main className="flex-1 max-w-2xl w-full mx-auto px-4 sm:px-12 py-12 flex flex-col gap-6">
         <h2 className="text-text-secondary uppercase tracking-wider text-xs">Opening cash in till</h2>
         <p className="text-text-tertiary text-sm">
           Count the cash in the till before any sale. Type the amount in cedis (e.g. 250.00). The shift is auditable from this number — if you fudge it, you'll wear the variance at close.

@@ -145,7 +145,7 @@ export default function StocktakeScreen({ onExit }: { onExit: () => void }) {
   return (
     <div className="min-h-screen bg-bg-deep text-text-primary flex flex-col">
       <AppHeader subtitle="stocktake" />
-      <main className="flex-1 max-w-6xl w-full mx-auto px-12 py-6 flex flex-col gap-4">
+      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-12 py-6 flex flex-col gap-4">
         <div className="flex items-center justify-between">
           <h2 className="text-text-secondary uppercase tracking-wider text-xs">Physical stocktake</h2>
           <span className="text-text-tertiary text-xs"><span className="kbd">F9</span> back</span>
@@ -178,7 +178,7 @@ export default function StocktakeScreen({ onExit }: { onExit: () => void }) {
 
         {active && (
           <>
-            <div className="bg-bg-surface border border-border p-4 grid grid-cols-4 gap-4 text-sm">
+            <div className="bg-bg-surface border border-border p-4 grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
               <div>
                 <div className="text-text-secondary uppercase tracking-wider text-xs">Counted</div>
                 <div className="font-mono tnum text-2xl">{counted} / {total}</div>

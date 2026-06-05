@@ -95,7 +95,7 @@ export function MarginTab() {
 
       {data && (
         <>
-          <section className="grid grid-cols-4 gap-4">
+          <section className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <Stat label="Revenue" value={formatMoneyWithCurrency(data.totalRevenuePesewas)} />
             <Stat label="COGS" value={formatMoneyWithCurrency(data.totalCogsPesewas)} />
             <Stat label="Gross margin" value={formatMoneyWithCurrency(data.totalMarginPesewas)}
