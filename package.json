@@ -19,6 +19,7 @@
     "seed:reset": "node scripts/reset-and-seed.cjs",
     "seed:demo": "node scripts/seed-demo-products.cjs",
     "backup": "node scripts/backup.cjs",
+    "serve:lan": "tsx scripts/serve-lan.ts",
     "icons": "node scripts/build-icons.cjs",
     "test": "vitest",
     "typecheck": "tsc -b --noEmit",

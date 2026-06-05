@@ -225,7 +225,7 @@ export default function HomeScreen() {
                 onChange={(e) => setCounted(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') void submitCountAndClose(); }}
                 disabled={closing} placeholder="0.00"
-                className="flex-1 bg-bg-input border border-border-strong px-5 py-4 text-4xl font-mono tnum text-right focus:outline-none focus:border-accent" />
+                className="flex-1 min-w-0 bg-bg-input border border-border-strong px-5 py-4 text-4xl font-mono tnum text-right focus:outline-none focus:border-accent" />
             </div>
             <div className="flex gap-3">
               <button onClick={() => { setStep('idle'); setCounted(''); setError(null); }}

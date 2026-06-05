@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "counter-lan",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["tsx", "scripts/serve-lan.ts"],
+      "port": 4181
+    }
+  ]
+}

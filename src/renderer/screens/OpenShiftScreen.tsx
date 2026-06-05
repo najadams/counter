@@ -64,7 +64,7 @@ export default function OpenShiftScreen() {
             onKeyDown={onKeyDown}
             disabled={submitting}
             placeholder="0.00"
-            className="flex-1 bg-bg-input border border-border-strong px-5 py-4 text-4xl font-mono tnum text-right focus:outline-none focus:border-accent"
+            className="flex-1 min-w-0 bg-bg-input border border-border-strong px-5 py-4 text-4xl font-mono tnum text-right focus:outline-none focus:border-accent"
           />
         </div>
         {!valid && raw.length > 0 && (
