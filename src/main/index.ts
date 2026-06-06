@@ -10,8 +10,13 @@ import { runMigrations } from './db/migrations.js';
 import { getDeviceId } from './db/deviceId.js';
 import { reconcileAllCustomersOnBoot } from './services/boot.js';
 import { HandlerRegistry } from './ipc/registry.js';
+import { initTokenStore } from './ipc/session.js';
+import { startSyncWorker } from './sync/push.js';
+import { startPullWorker } from './sync/pull.js';
+import { createHttpTransport } from './sync/httpTransport.js';
+import { readSyncConfig } from './sync/config.js';
 import { startHttpServer } from './http/server.js';
-import { registerIpcHandlers, registerSession5Handlers, registerSession6Handlers, registerSession7Handlers, registerSession8Handlers, registerSession9Handlers, registerSession11Handlers, registerSession11SuppliersHandlers, registerSession12AuditHandlers, registerSession12BreakageHandlers, registerSession12ReprintHandlers, registerSession12StockHandlers, registerSession14ReprintHandlers, registerSession15PeriodHandlers, registerSession15ExcHandlers, registerSession16ReorderHandlers, registerSession17ExpenseHandlers, registerSession18RecoveryHandlers, registerBackupHandlers, registerStatementHandlers, registerCpoHandlers, registerReturnsHandlers, registerSupplierPaymentsHandlers, registerReportsHandlers, registerCatalogTransferHandlers, registerReceiptConfigHandlers } from './ipc/handlers.js';
+import { registerIpcHandlers, registerSession5Handlers, registerSession6Handlers, registerSession7Handlers, registerSession8Handlers, registerSession9Handlers, registerSession11Handlers, registerSession11SuppliersHandlers, registerSession12AuditHandlers, registerSession12BreakageHandlers, registerSession12ReprintHandlers, registerSession12StockHandlers, registerSession14ReprintHandlers, registerSession15PeriodHandlers, registerSession15ExcHandlers, registerSession16ReorderHandlers, registerSession17ExpenseHandlers, registerSession18RecoveryHandlers, registerBackupHandlers, registerStatementHandlers, registerCpoHandlers, registerReturnsHandlers, registerSupplierPaymentsHandlers, registerReportsHandlers, registerCatalogTransferHandlers, registerReceiptConfigHandlers, registerSyncHandlers } from './ipc/handlers.js';
 
 log.initialize();
 log.transports.file.level = 'info';
@@ -97,6 +102,10 @@ app.whenReady().then(() => {
   const deviceId = getDeviceId(db);
   log.info(`[main] deviceId: ${deviceId}`);
 
+  // Rehydrate persisted HTTP sessions so a reboot (e.g. load-shedding)
+  // doesn't sign every LAN device out mid-shift. No-op for desktop IPC.
+  initTokenStore(db);
+
   // Boot-time reconciliation: heal cached customer balances against truth.
   // Silent unless drift was found.
   try {
@@ -146,6 +155,7 @@ app.whenReady().then(() => {
   registerReportsHandlers(registry, db, deviceId);
   registerCatalogTransferHandlers(registry, db, app, deviceId);
   registerReceiptConfigHandlers(registry, db, deviceId);
+  registerSyncHandlers(registry, db, deviceId);
   log.info(`[main] IPC handlers registered: ${registry.handlers.size} channels`);
 
   // Embedded HTTP transport. Opt-in via COUNTER_HTTP=1 so production desktop
@@ -173,6 +183,18 @@ app.whenReady().then(() => {
       proxyTarget: isDev ? process.env['VITE_DEV_SERVER_URL'] : undefined,
       tls,
     });
+  }
+
+  // Background push sync to the central store (Phase 3b). Opt-in: only runs
+  // once the shop is provisioned (shop_id + central_url + central_token in
+  // device_config, set via Settings -> Sync). Off by default, so a
+  // single-shop install opens no outbound connection.
+  const syncCfg = readSyncConfig(db);
+  if (syncCfg) {
+    const transport = createHttpTransport(syncCfg.centralUrl, syncCfg.token);
+    startSyncWorker(db, syncCfg.shopId, transport);
+    if (syncCfg.role !== 'HQ') startPullWorker(db, transport); // shops pull catalog; HQ is the source
+    log.info(`[sync] workers started for ${syncCfg.role} ${syncCfg.shopId} -> ${syncCfg.centralUrl}`);
   }
 
   createMainWindow();

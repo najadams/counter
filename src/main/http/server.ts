@@ -18,13 +18,14 @@ import os from 'node:os';
 import path from 'node:path';
 import log from 'electron-log/main';
 import type { Database as DB } from 'better-sqlite3';
-import { IPC_CHANNELS, type IpcResponse } from '../../shared/types/ipc.js';
+import { IPC_CHANNELS, type IpcResponse, type AccessInfoResponse } from '../../shared/types/ipc.js';
 import { verifyPin } from '../services/workers.js';
 import {
   mintToken, resolveToken, revokeToken, requestSession, type Session,
 } from '../ipc/session.js';
 import type { HandlerRegistry } from '../ipc/registry.js';
 import { SlidingWindowLimiter } from './rateLimit.js';
+import { Bonjour } from 'bonjour-service';
 
 const TOKEN_HEADER = 'x-counter-token';
 const DEVICE_HEADER = 'x-counter-device';
@@ -34,6 +35,10 @@ const MAX_BODY_BYTES = 50 * 1024 * 1024; // generous: breakage photos ride along
 // many-workers spraying that the per-(worker,device) lockout can't see.
 const LOGIN_MAX_PER_WINDOW = 10;
 const LOGIN_WINDOW_MS = 5 * 60 * 1000;
+
+// mDNS: advertise a stable name so phones can use http://<name>.local:PORT
+// regardless of the DHCP-assigned IP. Configurable for multi-host LANs.
+const MDNS_NAME = process.env['COUNTER_MDNS_NAME'] ?? 'counter';
 
 export interface HttpServerDeps {
   db: DB;
@@ -208,6 +213,18 @@ async function dispatchApi(
   sendJson(res, 200, out);
 }
 
+/** Build reachable URLs from a list of IPs. Pure; unit-tested. */
+export function accessUrls(scheme: string, addrs: string[], port: number): string[] {
+  return addrs.map((ip) => `${scheme}://${ip}:${port}`);
+}
+
+// Snapshot of how the running server can be reached, for the renderer's
+// "scan to join" QR. Null until listening; reset on close.
+let currentAccessInfo: AccessInfoResponse | null = null;
+export function getAccessInfo(): AccessInfoResponse | null {
+  return currentAccessInfo;
+}
+
 /** Reachable IPv4 addresses for operator-facing "open this URL" logging. */
 function lanAddresses(): string[] {
   const out: string[] = [];
@@ -223,6 +240,9 @@ export function startHttpServer(deps: HttpServerDeps): http.Server {
   const loginLimiter = new SlidingWindowLimiter(LOGIN_MAX_PER_WINDOW, LOGIN_WINDOW_MS);
   const sweep = setInterval(() => loginLimiter.sweep(), LOGIN_WINDOW_MS);
   sweep.unref?.();
+  // `Bonjour` is exported as a value (constructor) via `export =`, so annotate
+  // the instance with InstanceType rather than using the binding as a type.
+  let bonjour: InstanceType<typeof Bonjour> | undefined;
 
   const onRequest = (req: http.IncomingMessage, res: http.ServerResponse): void => {
     const url = req.url ?? '/';
@@ -251,7 +271,12 @@ export function startHttpServer(deps: HttpServerDeps): http.Server {
   const server = deps.tls
     ? https.createServer({ key: deps.tls.key, cert: deps.tls.cert }, onRequest)
     : http.createServer(onRequest);
-  server.on('close', () => clearInterval(sweep));
+  server.on('close', () => {
+    clearInterval(sweep);
+    currentAccessInfo = null;
+    try { bonjour?.unpublishAll(() => bonjour?.destroy()); } catch { /* noop */ }
+    bonjour = undefined;
+  });
 
   server.listen(deps.port, deps.host, () => {
     const addr = server.address();
@@ -259,15 +284,30 @@ export function startHttpServer(deps: HttpServerDeps): http.Server {
     const exposed = deps.host === '0.0.0.0' || deps.host === '::';
     log.info(`[http] listening on ${scheme}://${deps.host}:${boundPort}` +
       (deps.proxyTarget ? ` (proxying GET -> ${deps.proxyTarget})` : ` (serving ${deps.distDir})`));
+
+    const urls = exposed ? accessUrls(scheme, lanAddresses(), boundPort) : [];
+    let mdnsUrl: string | undefined;
+
     if (exposed) {
-      for (const ip of lanAddresses()) {
-        log.info(`[http] reachable on LAN at ${scheme}://${ip}:${boundPort}`);
-      }
+      for (const url of urls) log.info(`[http] reachable on LAN at ${url}`);
       if (!deps.tls) {
         log.warn('[http] bound to the LAN over plain HTTP — PINs and data travel ' +
           'UNENCRYPTED. Use a trusted private network, or supply TLS (COUNTER_HTTPS_KEY/CERT).');
       }
+      // Advertise a stable mDNS name so the URL survives DHCP IP changes.
+      // Non-fatal: if mDNS can't start, the IP URLs above still work.
+      try {
+        bonjour = new Bonjour();
+        bonjour.publish({ name: 'Counter', type: 'http', port: boundPort, host: `${MDNS_NAME}.local` });
+        mdnsUrl = `${scheme}://${MDNS_NAME}.local:${boundPort}`;
+        log.info(`[http] mDNS advertising ${mdnsUrl}`);
+      } catch (err) {
+        log.warn('[http] mDNS advertise failed (non-fatal); use the IP URL:', err);
+        bonjour = undefined;
+      }
     }
+
+    currentAccessInfo = { exposed, scheme, port: boundPort, urls, mdnsUrl };
   });
   return server as http.Server;
 }

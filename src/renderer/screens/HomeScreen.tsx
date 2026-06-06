@@ -11,14 +11,16 @@
 //   F12  Settings
 
 import { useEffect, useState } from 'react';
-import { counter } from '../lib/ipc';
+import { QRCodeSVG } from 'qrcode.react';
+import { counter, isDesktopHost } from '../lib/ipc';
 import { useSession } from '../store/session';
 import { AppHeader } from '../components/AppHeader';
 import { CashDropModal } from '../components/CashDropModal';
 import { ExpenseModal } from '../components/ExpenseModal';
 import { BackupHealthBanner } from '../components/BackupHealthBanner';
+import { SyncHealthBanner } from '../components/SyncHealthBanner';
 import { formatMoney, formatMoneyWithCurrency, parseCedisToPesewas } from '../../shared/lib/money';
-import type { ShiftCloseBackupResult } from '../../shared/types/ipc';
+import type { ShiftCloseBackupResult, AccessInfoResponse } from '../../shared/types/ipc';
 import SaleScreen from './SaleScreen';
 import VoidSaleScreen from './VoidSaleScreen';
 import BreakageScreen from './BreakageScreen';
@@ -154,6 +156,8 @@ export default function HomeScreen() {
           <>
             {info && <div className="bg-bg-surface border border-success px-5 py-3 text-success text-sm">{info}</div>}
             <BackupHealthBanner />
+            <SyncHealthBanner />
+            <LanJoinCard />
 
             <ActionRow kind="primary" label="Sale" hot="F1" caption="Search SKUs, build cart, take payment." onClick={() => setView('sale')} />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -359,6 +363,34 @@ function RevealLink({ path }: { path: string }) {
     >
       {label}
     </button>
+  );
+}
+
+// Shown only on the desktop host, and only when the embedded server is bound
+// to the LAN. Cashiers scan it to open the till on a phone/tablet on the same
+// wi-fi — no typing an IP. Prefers the stable counter.local name as the label
+// but encodes the IP URL, which always resolves even where mDNS doesn't.
+function LanJoinCard() {
+  const [access, setAccess] = useState<AccessInfoResponse | null>(null);
+  useEffect(() => {
+    if (!isDesktopHost) return;
+    let alive = true;
+    void counter.getAccessInfo().then((r) => { if (alive && r.success) setAccess(r.data); });
+    return () => { alive = false; };
+  }, []);
+  if (!isDesktopHost || !access || !access.exposed || access.urls.length === 0) return null;
+  const joinUrl = access.urls[0]!; // length checked above
+  return (
+    <div className="bg-bg-surface border border-border px-6 py-5 flex items-center gap-5">
+      <div className="bg-white p-2 rounded shrink-0">
+        <QRCodeSVG value={joinUrl} size={96} />
+      </div>
+      <div className="text-sm min-w-0">
+        <div className="uppercase tracking-wider text-xs text-text-secondary">Add a phone or tablet</div>
+        <div className="mt-1 text-text-primary">Scan to open the till on another device on this wi-fi.</div>
+        <div className="mt-1 font-mono text-xs text-text-tertiary break-all">{access.mdnsUrl ?? joinUrl}</div>
+      </div>
+    </div>
   );
 }
 

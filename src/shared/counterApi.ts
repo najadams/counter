@@ -25,6 +25,10 @@ export function createCounterApi(invoke: Invoke) {
     // system
     ping: (echo?: string) => invoke<ipc.PingResponse>(ipc.IPC_CHANNELS.PING, { echo }),
     getDeviceId: () => invoke<ipc.GetDeviceIdResponse>(ipc.IPC_CHANNELS.GET_DEVICE_ID, {}),
+    getAccessInfo: () => invoke<ipc.AccessInfoResponse>(ipc.IPC_CHANNELS.NET_ACCESS_INFO, {}),
+    syncGetStatus: () => invoke<ipc.SyncStatus>(ipc.IPC_CHANNELS_SYNC.SYNC_GET_STATUS, {}),
+    syncGetConfig: () => invoke<ipc.SyncConfigView>(ipc.IPC_CHANNELS_SYNC.SYNC_GET_CONFIG, {}),
+    syncSetConfig: (req: ipc.SyncSetConfigRequest) => invoke<ipc.SyncConfigView>(ipc.IPC_CHANNELS_SYNC.SYNC_SET_CONFIG, req),
 
     // auth
     listLoginCandidates: () => invoke<ipc.ListLoginCandidatesResponse>(ipc.IPC_CHANNELS.WORKER_LIST_FOR_LOGIN, {}),

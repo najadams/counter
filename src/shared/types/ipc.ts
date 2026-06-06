@@ -4,6 +4,7 @@ export const IPC_CHANNELS = {
   // System
   PING: 'system:ping',
   GET_DEVICE_ID: 'system:device-id',
+  NET_ACCESS_INFO: 'system:access-info',
 
   // Auth / session
   WORKER_LIST_FOR_LOGIN: 'worker:list-for-login',
@@ -57,6 +58,18 @@ export type IpcResponse<T> =
 export interface PingRequest { echo?: string }
 export interface PingResponse { pong: true; echo: string | undefined; serverTime: string }
 export interface GetDeviceIdResponse { deviceId: string }
+/** How a phone/tablet on the LAN can reach this host, for the home-screen
+ *  "scan to join" QR. `exposed` is false unless the embedded server is bound
+ *  to the LAN (COUNTER_HTTP_HOST=0.0.0.0). */
+export interface AccessInfoResponse {
+  exposed: boolean;
+  scheme: 'http' | 'https';
+  port: number;
+  /** Reachable IP URLs, e.g. ['http://192.168.1.20:4317']. Empty when not exposed. */
+  urls: string[];
+  /** Stable mDNS URL (http://counter.local:PORT) when advertised. */
+  mdnsUrl?: string;
+}
 
 // --- auth ------------------------------------------------------------------
 
@@ -1180,6 +1193,34 @@ export const IPC_CHANNELS_BACKUP = {
   BACKUP_LIST_HISTORY: 'backup:list-history',
   BACKUP_REVEAL_TARGET: 'backup:reveal-target',
 } as const;
+
+export const IPC_CHANNELS_SYNC = {
+  SYNC_GET_STATUS: 'sync:get-status',
+  SYNC_GET_CONFIG: 'sync:get-config',
+  SYNC_SET_CONFIG: 'sync:set-config',
+} as const;
+
+export interface SyncStatus {
+  configured: boolean;
+  role: 'HQ' | 'SHOP' | null;
+  shopId: string | null;
+  centralUrl: string | null;
+  lastPushAt: string | null;
+  lastPullAt: string | null;
+  pendingCount: number;
+}
+export interface SyncConfigView {
+  shopId: string | null;
+  centralUrl: string | null;
+  role: 'HQ' | 'SHOP';
+  hasToken: boolean;
+}
+export interface SyncSetConfigRequest {
+  shopId: string;
+  centralUrl: string;
+  token?: string;
+  role: 'HQ' | 'SHOP';
+}
 
 export type BackupLocationClass = 'usb' | 'cloud' | 'local';
 

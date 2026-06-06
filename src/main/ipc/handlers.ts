@@ -4,13 +4,16 @@ import type { App } from 'electron';
 import type { Database as DB } from 'better-sqlite3';
 import type { IpcRegistrar } from './registry.js';
 import { currentSession, setGlobalSession, type Session } from './session.js';
+import { getAccessInfo } from '../http/server.js';
+import { getSyncStatus } from '../sync/status.js';
+import { readSyncConfigView, writeSyncConfig } from '../sync/config.js';
 import {
   IPC_CHANNELS,
   type BreakageListRecentResponse, type BreakageReportRequest, type BreakageReportResponse,
   type ConsumptionGetUsageRequest, type ConsumptionGetUsageResponse,
   type ConsumptionLogRequest, type ConsumptionLogResponse,
   type CustomerSearchRequest, type CustomerSearchResponse,
-  type GetDeviceIdResponse, type IpcResponse,
+  type AccessInfoResponse, type GetDeviceIdResponse, type IpcResponse,
   type ListLoginCandidatesResponse, type PingRequest, type PingResponse,
   type ProductGetStockRequest, type ProductGetStockResponse,
   type ProductSearchRequest, type ProductSearchResponse,
@@ -101,6 +104,10 @@ export function registerIpcHandlers(
   ));
   ipcMain.handle(IPC_CHANNELS.GET_DEVICE_ID, wrap<unknown, GetDeviceIdResponse>(
     () => ({ deviceId }), IPC_CHANNELS.GET_DEVICE_ID,
+  ));
+  ipcMain.handle(IPC_CHANNELS.NET_ACCESS_INFO, wrap<unknown, AccessInfoResponse>(
+    () => getAccessInfo() ?? { exposed: false, scheme: 'http', port: 0, urls: [] },
+    IPC_CHANNELS.NET_ACCESS_INFO,
   ));
 
   // --- auth --------------------------------------------------------------
@@ -1577,6 +1584,7 @@ export function registerSession18RecoveryHandlers(
 import {
   IPC_CHANNELS_BACKUP,
   type BackupHeartbeat,
+  IPC_CHANNELS_SYNC, type SyncStatus, type SyncConfigView, type SyncSetConfigRequest,
   type BackupConfigResponse,
   type BackupSetConfigRequest,
   type BackupRunNowResponse,
@@ -2338,4 +2346,48 @@ export function registerReceiptConfigHandlers(
       IPC_CHANNELS_RECEIPT.RECEIPT_SET_CONFIG,
     ),
   );
+}
+
+// --- Sync provisioning + status (Phase 3 multi-shop) -----------------------
+export function registerSyncHandlers(ipcMain: IpcRegistrar, db: DB, deviceId: string): void {
+  ipcMain.handle(IPC_CHANNELS_SYNC.SYNC_GET_STATUS, wrap<void, SyncStatus>(
+    () => { requireWorker(); return getSyncStatus(db); },
+    IPC_CHANNELS_SYNC.SYNC_GET_STATUS,
+  ));
+
+  ipcMain.handle(IPC_CHANNELS_SYNC.SYNC_GET_CONFIG, wrap<void, SyncConfigView>(
+    () => { requireWorker(); return readSyncConfigView(db); },
+    IPC_CHANNELS_SYNC.SYNC_GET_CONFIG,
+  ));
+
+  // OWNER/FOUNDER only. Validates the URL, writes device_config, audit-logs.
+  // Takes effect on next launch (the sync worker is started at boot).
+  ipcMain.handle(IPC_CHANNELS_SYNC.SYNC_SET_CONFIG, wrap<SyncSetConfigRequest, SyncConfigView>(
+    (req) => {
+      const w = requireWorker();
+      if (w.role !== 'OWNER' && w.role !== 'FOUNDER') {
+        throw new Error('Only OWNER or FOUNDER can change sync settings.');
+      }
+      const url = (req.centralUrl ?? '').trim();
+      if (url && !/^https?:\/\//i.test(url)) {
+        throw new Error('Central URL must start with http:// or https://');
+      }
+      writeSyncConfig(db, {
+        shopId: (req.shopId ?? '').trim(),
+        centralUrl: url,
+        token: req.token?.trim() || undefined,
+        role: req.role === 'HQ' ? 'HQ' : 'SHOP',
+      });
+      logAudit(db, {
+        workerId: w.workerId,
+        action: 'SYNC_CONFIG_CHANGED',
+        entityType: 'device_config',
+        entityId: 'sync',
+        deviceId,
+        afterValue: { shopId: req.shopId, centralUrl: url, role: req.role, tokenSet: Boolean(req.token?.trim()) },
+      });
+      return readSyncConfigView(db);
+    },
+    IPC_CHANNELS_SYNC.SYNC_SET_CONFIG,
+  ));
 }

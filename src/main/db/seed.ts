@@ -37,6 +37,17 @@ export function runSeed(db: DB, opts: SeedOptions): void {
   const pin = opts.devCounterPin ?? '1234';
   const pinHash = bcrypt.hashSync(pin, PIN_BCRYPT_ROUNDS);
 
+  // Dev fixtures are setup data, not real shop activity. The DEV_FIXTURES_SEEDED
+  // audit row below fires the sync_outbox capture trigger (migration 0032), but
+  // we don't want fake fixtures queued to push to a central store. Record the
+  // outbox high-water mark now and drop anything this seed adds, so a freshly
+  // seeded dev install starts with an empty push queue — matching a fresh
+  // production install, where this whole block is skipped (includeDevFixtures
+  // is false) and nothing is enqueued at all.
+  const outboxHwm = (db
+    .prepare('SELECT COALESCE(MAX(seq), 0) AS m FROM sync_outbox')
+    .get() as { m: number }).m;
+
   db.transaction(() => {
     db.prepare(
       `INSERT INTO workers (
@@ -180,4 +191,7 @@ export function runSeed(db: DB, opts: SeedOptions): void {
     deviceId,
     'Dev fixtures inserted by db:reset',
   );
+
+  // Drop the outbox rows this seed generated (see outboxHwm above).
+  db.prepare('DELETE FROM sync_outbox WHERE seq > ?').run(outboxHwm);
 }

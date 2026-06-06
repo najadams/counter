@@ -24,7 +24,7 @@ import {
   registerBackupHandlers, registerStatementHandlers, registerCpoHandlers,
   registerReturnsHandlers, registerSupplierPaymentsHandlers,
   registerReportsHandlers, registerCatalogTransferHandlers,
-  registerReceiptConfigHandlers,
+  registerReceiptConfigHandlers, registerSyncHandlers,
 } from '../src/main/ipc/handlers.js';
 import { startHttpServer } from '../src/main/http/server.js';
 import type { App } from 'electron';
@@ -69,8 +69,10 @@ registerSupplierPaymentsHandlers(r, db, deviceId);
 registerReportsHandlers(r, db, deviceId);
 registerCatalogTransferHandlers(r, db, app, deviceId);
 registerReceiptConfigHandlers(r, db, deviceId);
+registerSyncHandlers(r, db, deviceId);
 
 const port = Number(process.env['PORT'] ?? 4181);
-startHttpServer({ db, deviceId, registry: r, distDir, host: '127.0.0.1', port });
+const host = process.env['HOST'] ?? '127.0.0.1';
+startHttpServer({ db, deviceId, registry: r, distDir, host, port });
 // eslint-disable-next-line no-console
-console.log(`serve-lan: http://127.0.0.1:${port}  (login dev-counter-1 / 1234)`);
+console.log(`serve-lan: http://${host}:${port}  (login dev-counter-1 / 1234)`);

@@ -11,6 +11,7 @@
 
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
+import type { Database as DB } from 'better-sqlite3';
 
 export type Session = { workerId: string; fullName: string; role: string } | null;
 
@@ -40,13 +41,21 @@ export function currentDeviceId(fallback: string): string {
 }
 
 // --- Token store (HTTP transport) ------------------------------------------
-// In-memory and opaque (server-side lookup, not signed). Tokens die with the
-// process, so remote clients re-login after a host restart. Two ceilings: an
-// idle window (refreshed on use) and an absolute lifetime (never refreshed),
-// so a captured-and-kept-alive token still expires within a day.
+// Opaque, server-side bearer tokens (not signed). An in-memory Map is the hot
+// path; a SQLite table (auth_tokens) is its durable backing, so a host reboot
+// — routine under load-shedding — doesn't sign every LAN device out mid-shift.
+// On boot, initTokenStore() rehydrates the still-valid rows. Two ceilings bound
+// a token: an idle window (refreshed on use) and an absolute lifetime (never
+// refreshed), so a captured-and-kept-alive token still expires within a day.
+// Desktop IPC sessions never touch this store — they use the global above.
 
 const TOKEN_IDLE_MS = 2 * 60 * 60 * 1000;    // 2h since last use
 const TOKEN_MAX_AGE_MS = 12 * 60 * 60 * 1000; // 12h since issue, hard cap
+// Don't write last_seen to disk on every request; only once it has advanced
+// past this, so a busy device isn't a write amplifier. The exact in-memory
+// last_seen still governs expiry — the persisted value only needs to be close
+// enough to survive a reboot.
+const LAST_SEEN_PERSIST_MS = 60 * 1000;
 
 type TokenEntry = {
   session: NonNullable<Session>;
@@ -54,32 +63,90 @@ type TokenEntry = {
   deviceId: string;
   createdAt: number;
   lastSeen: number;
+  /** last_seen value last written to disk; for write throttling. */
+  lastPersisted: number;
 };
 const tokens = new Map<string, TokenEntry>();
+
+// Durable backing. Null until initTokenStore() runs — and in tests/headless
+// paths that never call it — so every disk write is guarded and the store
+// works purely in memory when no DB is attached.
+let store: DB | null = null;
+
+function expired(entry: TokenEntry, now: number): boolean {
+  return now - entry.lastSeen > TOKEN_IDLE_MS || now - entry.createdAt > TOKEN_MAX_AGE_MS;
+}
+
+/** Attach the SQLite backing and rehydrate the in-memory map from it, dropping
+ *  rows that have already expired. Call once at boot, after migrations. Clears
+ *  in-memory state first, so re-calling it also models a fresh process. */
+export function initTokenStore(db: DB): void {
+  store = db;
+  tokens.clear();
+  pruneExpiredTokens();
+  const rows = db.prepare(
+    'SELECT token, worker_id, full_name, role, device_id, created_at, last_seen FROM auth_tokens',
+  ).all() as Array<{
+    token: string; worker_id: string; full_name: string; role: string;
+    device_id: string; created_at: number; last_seen: number;
+  }>;
+  for (const r of rows) {
+    tokens.set(r.token, {
+      session: { workerId: r.worker_id, fullName: r.full_name, role: r.role },
+      deviceId: r.device_id,
+      createdAt: r.created_at,
+      lastSeen: r.last_seen,
+      lastPersisted: r.last_seen,
+    });
+  }
+}
 
 export function mintToken(session: NonNullable<Session>, deviceId: string): string {
   const token = randomUUID();
   const now = Date.now();
-  tokens.set(token, { session, deviceId, createdAt: now, lastSeen: now });
+  tokens.set(token, { session, deviceId, createdAt: now, lastSeen: now, lastPersisted: now });
+  store?.prepare(
+    `INSERT INTO auth_tokens (token, worker_id, full_name, role, device_id, created_at, last_seen)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  ).run(token, session.workerId, session.fullName, session.role, deviceId, now, now);
   return token;
 }
 
 /** Resolve a bearer token to its session, refreshing the idle window. Returns
- *  null for unknown or expired tokens (and reaps the expired entry). Expiry is
- *  whichever comes first: idle timeout or absolute max age. */
+ *  null for unknown or expired tokens (reaping the expired entry from memory
+ *  and disk). Expiry is whichever comes first: idle timeout or absolute max. */
 export function resolveToken(token?: string): Session {
   if (!token) return null;
   const entry = tokens.get(token);
   if (!entry) return null;
   const now = Date.now();
-  if (now - entry.lastSeen > TOKEN_IDLE_MS || now - entry.createdAt > TOKEN_MAX_AGE_MS) {
+  if (expired(entry, now)) {
     tokens.delete(token);
+    store?.prepare('DELETE FROM auth_tokens WHERE token = ?').run(token);
     return null;
   }
   entry.lastSeen = now;
+  // Throttle disk writes: persist last_seen only once it has moved enough.
+  if (store && now - entry.lastPersisted > LAST_SEEN_PERSIST_MS) {
+    entry.lastPersisted = now;
+    store.prepare('UPDATE auth_tokens SET last_seen = ? WHERE token = ?').run(now, token);
+  }
   return entry.session;
 }
 
 export function revokeToken(token?: string): void {
-  if (token) tokens.delete(token);
+  if (!token) return;
+  tokens.delete(token);
+  store?.prepare('DELETE FROM auth_tokens WHERE token = ?').run(token);
+}
+
+/** Drop expired tokens from disk and memory. Cheap; called on boot and safe to
+ *  call periodically over a long uptime. */
+export function pruneExpiredTokens(now: number = Date.now()): void {
+  for (const [token, entry] of tokens) {
+    if (expired(entry, now)) tokens.delete(token);
+  }
+  store?.prepare(
+    'DELETE FROM auth_tokens WHERE (? - last_seen) > ? OR (? - created_at) > ?',
+  ).run(now, TOKEN_IDLE_MS, now, TOKEN_MAX_AGE_MS);
 }

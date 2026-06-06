@@ -29,6 +29,16 @@ function selectRawCounter(): CounterApi {
   return createCounterApi(httpInvoke); // browser / forced HTTP
 }
 
+/** True when running as the desktop host (Electron IPC); false in a LAN
+ *  browser or when ?http forces the HTTP transport. Gates host-only UI such
+ *  as the "scan to join" QR. */
+export const isDesktopHost: boolean = (() => {
+  if (typeof window === 'undefined') return false;
+  let forceHttp = false;
+  try { forceHttp = new URLSearchParams(window.location.search).has('http'); } catch { /* noop */ }
+  return !!window.counter && !forceHttp;
+})();
+
 // --- Friendly error translation ------------------------------------------
 //
 // Wrap the raw counter API so that error strings get a humanizing pass

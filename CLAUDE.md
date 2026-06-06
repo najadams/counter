@@ -278,6 +278,23 @@ Set environment variables before launching Counter:
   `[http] reachable on LAN at http://192.168.1.20:4317`. Open that on the
   phone. (Log location: §6 — `%APPDATA%\Counter\logs\main.log`.)
 
+### Joining from a phone (QR + counter.local)
+
+When the server is LAN-exposed, the host home screen shows a **QR code** —
+the cashier scans it to open the till on a phone/tablet on the same wi-fi,
+with no IP to type. The QR encodes the host's IP URL (always resolvable);
+the friendly `counter.local` address is shown beneath it.
+
+The host also advertises itself over **mDNS** as `counter.local`, so
+`http://counter.local:4317` keeps working even when DHCP hands the host a
+new IP. Rename it with `COUNTER_MDNS_NAME` (e.g. `osu` ->
+`http://osu.local:4317`) when several Counter hosts share one LAN.
+
+Caveats: some Android browsers don't resolve `.local` names — the QR (IP
+URL) is the reliable fallback. A Windows host needs an mDNS responder;
+Apple's Bonjour service ships with many printer drivers and is often
+already present.
+
 ### Security notes (read before exposing on the LAN)
 
 - **Use a trusted private network.** Without TLS, PINs travel unencrypted
@@ -289,9 +306,83 @@ Set environment variables before launching Counter:
 - **Login is rate-limited** to 10 attempts / 5 minutes per device IP to slow
   guessing; further attempts get a "try again later" until the window clears.
 - Sessions are independent per device — two people can be signed in as
-  different workers at once. Sign-in tokens expire after 2h idle / 12h max
-  and are lost on a host restart (everyone re-signs-in), which is fine.
+  different workers at once. Sign-in tokens expire after 2h idle / 12h max,
+  and now **survive a host restart** (persisted to the DB in `auth_tokens`),
+  so a load-shedding reboot doesn't sign everyone out mid-shift. Expired
+  tokens are reaped on boot.
 
 Still **not** built yet (don't promise these): a touch-optimised layout —
 the till UI is keyboard-first, so a phone is usable but cramped — and remote
 receipt printing. Phones can ring up sales; the receipt prints on the host.
+
+## 10. Multiple shops — sync (PLANNED, Phase 3 — not built yet)
+
+> **Status: design only. None of this ships today.** It is documented here so
+> the single-shop schema choices already in place (every table carries
+> `device_id` and `synced_at`; `sales` carries `location_id`) stay coherent as
+> we grow. The full design, with schema and SQL, is in
+> `docs/phase3-network-and-sync.md`. Don't promise any of §10 to the owner yet.
+
+### The model
+
+Each shop stays exactly what it is today: one Counter install, one local
+SQLite DB, one receipt printer, serving its own phones/tablets over the LAN
+(§9). A shop **never** needs the internet to sell — that's deliberate, because
+the line goes down. A background sync worker moves data to and from a central
+store whenever a connection is available.
+
+Data flows in two directions with a clear ownership split, which is what keeps
+sync conflict-free:
+
+- **Sales, payments, stock moves, breakage, audit — flow UP.** These are
+  append-only events; no two shops ever touch the same record, so they merge
+  with no conflicts. The central store is the union of every shop's activity.
+- **Catalog, prices, suppliers, worker roster — flow DOWN.** The owner
+  maintains one master set at HQ; shops receive it. One writer, so again no
+  conflicts. You stop re-keying the product list at every shop.
+
+What we will **not** do: make the central database the live system of record
+(a shop with no internet could no longer sell), let two shops edit the same
+price and try to merge, or wire shops directly to each other. Everything is
+hub-and-spoke through the central store.
+
+### Setting up a new shop (planned flow)
+
+1. Install Counter and run the first-run wizard as normal (§3) — this still
+   creates a local OWNER.
+2. Under Settings → Sync, enter the shop's short code (e.g. `OSU`), the central
+   URL, and the per-shop sync token the owner issues.
+3. The app registers with the central store, receives its `shop_id`, and pulls
+   down the current catalog/prices/workers.
+4. Background sync runs from then on. The shop works offline; it catches up when
+   it reconnects.
+
+### Sync health
+
+Like the backup heartbeat (§4), each shop records its last successful sync, and
+the home screen shows a banner when sync goes stale (warning after 24h, danger
+after 72h). The central side tracks each shop's last-seen and watches for gaps
+in the per-shop sequence numbers — a gap means data went missing in transit,
+which is itself worth investigating (same anti-shrinkage instinct as the rest of
+the app).
+
+### Security
+
+Shop-to-central traffic runs over real HTTPS to the central host (which has a
+proper certificate), so the LAN self-signed-cert problem in §9 never arises for
+data leaving the building. Each shop authenticates with its own revocable token,
+and the central store never dials into shops — every connection starts from the
+shop side.
+
+### Consolidated reporting
+
+The central store (Postgres) is where the owner sees everything at once: revenue
+by shop, stock by shop, cross-shop audit. Each shop's own local reports keep
+working offline, unchanged.
+
+### Not yet decided (see the design doc)
+
+Whether customers and the worker roster are owned per-shop or centrally (this
+affects credit and logins across shops), how inter-shop stock transfers are
+recorded, and where the central store is hosted. These are open questions in
+`docs/phase3-network-and-sync.md`, not settled plans.

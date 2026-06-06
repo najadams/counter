@@ -29,13 +29,16 @@
     "dist:all": "npm run icons && npm run build && electron-builder -mwl --publish never",
     "postinstall": "electron-builder install-app-deps",
     "clean": "rm -rf dist-electron dist",
-    "predev": "rm -rf dist-electron"
+    "predev": "rm -rf dist-electron",
+    "sync:central-stub": "tsx scripts/central-stub.ts"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "^11.3.0",
+    "bonjour-service": "^1.2.1",
     "electron-log": "^5.2.0",
     "node-thermal-printer": "^4.4.5",
+    "qrcode.react": "^4.1.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "uuid": "^10.0.0",
@@ -148,8 +151,17 @@
         "height": 380
       },
       "contents": [
-        { "x": 140, "y": 200, "type": "file" },
-        { "x": 400, "y": 200, "type": "link", "path": "/Applications" }
+        {
+          "x": 140,
+          "y": 200,
+          "type": "file"
+        },
+        {
+          "x": 400,
+          "y": 200,
+          "type": "link",
+          "path": "/Applications"
+        }
       ]
     },
     "linux": {
