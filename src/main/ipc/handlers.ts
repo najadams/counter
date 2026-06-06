@@ -34,7 +34,7 @@ import {
   type WorkerReactivateRequest, type WorkerResetPinRequest,
   type WorkerSimpleResponse, type WorkerTerminateRequest,
 } from '../../shared/types/ipc.js';
-import { maybeRunShiftCloseBackup } from '../lib/shiftCloseBackup.js';
+import { maybeRunShiftCloseBackup, findBackupRunner } from '../lib/shiftCloseBackup.js';
 import { listLoginCandidates, verifyPin } from '../services/workers.js';
 import {
   computeAndCloseShift, getOpenShift, openShift, submitClosingCount,
@@ -189,8 +189,6 @@ export function registerIpcHandlers(
           if (!fsmod.existsSync(target)) fsmod.mkdirSync(target, { recursive: true });
           fsmod.accessSync(target, fsmod.constants.W_OK);
         } catch {
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          const { defaultBackupTarget } = require('../db/backupConfig.js') as typeof import('../db/backupConfig.js');
           target = defaultBackupTarget();
           fellBackToDefault = cfg.targetDir !== target;
         }
@@ -1594,7 +1592,7 @@ import {
   type BackupRevealTargetRequest,
   type BackupRevealTargetResponse,
 } from '../../shared/types/ipc.js';
-import { getBackupConfig, setBackupConfig } from '../db/backupConfig.js';
+import { getBackupConfig, setBackupConfig, defaultBackupTarget } from '../db/backupConfig.js';
 
 export function registerBackupHandlers(
   ipcMain: IpcRegistrar,
@@ -1679,11 +1677,11 @@ export function registerBackupHandlers(
         const w = requireWorker();
         const cfg = getBackupConfig(db);
         const userDataDir = app.getPath('userData');
-        // Re-use the same runtime-walk lookup that shiftCloseBackup uses,
-        // so source layout (src/main/ipc/) and bundled layout
-        // (dist-electron/main/) both resolve correctly.
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { findBackupRunner } = require('../lib/shiftCloseBackup.js') as typeof import('../lib/shiftCloseBackup.js');
+        // findBackupRunner walks up to scripts/lib/backup-runner.cjs, so source
+        // layout (src/main/ipc/) and bundled layout (dist-electron/main/ in
+        // app.asar) both resolve. It's imported statically — a runtime
+        // require('../lib/shiftCloseBackup.js') breaks in the bundle, where that
+        // module is folded into index.js and no longer exists as its own file.
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const runner = require(findBackupRunner()) as {
           runBackup: (opts: {
