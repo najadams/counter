@@ -1,0 +1,22 @@
+# Local Postgres for developing the central store.
+#   docker compose up -d
+#   DATABASE_URL=postgres://counter:counter@localhost:5432/counter_central npm run migrate
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: counter
+      POSTGRES_PASSWORD: counter
+      POSTGRES_DB: counter_central
+    ports:
+      - "5432:5432"
+    volumes:
+      - central_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U counter -d counter_central"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  central_pgdata:
