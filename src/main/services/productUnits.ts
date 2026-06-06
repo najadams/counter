@@ -247,22 +247,35 @@ export function getUnit(db: DB, unitId: string): ProductUnit | null {
  * compat with one-unit products like the dev fixtures).
  */
 export function defaultSaleUnit(db: DB, productId: string): ProductUnit | null {
-  const r = db
-    .prepare(
-      `SELECT id, product_id AS productId, unit_name AS unitName,
+  type RawUnit = Omit<ProductUnit, 'isPurchaseUnit' | 'isSaleUnit' | 'active'> & {
+    isPurchaseUnit: number; isSaleUnit: number; active: number;
+  };
+  const cols = `id, product_id AS productId, unit_name AS unitName,
               conversion_factor AS conversionFactor, price_pesewas AS pricePesewas,
               is_purchase_unit AS isPurchaseUnit, is_sale_unit AS isSaleUnit,
-              display_order AS displayOrder, active, notes
-         FROM product_units
+              display_order AS displayOrder, active, notes`;
+
+  // Honor the operator's "Default at the till" choice
+  // (products.primary_sale_unit_id) when it still points at an active, sellable
+  // unit. Otherwise fall back to the smallest active sellable unit (legacy
+  // compat for one-unit products like the dev fixtures).
+  const primary = db
+    .prepare(
+      `SELECT ${cols} FROM product_units
+         WHERE product_id = ? AND active = 1 AND is_sale_unit = 1
+           AND id = (SELECT primary_sale_unit_id FROM products WHERE id = ?)`,
+    )
+    .get(productId, productId) as RawUnit | undefined;
+
+  const r = primary ?? (db
+    .prepare(
+      `SELECT ${cols} FROM product_units
          WHERE product_id = ? AND active = 1 AND is_sale_unit = 1
          ORDER BY conversion_factor ASC, display_order ASC
          LIMIT 1`,
     )
-    .get(productId) as
-    | (Omit<ProductUnit, 'isPurchaseUnit' | 'isSaleUnit' | 'active'> & {
-        isPurchaseUnit: number; isSaleUnit: number; active: number;
-      })
-    | undefined;
+    .get(productId) as RawUnit | undefined);
+
   if (!r) return null;
   return { ...r, isPurchaseUnit: r.isPurchaseUnit === 1, isSaleUnit: r.isSaleUnit === 1, active: r.active === 1 };
 }

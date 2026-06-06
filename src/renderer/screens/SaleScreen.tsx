@@ -546,7 +546,9 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
             {lines.length === 0 && (
               <li className="px-6 py-6 text-text-tertiary">Empty.</li>
             )}
-            {lines.map((l) => (
+            {/* LIFO: newest line at the top. Visual only — submit/receipt keep
+                scan order. Reverse a copy so the store array isn't mutated. */}
+            {[...lines].reverse().map((l) => (
               <li key={l.productId} className="px-6 py-3 border-b border-border">
                 <div className="flex items-baseline justify-between">
                   <span className="text-text-primary truncate">{l.name}</span>

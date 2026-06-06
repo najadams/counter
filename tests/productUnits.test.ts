@@ -163,6 +163,25 @@ describe('defaultSaleUnit', () => {
     const def = defaultSaleUnit(db, starId);
     expect(def?.unitName).toBe('UNIT'); // PALLET ignored
   });
+
+  it('honors the primary sale unit ("Default at the till") when set', () => {
+    const crate = addUnit(db, {
+      productId: starId, unitName: 'CRATE', conversionFactor: 24, pricePesewas: 18000,
+      actorWorkerId: owner, deviceId: D,
+    });
+    db.prepare('UPDATE products SET primary_sale_unit_id = ? WHERE id = ?').run(crate.unitId, starId);
+    expect(defaultSaleUnit(db, starId)?.unitName).toBe('CRATE'); // not the smaller UNIT
+  });
+
+  it('falls back to smallest when the primary unit is deactivated', () => {
+    const crate = addUnit(db, {
+      productId: starId, unitName: 'CRATE', conversionFactor: 24, pricePesewas: 18000,
+      actorWorkerId: owner, deviceId: D,
+    });
+    db.prepare('UPDATE products SET primary_sale_unit_id = ? WHERE id = ?').run(crate.unitId, starId);
+    deactivateUnit(db, crate.unitId, owner, D);
+    expect(defaultSaleUnit(db, starId)?.unitName).toBe('UNIT');
+  });
 });
 
 describe('convertToCanonical', () => {
