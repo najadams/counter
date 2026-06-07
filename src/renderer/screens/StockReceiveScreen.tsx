@@ -138,7 +138,7 @@ export default function StockReceiveScreen({ onExit }: { onExit: () => void }) {
 
   return (
     <div className="min-h-screen bg-bg-deep text-text-primary flex flex-col">
-      <AppHeader subtitle="receive stock" />
+      <AppHeader subtitle="receive stock" onBack={onExit} />
       <main className="flex-1 max-w-4xl w-full mx-auto px-4 sm:px-12 py-8 flex flex-col gap-5">
         <div className="flex items-baseline justify-between">
           <h2 className="text-text-secondary uppercase tracking-wider text-xs">Stock receipt</h2>

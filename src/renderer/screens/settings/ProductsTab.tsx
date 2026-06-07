@@ -231,6 +231,9 @@ function ProductFormModal({ mode, existing, onCancel, onDone, onError }: {
   const [du_price, setDuPrice] = useState('');
   const [du_sale, setDuSale] = useState(true);
   const [du_purchase, setDuPurchase] = useState(true);
+  // Which draft unit (by name) should be the default at the till. '' = let the
+  // app fall back to the smallest sellable unit.
+  const [defaultSaleUnitName, setDefaultSaleUnitName] = useState('');
 
   function addDraftUnit() {
     const name = du_name.trim().toUpperCase();
@@ -250,7 +253,9 @@ function ProductFormModal({ mode, existing, onCancel, onDone, onError }: {
     setDuName(''); setDuFactor(''); setDuPrice('');
   }
   function removeDraftUnit(idx: number) {
+    const removed = draftUnits[idx];
     setDraftUnits(draftUnits.filter((_, i) => i !== idx));
+    if (removed && removed.unitName === defaultSaleUnitName) setDefaultSaleUnitName('');
   }
 
   function parseInt(s: string): number | null {
@@ -294,8 +299,20 @@ function ProductFormModal({ mode, existing, onCancel, onDone, onError }: {
         shelfLifeDays: shelfLifeN,
         units: draftUnits.length > 0 ? draftUnits : undefined,
       });
+      if (!r.success) { setSubmitting(false); onError(r.error); return; }
+      // Apply the chosen "Default at the till" unit. unitIds line up with the
+      // draftUnits order they were created in, so map the picked name to its id.
+      if (defaultSaleUnitName) {
+        const idx = draftUnits.findIndex((u) => u.unitName === defaultSaleUnitName);
+        if (idx >= 0 && r.data.unitIds[idx]) {
+          const pr = await counter.updateProduct({
+            productId: r.data.productId,
+            fields: { primarySaleUnitId: r.data.unitIds[idx] },
+          });
+          if (!pr.success) { setSubmitting(false); onError(pr.error); return; }
+        }
+      }
       setSubmitting(false);
-      if (!r.success) { onError(r.error); return; }
       const warn = r.data.warnings.length > 0 ? ` Warning: ${r.data.warnings.join(', ')}.` : '';
       const unitNote = r.data.unitIds.length > 0 ? ` (${r.data.unitIds.length} unit${r.data.unitIds.length === 1 ? '' : 's'} added)` : '';
       onDone(`Product added${unitNote}.${warn}`);
@@ -526,6 +543,24 @@ function ProductFormModal({ mode, existing, onCancel, onDone, onError }: {
                 </button>
               </div>
             </div>
+            {draftUnits.some((u) => u.isSaleUnit) && (
+              <div className="flex flex-col gap-1 border-t border-border pt-3">
+                <span className="text-text-secondary text-xs uppercase tracking-wider">Default at the till</span>
+                <select value={defaultSaleUnitName} onChange={(e) => setDefaultSaleUnitName(e.target.value)}
+                  className="w-full bg-bg-input border border-border-strong px-3 py-2">
+                  <option value="">— smallest (canonical)</option>
+                  {draftUnits.filter((u) => u.isSaleUnit).map((u) => (
+                    <option key={u.unitName} value={u.unitName}>
+                      {u.unitName}{u.conversionFactor > 1 ? ` (× ${u.conversionFactor})` : ''}
+                    </option>
+                  ))}
+                </select>
+                <span className="text-text-tertiary text-xs">
+                  Which size shows up first when a cashier rings up this product.
+                  Cashiers can still switch units at the till.
+                </span>
+              </div>
+            )}
           </div>
         )}
         {mode === 'edit' && existing && (
@@ -728,6 +763,49 @@ function ProductUnitsEditor({
   const [primarySaleUnitId, setPrimarySaleUnitId] = useState<string>(initialPrimarySaleUnitId ?? '');
   const [savingPrimary, setSavingPrimary] = useState(false);
 
+  // Inline edit of an existing row — fix a typo'd name/factor/price without
+  // having to deactivate-and-re-add (which the UNIQUE name constraint blocks).
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editFactor, setEditFactor] = useState('');
+  const [editPrice, setEditPrice] = useState('');
+  const [editSale, setEditSale] = useState(true);
+  const [editPurchase, setEditPurchase] = useState(true);
+
+  function startEdit(u: UnitRow) {
+    setEditId(u.id);
+    setEditName(u.unitName);
+    setEditFactor(String(u.conversionFactor));
+    setEditPrice(formatMoney(u.pricePesewas));
+    setEditSale(u.isSaleUnit);
+    setEditPurchase(u.isPurchaseUnit);
+  }
+  function cancelEdit() { setEditId(null); }
+
+  async function saveEdit(u: UnitRow) {
+    const name = editName.trim().toUpperCase();
+    const factor = Number(editFactor.replace(/\D/g, ''));
+    const price = parseCedisToPesewas(editPrice);
+    if (!name || !factor || price == null) {
+      onError('Name, factor, and price are all required.');
+      return;
+    }
+    if (!editSale && !editPurchase) {
+      onError('Mark as sellable, purchasable, or both.');
+      return;
+    }
+    const r = await counter.updateProductUnit({
+      unitId: u.id,
+      fields: {
+        unitName: name, conversionFactor: factor, pricePesewas: price,
+        isSaleUnit: editSale, isPurchaseUnit: editPurchase,
+      },
+    });
+    if (!r.success) { onError(r.error); return; }
+    setEditId(null);
+    await refresh();
+  }
+
   async function refresh() {
     const r = await counter.listProductUnits(productId, false);
     if (r.success) setUnits(r.data.units as UnitRow[]);
@@ -809,6 +887,33 @@ function ProductUnitsEditor({
         </thead>
         <tbody>
           {units.map((u) => (
+            editId === u.id ? (
+              <tr key={u.id} className="border-t border-border-subtle bg-bg-deep/40">
+                <td className="px-2 py-1.5">
+                  <input value={editName} onChange={(e) => setEditName(e.target.value.toUpperCase())}
+                    className="w-full bg-bg-input border border-border-strong px-2 py-1 font-mono text-sm" />
+                </td>
+                <td className="px-2 py-1.5">
+                  <input value={editFactor} onChange={(e) => setEditFactor(e.target.value.replace(/\D/g, ''))}
+                    className="w-full bg-bg-input border border-border-strong px-2 py-1 font-mono tnum text-sm text-right" />
+                </td>
+                <td className="px-2 py-1.5">
+                  <input value={editPrice} onChange={(e) => setEditPrice(e.target.value)}
+                    className="w-full bg-bg-input border border-border-strong px-2 py-1 font-mono tnum text-sm text-right" />
+                </td>
+                <td className="text-center px-2 py-1.5">
+                  <input type="checkbox" checked={editSale} onChange={(e) => setEditSale(e.target.checked)} />
+                </td>
+                <td className="text-center px-2 py-1.5">
+                  <input type="checkbox" checked={editPurchase} onChange={(e) => setEditPurchase(e.target.checked)} />
+                </td>
+                <td className="px-3 py-1.5">{u.active ? <span className="text-success">active</span> : <span className="text-text-tertiary">inactive</span>}</td>
+                <td className="text-right px-3 py-1.5 whitespace-nowrap">
+                  <button onClick={() => void saveEdit(u)} className="text-accent hover:text-accent-light text-xs">save</button>
+                  <button onClick={cancelEdit} className="text-text-tertiary hover:text-text-primary text-xs ml-3">cancel</button>
+                </td>
+              </tr>
+            ) : (
             <tr key={u.id} className="border-t border-border-subtle hover:bg-bg-deep/40">
               <td className="font-mono px-3 py-2">{u.unitName}</td>
               <td className="text-right font-mono tnum px-3 py-2">× {u.conversionFactor}</td>
@@ -816,12 +921,14 @@ function ProductUnitsEditor({
               <td className="text-center px-3 py-2">{u.isSaleUnit ? '✓' : '—'}</td>
               <td className="text-center px-3 py-2">{u.isPurchaseUnit ? '✓' : '—'}</td>
               <td className="px-3 py-2">{u.active ? <span className="text-success">active</span> : <span className="text-text-tertiary">inactive</span>}</td>
-              <td className="text-right px-3 py-2">
+              <td className="text-right px-3 py-2 whitespace-nowrap">
+                <button onClick={() => startEdit(u)} className="text-text-tertiary hover:text-text-primary text-xs">edit</button>
                 {u.active
-                  ? <button onClick={() => void deactivate(u)} className="text-text-tertiary hover:text-warning text-xs">deactivate</button>
-                  : <button onClick={() => void reactivate(u)} className="text-text-tertiary hover:text-success text-xs">reactivate</button>}
+                  ? <button onClick={() => void deactivate(u)} className="text-text-tertiary hover:text-warning text-xs ml-3">deactivate</button>
+                  : <button onClick={() => void reactivate(u)} className="text-text-tertiary hover:text-success text-xs ml-3">reactivate</button>}
               </td>
             </tr>
+            )
           ))}
           {units.length === 0 && (
             <tr><td colSpan={7} className="text-text-tertiary text-center py-4 px-3">No units defined yet.</td></tr>

@@ -221,6 +221,55 @@ describe('updateUnit / deactivate / reactivate', () => {
     expect(u?.pricePesewas).toBe(17500);
   });
 
+  it('renames and re-factors an existing unit in place', () => {
+    const r = addUnit(db, {
+      productId: starId, unitName: 'PAKC', conversionFactor: 20, pricePesewas: 18000,
+      actorWorkerId: owner, deviceId: D,
+    });
+    updateUnit(db, {
+      unitId: r.unitId,
+      fields: { unitName: 'PACK', conversionFactor: 24 },
+      actorWorkerId: owner, deviceId: D,
+    });
+    const u = getUnit(db, r.unitId);
+    expect(u?.unitName).toBe('PACK');
+    expect(u?.conversionFactor).toBe(24);
+  });
+
+  it('rejects a rename that collides with another unit', () => {
+    addUnit(db, {
+      productId: starId, unitName: 'CRATE', conversionFactor: 24, pricePesewas: 18000,
+      actorWorkerId: owner, deviceId: D,
+    });
+    const r = addUnit(db, {
+      productId: starId, unitName: 'PACK', conversionFactor: 6, pricePesewas: 4500,
+      actorWorkerId: owner, deviceId: D,
+    });
+    expect(() => updateUnit(db, {
+      unitId: r.unitId, fields: { unitName: 'CRATE' }, actorWorkerId: owner, deviceId: D,
+    })).toThrow(/already exists/);
+  });
+
+  it('rejects a factor edit that is not a positive integer', () => {
+    const r = addUnit(db, {
+      productId: starId, unitName: 'CRATE', conversionFactor: 24, pricePesewas: 18000,
+      actorWorkerId: owner, deviceId: D,
+    });
+    expect(() => updateUnit(db, {
+      unitId: r.unitId, fields: { conversionFactor: 0 }, actorWorkerId: owner, deviceId: D,
+    })).toThrow(/positive integer/);
+  });
+
+  it('rejects an edit that clears both sale and purchase', () => {
+    const r = addUnit(db, {
+      productId: starId, unitName: 'CRATE', conversionFactor: 24, pricePesewas: 18000,
+      isSaleUnit: true, isPurchaseUnit: false, actorWorkerId: owner, deviceId: D,
+    });
+    expect(() => updateUnit(db, {
+      unitId: r.unitId, fields: { isSaleUnit: false }, actorWorkerId: owner, deviceId: D,
+    })).toThrow(/sellable, purchasable, or both/);
+  });
+
   it('deactivate + reactivate flips active', () => {
     const r = addUnit(db, {
       productId: starId, unitName: 'CRATE', conversionFactor: 24, pricePesewas: 18000,

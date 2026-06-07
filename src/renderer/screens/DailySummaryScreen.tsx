@@ -88,7 +88,7 @@ export default function DailySummaryScreen({ onExit }: { onExit: () => void }) {
 
   return (
     <div className="min-h-screen bg-bg-deep text-text-primary flex flex-col">
-      <AppHeader subtitle="daily summary" />
+      <AppHeader subtitle="daily summary" onBack={onExit} />
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-12 py-6 grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-6">
         <section className="flex flex-col gap-3">
           <div className="flex items-center justify-between">

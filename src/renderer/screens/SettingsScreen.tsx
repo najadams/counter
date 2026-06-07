@@ -41,7 +41,7 @@ export default function SettingsScreen({ onExit }: { onExit: () => void }) {
 
   return (
     <div className="min-h-screen bg-bg-deep text-text-primary flex flex-col">
-      <AppHeader subtitle="settings" />
+      <AppHeader subtitle="settings" onBack={onExit} />
       {/* Responsive shell: no hard max-width — Counter ships with 10 settings
        *  tabs that need horizontal room; capping the container at max-w-6xl
        *  forced the tab row to overflow into a hidden zone where the "Done"

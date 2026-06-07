@@ -144,7 +144,7 @@ export default function StocktakeScreen({ onExit }: { onExit: () => void }) {
 
   return (
     <div className="min-h-screen bg-bg-deep text-text-primary flex flex-col">
-      <AppHeader subtitle="stocktake" />
+      <AppHeader subtitle="stocktake" onBack={onExit} />
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-12 py-6 flex flex-col gap-4">
         <div className="flex items-center justify-between">
           <h2 className="text-text-secondary uppercase tracking-wider text-xs">Physical stocktake</h2>

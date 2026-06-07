@@ -113,6 +113,8 @@ export function addUnit(db: DB, input: AddUnitInput): { unitId: string } {
 export interface UpdateUnitInput {
   unitId: string;
   fields: Partial<{
+    unitName: string;
+    conversionFactor: number;
     pricePesewas: number;
     isPurchaseUnit: boolean;
     isSaleUnit: boolean;
@@ -127,15 +129,30 @@ export function updateUnit(db: DB, input: UpdateUnitInput): void {
   requireAdmin(db, input.actorWorkerId);
   const existing = db
     .prepare(
-      `SELECT price_pesewas, is_purchase_unit, is_sale_unit, display_order, notes
+      `SELECT product_id, unit_name, conversion_factor, price_pesewas,
+              is_purchase_unit, is_sale_unit, display_order, notes
          FROM product_units WHERE id = ?`,
     )
     .get(input.unitId) as
-    | { price_pesewas: number; is_purchase_unit: number; is_sale_unit: number; display_order: number; notes: string | null }
+    | {
+        product_id: string; unit_name: string; conversion_factor: number;
+        price_pesewas: number; is_purchase_unit: number; is_sale_unit: number;
+        display_order: number; notes: string | null;
+      }
     | undefined;
   if (!existing) throw new Error(`unit ${input.unitId} not found`);
 
+  // A unit must stay sellable or purchasable. Compute the effective flags
+  // after this edit so we reject a change that would clear both.
+  const effSale = input.fields.isSaleUnit ?? existing.is_sale_unit === 1;
+  const effPurchase = input.fields.isPurchaseUnit ?? existing.is_purchase_unit === 1;
+  if (!effSale && !effPurchase) {
+    throw new Error('a unit must be sellable, purchasable, or both');
+  }
+
   const colMap: Record<string, string> = {
+    unitName: 'unit_name',
+    conversionFactor: 'conversion_factor',
     pricePesewas: 'price_pesewas',
     isPurchaseUnit: 'is_purchase_unit',
     isSaleUnit: 'is_sale_unit',
@@ -155,6 +172,25 @@ export function updateUnit(db: DB, input: UpdateUnitInput): void {
       if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
         throw new Error('pricePesewas must be a non-negative integer');
       }
+    }
+    if (key === 'conversionFactor') {
+      if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) {
+        throw new Error('conversionFactor must be a positive integer');
+      }
+    }
+    if (key === 'unitName') {
+      const name = String(value).trim();
+      if (!name) throw new Error('unitName required');
+      // (product_id, unit_name) is UNIQUE; reject a rename that collides with
+      // any other unit of this product (active or not) before the DB does, so
+      // the operator gets a clear message instead of a raw constraint error.
+      const dup = db
+        .prepare(
+          'SELECT id FROM product_units WHERE product_id = ? AND unit_name = ? AND id <> ?',
+        )
+        .get(existing.product_id, name, input.unitId);
+      if (dup) throw new Error(`another unit '${name}' already exists for this product`);
+      value = name;
     }
     setParts.push(`${col} = ?`);
     params.push(value);

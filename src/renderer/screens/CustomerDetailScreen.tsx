@@ -78,7 +78,7 @@ export default function CustomerDetailScreen({
 
   return (
     <div className="min-h-screen bg-bg-deep text-text-primary flex flex-col">
-      <AppHeader subtitle="customer detail" />
+      <AppHeader subtitle="customer detail" onBack={onExit} />
       <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-12 py-6 flex flex-col gap-5">
         <div className="flex items-baseline justify-between">
           <div>

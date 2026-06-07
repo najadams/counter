@@ -416,7 +416,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
     // every other screen unchanged. 1.15 ≈ a single macOS "Scaled" notch;
     // bump or lower the factor here if the counter PC needs more/less.
     <div className="min-h-screen bg-bg-deep text-text-primary flex flex-col sale-zoom">
-      <AppHeader subtitle="sale" />
+      <AppHeader subtitle="sale" onBack={onExit} />
       {/* One column on phones (LAN access), two panes on desktop. */}
       <main className="flex-1 grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-0">
         {/* Left: search + results */}

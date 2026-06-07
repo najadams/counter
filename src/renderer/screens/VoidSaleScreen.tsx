@@ -93,7 +93,7 @@ export default function VoidSaleScreen({ onExit, onDuplicate }: { onExit: () => 
 
   return (
     <div className="min-h-screen bg-bg-deep text-text-primary flex flex-col">
-      <AppHeader subtitle="void sale" />
+      <AppHeader subtitle="void sale" onBack={onExit} />
       <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-12 py-8 flex flex-col gap-4">
         <div className="flex items-baseline justify-between">
           <h2 className="text-text-secondary uppercase tracking-wider text-xs">Recent sales</h2>

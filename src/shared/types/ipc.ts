@@ -749,6 +749,8 @@ export interface ProductUnitAddResponse { unitId: string }
 export interface ProductUnitUpdateRequest {
   unitId: string;
   fields: Partial<{
+    unitName: string;
+    conversionFactor: number;
     pricePesewas: number;
     isPurchaseUnit: boolean;
     isSaleUnit: boolean;
