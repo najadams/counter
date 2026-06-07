@@ -1,6 +1,6 @@
 {
   "name": "counter",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Keyboard-first Electron POS for a Ghanaian beverage shop. Anti-shrinkage forensics on every cedi.",
   "author": {
     "name": "Counter POS",
