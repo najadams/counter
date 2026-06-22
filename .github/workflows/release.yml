@@ -119,10 +119,15 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
+          # Recursive globs: download-artifact preserves the electron-builder
+          # release/<version>/ subdir, so installers land at
+          # dist/counter-<os>/<version>/Counter-*. A non-recursive dist/*/*
+          # matches the version DIRECTORY, not the files, and publishes an
+          # empty release. Match the installer files directly, at any depth.
           files: |
-            dist/counter-windows/*
-            dist/counter-macos/*
-            dist/counter-linux/*
+            dist/**/Counter-Setup-*.exe
+            dist/**/Counter-*.dmg
+            dist/**/Counter-*.AppImage
           body: |
             ## Counter ${{ github.ref_name }}
 
