@@ -1,6 +1,6 @@
 {
   "name": "counter",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Keyboard-first Electron POS for a Ghanaian beverage shop. Anti-shrinkage forensics on every cedi.",
   "author": {
     "name": "Counter POS",
@@ -71,6 +71,7 @@
     "appId": "com.counter.pos",
     "productName": "Counter",
     "copyright": "Copyright (c) 2026 Counter POS",
+    "afterPack": "scripts/after-pack.cjs",
     "asar": true,
     "asarUnpack": [
       "node_modules/better-sqlite3/**/*"
