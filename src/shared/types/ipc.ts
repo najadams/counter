@@ -203,6 +203,9 @@ export interface SaleCompleteResponse {
   changePesewas: number | null;
   printerFailed: boolean;
   printerError?: string;
+  /** Print station this sale routed to ('door' = phone/LAN, 'counter' = desktop).
+   *  The renderer escalates a door-printer failure into a blocking alert. */
+  station: 'counter' | 'door';
   /** Receipt struct the renderer can render for on-screen / browser-print. */
   receipt: import('../lib/receipt.js').SaleReceipt;
 }

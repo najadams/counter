@@ -440,6 +440,46 @@ describe('completeSale — printer degraded mode', () => {
   });
 });
 
+describe('completeSale — door station routing', () => {
+  it('routes a phone (door) sale to the door printer and tags the reprint station=door', async () => {
+    const calls: string[] = [];
+    _setPrinter({ async print() { calls.push('counter'); return { ok: true } as const; } }, 'counter');
+    _setPrinter({ async print() { calls.push('door'); return { ok: false, reason: 'OFFLINE', message: 'door unplugged' } as const; } }, 'door');
+    const star = pickProduct('STAR-330');
+    const r = await completeSale(db, {
+      shiftId, workerId: W, workerName: 'Naj', locationId: L, channel: 'WALK_IN',
+      lines: [{ productId: star.id, quantity: 1, unitPricePesewas: 800 }],
+      paymentMethod: 'CASH', cashGivenPesewas: 800, deviceId: D, shopName: 'TEST',
+      station: 'door',
+    });
+    // Door printer was used; the counter printer was never touched.
+    expect(calls).toEqual(['door']);
+    expect(r.station).toBe('door');
+    expect(r.printerFailed).toBe(true);
+    const reprint = db.prepare(
+      'SELECT station_id FROM pending_receipt_reprints WHERE sale_id = ?',
+    ).get(r.saleId) as { station_id: string };
+    expect(reprint.station_id).toBe('door');
+  });
+
+  it('routes a desktop (default) sale to the counter printer, station=counter', async () => {
+    const calls: string[] = [];
+    _setPrinter({ async print() { calls.push('counter'); return { ok: true } as const; } }, 'counter');
+    _setPrinter({ async print() { calls.push('door'); return { ok: true } as const; } }, 'door');
+    const star = pickProduct('STAR-330');
+    const r = await completeSale(db, {
+      shiftId, workerId: W, workerName: 'Naj', locationId: L, channel: 'WALK_IN',
+      lines: [{ productId: star.id, quantity: 1, unitPricePesewas: 800 }],
+      paymentMethod: 'CASH', cashGivenPesewas: 800, deviceId: D, shopName: 'TEST',
+      // no station -> defaults to 'counter'
+    });
+    // Counter printer was used; the door printer was never touched.
+    expect(calls).toEqual(['counter']);
+    expect(r.station).toBe('counter');
+    expect(r.printerFailed).toBe(false);
+  });
+});
+
 describe('receipt formatter', () => {
   it('produces 32-column lines, no overflow', () => {
     const lines = formatReceipt({

@@ -12,13 +12,20 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 import type { Database as DB } from 'better-sqlite3';
+import type { Station } from '../printer/printer.js';
 
 export type Session = { workerId: string; fullName: string; role: string } | null;
 
 /** Request-scoped context for non-IPC transports. Set by the HTTP dispatcher
- *  for the duration of one request; unset everywhere else. Carries the session
- *  and the remote device id so handlers/audit attribute to the right device. */
-export const requestSession = new AsyncLocalStorage<{ session: Session; deviceId?: string }>();
+ *  for the duration of one request; unset everywhere else. Carries the session,
+ *  the remote device id (so audit attributes to the right device), and the
+ *  print station (HTTP/phone -> 'door', desktop -> 'counter') so receipts route
+ *  to the exit printer for phone sales. */
+export const requestSession = new AsyncLocalStorage<{
+  session: Session;
+  deviceId?: string;
+  station?: Station;
+}>();
 
 /** Desktop single-window session. */
 let globalSession: Session = null;
@@ -31,6 +38,14 @@ export function setGlobalSession(session: Session): void {
 export function currentSession(): Session {
   const scoped = requestSession.getStore();
   return scoped ? scoped.session : globalSession;
+}
+
+/** The print station for the current call. Set by the HTTP dispatcher to
+ *  'door' (phones clear at the exit); the desktop IPC path leaves it unset and
+ *  defaults to 'counter'. This is the single seam that routes phone receipts to
+ *  the door printer without inferring origin from sale data. */
+export function currentStation(): Station {
+  return requestSession.getStore()?.station ?? 'counter';
 }
 
 /** The device id in effect for the current call: the remote device on the

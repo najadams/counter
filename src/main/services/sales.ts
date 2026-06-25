@@ -18,7 +18,7 @@ import {
   DISCOUNT_ABS_THRESHOLD_PESEWAS,
   DISCOUNT_PERCENT_THRESHOLD_BPS,
 } from '../../shared/lib/constants.js';
-import { getPrinter } from '../printer/printer.js';
+import { getPrinter, type Station } from '../printer/printer.js';
 import type { SaleReceipt } from '../printer/receipt.js';
 import { getReceiptConfig } from './receiptConfig.js';
 
@@ -176,6 +176,10 @@ export interface CompleteSaleInput {
   deviceId: string;
   shopName: string;
   shopSubtitle?: string | null;
+  /** Print station to route this sale's receipt to. Stamped at the transport
+   *  boundary (phone/HTTP -> 'door', desktop -> 'counter'). Defaults to
+   *  'counter' when absent. */
+  station?: Station;
 }
 
 export interface CompleteSaleResult {
@@ -184,6 +188,10 @@ export interface CompleteSaleResult {
   changePesewas: number | null;
   printerFailed: boolean;
   printerError?: string;
+  /** Where this sale's receipt was routed ('counter' or 'door'). The renderer
+   *  uses it to escalate a door-printer failure into a blocking "send to
+   *  counter" alert for the phone cashier. */
+  station: Station;
   /** The receipt struct used by the auto-print path. Returned so the renderer
    *  can offer an on-demand reprint via the browser print dialog. */
   receipt: SaleReceipt;
@@ -703,10 +711,14 @@ export async function completeSale(
     })),
   };
 
+  // Route to the sale's station: phone (HTTP) sales print at the door so the
+  // exit-check can clear them; desktop sales print at the counter.
+  const station: Station = input.station ?? 'counter';
+
   let printerFailed = false;
   let printerError: string | undefined;
   try {
-    const result = await getPrinter().print(receipt);
+    const result = await getPrinter(station).print(receipt);
     if (!result.ok) {
       printerFailed = true;
       printerError = `${result.reason}: ${result.message}`;
@@ -718,18 +730,20 @@ export async function completeSale(
 
   if (printerFailed) {
     // Mark the sale + queue a reprint. Outside the original txn so a printer
-    // hiccup never fails the sale.
+    // hiccup never fails the sale. The row carries the station it failed at so
+    // a later retry fires on the SAME printer, not the default one.
     const flagTx = db.transaction(() => {
       db.prepare('UPDATE sales SET printer_failed = 1, updated_at = ? WHERE id = ?')
         .run(new Date().toISOString(), saleId);
       db.prepare(
         `INSERT INTO pending_receipt_reprints
-          (id, sale_id, reason, created_by, updated_by, device_id)
-          VALUES (?, ?, ?, ?, ?, ?)`,
+          (id, sale_id, reason, station_id, created_by, updated_by, device_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         `prr-${uuidv4()}`,
         saleId,
         printerError ? printerError.slice(0, 80) : 'OFFLINE',
+        station,
         input.workerId,
         input.workerId,
         input.deviceId,
@@ -746,7 +760,7 @@ export async function completeSale(
     flagTx();
   }
 
-  return { saleId, totalPesewas, changePesewas, printerFailed, printerError, receipt };
+  return { saleId, totalPesewas, changePesewas, printerFailed, printerError, receipt, station };
 }
 
 /** Convenience: read shop_name / shop_subtitle from device_config. */
