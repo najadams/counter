@@ -61,6 +61,8 @@ export function createCounterApi(invoke: Invoke) {
       invoke<ipc.SaleListRecentResponse>(ipc.IPC_CHANNELS.SALE_LIST_RECENT, { limit }),
     voidSale: (saleId: string, reason: string, supervisorWorkerId: string, supervisorPin: string) =>
       invoke<ipc.SaleVoidResponse>(ipc.IPC_CHANNELS.SALE_VOID, { saleId, reason, supervisorWorkerId, supervisorPin }),
+    correctSale: (req: ipc.SaleCorrectRequest) =>
+      invoke<ipc.SaleCorrectResponse>(ipc.IPC_CHANNELS.SALE_CORRECT, req),
 
     // breakage
     reportBreakage: (req: ipc.BreakageReportRequest) =>

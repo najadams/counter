@@ -5,6 +5,7 @@ import { useCart } from '../store/cart';
 import { counter } from '../lib/ipc';
 import { AppHeader } from '../components/AppHeader';
 import { SupervisorPinModal } from '../components/SupervisorPinModal';
+import { CorrectSaleModal } from '../components/CorrectSaleModal';
 import { ReceiptPrintModal } from '../components/ReceiptPrintModal';
 import type { SaleReceipt } from '../../shared/lib/receipt';
 import { formatMoney, formatMoneyWithCurrency } from '../../shared/lib/money';
@@ -27,6 +28,7 @@ export default function VoidSaleScreen({ onExit, onDuplicate }: { onExit: () => 
     receipt: SaleReceipt; amountPaidPesewas: number; amountOutstandingPesewas: number | null;
   } | null>(null);
   const [loadingReceiptId, setLoadingReceiptId] = useState<string | null>(null);
+  const [correcting, setCorrecting] = useState<RecentSale | null>(null);
 
   async function refresh() {
     const r = await counter.listRecentSales(50);
@@ -136,11 +138,18 @@ export default function VoidSaleScreen({ onExit, onDuplicate }: { onExit: () => 
                       </button>
                       {s.voided
                         ? <span className="text-danger text-xs self-center">VOIDED</span>
-                        : <button
-                            onClick={() => { setSelected(s); setReason(''); setError(null); setInfo(null); }}
-                            className="px-3 py-1 border border-danger text-danger hover:bg-danger hover:text-ink text-xs">
-                            Void
-                          </button>}
+                        : <>
+                            <button
+                              onClick={() => { setCorrecting(s); setError(null); setInfo(null); }}
+                              className="px-3 py-1 border border-border text-text-tertiary hover:text-accent hover:border-accent text-xs">
+                              Correct
+                            </button>
+                            <button
+                              onClick={() => { setSelected(s); setReason(''); setError(null); setInfo(null); }}
+                              className="px-3 py-1 border border-danger text-danger hover:bg-danger hover:text-ink text-xs">
+                              Void
+                            </button>
+                          </>}
                     </div>
                   </td>
                 </tr>
@@ -186,6 +195,14 @@ export default function VoidSaleScreen({ onExit, onDuplicate }: { onExit: () => 
           />
         )}
       </main>
+
+      {correcting && (
+        <CorrectSaleModal
+          sale={correcting}
+          onCancel={() => setCorrecting(null)}
+          onDone={(msg) => { setCorrecting(null); setInfo(msg); void refresh(); }}
+        />
+      )}
 
       {receiptDetail && (
         <ReceiptPrintModal
