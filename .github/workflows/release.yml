@@ -94,7 +94,10 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
         run: |
-          set -u
+          # GitHub Actions runs `shell: bash` with `-eo pipefail`, so a failed
+          # `npm run` would abort this step before the retry logic. Turn errexit
+          # off and inspect exit codes by hand; keep nounset for safety.
+          set +e -u
           eject_stray_volumes() {
             for vol in /Volumes/Counter*; do
               [ -d "$vol" ] || continue
