@@ -6,10 +6,16 @@ import https from 'node:https';
 import type { SyncTransport, PullTransport, PushBatch, PushAck, PullResponse } from '../../shared/sync.js';
 
 export function createHttpTransport(centralUrl: string, token: string): SyncTransport & PullTransport {
+  // Append endpoints RELATIVE to the central base so a base path is honoured
+  // (Supabase serves functions under /functions/v1/, e.g. central_url
+  // https://<project>.supabase.co/functions/v1/ → .../functions/v1/ingest).
+  // A leading-slash path would strip the base. Normalise a trailing slash so
+  // `new URL('ingest', base)` resolves correctly; a root host still works.
+  const base = centralUrl.endsWith('/') ? centralUrl : `${centralUrl}/`;
   return {
     send(batch: PushBatch): Promise<PushAck> {
       return new Promise<PushAck>((resolve, reject) => {
-        const url = new URL('/ingest', centralUrl);
+        const url = new URL('ingest', base);
         const client = url.protocol === 'https:' ? https : http;
         const body = Buffer.from(JSON.stringify(batch), 'utf8');
         const req = client.request(url, {
@@ -44,7 +50,7 @@ export function createHttpTransport(centralUrl: string, token: string): SyncTran
 
     fetchCatalog(since: number, limit = 500): Promise<PullResponse> {
       return new Promise<PullResponse>((resolve, reject) => {
-        const url = new URL('/catalog', centralUrl);
+        const url = new URL('catalog', base);
         url.searchParams.set('since', String(since));
         url.searchParams.set('limit', String(limit));
         const client = url.protocol === 'https:' ? https : http;

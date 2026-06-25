@@ -28,3 +28,6 @@ _diag.mjs
 
 # Vitest re-writes vitest.config.ts.timestamp-*.mjs on every run.
 vitest.config.ts.timestamp*.mjs
+
+# Supabase CLI local link state
+supabase/.temp/
