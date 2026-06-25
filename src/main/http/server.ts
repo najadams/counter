@@ -207,7 +207,11 @@ async function dispatchApi(
     return;
   }
   const session: Session = resolveToken(token);
-  const out = await requestSession.run({ session, deviceId }, () =>
+  // Phones reach the till over HTTP; their receipts must print at the exit so
+  // the door-check can clear the sale without a walk back to the counter. Stamp
+  // the station here, at the transport boundary — the desktop IPC path leaves it
+  // unset and defaults to 'counter'.
+  const out = await requestSession.run({ session, deviceId, station: 'door' }, () =>
     (fn as (e: unknown, p: unknown) => Promise<IpcResponse<unknown>>)({}, payload),
   );
   sendJson(res, 200, out);

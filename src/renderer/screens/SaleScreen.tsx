@@ -30,6 +30,20 @@ import {
 import { SupervisorPinModal } from '../components/SupervisorPinModal';
 import { chimeSuccess, chimeWarning, flashBody } from '../lib/feedback';
 
+/** Door-printer failure on a phone sale: the cashier must walk the customer to
+ *  the counter for the exit-token before they leave. Blocking + can't-miss on
+ *  purpose — a queued-receipt toast is too easy to miss on a phone, and the
+ *  door-check has nothing to match against until the paper exists. The sale is
+ *  already saved and queued for reprint. */
+function alertDoorReceiptFailure(printerError?: string): void {
+  window.alert(
+    '⚠ RECEIPT FAILED — send the customer to the counter to collect their '
+    + 'receipt before they leave.\n\n'
+    + `Reason: ${printerError ?? 'door printer offline'}\n\n`
+    + 'The sale is saved and queued for reprint.',
+  );
+}
+
 interface ProductHit {
   id: string; sku: string; name: string; brand: string | null;
   category: string; unitPricePesewas: number; costPricePesewas: number;
@@ -261,9 +275,11 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
     });
     setSubmitting(false);
     if (!res.success) { setError(res.error); return; }
-    const { saleId, changePesewas, printerFailed, printerError, receipt } = res.data;
-    if (printerFailed) { chimeWarning(); flashBody('flash-warning'); }
-    else { chimeSuccess(); flashBody('flash-success'); }
+    const { saleId, changePesewas, printerFailed, printerError, receipt, station } = res.data;
+    if (printerFailed) {
+      chimeWarning(); flashBody('flash-warning');
+      if (station === 'door') alertDoorReceiptFailure(printerError);
+    } else { chimeSuccess(); flashBody('flash-success'); }
     let toast = `Sale ${saleId.slice(-8)} complete.`;
     if (changePesewas != null && changePesewas > 0) toast += ` Change: ${formatMoneyWithCurrency(changePesewas)}.`;
     if (printerFailed) toast += `  ⚠ Receipt queued — ${printerError ?? 'printer offline'}.`;
@@ -335,10 +351,11 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
     });
     setSubmitting(false);
     if (!res.success) { setError(res.error); return; }
-    const { saleId, changePesewas, printerFailed, printerError, receipt } = res.data;
+    const { saleId, changePesewas, printerFailed, printerError, receipt, station } = res.data;
     if (printerFailed) {
       chimeWarning();
       flashBody('flash-warning');
+      if (station === 'door') alertDoorReceiptFailure(printerError);
     } else {
       chimeSuccess();
       flashBody('flash-success');

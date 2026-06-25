@@ -11,6 +11,7 @@ import { getDeviceId } from './db/deviceId.js';
 import { reconcileAllCustomersOnBoot } from './services/boot.js';
 import { HandlerRegistry } from './ipc/registry.js';
 import { initTokenStore } from './ipc/session.js';
+import { setPrinterDevMode } from './printer/printer.js';
 import { startSyncWorker } from './sync/push.js';
 import { startPullWorker } from './sync/pull.js';
 import { createHttpTransport } from './sync/httpTransport.js';
@@ -89,6 +90,9 @@ function createMainWindow(): void {
 }
 
 app.whenReady().then(() => {
+  // Console-print fallback is a dev convenience only. In the packaged app an
+  // unconfigured/unreachable station must fail loud, never silently "succeed".
+  setPrinterDevMode(isDev);
   const userData = app.getPath('userData');
   const dbPath = defaultDbPath(userData);
   log.info(`[main] DB path: ${dbPath}`);

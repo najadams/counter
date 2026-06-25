@@ -3,7 +3,7 @@
 import type { App } from 'electron';
 import type { Database as DB } from 'better-sqlite3';
 import type { IpcRegistrar } from './registry.js';
-import { currentSession, setGlobalSession, type Session } from './session.js';
+import { currentSession, currentStation, setGlobalSession, type Session } from './session.js';
 import { getAccessInfo } from '../http/server.js';
 import { getSyncStatus } from '../sync/status.js';
 import { readSyncConfigView, writeSyncConfig } from '../sync/config.js';
@@ -245,6 +245,7 @@ export function registerIpcHandlers(
         paymentMethod: req.paymentMethod, paymentReference: req.paymentReference,
         cashGivenPesewas: req.cashGivenPesewas, customerId: req.customerId,
         deviceId, shopName: header.shopName, shopSubtitle: header.shopSubtitle,
+        station: currentStation(),
       });
     },
     IPC_CHANNELS.SALE_COMPLETE,
@@ -1092,15 +1093,18 @@ export function registerSession12ReprintHandlers(
         const w = requireWorker();
         // Locate the queued reprint to fetch its sale_id.
         const row = db.prepare(
-          'SELECT sale_id, resolved_at FROM pending_receipt_reprints WHERE id = ?',
-        ).get(req.reprintId) as { sale_id: string; resolved_at: string | null } | undefined;
+          'SELECT sale_id, station_id, resolved_at FROM pending_receipt_reprints WHERE id = ?',
+        ).get(req.reprintId) as
+          { sale_id: string; station_id: string; resolved_at: string | null } | undefined;
         if (!row) throw new Error(`reprint ${req.reprintId} not found`);
         if (row.resolved_at) throw new Error('reprint already resolved');
 
         const receipt = buildSaleReceiptForReprint(db, row.sale_id);
         if (!receipt) throw new Error(`sale ${row.sale_id} not found`);
 
-        const printer = getPrinter();
+        // Retry on the SAME station it failed at, so a door-sale receipt
+        // doesn't surface at the counter (and vice versa).
+        const printer = getPrinter(row.station_id === 'door' ? 'door' : 'counter');
         const result = await printer.print(receipt);
         if (result.ok) {
           markReprintResolved(db, req.reprintId, 'manual reprint succeeded', w.workerId, deviceId);
@@ -1185,7 +1189,9 @@ export function registerSession14ReprintHandlers(
         const receipt = buildSaleReceiptForReprint(db, req.saleId);
         if (!receipt) throw new Error(`sale ${req.saleId} not found`);
 
-        const printer = getPrinter();
+        // On-demand reprint prints where the request came from: a phone
+        // reprints at the door, the desktop at the counter.
+        const printer = getPrinter(currentStation());
         const result = await printer.print(receipt);
 
         // Audit every reprint regardless of outcome — this is a forensic surface.
