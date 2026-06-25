@@ -28,6 +28,8 @@ import {
   DISCOUNT_ABS_THRESHOLD_PESEWAS, DISCOUNT_PERCENT_THRESHOLD_BPS,
 } from '../../shared/lib/constants';
 import { SupervisorPinModal } from '../components/SupervisorPinModal';
+import { TouchCheckoutSheet } from '../components/TouchCheckoutSheet';
+import { useIsTouch } from '../hooks/useIsTouch';
 import { chimeSuccess, chimeWarning, flashBody } from '../lib/feedback';
 
 /** Door-printer failure on a phone sale: the cashier must walk the customer to
@@ -127,6 +129,15 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
     }
   }, [customer, channel]);
   const [showPaymentModal, setShowPaymentModal] = useState<PaymentMethod | null>(null);
+  const isTouch = useIsTouch();
+  const [showTouchSheet, setShowTouchSheet] = useState(false);
+
+  // Close the touch sheet when the cart empties — i.e. a sale completed (any
+  // path, including the supervisor-PIN re-submit) cleared it. Keeps the sheet
+  // open on validation/server failure (cart not cleared) so the error shows.
+  useEffect(() => {
+    if (showTouchSheet && lines.length === 0) setShowTouchSheet(false);
+  }, [lines.length, showTouchSheet]);
   const [showSplit, setShowSplit] = useState(false);
 
   const searchRef = useRef<HTMLInputElement>(null);
@@ -298,6 +309,11 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
 
   async function submitSale(supervisorOverride?: { id: string; pin: string }) {
     if (submitting) return;
+    // Read payment fields fresh from the store. The touch checkout sheet sets
+    // these and submits in the same tick, where the captured render selectors
+    // would be stale. On desktop the state is already settled before F2/Complete,
+    // so these equal the captured values — behaviour-neutral for the desktop flow.
+    const { paymentMethod, paymentReference, cashGivenPesewas: cashGiven, customer } = useCart.getState();
     if (lines.length === 0) { setError('Cart is empty.'); return; }
     if (!paymentMethod) { setError('Pick a payment method (F4/F5/F6).'); return; }
     if (paymentMethod.startsWith('MOMO_') && paymentReference.trim() === '') {
@@ -448,7 +464,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
               placeholder="Search by SKU or name…"
               className="w-full bg-bg-input border border-border-strong px-4 py-3 text-lg focus:outline-none focus:border-accent"
             />
-            <div className="hidden sm:block text-text-tertiary text-xs mt-2">
+            <div className={`${isTouch ? 'hidden' : 'hidden sm:block'} text-text-tertiary text-xs mt-2`}>
               <span className="kbd">↑</span><span className="kbd">↓</span> move ·
               <span className="kbd">Enter</span> add ·
               <span className="kbd">F4</span> Cash ·
@@ -654,25 +670,37 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
               </div>
             )}
 
-            <div className="grid grid-cols-3 gap-2 mt-2">
-              <PayBtn label="Cash" hot="F4" onClick={() => openPayment('CASH')} active={paymentMethod === 'CASH'} />
-              <PayBtn label="MoMo" hot="F5" onClick={() => openPayment('MOMO_MTN')} active={paymentMethod?.startsWith('MOMO_') ?? false} />
-              <PayBtn label="Credit" hot="F6" onClick={() => openPayment('CREDIT')} active={paymentMethod === 'CREDIT'} />
-            </div>
-            <button
-              onClick={() => { if (lines.length > 0) setShowSplit(true); }}
-              disabled={lines.length === 0}
-              className="text-sm px-3 py-2 border border-border hover:bg-bg-deep disabled:opacity-40 mt-1"
-            >
-              Split payment (cash + MoMo, etc.)
-            </button>
-            <button
-              onClick={() => void submitSale()}
-              disabled={submitting || lines.length === 0 || !paymentMethod}
-              className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed mt-2"
-            >
-              {submitting ? 'Completing…' : 'Complete sale'} <span className="kbd">F2</span>
-            </button>
+            {isTouch ? (
+              <button
+                onClick={() => { if (lines.length > 0) setShowTouchSheet(true); }}
+                disabled={lines.length === 0}
+                className="bg-accent text-ink px-5 py-4 text-lg font-semibold rounded-lg disabled:opacity-40 disabled:cursor-not-allowed mt-2"
+              >
+                Checkout
+              </button>
+            ) : (
+              <>
+                <div className="grid grid-cols-3 gap-2 mt-2">
+                  <PayBtn label="Cash" hot="F4" onClick={() => openPayment('CASH')} active={paymentMethod === 'CASH'} />
+                  <PayBtn label="MoMo" hot="F5" onClick={() => openPayment('MOMO_MTN')} active={paymentMethod?.startsWith('MOMO_') ?? false} />
+                  <PayBtn label="Credit" hot="F6" onClick={() => openPayment('CREDIT')} active={paymentMethod === 'CREDIT'} />
+                </div>
+                <button
+                  onClick={() => { if (lines.length > 0) setShowSplit(true); }}
+                  disabled={lines.length === 0}
+                  className="text-sm px-3 py-2 border border-border hover:bg-bg-deep disabled:opacity-40 mt-1"
+                >
+                  Split payment (cash + MoMo, etc.)
+                </button>
+                <button
+                  onClick={() => void submitSale()}
+                  disabled={submitting || lines.length === 0 || !paymentMethod}
+                  className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed mt-2"
+                >
+                  {submitting ? 'Completing…' : 'Complete sale'} <span className="kbd">F2</span>
+                </button>
+              </>
+            )}
 
             {error && (
               <div className="bg-bg-deep border border-danger px-4 py-2 text-danger text-sm">{error}</div>
@@ -728,6 +756,22 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
           setCashGivenPesewas={setCashGivenPesewas}
           customer={customer}
           setCustomer={setCustomer}
+        />
+      )}
+      {isTouch && showTouchSheet && (
+        <TouchCheckoutSheet
+          totalPesewas={total}
+          paymentReference={paymentReference}
+          setPaymentReference={setPaymentReference}
+          setPaymentMethod={setPaymentMethod}
+          setCashGivenPesewas={setCashGivenPesewas}
+          customer={customer}
+          setCustomer={setCustomer}
+          submitting={submitting}
+          error={error}
+          onSubmit={() => void submitSale()}
+          onClose={() => setShowTouchSheet(false)}
+          onOpenSplit={() => { setShowTouchSheet(false); if (lines.length > 0) setShowSplit(true); }}
         />
       )}
       {needsDiscountSupervisor && (
