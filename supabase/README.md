@@ -54,9 +54,18 @@ idempotent; the shop keeps selling whether or not the central store is reachable
 - RLS-on/no-policies means the public REST API exposes nothing; only the
   service-role functions read/write. Run `get_advisors(security)` after deploy.
 
+## Catalog-down (master data DOWN to shops)
+
+`catalog` serves the HQ shop's master rows (`shops.role = 'HQ'`) to any
+authenticated shop, ordered by the HQ outbox seq as the central cursor. The flow:
+an HQ-role install captures its master tables (migration 0033) and pushes them UP
+through `/ingest` like any event; they land in `shop_events` keyed by
+`(HQ shop_id, table_name, row_id)` (upsert, latest wins); `catalog` serves them
+down. Shops apply by upsert-on-id (`src/main/sync/pull.ts`) and page with
+`since=cursor`. To turn it on: `select register_shop('HQ','Head office','<token>','HQ');`
+on the central, then run one install with `sync_role = HQ`.
+
 ## Not built yet (next slices)
 
-- `catalog` real implementation (master data DOWN): serve HQ-owned
-  `SYNCED_MASTER_TABLES` ordered by a central cursor.
 - A `register`/provisioning endpoint (today registration is a SQL call).
 - Per-shop sequence-gap alerting on the central side.
