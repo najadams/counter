@@ -59,7 +59,9 @@ create or replace function register_shop(
 ) returns void
 language sql
 security definer
-set search_path = public
+-- pgcrypto's digest() lives in the `extensions` schema on Supabase, not public,
+-- so include it on the search_path.
+set search_path = public, extensions
 as $$
   insert into shops (shop_id, name, token_hash, role)
   values (p_shop_id, p_name, encode(digest(p_token, 'sha256'), 'hex'), p_role)
