@@ -180,6 +180,25 @@ export interface CompleteSaleInput {
    *  boundary (phone/HTTP -> 'door', desktop -> 'counter'). Defaults to
    *  'counter' when absent. */
   station?: Station;
+  /** When true, skip tier/customer-override re-pricing and use each line's
+   *  unitPricePesewas verbatim. Used by sale correction so a price change since
+   *  the original sale can't silently move a re-rung "unchanged" line's total. */
+  lockPrices?: boolean;
+  /** When set, this sale is the corrected replacement of an original; the
+   *  receipt prints a "CORRECTED — supersedes #<id>" header. The DB link is
+   *  written by correctSale, not here. */
+  supersedesSaleId?: string | null;
+}
+
+/** Synchronous core of completeSale: validation + pricing + the atomic DB
+ *  writes + the built receipt, with NO printing. Returned so a larger
+ *  transaction (sale correction) can compose it; completeSale prints after. */
+export interface CompleteSaleCoreResult {
+  saleId: string;
+  totalPesewas: number;
+  changePesewas: number | null;
+  receipt: SaleReceipt;
+  station: Station;
 }
 
 export interface CompleteSaleResult {
@@ -198,17 +217,16 @@ export interface CompleteSaleResult {
 }
 
 /**
- * Atomic sale: writes sales + sale_lines + stock_movements + audit_log
- * in one DB transaction. Then attempts to print the receipt; if the
- * printer fails, flips sales.printer_failed and inserts a
- * pending_receipt_reprints row. The sale is NOT rolled back on a
- * printer failure — we trust the DB write, and let the supervisor
- * reprint later.
+ * Synchronous core: writes sales + sale_lines + sale_payments +
+ * stock_movements + audit_log in one DB transaction and builds the receipt.
+ * Does NOT print. Because it's synchronous it can be composed inside a larger
+ * transaction (e.g. correctSale's void + re-ring). The async completeSale
+ * wrapper below calls this and then prints.
  */
-export async function completeSale(
+export function completeSaleCore(
   db: DB,
   input: CompleteSaleInput,
-): Promise<CompleteSaleResult> {
+): CompleteSaleCoreResult {
   // --- input validation -----------------------------------------------------
   if (input.lines.length === 0) {
     throw new Error('completeSale: cart is empty');
@@ -361,23 +379,28 @@ export async function completeSale(
     let unitPrice = l.unitPricePesewas;
     let appliedTierId: string | null = null;
 
-    // Wave C.2: per-customer price override beats the line's input price.
-    // Override is per-display-unit (same units as l.unitPricePesewas), so
-    // no factor conversion needed here. Tier may still beat the override
-    // if a volume break gives a better price.
-    if (input.customerId && unit) {
-      const ov = findBestOverride(db, input.customerId, l.productId, unit.id, input.channel);
-      if (ov && ov.pricePesewas < unitPrice) {
-        unitPrice = ov.pricePesewas;
+    // lockPrices (sale correction): use the line's price verbatim, skipping
+    // tier/override re-pricing, so re-ringing the original lines can't shift
+    // their totals if prices changed since the original sale.
+    if (!input.lockPrices) {
+      // Wave C.2: per-customer price override beats the line's input price.
+      // Override is per-display-unit (same units as l.unitPricePesewas), so
+      // no factor conversion needed here. Tier may still beat the override
+      // if a volume break gives a better price.
+      if (input.customerId && unit) {
+        const ov = findBestOverride(db, input.customerId, l.productId, unit.id, input.channel);
+        if (ov && ov.pricePesewas < unitPrice) {
+          unitPrice = ov.pricePesewas;
+        }
       }
-    }
 
-    if (tier && tier.unitPricePesewas < unitPrice) {
-      // Tier is per-canonical-unit; convert to per-unit for line math.
-      const tierUnitPrice = tier.unitPricePesewas * factor;
-      if (tierUnitPrice < unitPrice) {
-        unitPrice = tierUnitPrice;
-        appliedTierId = tier.id;
+      if (tier && tier.unitPricePesewas < unitPrice) {
+        // Tier is per-canonical-unit; convert to per-unit for line math.
+        const tierUnitPrice = tier.unitPricePesewas * factor;
+        if (tierUnitPrice < unitPrice) {
+          unitPrice = tierUnitPrice;
+          appliedTierId = tier.id;
+        }
       }
     }
     appliedTierIds.push(appliedTierId);
@@ -404,7 +427,9 @@ export async function completeSale(
   }
 
   // Discount supervisor gate: above either threshold, supervisor PIN required.
-  if (discount > 0) {
+  // Skipped under lockPrices (sale correction): the carried-forward discount was
+  // already approved on the original sale; re-gating it would block corrections.
+  if (discount > 0 && !input.lockPrices) {
     const percentLimit = Math.floor((subtotalPesewas * DISCOUNT_PERCENT_THRESHOLD_BPS) / 10000);
     const limit = Math.max(percentLimit, DISCOUNT_ABS_THRESHOLD_PESEWAS);
     if (discount > limit) {
@@ -679,6 +704,7 @@ export async function completeSale(
     showChannel: cfg.showChannel,
     showCustomer: cfg.showCustomer,
     receiptId: saleId,
+    correctedFromReceiptId: input.supersedesSaleId ?? null,
     workerName: input.workerName,
     saleAt: now,
     channel: input.channel,
@@ -715,6 +741,61 @@ export async function completeSale(
   // exit-check can clear them; desktop sales print at the counter.
   const station: Station = input.station ?? 'counter';
 
+  return { saleId, totalPesewas, changePesewas, receipt, station };
+}
+
+/** Flip sales.printer_failed and queue a station-tagged reprint. Used by the
+ *  sale path and the correction path on a printer failure. Its own transaction
+ *  so a printer hiccup never rolls back a committed sale. */
+export function flagReceiptFailed(
+  db: DB,
+  saleId: string,
+  station: Station,
+  printerError: string | undefined,
+  workerId: string,
+  deviceId: string,
+): void {
+  const tx = db.transaction(() => {
+    db.prepare('UPDATE sales SET printer_failed = 1, updated_at = ? WHERE id = ?')
+      .run(new Date().toISOString(), saleId);
+    db.prepare(
+      `INSERT INTO pending_receipt_reprints
+        (id, sale_id, reason, station_id, created_by, updated_by, device_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      `prr-${uuidv4()}`,
+      saleId,
+      printerError ? printerError.slice(0, 80) : 'OFFLINE',
+      station,
+      workerId,
+      workerId,
+      deviceId,
+    );
+    logAudit(db, {
+      workerId,
+      action: 'SALE_RECEIPT_FAILED',
+      entityType: 'sales',
+      entityId: saleId,
+      afterValue: { error: printerError ?? 'unknown' },
+      deviceId,
+    });
+  });
+  tx();
+}
+
+/**
+ * Atomic sale + receipt print. The DB work is completeSaleCore (synchronous);
+ * this wrapper prints after the commit and, on printer failure, flips
+ * printer_failed and queues a reprint. The sale is NOT rolled back on a print
+ * failure — we trust the DB write and let a supervisor reprint later.
+ */
+export async function completeSale(
+  db: DB,
+  input: CompleteSaleInput,
+): Promise<CompleteSaleResult> {
+  const core = completeSaleCore(db, input);
+  const { saleId, receipt, station } = core;
+
   let printerFailed = false;
   let printerError: string | undefined;
   try {
@@ -729,38 +810,18 @@ export async function completeSale(
   }
 
   if (printerFailed) {
-    // Mark the sale + queue a reprint. Outside the original txn so a printer
-    // hiccup never fails the sale. The row carries the station it failed at so
-    // a later retry fires on the SAME printer, not the default one.
-    const flagTx = db.transaction(() => {
-      db.prepare('UPDATE sales SET printer_failed = 1, updated_at = ? WHERE id = ?')
-        .run(new Date().toISOString(), saleId);
-      db.prepare(
-        `INSERT INTO pending_receipt_reprints
-          (id, sale_id, reason, station_id, created_by, updated_by, device_id)
-          VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      ).run(
-        `prr-${uuidv4()}`,
-        saleId,
-        printerError ? printerError.slice(0, 80) : 'OFFLINE',
-        station,
-        input.workerId,
-        input.workerId,
-        input.deviceId,
-      );
-      logAudit(db, {
-        workerId: input.workerId,
-        action: 'SALE_RECEIPT_FAILED',
-        entityType: 'sales',
-        entityId: saleId,
-        afterValue: { error: printerError ?? 'unknown' },
-        deviceId: input.deviceId,
-      });
-    });
-    flagTx();
+    flagReceiptFailed(db, saleId, station, printerError, input.workerId, input.deviceId);
   }
 
-  return { saleId, totalPesewas, changePesewas, printerFailed, printerError, receipt, station };
+  return {
+    saleId,
+    totalPesewas: core.totalPesewas,
+    changePesewas: core.changePesewas,
+    printerFailed,
+    printerError,
+    receipt,
+    station,
+  };
 }
 
 /** Convenience: read shop_name / shop_subtitle from device_config. */

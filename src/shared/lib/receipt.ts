@@ -48,6 +48,10 @@ export interface SaleReceipt {
   /** New: one entry per tender. If absent or single-row, formatter falls back to `payment`. */
   payments?: ReceiptTender[];
   printerFailedNotice?: boolean;
+  /** Set on a sale-correction replacement receipt: prints a prominent
+   *  "CORRECTED — supersedes #<id>" banner so the door-check honours this slip
+   *  and not the superseded original. */
+  correctedFromReceiptId?: string | null;
   /** Customization. All optional — defaults preserve the legacy output. */
   footerText?: string | null;
   showCashier?: boolean;
@@ -115,6 +119,10 @@ export function formatReceipt(r: SaleReceipt): string[] {
   lines.push(divider('='));
 
   lines.push(`Receipt #${r.receiptId.slice(-8)}`);
+  if (r.correctedFromReceiptId) {
+    lines.push(center('*** CORRECTED ***'));
+    lines.push(center(`supersedes #${r.correctedFromReceiptId.slice(-8)}`));
+  }
   const dt = new Date(r.saleAt);
   // Compact "YYYY-MM-DD HH:mm" — local time, padded.
   const pad = (n: number) => n.toString().padStart(2, '0');

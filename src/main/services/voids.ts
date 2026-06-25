@@ -93,99 +93,110 @@ export function voidSale(db: DB, input: VoidSaleInput): VoidSaleResult {
     }>;
   if (lines.length === 0) throw new Error(`voidSale: sale has no lines (corrupt)`);
 
+  const result = db.transaction(() => voidSaleCore(db, {
+    sale,
+    lines,
+    workerId: input.workerId,
+    reason: input.reason,
+    deviceId: input.deviceId,
+    supervisorApprovalId: input.supervisorWorkerId,
+  }))();
+
+  return { saleId: input.saleId, ...result };
+}
+
+export interface VoidSaleCoreParams {
+  sale: { id: string; location_id: string; customer_id: string | null; is_credit: number };
+  lines: Array<{ product_id: string; quantity: number; unit_cost_pesewas: number; conversion_factor: number }>;
+  workerId: string;
+  reason: string;
+  deviceId: string;
+  /** Supervisor who approved the void, or null for a correction void (the
+   *  correction's composition gate is the control there, not a PIN). */
+  supervisorApprovalId: string | null;
+}
+
+/**
+ * The DB writes of a void — reversal stock movements, credit-balance reversal,
+ * mark voided=1, SALE_VOIDED audit — with NO verification and NO transaction
+ * wrapper, so it composes inside a larger transaction (correctSale's void +
+ * re-ring). voidSale wraps this in its own transaction after verifying.
+ */
+export function voidSaleCore(
+  db: DB,
+  p: VoidSaleCoreParams,
+): { reversalMovementCount: number; customerBalanceDelta: number } {
   const now = new Date().toISOString();
   let customerDelta = 0;
   let reversalMovementCount = 0;
 
-  const tx = db.transaction(() => {
-    // 1) Reversing stock movements (positive, SALE_VOID_REVERSAL). Canonical
-    //    quantity = sale_lines.quantity × conversion_factor of the applied
-    //    unit. Per-canonical cost = sale_lines.unit_cost_pesewas ÷ factor —
-    //    after the sales.ts fix this is an exact integer; we use Math.round
-    //    defensively in case of legacy data written before that fix landed.
-    //    To keep the cost basis of the reversal exactly equal to the cost
-    //    basis of the original sale_line, we override total_value_pesewas
-    //    with line.unit_cost_pesewas × line.quantity instead of letting it
-    //    compute from rounded per-canonical cost × canonical quantity.
-    for (const line of lines) {
-      const canonicalQty = line.quantity * line.conversion_factor;
-      const perCanonicalCost = line.conversion_factor === 1
-        ? line.unit_cost_pesewas
-        : Math.round(line.unit_cost_pesewas / line.conversion_factor);
-      const lineValuePesewas = line.unit_cost_pesewas * line.quantity;
-      insertStockMovement(db, {
-        productId: line.product_id,
-        locationId: sale.location_id,
-        quantity: canonicalQty,
-        reasonCode: 'SALE_VOID_REVERSAL',
-        workerId: input.workerId,
-        saleId: sale.id,
-        unitCostPesewas: perCanonicalCost,
-        totalValuePesewasOverride: lineValuePesewas,
-        supervisorApprovalId: input.supervisorWorkerId,
-        notes: input.reason.slice(0, 200),
-        deviceId: input.deviceId,
-      });
-      reversalMovementCount++;
-    }
-
-    // 2) Reverse customer balance — but only the CREDIT-tender portion of
-    //    the original sale. Mirrors completeSale, which now bumps the
-    //    balance by the credit tenders only (not the full sale total).
-    //    For a pure-CREDIT sale the two amounts coincide; for a split
-    //    they differ and the void must reverse what was actually added.
-    if (sale.is_credit === 1 && sale.customer_id) {
-      const creditRow = db
-        .prepare(
-          `SELECT COALESCE(SUM(amount_pesewas), 0) AS creditAmount
-             FROM sale_payments
-             WHERE sale_id = ? AND payment_method = 'CREDIT'`,
-        )
-        .get(sale.id) as { creditAmount: number };
-      const creditAmount = creditRow.creditAmount;
-      if (creditAmount > 0) {
-        db.prepare(
-          `UPDATE customers
-              SET current_balance_pesewas = current_balance_pesewas - ?,
-                  updated_at = ?,
-                  updated_by = ?
-              WHERE id = ?`,
-        ).run(creditAmount, now, input.workerId, sale.customer_id);
-        customerDelta = -creditAmount;
-      }
-    }
-
-    // 3) Mark sale voided.
-    db.prepare(
-      `UPDATE sales
-          SET voided = 1,
-              voided_at = ?,
-              voided_by = ?,
-              void_reason = ?,
-              updated_at = ?,
-              updated_by = ?
-          WHERE id = ?`,
-    ).run(now, input.workerId, input.reason, now, input.workerId, input.saleId);
-
-    logAudit(db, {
-      workerId: input.workerId,
-      action: 'SALE_VOIDED',
-      entityType: 'sales',
-      entityId: input.saleId,
-      afterValue: {
-        voidedAt: now,
-        reason: input.reason,
-        supervisorWorkerId: input.supervisorWorkerId,
-        customerBalanceDelta: customerDelta,
-        reversalMovementCount,
-      },
-      deviceId: input.deviceId,
+  // 1) Reversing stock movements (positive, SALE_VOID_REVERSAL). Canonical
+  //    quantity = quantity × conversion_factor; cost basis kept exactly equal
+  //    to the original sale_line via the total_value override.
+  for (const line of p.lines) {
+    const canonicalQty = line.quantity * line.conversion_factor;
+    const perCanonicalCost = line.conversion_factor === 1
+      ? line.unit_cost_pesewas
+      : Math.round(line.unit_cost_pesewas / line.conversion_factor);
+    const lineValuePesewas = line.unit_cost_pesewas * line.quantity;
+    insertStockMovement(db, {
+      productId: line.product_id,
+      locationId: p.sale.location_id,
+      quantity: canonicalQty,
+      reasonCode: 'SALE_VOID_REVERSAL',
+      workerId: p.workerId,
+      saleId: p.sale.id,
+      unitCostPesewas: perCanonicalCost,
+      totalValuePesewasOverride: lineValuePesewas,
+      supervisorApprovalId: p.supervisorApprovalId ?? undefined,
+      notes: p.reason.slice(0, 200),
+      deviceId: p.deviceId,
     });
+    reversalMovementCount++;
+  }
+
+  // 2) Reverse customer balance — only the CREDIT-tender portion (mirrors
+  //    completeSale, which bumps by credit tenders only).
+  if (p.sale.is_credit === 1 && p.sale.customer_id) {
+    const creditRow = db
+      .prepare(
+        `SELECT COALESCE(SUM(amount_pesewas), 0) AS creditAmount
+           FROM sale_payments WHERE sale_id = ? AND payment_method = 'CREDIT'`,
+      )
+      .get(p.sale.id) as { creditAmount: number };
+    if (creditRow.creditAmount > 0) {
+      db.prepare(
+        `UPDATE customers
+            SET current_balance_pesewas = current_balance_pesewas - ?,
+                updated_at = ?, updated_by = ? WHERE id = ?`,
+      ).run(creditRow.creditAmount, now, p.workerId, p.sale.customer_id);
+      customerDelta = -creditRow.creditAmount;
+    }
+  }
+
+  // 3) Mark sale voided.
+  db.prepare(
+    `UPDATE sales
+        SET voided = 1, voided_at = ?, voided_by = ?, void_reason = ?,
+            updated_at = ?, updated_by = ? WHERE id = ?`,
+  ).run(now, p.workerId, p.reason, now, p.workerId, p.sale.id);
+
+  logAudit(db, {
+    workerId: p.workerId,
+    action: 'SALE_VOIDED',
+    entityType: 'sales',
+    entityId: p.sale.id,
+    afterValue: {
+      voidedAt: now,
+      reason: p.reason,
+      supervisorWorkerId: p.supervisorApprovalId,
+      customerBalanceDelta: customerDelta,
+      reversalMovementCount,
+    },
+    deviceId: p.deviceId,
   });
 
-  tx();
-
-  return { saleId: input.saleId, reversalMovementCount, customerBalanceDelta: customerDelta };
+  return { reversalMovementCount, customerBalanceDelta: customerDelta };
 }
 
 export interface RecentSale {

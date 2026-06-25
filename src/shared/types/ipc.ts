@@ -28,6 +28,7 @@ export const IPC_CHANNELS = {
   // Voids
   SALE_LIST_RECENT: 'sale:list-recent',
   SALE_VOID: 'sale:void',
+  SALE_CORRECT: 'sale:correct',
 
   // Breakage / consumption / stock receipts
   BREAKAGE_REPORT: 'breakage:report',
@@ -248,6 +249,23 @@ export interface SaleVoidResponse {
   saleId: string;
   reversalMovementCount: number;
   customerBalanceDelta: number;
+}
+export interface SaleCorrectRequest {
+  originalSaleId: string;
+  /** ONLY the missed items; original lines are rebuilt server-side. */
+  addedLines: Array<{ productId: string; quantity: number; unitPricePesewas: number; unitId?: string }>;
+  /** Tenders for the FULL corrected total (must sum to it). */
+  payments: Array<{ method: string; amountPesewas: number; reference?: string | null; cashGivenPesewas?: number | null }>;
+}
+export interface SaleCorrectResponse {
+  originalSaleId: string;
+  newSaleId: string;
+  totalPesewas: number;
+  deltaPesewas: number;
+  changePesewas: number | null;
+  printerFailed: boolean;
+  printerError?: string;
+  station: 'counter' | 'door';
 }
 
 // --- breakage --------------------------------------------------------------

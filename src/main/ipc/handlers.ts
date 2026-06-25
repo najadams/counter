@@ -21,6 +21,7 @@ import {
   type SaleRepriceLinesRequest, type SaleRepriceLinesResponse,
   type SaleListRecentRequest, type SaleListRecentResponse,
   type SaleVoidRequest, type SaleVoidResponse,
+  type SaleCorrectRequest, type SaleCorrectResponse,
   type ShiftCloseRequest, type ShiftCloseResponse,
   type ShiftGetOpenResponse, type ShiftOpenRequest, type ShiftOpenResponse,
   type ShiftSubmitCountRequest, type ShiftSubmitCountResponse,
@@ -44,6 +45,7 @@ import { priceForUnit } from '../services/productUnits.js';
 import { searchCustomers } from '../services/customers.js';
 import { unitsOnHand } from '../services/stockMovements.js';
 import { listRecentSales, voidSale } from '../services/voids.js';
+import { correctSale } from '../services/correctSale.js';
 import { listRecentBreakage, reportBreakage } from '../services/breakage.js';
 import { getMonthlyUsage, recordConsumption } from '../services/consumption.js';
 import { listActiveSuppliers, receiveStock } from '../services/stockReceipts.js';
@@ -281,6 +283,29 @@ export function registerIpcHandlers(
       });
     },
     IPC_CHANNELS.SALE_VOID,
+  ));
+  ipcMain.handle(IPC_CHANNELS.SALE_CORRECT, wrap<SaleCorrectRequest, SaleCorrectResponse>(
+    async (req) => {
+      const w = requireWorker();
+      const header = getShopHeader(db);
+      const r = await correctSale(db, {
+        originalSaleId: req.originalSaleId,
+        addedLines: req.addedLines,
+        payments: req.payments,
+        workerId: w.workerId, workerName: w.fullName,
+        deviceId, shopName: header.shopName, shopSubtitle: header.shopSubtitle,
+        station: currentStation(),
+      });
+      // Receipt struct stays main-side; renderer reads it back via getSaleReceipt
+      // if it wants to reprint. Return the scalar result + routing.
+      return {
+        originalSaleId: r.originalSaleId, newSaleId: r.newSaleId,
+        totalPesewas: r.totalPesewas, deltaPesewas: r.deltaPesewas,
+        changePesewas: r.changePesewas, printerFailed: r.printerFailed,
+        printerError: r.printerError, station: r.station,
+      };
+    },
+    IPC_CHANNELS.SALE_CORRECT,
   ));
 
   // --- breakage ----------------------------------------------------------
