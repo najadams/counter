@@ -5,6 +5,8 @@ export const IPC_CHANNELS = {
   PING: 'system:ping',
   GET_DEVICE_ID: 'system:device-id',
   NET_ACCESS_INFO: 'system:access-info',
+  NET_HTTP_STATUS: 'system:http-status',
+  NET_HTTP_SET: 'system:http-set',
 
   // Auth / session
   WORKER_LIST_FOR_LOGIN: 'worker:list-for-login',
@@ -71,6 +73,15 @@ export interface AccessInfoResponse {
   /** Stable mDNS URL (http://counter.local:PORT) when advertised. */
   mdnsUrl?: string;
 }
+
+/** Runtime state of the embedded LAN server (the "Phone access" toggle). */
+export interface HttpStatusResponse {
+  enabled: boolean;
+  host: string;
+  access: AccessInfoResponse | null;
+}
+/** Toggle phone access. `lan` exposes on the LAN (0.0.0.0); default true. */
+export interface HttpSetRequest { enabled: boolean; lan?: boolean }
 
 // --- auth ------------------------------------------------------------------
 

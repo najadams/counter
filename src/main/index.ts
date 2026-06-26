@@ -16,7 +16,7 @@ import { startSyncWorker } from './sync/push.js';
 import { startPullWorker } from './sync/pull.js';
 import { createHttpTransport } from './sync/httpTransport.js';
 import { readSyncConfig } from './sync/config.js';
-import { startHttpServer } from './http/server.js';
+import { initHttpManager, autostartHttp } from './http/manager.js';
 import { registerIpcHandlers, registerSession5Handlers, registerSession6Handlers, registerSession7Handlers, registerSession8Handlers, registerSession9Handlers, registerSession11Handlers, registerSession11SuppliersHandlers, registerSession12AuditHandlers, registerSession12BreakageHandlers, registerSession12ReprintHandlers, registerSession12StockHandlers, registerSession14ReprintHandlers, registerSession15PeriodHandlers, registerSession15ExcHandlers, registerSession16ReorderHandlers, registerSession17ExpenseHandlers, registerSession18RecoveryHandlers, registerBackupHandlers, registerStatementHandlers, registerCpoHandlers, registerReturnsHandlers, registerSupplierPaymentsHandlers, registerReportsHandlers, registerCatalogTransferHandlers, registerReceiptConfigHandlers, registerSyncHandlers } from './ipc/handlers.js';
 
 log.initialize();
@@ -166,28 +166,30 @@ app.whenReady().then(() => {
   // builds don't open a socket unless asked. Defaults to loopback; set
   // COUNTER_HTTP_HOST=0.0.0.0 to expose on the LAN. Optional TLS via
   // COUNTER_HTTPS_KEY / COUNTER_HTTPS_CERT (PEM file paths).
-  if (process.env['COUNTER_HTTP'] === '1') {
-    let tls: { key: Buffer; cert: Buffer } | undefined;
-    const keyPath = process.env['COUNTER_HTTPS_KEY'];
-    const certPath = process.env['COUNTER_HTTPS_CERT'];
-    if (keyPath && certPath) {
-      try {
-        tls = { key: fs.readFileSync(keyPath), cert: fs.readFileSync(certPath) };
-      } catch (err) {
-        log.error('[http] failed to read TLS key/cert; starting without TLS:', err);
-      }
+  // The LAN server is now a runtime toggle ("Phone access" in Settings),
+  // persisted in device_config and managed by the http manager. The
+  // COUNTER_HTTP / COUNTER_HTTP_HOST env vars still force it on (dev, kiosk),
+  // and optional TLS is read here. autostartHttp() honours the persisted toggle.
+  let tls: { key: Buffer; cert: Buffer } | undefined;
+  const keyPath = process.env['COUNTER_HTTPS_KEY'];
+  const certPath = process.env['COUNTER_HTTPS_CERT'];
+  if (keyPath && certPath) {
+    try {
+      tls = { key: fs.readFileSync(keyPath), cert: fs.readFileSync(certPath) };
+    } catch (err) {
+      log.error('[http] failed to read TLS key/cert; starting without TLS:', err);
     }
-    startHttpServer({
-      db,
-      deviceId,
-      registry,
-      distDir: path.join(__dirname, '../../dist'),
-      host: process.env['COUNTER_HTTP_HOST'] ?? '127.0.0.1',
-      port: Number(process.env['COUNTER_HTTP_PORT'] ?? 4317),
-      proxyTarget: isDev ? process.env['VITE_DEV_SERVER_URL'] : undefined,
-      tls,
-    });
   }
+  initHttpManager({
+    db,
+    deviceId,
+    registry,
+    distDir: path.join(__dirname, '../../dist'),
+    port: Number(process.env['COUNTER_HTTP_PORT'] ?? 4317),
+    proxyTarget: isDev ? process.env['VITE_DEV_SERVER_URL'] : undefined,
+    tls,
+  }, db);
+  autostartHttp();
 
   // Background push sync to the central store (Phase 3b). Opt-in: only runs
   // once the shop is provisioned (shop_id + central_url + central_token in

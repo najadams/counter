@@ -5,6 +5,7 @@ import type { Database as DB } from 'better-sqlite3';
 import type { IpcRegistrar } from './registry.js';
 import { currentSession, currentStation, setGlobalSession, type Session } from './session.js';
 import { getAccessInfo } from '../http/server.js';
+import { httpStatus, setHttp } from '../http/manager.js';
 import { getSyncStatus } from '../sync/status.js';
 import { readSyncConfigView, writeSyncConfig } from '../sync/config.js';
 import {
@@ -13,7 +14,8 @@ import {
   type ConsumptionGetUsageRequest, type ConsumptionGetUsageResponse,
   type ConsumptionLogRequest, type ConsumptionLogResponse,
   type CustomerSearchRequest, type CustomerSearchResponse,
-  type AccessInfoResponse, type GetDeviceIdResponse, type IpcResponse,
+  type AccessInfoResponse, type HttpStatusResponse, type HttpSetRequest,
+  type GetDeviceIdResponse, type IpcResponse,
   type ListLoginCandidatesResponse, type PingRequest, type PingResponse,
   type ProductGetStockRequest, type ProductGetStockResponse,
   type ProductSearchRequest, type ProductSearchResponse,
@@ -106,6 +108,20 @@ export function registerIpcHandlers(
   ));
   ipcMain.handle(IPC_CHANNELS.GET_DEVICE_ID, wrap<unknown, GetDeviceIdResponse>(
     () => ({ deviceId }), IPC_CHANNELS.GET_DEVICE_ID,
+  ));
+  ipcMain.handle(IPC_CHANNELS.NET_HTTP_STATUS, wrap<unknown, HttpStatusResponse>(
+    () => { requireWorker(); return httpStatus(); },
+    IPC_CHANNELS.NET_HTTP_STATUS,
+  ));
+  ipcMain.handle(IPC_CHANNELS.NET_HTTP_SET, wrap<HttpSetRequest, HttpStatusResponse>(
+    async (req) => {
+      const w = requireWorker();
+      if (w.role !== 'OWNER' && w.role !== 'FOUNDER') {
+        throw new Error('Only OWNER or FOUNDER can change phone access.');
+      }
+      return await setHttp(req.enabled, req.lan ?? true);
+    },
+    IPC_CHANNELS.NET_HTTP_SET,
   ));
   ipcMain.handle(IPC_CHANNELS.NET_ACCESS_INFO, wrap<unknown, AccessInfoResponse>(
     () => getAccessInfo() ?? { exposed: false, scheme: 'http', port: 0, urls: [] },
