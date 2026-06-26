@@ -71,13 +71,63 @@ jobs:
       - name: Typecheck
         run: npx tsc -b --noEmit
 
+      # Windows + Linux: one clean run, no flakiness to work around.
       - name: Build installer
+        if: matrix.os != 'macos-latest'
         run: npm run ${{ matrix.dist_script }}
         env:
           # Skip code signing on CI for the unsigned dev builds. Real
           # production releases should set CSC_LINK / WIN_CSC_LINK and the
           # corresponding passwords as repo secrets.
           CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      # macOS: DMG creation intermittently fails at the final
+      # `hdiutil detach` step — a GitHub-runner race where Spotlight/Finder
+      # background processes keep the mounted "/Volumes/Counter <version>"
+      # image busy, so electron-builder's detach exits non-zero. It's
+      # transient: a plain re-run succeeds. Wrap the build in a retry that
+      # first ejects any stray Counter volume left mounted by a failed
+      # attempt, so the next run mounts and detaches cleanly.
+      - name: Build installer (macOS, retry on hdiutil detach race)
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: |
+          # GitHub Actions runs `shell: bash` with `-eo pipefail`, so a failed
+          # `npm run` would abort this step before the retry logic. Turn errexit
+          # off and inspect exit codes by hand; keep nounset for safety.
+          set +e -u
+          eject_stray_volumes() {
+            for vol in /Volumes/Counter*; do
+              [ -d "$vol" ] || continue
+              echo "::group::Ejecting stray volume: $vol"
+              hdiutil detach -force "$vol" || true
+              echo "::endgroup::"
+            done
+          }
+          max_attempts=3
+          attempt=1
+          while true; do
+            echo "macOS installer build — attempt ${attempt}/${max_attempts}"
+            eject_stray_volumes
+            # Capture the exit code directly: `$?` after `if cmd; then` with a
+            # false condition and no else is 0, not cmd's code — so a guarded
+            # `if` would mask a genuine failure and let the step pass.
+            npm run ${{ matrix.dist_script }}
+            status=$?
+            if [ "${status}" -eq 0 ]; then
+              echo "macOS installer build succeeded on attempt ${attempt}"
+              break
+            fi
+            if [ "${attempt}" -ge "${max_attempts}" ]; then
+              echo "macOS installer build failed after ${attempt} attempts (exit ${status})"
+              exit "${status}"
+            fi
+            echo "Build failed (exit ${status}); cleaning up and retrying in 15s…"
+            sleep 15
+            attempt=$((attempt + 1))
+          done
 
       - name: List build output
         shell: bash
