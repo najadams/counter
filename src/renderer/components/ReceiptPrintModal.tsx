@@ -28,6 +28,7 @@ const FALLBACK_CONFIG: ReceiptConfigResponse = {
   showCashier: true,
   showChannel: true,
   showCustomer: true,
+  vatRegistrationNumber: null,
 };
 
 interface Props {
@@ -193,6 +194,21 @@ export function ReceiptBody({
           fontSize="13pt"
           mono
         />
+        {/* VAT breakdown (Ghana, Act 1151). Inclusive prices — informational.
+            Rendered only when there is VAT to show (VAT build). */}
+        {((receipt.vatPesewas ?? 0) > 0 ||
+          (receipt.nhilPesewas ?? 0) > 0 ||
+          (receipt.getfundPesewas ?? 0) > 0) && (
+          <>
+            <Row left="Taxable (excl)" right={formatMoneyWithCurrency(receipt.taxablePesewas ?? 0)} weight={baseWeight} mono />
+            <Row left="VAT 15%" right={formatMoneyWithCurrency(receipt.vatPesewas ?? 0)} weight={baseWeight} mono />
+            <Row left="NHIL 2.5%" right={formatMoneyWithCurrency(receipt.nhilPesewas ?? 0)} weight={baseWeight} mono />
+            <Row left="GETFund 2.5%" right={formatMoneyWithCurrency(receipt.getfundPesewas ?? 0)} weight={baseWeight} mono />
+            {receipt.vatRegistrationNumber && (
+              <Row left="VAT Reg" right={receipt.vatRegistrationNumber} weight={baseWeight} mono />
+            )}
+          </>
+        )}
       </div>
 
       <Hr />

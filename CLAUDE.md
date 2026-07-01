@@ -38,15 +38,24 @@ The app stores its DB at the OS userData dir in production, and at
 
 ## 2. Building installers
 
-The build is shaped by `build` in `package.json` (electron-builder).
+The build is shaped by `build` in `package.json` (electron-builder). Paths below
+use `${version}` from `package.json` (currently `0.2.3`).
 
 | Command            | Output                                                          |
 |--------------------|------------------------------------------------------------------|
-| `npm run dist:win` | `release/0.1.0/Counter-Setup-0.1.0-x64.exe` (NSIS installer)    |
-| `npm run dist:mac` | `release/0.1.0/Counter-0.1.0-arm64.dmg` (and -x64 if hosted)    |
-| `npm run dist:linux` | `release/0.1.0/Counter-0.1.0-x64.AppImage`                    |
+| `npm run dist:win` | `release/${version}/Counter-Setup-${version}-x64.exe` (NSIS)    |
+| `npm run dist:mac` | `release/${version}/Counter-${version}-arm64.dmg` (and -x64)    |
+| `npm run dist:linux` | `release/${version}/Counter-${version}-x64.AppImage`         |
 
 Targets configured: nsis (Windows), dmg (Mac), AppImage (Linux).
+
+**VAT vs no-VAT variants.** Counter ships in two flavours from one codebase (see
+§11). The `dist:*` commands above build the **no-VAT** installer. Append `:vat`
+— `npm run dist:win:vat`, `dist:mac:vat`, `dist:linux:vat` — to build the **VAT**
+installer (`Counter-VAT-Setup-${version}-x64.exe`, etc.). The `:vat` scripts set
+`COUNTER_VAT=1` and use `electron-builder.vat.cjs` to give the VAT build a
+distinct appId/name so both can install side by side. CI builds all six (3 OS ×
+2 variants) — see `.github/workflows/release.yml`.
 
 ### 2a. Cross-build caveat & the recommended path
 
@@ -386,3 +395,62 @@ Whether customers and the worker roster are owned per-shop or centrally (this
 affects credit and logins across shops), how inter-shop stock transfers are
 recorded, and where the central store is hosted. These are open questions in
 `docs/phase3-network-and-sync.md`, not settled plans.
+
+## 11. VAT — the two build variants
+
+Counter ships as **two binaries from one `main` branch**: a **no-VAT** build and a
+**VAT** build. There is no separate VAT branch — VAT is gated by a build-time flag,
+so every feature lands once and flows into both. The only runtime difference is
+whether VAT is charged/recorded.
+
+Which one a shop installs depends on VAT registration. Ghana raised the mandatory
+registration threshold to **GH¢750,000** turnover (1 Jan 2026), so a small shop
+below it runs the no-VAT build; a registered shop runs the VAT build.
+
+### The flag
+
+`COUNTER_VAT=1` at **build time** selects the VAT build. `vite.config.ts` injects
+it as the compile-time constant `__COUNTER_VAT__`; `src/shared/lib/vat.ts` exposes
+it as `VAT_ENABLED`. Dead VAT branches tree-shake out of the no-VAT bundle. Build
+with the `dist:*:vat` scripts (§2). It is **not** a runtime toggle — a shop can't
+flip VAT on in Settings; you install the matching binary.
+
+### The law (VAT Act 2025 / Act 1151, effective 1 Jan 2026)
+
+- VAT **15%** + NHIL **2.5%** + GETFund **2.5%**, all on the **same base** (no
+  cascading). The COVID-19 Health Recovery Levy is **abolished**. Combined effective
+  rate **20%**.
+- Prices are **VAT-inclusive** (Ghana law for consumer prices). The customer total
+  is **identical** to the no-VAT build; the tax is **extracted** out of the inclusive
+  total for the receipt and records. From an inclusive total `T`:
+  base = `round(T / 1.20)`, then VAT/NHIL/GETFund off the base, with VAT absorbing
+  the rounding residual so `taxable + vat + nhil + getfund == total` exactly.
+- All integer pesewas (§5). Rates live in `src/shared/lib/vat.ts` — change them
+  there if the law changes again. VFRS (flat-rate scheme) is not built; it would go
+  behind the same module.
+
+### What changes in the VAT build
+
+- `sales` carries `taxable_pesewas / vat_pesewas / nhil_pesewas / getfund_pesewas`
+  (migration `0037_vat.sql`). These columns exist in **both** builds — the no-VAT
+  build just always writes 0, so the schema never diverges. Written in
+  `completeSaleCore` (`src/main/services/sales.ts`).
+- Receipts print a VAT block (`TOTAL includes VAT`, the three levy lines, and the
+  shop's VAT reg number) — `src/shared/lib/receipt.ts` and the on-screen
+  `ReceiptBody`. Suppressed entirely when the components are 0.
+- Settings → Receipt gains a **VAT registration number** field (stored in
+  `device_config` via `receiptConfig.ts`), shown only in the VAT build.
+- The checkout screens show an "incl. VAT" line; the total is unchanged.
+
+### Verifying
+
+`COUNTER_VAT=1 npm run test -- tests/vat-sale.test.ts` exercises a real VAT sale
+(DB row + receipt); `src/shared/lib/vat.test.ts` proves the pesewa rounding identity.
+The default `npm test` runs the suite with VAT off (the VAT integration test
+self-skips), so the no-VAT receipt assertions stay valid.
+
+> Note for contributors: tests open `better-sqlite3` under plain Node, but
+> `postinstall` rebuilds it for the Electron ABI. If the DB-backed tests fail with
+> `NODE_MODULE_VERSION`, run `npm rebuild better-sqlite3` to test, then
+> `npx electron-builder install-app-deps` to restore the Electron build before
+> `npm run dev`.

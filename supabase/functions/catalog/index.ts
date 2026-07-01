@@ -5,12 +5,12 @@
 // The shop applies rows by upsert-on-id and pages with since=cursor until empty
 // (src/main/sync/pull.ts).
 //
-// The HQ shop (shops.role = 'HQ') is the single source of master/catalog data:
-// HQ captures its master tables into its outbox (migration 0033) and pushes them
-// UP through /ingest like any event, landing in shop_events keyed by
-// (HQ shop_id, table_name, row_id) — upsert, so the latest version wins. Here we
-// serve those master rows DOWN to any authenticated shop, ordered by the HQ
-// outbox seq used as the central cursor.
+// The HQ shop (shops.role = 'HQ') is the per-COMPANY source of master/catalog
+// data: HQ captures its master tables into its outbox (migration 0033) and pushes
+// them UP through /ingest like any event, landing in shop_events keyed by
+// (company_id, HQ shop_id, table_name, row_id) — upsert, so the latest wins. Here
+// we serve those master rows DOWN to shops OF THE SAME COMPANY, ordered by the HQ
+// outbox seq used as the central cursor. A shop never sees another client's catalog.
 
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
@@ -38,16 +38,19 @@ Deno.serve(async (req: Request) => {
   const limitRaw = Number(url.searchParams.get("limit") ?? "500");
   const limit = Math.min(Number.isFinite(limitRaw) ? limitRaw : 500, 1000);
 
-  // The HQ shop is the source of catalog data. No HQ provisioned yet → nothing
-  // to serve; the shop's pull worker no-ops and keeps its cursor.
+  // This company's HQ shop is the source of its catalog. No HQ for this company
+  // yet → nothing to serve; the shop's pull worker no-ops and keeps its cursor.
   const { data: hq, error: hqErr } = await supabase
-    .from("shops").select("shop_id").eq("role", "HQ").limit(1).maybeSingle();
+    .from("shops").select("shop_id")
+    .eq("company_id", shop.company_id)
+    .eq("role", "HQ").limit(1).maybeSingle();
   if (hqErr) return jsonResponse({ error: hqErr.message }, 500);
   if (!hq) return jsonResponse({ rows: [], cursor: since });
 
   const { data: rows, error } = await supabase
     .from("shop_events")
     .select("seq, table_name, data")
+    .eq("company_id", shop.company_id)
     .eq("shop_id", hq.shop_id)
     .in("table_name", MASTER_TABLES)
     .gt("seq", since)

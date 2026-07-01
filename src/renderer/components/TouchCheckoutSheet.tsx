@@ -13,6 +13,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { counter } from '../lib/ipc';
 import { useCart, type PaymentMethod } from '../store/cart';
 import { formatMoney, formatMoneyWithCurrency, parseCedisToPesewas } from '../../shared/lib/money';
+import { extractInclusiveVat, VAT_ENABLED } from '../../shared/lib/vat';
 import { CustomerCreateModal } from './CustomerCreateModal';
 
 type Cust = ReturnType<typeof useCart.getState>['customer'];
@@ -46,6 +47,8 @@ export function TouchCheckoutSheet(p: TouchCheckoutSheetProps): JSX.Element {
 
   const cashPesewas = useMemo(() => parseCedisToPesewas(cashRaw), [cashRaw]);
   const change = cashPesewas != null ? cashPesewas - p.totalPesewas : null;
+  // VAT contained in the inclusive total — null in the no-VAT build. Display only.
+  const vat = useMemo(() => (VAT_ENABLED ? extractInclusiveVat(p.totalPesewas) : null), [p.totalPesewas]);
 
   // Customer search (credit) — mirrors PaymentModal.
   useEffect(() => {
@@ -111,6 +114,14 @@ export function TouchCheckoutSheet(p: TouchCheckoutSheetProps): JSX.Element {
         <div className="flex items-center justify-between">
           <div className="text-text-tertiary text-sm">
             Total due <span className="font-mono tnum text-text-primary text-lg">{formatMoneyWithCurrency(p.totalPesewas)}</span>
+            {vat && p.totalPesewas > 0 && (
+              <div className="text-text-tertiary text-xs">
+                incl. VAT{' '}
+                <span className="font-mono tnum">
+                  {formatMoney(vat.vatPesewas + vat.nhilPesewas + vat.getfundPesewas)}
+                </span>
+              </div>
+            )}
           </div>
           <button onClick={p.onClose} className="text-text-secondary text-2xl leading-none px-2" aria-label="Close">×</button>
         </div>

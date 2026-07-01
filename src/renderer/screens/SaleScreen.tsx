@@ -64,6 +64,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
   const customer = useCart((s) => s.customer);
   const subtotal = useCart((s) => s.subtotalPesewas)();
   const total = useCart((s) => s.totalPesewas)();
+  const vat = useCart((s) => s.vatBreakdown)();
   const discount = useCart((s) => s.discountPesewas);
   const addLine = useCart((s) => s.addLine);
   const removeLine = useCart((s) => s.removeLine);
@@ -654,6 +655,14 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
               ) : null;
             })()}
             <Row label="TOTAL" value={formatMoney(total)} large />
+            {vat && total > 0 && (
+              <div className="text-text-tertiary text-xs flex justify-between">
+                <span>incl. VAT 15% + NHIL 2.5% + GETFund 2.5%</span>
+                <span className="font-mono tnum">
+                  {formatMoney(vat.vatPesewas + vat.nhilPesewas + vat.getfundPesewas)}
+                </span>
+              </div>
+            )}
 
             {paymentMethod && (
               <div className="text-text-secondary text-xs mt-2">

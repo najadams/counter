@@ -43,6 +43,15 @@ export interface SaleReceipt {
   subtotalPesewas: number;
   discountPesewas: number;
   totalPesewas: number;
+  /** Ghana VAT breakdown (Act 1151). Extracted from the VAT-inclusive total.
+   *  All optional and 0/absent in the no-VAT build — the VAT block is then
+   *  suppressed entirely so the no-VAT receipt is unchanged. */
+  taxablePesewas?: number;
+  vatPesewas?: number;
+  nhilPesewas?: number;
+  getfundPesewas?: number;
+  /** Shop's VAT/TIN registration number, printed under the VAT block. */
+  vatRegistrationNumber?: string | null;
   /** Legacy single-tender summary (always set; mirrors payments[0] for one-tender sales). */
   payment: ReceiptPayment;
   /** New: one entry per tender. If absent or single-row, formatter falls back to `payment`. */
@@ -152,6 +161,24 @@ export function formatReceipt(r: SaleReceipt): string[] {
     lines.push(leftRight('Discount', `-${formatMoney(r.discountPesewas)}`));
   }
   lines.push(leftRight('TOTAL', formatMoney(r.totalPesewas)));
+
+  // VAT breakdown (Ghana, Act 1151). Inclusive prices, so this is informational:
+  // it shows the tax already contained in TOTAL. Printed only when there is VAT
+  // to show (VAT build); the no-VAT build leaves these 0 and prints nothing.
+  const vatPesewas = r.vatPesewas ?? 0;
+  const nhilPesewas = r.nhilPesewas ?? 0;
+  const getfundPesewas = r.getfundPesewas ?? 0;
+  if (vatPesewas > 0 || nhilPesewas > 0 || getfundPesewas > 0) {
+    lines.push(center('TOTAL includes VAT'));
+    lines.push(leftRight('Taxable (excl)', formatMoney(r.taxablePesewas ?? 0)));
+    lines.push(leftRight('VAT 15%', formatMoney(vatPesewas)));
+    lines.push(leftRight('NHIL 2.5%', formatMoney(nhilPesewas)));
+    lines.push(leftRight('GETFund 2.5%', formatMoney(getfundPesewas)));
+    if (r.vatRegistrationNumber) {
+      lines.push(`VAT Reg: ${r.vatRegistrationNumber.slice(0, W - 9)}`);
+    }
+  }
+
   lines.push(divider('-'));
 
   // Payment block: split-tender aware. If `payments` has more than one entry,

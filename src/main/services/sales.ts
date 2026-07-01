@@ -21,6 +21,7 @@ import {
 import { getPrinter, type Station } from '../printer/printer.js';
 import type { SaleReceipt } from '../printer/receipt.js';
 import { getReceiptConfig } from './receiptConfig.js';
+import { vatForSale, VAT_ENABLED } from '../../shared/lib/vat.js';
 
 export type SaleChannel = 'WALK_IN' | 'WHOLESALE' | 'ROUTE';
 
@@ -426,6 +427,18 @@ export function completeSaleCore(
     throw new Error(`completeSale: discount exceeds subtotal`);
   }
 
+  // VAT (Ghana, Act 1151). Prices are VAT-inclusive so the total is unchanged;
+  // we extract the tax out of it for the record/receipt. In the no-VAT build
+  // vatForSale() returns zeros (which deliberately do NOT sum to the total), so
+  // the reconciliation identity is only asserted when VAT is on.
+  const vat = vatForSale(totalPesewas);
+  if (
+    VAT_ENABLED &&
+    vat.taxablePesewas + vat.vatPesewas + vat.nhilPesewas + vat.getfundPesewas !== totalPesewas
+  ) {
+    throw new Error('completeSale: VAT breakdown does not reconcile to the total');
+  }
+
   // Discount supervisor gate: above either threshold, supervisor PIN required.
   // Skipped under lockPrices (sale correction): the carried-forward discount was
   // already approved on the original sale; re-gating it would block corrections.
@@ -523,9 +536,10 @@ export function completeSaleCore(
       `INSERT INTO sales (
         id, shift_id, worker_id, location_id, customer_id, channel,
         subtotal_pesewas, discount_pesewas, discount_reason, total_pesewas,
+        taxable_pesewas, vat_pesewas, nhil_pesewas, getfund_pesewas,
         payment_method, payment_reference, is_credit,
         created_by, updated_by, device_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       saleId,
       input.shiftId,
@@ -537,6 +551,10 @@ export function completeSaleCore(
       discount,
       discount > 0 ? input.discountReason ?? null : null,
       totalPesewas,
+      vat.taxablePesewas,
+      vat.vatPesewas,
+      vat.nhilPesewas,
+      vat.getfundPesewas,
       primary.method,
       primary.reference ?? null,
       isCredit ? 1 : 0,
@@ -722,6 +740,12 @@ export function completeSaleCore(
     subtotalPesewas,
     discountPesewas: discount,
     totalPesewas,
+    // VAT lines print only in the VAT build (zeros are suppressed by the formatter).
+    taxablePesewas: vat.taxablePesewas,
+    vatPesewas: vat.vatPesewas,
+    nhilPesewas: vat.nhilPesewas,
+    getfundPesewas: vat.getfundPesewas,
+    vatRegistrationNumber: VAT_ENABLED ? cfg.vatRegistrationNumber : null,
     payment: {
       method: primary.method,
       reference: primary.reference ?? null,

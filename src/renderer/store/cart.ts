@@ -2,6 +2,7 @@
 // All optimistic locally; we never write until completeSale().
 
 import { create } from 'zustand';
+import { vatForSale, VAT_ENABLED, type VatBreakdown } from '@shared/lib/vat';
 
 export type SaleChannel = 'WALK_IN' | 'WHOLESALE' | 'ROUTE';
 export type PaymentMethod =
@@ -72,6 +73,9 @@ export interface CartState {
 
   subtotalPesewas: () => number;
   totalPesewas: () => number;
+  /** VAT contained in the (inclusive) total — null in the no-VAT build. Display
+   *  only; does NOT change totalPesewas. */
+  vatBreakdown: () => VatBreakdown | null;
 }
 
 export const useCart = create<CartState>((set, get) => ({
@@ -207,4 +211,6 @@ export const useCart = create<CartState>((set, get) => ({
     get().lines.reduce((sum, l) => sum + l.unitPricePesewas * l.quantity, 0),
 
   totalPesewas: () => Math.max(0, get().subtotalPesewas() - get().discountPesewas),
+
+  vatBreakdown: () => (VAT_ENABLED ? vatForSale(get().totalPesewas()) : null),
 }));

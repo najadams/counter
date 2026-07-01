@@ -1359,6 +1359,8 @@ export interface ReceiptConfigResponse {
   showCashier: boolean;
   showChannel: boolean;
   showCustomer: boolean;
+  /** VAT/TIN registration number printed on receipts in the VAT build. */
+  vatRegistrationNumber: string | null;
 }
 
 export type ReceiptSetConfigRequest = ReceiptConfigResponse;

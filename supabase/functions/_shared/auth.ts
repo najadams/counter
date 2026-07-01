@@ -21,12 +21,15 @@ async function sha256Hex(input: string): Promise<string> {
 }
 
 export interface Shop {
+  company_id: string;   // the tenant this token belongs to — stamped on every row
   shop_id: string;
   role: string;
   last_acked_seq: number;
 }
 
-/** Returns the authenticated shop, or null. Null → caller responds 401. */
+/** Returns the authenticated shop (incl. its company), or null. Null → 401.
+ *  The token alone determines company_id; the caller never asserts it, so a
+ *  token for company A can only ever read/write company A's rows. */
 export async function authenticate(req: Request, supabase: SupabaseClient): Promise<Shop | null> {
   const header = req.headers.get("authorization") ?? "";
   const match = header.match(/^Bearer\s+(.+)$/i);
@@ -34,7 +37,7 @@ export async function authenticate(req: Request, supabase: SupabaseClient): Prom
   const hash = await sha256Hex(match[1].trim());
   const { data, error } = await supabase
     .from("shops")
-    .select("shop_id, role, last_acked_seq")
+    .select("company_id, shop_id, role, last_acked_seq")
     .eq("token_hash", hash)
     .maybeSingle();
   if (error || !data) return null;

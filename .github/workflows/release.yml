@@ -29,19 +29,36 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Two variants per OS from the SAME commit: the no-VAT build (default
+        # dist:* scripts) and the VAT build (dist:*:vat, COUNTER_VAT=1 baked in
+        # with a distinct appId/name). Six jobs total.
         include:
+          # --- no-VAT (default) ---
           - os: windows-latest
             dist_script: dist:win
             artifact_glob: 'release/*/Counter-Setup-*.exe'
             artifact_name: counter-windows
           - os: macos-latest
             dist_script: dist:mac
-            artifact_glob: 'release/*/Counter-*.dmg'
+            artifact_glob: 'release/*/Counter-[0-9]*.dmg'
             artifact_name: counter-macos
           - os: ubuntu-latest
             dist_script: dist:linux
-            artifact_glob: 'release/*/Counter-*.AppImage'
+            artifact_glob: 'release/*/Counter-[0-9]*.AppImage'
             artifact_name: counter-linux
+          # --- VAT ---
+          - os: windows-latest
+            dist_script: dist:win:vat
+            artifact_glob: 'release/*/Counter-VAT-Setup-*.exe'
+            artifact_name: counter-windows-vat
+          - os: macos-latest
+            dist_script: dist:mac:vat
+            artifact_glob: 'release/*/Counter-VAT-*.dmg'
+            artifact_name: counter-macos-vat
+          - os: ubuntu-latest
+            dist_script: dist:linux:vat
+            artifact_glob: 'release/*/Counter-VAT-*.AppImage'
+            artifact_name: counter-linux-vat
 
     steps:
       - name: Checkout
@@ -178,6 +195,7 @@ jobs:
             dist/**/Counter-Setup-*.exe
             dist/**/Counter-*.dmg
             dist/**/Counter-*.AppImage
+            dist/**/Counter-VAT-Setup-*.exe
           body: |
             ## Counter ${{ github.ref_name }}
 
@@ -188,6 +206,11 @@ jobs:
             - **Windows**: download `Counter-Setup-*-x64.exe`, run it. Windows SmartScreen may warn that the publisher is unverified — click "More info" → "Run anyway" (the build is unsigned for v0.x).
             - **macOS**: download the `.dmg`, drag Counter to Applications. Right-click → Open the first time to bypass Gatekeeper (unsigned).
             - **Linux**: download `Counter-*.AppImage`, `chmod +x`, run.
+
+            **VAT vs no-VAT:** the `Counter-VAT-*` installers charge/record Ghana VAT
+            (15% + 2.5% NHIL + 2.5% GETFund, inclusive); the plain `Counter-*`
+            installers do not. They install side by side with separate data — pick
+            the one matching the shop's VAT registration.
 
             See [CLAUDE.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/CLAUDE.md) for setup, backup, and runbook.
         env:

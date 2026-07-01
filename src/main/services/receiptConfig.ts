@@ -22,6 +22,9 @@ export interface ReceiptConfig {
   showCashier: boolean;
   showChannel: boolean;
   showCustomer: boolean;
+  /** Shop's VAT/TIN registration number, printed on the receipt in the VAT
+   *  build. Ignored by the no-VAT build. */
+  vatRegistrationNumber: string | null;
 }
 
 export const DEFAULT_RECEIPT_CONFIG: Omit<ReceiptConfig, 'shopName' | 'shopSubtitle'> = {
@@ -35,6 +38,7 @@ export const DEFAULT_RECEIPT_CONFIG: Omit<ReceiptConfig, 'shopName' | 'shopSubti
   showCashier: true,
   showChannel: true,
   showCustomer: true,
+  vatRegistrationNumber: null,
 };
 
 const RECEIPT_KEY = 'receipt_config';
@@ -73,6 +77,7 @@ export function getReceiptConfig(db: DB): ReceiptConfig {
     showCashier: typeof stored.showCashier === 'boolean' ? stored.showCashier : DEFAULT_RECEIPT_CONFIG.showCashier,
     showChannel: typeof stored.showChannel === 'boolean' ? stored.showChannel : DEFAULT_RECEIPT_CONFIG.showChannel,
     showCustomer: typeof stored.showCustomer === 'boolean' ? stored.showCustomer : DEFAULT_RECEIPT_CONFIG.showCustomer,
+    vatRegistrationNumber: normalizeOptional(stored.vatRegistrationNumber) ?? DEFAULT_RECEIPT_CONFIG.vatRegistrationNumber,
   };
 }
 
@@ -89,6 +94,7 @@ export interface ReceiptConfigInput {
   showCashier: boolean;
   showChannel: boolean;
   showCustomer: boolean;
+  vatRegistrationNumber: string | null;
 }
 
 export function setReceiptConfig(db: DB, input: ReceiptConfigInput): ReceiptConfig {
@@ -112,6 +118,8 @@ export function setReceiptConfig(db: DB, input: ReceiptConfigInput): ReceiptConf
   }
   const sideMarginMm = clampMargin(input.sideMarginMm);
 
+  const vatRegistrationNumber = trimOrNull(input.vatRegistrationNumber, 30, 'VAT registration number');
+
   const blob: Omit<ReceiptConfig, 'shopName' | 'shopSubtitle'> = {
     headerLine3,
     headerLine4,
@@ -123,6 +131,7 @@ export function setReceiptConfig(db: DB, input: ReceiptConfigInput): ReceiptConf
     showCashier: !!input.showCashier,
     showChannel: !!input.showChannel,
     showCustomer: !!input.showCustomer,
+    vatRegistrationNumber,
   };
 
   const upsert = db.prepare(

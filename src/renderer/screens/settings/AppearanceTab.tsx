@@ -17,6 +17,7 @@ import type {
   ReceiptConfigResponse, ReceiptDensity, ReceiptPaperWidth,
 } from '../../../shared/types/ipc';
 import type { SaleReceipt } from '../../../shared/lib/receipt';
+import { VAT_ENABLED, extractInclusiveVat } from '../../../shared/lib/vat';
 
 export function AppearanceTab() {
   const choice = useTheme((s) => s.choice);
@@ -224,6 +225,18 @@ function ReceiptSection(): JSX.Element {
             />
           </FormGroup>
 
+          {/* VAT — only in the VAT build. */}
+          {VAT_ENABLED && (
+            <FormGroup label="VAT">
+              <TextField
+                label="VAT registration number"
+                value={draft.vatRegistrationNumber ?? ''}
+                onChange={(v) => patch('vatRegistrationNumber', v || null)}
+                placeholder="C0001234567"
+              />
+            </FormGroup>
+          )}
+
           {/* Paper / layout */}
           <FormGroup label="Paper & layout">
             <RadioRow
@@ -325,6 +338,12 @@ function ReceiptSection(): JSX.Element {
                 ...SAMPLE_RECEIPT,
                 shopName: draft.shopName || SAMPLE_RECEIPT.shopName,
                 shopSubtitle: draft.shopSubtitle ?? SAMPLE_RECEIPT.shopSubtitle,
+                ...(VAT_ENABLED
+                  ? {
+                      ...extractInclusiveVat(SAMPLE_RECEIPT.totalPesewas),
+                      vatRegistrationNumber: draft.vatRegistrationNumber,
+                    }
+                  : {}),
               }}
               config={draft}
             />

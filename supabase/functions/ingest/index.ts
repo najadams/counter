@@ -47,6 +47,7 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "malformed row" }, 400);
     }
     records.push({
+      company_id: shop.company_id,   // stamped server-side — the shop never asserts its tenant
       shop_id: shop.shop_id,
       table_name: r.table,
       row_id: String(id),
@@ -58,7 +59,7 @@ Deno.serve(async (req: Request) => {
 
   const { error } = await supabase
     .from("shop_events")
-    .upsert(records, { onConflict: "shop_id,table_name,row_id" });
+    .upsert(records, { onConflict: "company_id,shop_id,table_name,row_id" });
   if (error) return jsonResponse({ error: error.message }, 500);
 
   // High-water ack: never regress if an older batch is re-sent.
@@ -67,6 +68,7 @@ Deno.serve(async (req: Request) => {
   await supabase
     .from("shops")
     .update({ last_acked_seq: ackedSeq, last_seen_at: new Date().toISOString() })
+    .eq("company_id", shop.company_id)
     .eq("shop_id", shop.shop_id);
 
   return jsonResponse({ ackedSeq });
