@@ -33,7 +33,9 @@
     "postinstall": "electron-builder install-app-deps",
     "clean": "rm -rf dist-electron dist",
     "predev": "rm -rf dist-electron",
-    "sync:central-stub": "tsx scripts/central-stub.ts"
+    "sync:central-stub": "tsx scripts/central-stub.ts",
+    "provision:company": "tsx scripts/provision-company.ts",
+    "provision:agent": "tsx scripts/provision-agent.ts"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

@@ -31,6 +31,7 @@ export function createCounterApi(invoke: Invoke) {
     syncGetStatus: () => invoke<ipc.SyncStatus>(ipc.IPC_CHANNELS_SYNC.SYNC_GET_STATUS, {}),
     syncGetConfig: () => invoke<ipc.SyncConfigView>(ipc.IPC_CHANNELS_SYNC.SYNC_GET_CONFIG, {}),
     syncSetConfig: (req: ipc.SyncSetConfigRequest) => invoke<ipc.SyncConfigView>(ipc.IPC_CHANNELS_SYNC.SYNC_SET_CONFIG, req),
+    syncAddShop: (req: ipc.AddShopRequest) => invoke<ipc.AddShopResult>(ipc.IPC_CHANNELS_SYNC.SYNC_ADD_SHOP, req),
 
     // auth
     listLoginCandidates: () => invoke<ipc.ListLoginCandidatesResponse>(ipc.IPC_CHANNELS.WORKER_LIST_FOR_LOGIN, {}),
@@ -252,6 +253,10 @@ export function createCounterApi(invoke: Invoke) {
       invoke<ipc.ExcRepeatedSkuVoidsResponse>(ipc.IPC_CHANNELS_S15_EXC.EXC_REPEATED_SKU_VOIDS, { fromDate, toDate }),
     excLargeDiscounts: (fromDate: string, toDate: string) =>
       invoke<ipc.ExcLargeDiscountsResponse>(ipc.IPC_CHANNELS_S15_EXC.EXC_LARGE_DISCOUNTS, { fromDate, toDate }),
+    excUnderpricedLines: (fromDate: string, toDate: string) =>
+      invoke<ipc.ExcUnderpricedLinesResponse>(ipc.IPC_CHANNELS_S15_EXC.EXC_UNDERPRICED_LINES, { fromDate, toDate }),
+    excNegativeStock: (locationId?: string) =>
+      invoke<ipc.ExcNegativeStockResponse>(ipc.IPC_CHANNELS_S15_EXC.EXC_NEGATIVE_STOCK, locationId ? { locationId } : {}),
 
     // --- Session 16: reorder PO suggestions ---
     reorderSuggest: (supplierId?: string | null, safetyMultiplier?: number) =>
@@ -356,6 +361,18 @@ export function createCounterApi(invoke: Invoke) {
       invoke<ipc.ReceiptConfigResponse>(ipc.IPC_CHANNELS_RECEIPT.RECEIPT_GET_CONFIG, {}),
     receiptSetConfig: (req: ipc.ReceiptSetConfigRequest) =>
       invoke<ipc.ReceiptConfigResponse>(ipc.IPC_CHANNELS_RECEIPT.RECEIPT_SET_CONFIG, req),
+
+    // --- Phase 4 workstream C: WhatsApp pending orders (accept/reject) ---
+    pendingOrdersList: () =>
+      invoke<ipc.PendingOrdersListResponse>(ipc.IPC_CHANNELS_PENDING_ORDERS.PENDING_ORDERS_LIST, {}),
+    pendingOrderGet: (orderId: string) =>
+      invoke<ipc.PendingOrderDetail>(ipc.IPC_CHANNELS_PENDING_ORDERS.PENDING_ORDERS_GET, { orderId }),
+    pendingOrderResolveForCart: (orderId: string) =>
+      invoke<ipc.ResolvedPendingOrder>(ipc.IPC_CHANNELS_PENDING_ORDERS.PENDING_ORDERS_RESOLVE_FOR_CART, { orderId }),
+    pendingOrderReject: (orderId: string, reason: string) =>
+      invoke<void>(ipc.IPC_CHANNELS_PENDING_ORDERS.PENDING_ORDERS_REJECT, { orderId, reason }),
+    pendingOrderMarkFulfilled: (orderId: string, saleId: string) =>
+      invoke<void>(ipc.IPC_CHANNELS_PENDING_ORDERS.PENDING_ORDERS_MARK_FULFILLED, { orderId, saleId }),
   };
 }
 

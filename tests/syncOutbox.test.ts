@@ -8,7 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runMigrations } from '../src/main/db/migrations';
 import { runSeed } from '../src/main/db/seed';
-import { SYNCED_EVENT_TABLES, SYNCED_MASTER_TABLES } from '../src/shared/sync';
+import { MUTABLE_EVENT_TABLES, SYNCED_EVENT_TABLES, SYNCED_MASTER_TABLES } from '../src/shared/sync';
 
 const migrationsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../migrations');
 let db: ReturnType<typeof Database>;
@@ -53,12 +53,13 @@ describe('sync_outbox capture', () => {
     expect(seqOf('c')).toBeGreaterThan(seqB);
   });
 
-  it('has exactly one capture trigger per SYNCED_EVENT_TABLES entry (no drift)', () => {
+  it('has exactly one capture trigger per SYNCED_EVENT_TABLES entry, plus an UPDATE trigger for MUTABLE_EVENT_TABLES (no drift)', () => {
     const names = (db.prepare(
       "SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'trg_outbox_%' ORDER BY name",
     ).all() as Array<{ name: string }>).map((r) => r.name);
     const expected = [
       ...SYNCED_EVENT_TABLES.map((t) => `trg_outbox_${t}_ins`),
+      ...MUTABLE_EVENT_TABLES.map((t) => `trg_outbox_${t}_upd`),
       ...SYNCED_MASTER_TABLES.flatMap((t) => [`trg_outbox_${t}_mins`, `trg_outbox_${t}_mupd`]),
     ].sort();
     expect(names.sort()).toEqual(expected);

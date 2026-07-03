@@ -24,7 +24,7 @@ import {
   registerBackupHandlers, registerStatementHandlers, registerCpoHandlers,
   registerReturnsHandlers, registerSupplierPaymentsHandlers,
   registerReportsHandlers, registerCatalogTransferHandlers,
-  registerReceiptConfigHandlers, registerSyncHandlers,
+  registerReceiptConfigHandlers, registerSyncHandlers, registerPendingOrdersHandlers,
 } from '../src/main/ipc/handlers.js';
 import { startHttpServer } from '../src/main/http/server.js';
 import type { App } from 'electron';
@@ -70,6 +70,7 @@ registerReportsHandlers(r, db, deviceId);
 registerCatalogTransferHandlers(r, db, app, deviceId);
 registerReceiptConfigHandlers(r, db, deviceId);
 registerSyncHandlers(r, db, deviceId);
+registerPendingOrdersHandlers(r, db, deviceId);
 
 const port = Number(process.env['PORT'] ?? 4181);
 const host = process.env['HOST'] ?? '127.0.0.1';

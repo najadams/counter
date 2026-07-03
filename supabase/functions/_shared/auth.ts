@@ -43,3 +43,35 @@ export async function authenticate(req: Request, supabase: SupabaseClient): Prom
   if (error || !data) return null;
   return data as Shop;
 }
+
+export interface Agent {
+  company_id: string;   // the tenant this token belongs to — stamped on every row
+  agent_id: string;
+  scopes: string[];
+}
+
+/** Same shape as authenticate() but against the `agents` table (Phase 4). A
+ *  revoked token (revoked_at set) fails closed — same as a token that never
+ *  existed — so revoke_agent() takes effect immediately with no separate
+ *  cache to invalidate. */
+export async function authenticateAgent(req: Request, supabase: SupabaseClient): Promise<Agent | null> {
+  const header = req.headers.get("authorization") ?? "";
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  if (!match) return null;
+  const hash = await sha256Hex(match[1].trim());
+  const { data, error } = await supabase
+    .from("agents")
+    .select("company_id, agent_id, scopes, revoked_at")
+    .eq("token_hash", hash)
+    .is("revoked_at", null)
+    .maybeSingle();
+  if (error || !data) return null;
+  return data as Agent;
+}
+
+/** Scope check helper — every route declares what it needs, so a token minted
+ *  with a narrower scope set (e.g. catalog:read only) is refused on write
+ *  routes even though the token itself is valid. */
+export function hasScope(agent: Agent, scope: string): boolean {
+  return agent.scopes.includes(scope);
+}

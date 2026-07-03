@@ -14,9 +14,21 @@ export const SYNCED_EVENT_TABLES = [
   'cash_counts', 'shifts', 'stocktake_events', 'stocktake_lines', 'period_closes',
   'petty_cash_expenses', 'container_movements', 'customer_returns', 'customer_return_lines',
   'route_runs', 'route_stops', 'daily_summaries',
+  // Phase 4: WhatsApp order accept/reject/fulfil. Unlike every other table in
+  // this list, pending_orders rows are MUTATED in place (CONFIRMED ->
+  // FULFILLED|REJECTED|CANCELLED), not append-only — migration 0039 captures
+  // both INSERT and UPDATE, where every other table here captures INSERT only.
+  'pending_orders',
 ] as const;
 
 export type SyncedEventTable = (typeof SYNCED_EVENT_TABLES)[number];
+
+/** Subset of SYNCED_EVENT_TABLES whose rows are mutated in place after their
+ *  initial insert, so they capture an UPDATE trigger too (migration 0039),
+ *  unlike every other event table here which is genuinely append-only and
+ *  only ever needs INSERT capture. Single source of truth for the "no drift"
+ *  trigger-count test in tests/syncOutbox.test.ts. */
+export const MUTABLE_EVENT_TABLES: readonly SyncedEventTable[] = ['pending_orders'];
 
 export interface PushRow {
   seq: number;
@@ -74,4 +86,51 @@ export interface PullResponse {
  *  SyncTransport (push) so push-only fakes stay valid. */
 export interface PullTransport {
   fetchCatalog(since: number, limit?: number): Promise<PullResponse>;
+}
+
+// --- Phase 4: WhatsApp orders (agent -> central -> shop, DOWN) -------------
+//
+// Distinct from PullRow/PullResponse above: catalog rows are HQ-authored and
+// upserted by bare id (any shop's catalog table); order rows are CONFIRMED
+// orders addressed to THIS shop specifically, served by orders-feed (not
+// catalog), and applied into pending_orders rather than a mirrored table.
+
+export interface OrderPullLine {
+  product_id: string;
+  unit_id: string | null;
+  quantity: number;
+  unit_price_pesewas: number;
+  line_total_pesewas: number;
+}
+
+export interface OrderPullData {
+  id: string;
+  status: string;
+  customer_phone: string;
+  customer_name: string | null;
+  channel: string;
+  subtotal_pesewas: number;
+  total_pesewas: number;
+  quote_expires_at: string;
+  confirmed_at: string | null;
+  created_by_agent: string;
+  created_at: string;
+  lines: OrderPullLine[];
+}
+
+export interface OrderPullRow {
+  /** Central-assigned monotonic cursor (orders.seq, set once by confirm_order). */
+  cursor: number;
+  data: OrderPullData;
+}
+
+export interface OrdersPullResponse {
+  rows: OrderPullRow[];
+  cursor: number;
+}
+
+/** Separate from PullTransport (catalog) so a push/catalog-only fake transport
+ *  stays valid without also having to fake order-pulling. */
+export interface OrdersPullTransport {
+  fetchOrders(since: number, limit?: number): Promise<OrdersPullResponse>;
 }

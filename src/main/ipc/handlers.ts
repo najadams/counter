@@ -7,7 +7,8 @@ import { currentSession, currentStation, setGlobalSession, type Session } from '
 import { getAccessInfo } from '../http/server.js';
 import { httpStatus, setHttp } from '../http/manager.js';
 import { getSyncStatus } from '../sync/status.js';
-import { readSyncConfigView, writeSyncConfig } from '../sync/config.js';
+import { readSyncConfig, readSyncConfigView, writeSyncConfig } from '../sync/config.js';
+import { addShopToCentral } from '../sync/httpTransport.js';
 import {
   IPC_CHANNELS,
   type BreakageListRecentResponse, type BreakageReportRequest, type BreakageReportResponse,
@@ -408,6 +409,7 @@ export function registerIpcHandlers(
         workerId: w.workerId,
         supervisorApprovalId: req.supervisorWorkerId,
         lines: req.lines, notes: req.notes,
+        allowLargeCostSwing: req.allowLargeCostSwing,
         deviceId,
       });
       return {
@@ -1371,11 +1373,13 @@ import {
   IPC_CHANNELS_S15_EXC,
   type ExcDateRangeRequest,
   type ExcDiscountsByCashierResponse, type ExcLargeDiscountsResponse,
+  type ExcNegativeStockRequest, type ExcNegativeStockResponse,
   type ExcPostSaleEditsResponse, type ExcRepeatedSkuVoidsResponse,
-  type ExcVoidsByCashierResponse,
+  type ExcUnderpricedLinesResponse, type ExcVoidsByCashierResponse,
 } from '../../shared/types/ipc.js';
 import {
-  discountsByCashier, largeDiscounts, postSaleEdits, repeatedSkuVoids, voidsByCashier,
+  discountsByCashier, largeDiscounts, negativeStock, postSaleEdits,
+  repeatedSkuVoids, underpricedLines, voidsByCashier,
 } from '../services/exceptionReports.js';
 
 export function registerSession15ExcHandlers(
@@ -1411,6 +1415,18 @@ export function registerSession15ExcHandlers(
     wrap<ExcDateRangeRequest, ExcLargeDiscountsResponse>(
       (req) => { const w = requireWorker(); return { rows: largeDiscounts(db, w.workerId, req.fromDate, req.toDate) }; },
       IPC_CHANNELS_S15_EXC.EXC_LARGE_DISCOUNTS,
+    ),
+  );
+  ipcMain.handle(IPC_CHANNELS_S15_EXC.EXC_UNDERPRICED_LINES,
+    wrap<ExcDateRangeRequest, ExcUnderpricedLinesResponse>(
+      (req) => { const w = requireWorker(); return { rows: underpricedLines(db, w.workerId, req.fromDate, req.toDate) }; },
+      IPC_CHANNELS_S15_EXC.EXC_UNDERPRICED_LINES,
+    ),
+  );
+  ipcMain.handle(IPC_CHANNELS_S15_EXC.EXC_NEGATIVE_STOCK,
+    wrap<ExcNegativeStockRequest, ExcNegativeStockResponse>(
+      (req) => { const w = requireWorker(); return { rows: negativeStock(db, w.workerId, req?.locationId) }; },
+      IPC_CHANNELS_S15_EXC.EXC_NEGATIVE_STOCK,
     ),
   );
 }
@@ -1630,6 +1646,7 @@ import {
   IPC_CHANNELS_BACKUP,
   type BackupHeartbeat,
   IPC_CHANNELS_SYNC, type SyncStatus, type SyncConfigView, type SyncSetConfigRequest,
+  type AddShopRequest, type AddShopResult,
   type BackupConfigResponse,
   type BackupSetConfigRequest,
   type BackupRunNowResponse,
@@ -2434,5 +2451,102 @@ export function registerSyncHandlers(ipcMain: IpcRegistrar, db: DB, deviceId: st
       return readSyncConfigView(db);
     },
     IPC_CHANNELS_SYNC.SYNC_SET_CONFIG,
+  ));
+
+  // OWNER/FOUNDER only. Self-service branch onboarding: asks the central store
+  // to mint a sibling shop under THIS install's OWN company (using this shop's
+  // own token as proof of membership — see supabase/functions/add-shop). This
+  // install must already be provisioned; the new branch's token is returned to
+  // the renderer exactly once so the OWNER can copy it into that branch's own
+  // Settings -> Sync. Nothing is persisted locally about the new shop.
+  ipcMain.handle(IPC_CHANNELS_SYNC.SYNC_ADD_SHOP, wrap<AddShopRequest, AddShopResult>(
+    async (req) => {
+      const w = requireWorker();
+      if (w.role !== 'OWNER' && w.role !== 'FOUNDER') {
+        throw new Error('Only OWNER or FOUNDER can add a branch.');
+      }
+      const cfg = readSyncConfig(db);
+      if (!cfg) {
+        throw new Error(
+          'This branch isn\'t connected to a central store yet. Configure Sync here first.',
+        );
+      }
+      const newShopId = (req.shopId ?? '').trim();
+      if (!newShopId) throw new Error('Shop code is required.');
+
+      const result = await addShopToCentral(cfg.centralUrl, cfg.token, newShopId);
+
+      logAudit(db, {
+        workerId: w.workerId,
+        action: 'SYNC_SHOP_ADDED',
+        entityType: 'device_config',
+        entityId: 'sync',
+        deviceId,
+        afterValue: { shopId: result.shopId, role: result.role },
+      });
+      return { ...result, centralUrl: cfg.centralUrl };
+    },
+    IPC_CHANNELS_SYNC.SYNC_ADD_SHOP,
+  ));
+}
+
+// --- Phase 4 workstream C: WhatsApp pending orders (accept/reject) --------
+
+import {
+  IPC_CHANNELS_PENDING_ORDERS,
+  type PendingOrderGetRequest, type PendingOrderDetail,
+  type PendingOrderMarkFulfilledRequest,
+  type PendingOrderRejectRequest, type PendingOrdersListResponse,
+  type ResolvedPendingOrder,
+} from '../../shared/types/ipc.js';
+import {
+  getPendingOrder, listPendingOrders, markPendingOrderFulfilled, rejectPendingOrder,
+  resolvePendingOrderForCart,
+} from '../services/pendingOrders.js';
+
+export function registerPendingOrdersHandlers(
+  ipcMain: IpcRegistrar,
+  db: DB,
+  deviceId: string,
+): void {
+  ipcMain.handle(IPC_CHANNELS_PENDING_ORDERS.PENDING_ORDERS_LIST, wrap<void, PendingOrdersListResponse>(
+    () => { requireWorker(); return { orders: listPendingOrders(db) }; },
+    IPC_CHANNELS_PENDING_ORDERS.PENDING_ORDERS_LIST,
+  ));
+
+  ipcMain.handle(IPC_CHANNELS_PENDING_ORDERS.PENDING_ORDERS_GET, wrap<PendingOrderGetRequest, PendingOrderDetail>(
+    (req) => {
+      requireWorker();
+      const order = getPendingOrder(db, req.orderId);
+      if (!order) throw new Error(`Order ${req.orderId} not found.`);
+      return order;
+    },
+    IPC_CHANNELS_PENDING_ORDERS.PENDING_ORDERS_GET,
+  ));
+
+  ipcMain.handle(IPC_CHANNELS_PENDING_ORDERS.PENDING_ORDERS_RESOLVE_FOR_CART, wrap<PendingOrderGetRequest, ResolvedPendingOrder>(
+    (req) => {
+      requireWorker();
+      return resolvePendingOrderForCart(db, req.orderId, DEFAULT_LOCATION_ID);
+    },
+    IPC_CHANNELS_PENDING_ORDERS.PENDING_ORDERS_RESOLVE_FOR_CART,
+  ));
+
+  ipcMain.handle(IPC_CHANNELS_PENDING_ORDERS.PENDING_ORDERS_REJECT, wrap<PendingOrderRejectRequest, void>(
+    (req) => {
+      const w = requireWorker();
+      rejectPendingOrder(db, { orderId: req.orderId, reason: req.reason, workerId: w.workerId, deviceId });
+    },
+    IPC_CHANNELS_PENDING_ORDERS.PENDING_ORDERS_REJECT,
+  ));
+
+  // Called by the renderer right after completeSale succeeds for a cart that
+  // was loaded from an accepted order — see SaleScreen's fulfilment writeback.
+  ipcMain.handle(IPC_CHANNELS_PENDING_ORDERS.PENDING_ORDERS_MARK_FULFILLED, wrap<PendingOrderMarkFulfilledRequest, void>(
+    (req) => {
+      const w = requireWorker();
+      markPendingOrderFulfilled(db, { orderId: req.orderId, saleId: req.saleId, workerId: w.workerId, deviceId });
+    },
+    IPC_CHANNELS_PENDING_ORDERS.PENDING_ORDERS_MARK_FULFILLED,
   ));
 }

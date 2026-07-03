@@ -335,6 +335,10 @@ export interface StockReceiveRequest {
   supervisorPin: string;
   lines: Array<{ productId: string; quantity: number; unitCostPesewas: number; unitId?: string | null }>;
   notes?: string | null;
+  /** Confirm a receipt the backend refused with a COST_SWING error (implied
+   *  per-canonical cost change over ±50% — usually a per-crate/per-bottle
+   *  cost mix-up). */
+  allowLargeCostSwing?: boolean;
 }
 export interface StockReceiveResponse {
   movementCount: number;
@@ -1082,6 +1086,8 @@ export const IPC_CHANNELS_S15_EXC = {
   EXC_POST_SALE_EDITS: 'exc:post-sale-edits',
   EXC_REPEATED_SKU_VOIDS: 'exc:repeated-sku-voids',
   EXC_LARGE_DISCOUNTS: 'exc:large-discounts',
+  EXC_UNDERPRICED_LINES: 'exc:underpriced-lines',
+  EXC_NEGATIVE_STOCK: 'exc:negative-stock',
 } as const;
 
 export interface ExcDateRangeRequest { fromDate: string; toDate: string }
@@ -1107,11 +1113,24 @@ export interface LargeDiscountRow {
   saleId: string; saleAt: string; workerName: string;
   totalPesewas: number; discountPesewas: number; discountRatio: number; reason: string | null;
 }
+export interface UnderpricedLineRow {
+  saleId: string; saleAt: string; workerName: string;
+  sku: string; productName: string; unitName: string;
+  quantity: number; unitPricePesewas: number; listPricePesewas: number;
+  shortfallPesewas: number;
+}
+export interface NegativeStockRow {
+  productId: string; sku: string; productName: string;
+  unitsOnHand: number; valueAtCostPesewas: number;
+}
 export interface ExcVoidsByCashierResponse { rows: CashierVoidRow[] }
 export interface ExcDiscountsByCashierResponse { rows: CashierDiscountRow[] }
 export interface ExcPostSaleEditsResponse { rows: PostSaleEditRow[] }
 export interface ExcRepeatedSkuVoidsResponse { rows: RepeatedSkuVoidRow[] }
 export interface ExcLargeDiscountsResponse { rows: LargeDiscountRow[] }
+export interface ExcUnderpricedLinesResponse { rows: UnderpricedLineRow[] }
+export interface ExcNegativeStockRequest { locationId?: string }
+export interface ExcNegativeStockResponse { rows: NegativeStockRow[] }
 
 // --- Session 16: reorder PO suggestions ----------------------------------
 
@@ -1232,6 +1251,7 @@ export const IPC_CHANNELS_SYNC = {
   SYNC_GET_STATUS: 'sync:get-status',
   SYNC_GET_CONFIG: 'sync:get-config',
   SYNC_SET_CONFIG: 'sync:set-config',
+  SYNC_ADD_SHOP: 'sync:add-shop',
 } as const;
 
 export interface SyncStatus {
@@ -1254,6 +1274,19 @@ export interface SyncSetConfigRequest {
   centralUrl: string;
   token?: string;
   role: 'HQ' | 'SHOP';
+}
+/** Self-service branch onboarding: add a sibling shop under THIS install's own
+ *  company. Requires this install to already be provisioned (see SyncTab). */
+export interface AddShopRequest {
+  shopId: string;
+}
+export interface AddShopResult {
+  shopId: string;
+  role: 'SHOP';
+  /** The new branch's bearer token — shown to the OWNER exactly once so they
+   *  can copy it into that branch's own Settings -> Sync. Never stored here. */
+  token: string;
+  centralUrl: string;
 }
 
 export type BackupLocationClass = 'usb' | 'cloud' | 'local';
@@ -1955,5 +1988,67 @@ export interface CatalogImportApplyResponse {
   /** Wall-clock duration of the import transaction, ms. */
   durationMs: number;
   error?: string;
+}
+
+// --- Phase 4 workstream C: WhatsApp pending orders (accept/reject) --------
+
+export const IPC_CHANNELS_PENDING_ORDERS = {
+  PENDING_ORDERS_LIST: 'pending-orders:list',
+  PENDING_ORDERS_GET: 'pending-orders:get',
+  PENDING_ORDERS_RESOLVE_FOR_CART: 'pending-orders:resolve-for-cart',
+  PENDING_ORDERS_REJECT: 'pending-orders:reject',
+  PENDING_ORDERS_MARK_FULFILLED: 'pending-orders:mark-fulfilled',
+} as const;
+
+export interface PendingOrderLine {
+  productId: string;
+  productName: string;
+  unitId: string | null;
+  unitName: string;
+  quantity: number;
+  unitPricePesewas: number;
+  lineTotalPesewas: number;
+}
+export interface PendingOrderSummary {
+  id: string;
+  status: string;
+  customerPhone: string;
+  customerName: string | null;
+  channel: string;
+  totalPesewas: number;
+  quoteExpiresAt: string | null;
+  receivedAt: string;
+  lineCount: number;
+}
+export interface PendingOrderDetail extends PendingOrderSummary {
+  subtotalPesewas: number;
+  confirmedAt: string | null;
+  lines: PendingOrderLine[];
+  fulfilledSaleId: string | null;
+  rejectReason: string | null;
+}
+
+export interface PendingOrdersListResponse { orders: PendingOrderSummary[] }
+export interface PendingOrderGetRequest { orderId: string }
+export interface PendingOrderRejectRequest { orderId: string; reason: string }
+export interface PendingOrderMarkFulfilledRequest { orderId: string; saleId: string }
+
+export interface ResolvedCartLine {
+  productId: string;
+  sku: string;
+  name: string;
+  unitId: string | null;
+  unitName: string;
+  factor: number;
+  unitPricePesewas: number;
+  quantity: number;
+  unitsOnHand: number;
+}
+export interface ResolvedPendingOrder {
+  orderId: string;
+  channel: string;
+  customerName: string | null;
+  customerPhone: string;
+  lines: ResolvedCartLine[];
 }
 

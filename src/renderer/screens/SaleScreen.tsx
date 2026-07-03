@@ -46,6 +46,21 @@ function alertDoorReceiptFailure(printerError?: string): void {
   );
 }
 
+/** If this cart was loaded by accepting a WhatsApp pending order, stamp the
+ *  order FULFILLED with the sale that just completed — best-effort. The sale
+ *  itself already succeeded and is not rolled back if this fails; a failure
+ *  here just means the order stays CONFIRMED in the queue for a cashier to
+ *  notice and retry, not a lost or duplicated sale. */
+async function writeBackOrderFulfilment(saleId: string): Promise<void> {
+  const orderId = useCart.getState().fulfillingOrderId;
+  if (!orderId) return;
+  const r = await counter.pendingOrderMarkFulfilled(orderId, saleId);
+  if (!r.success) {
+    // eslint-disable-next-line no-console
+    console.error(`[whatsapp-order] failed to mark ${orderId} fulfilled by sale ${saleId}:`, r.error);
+  }
+}
+
 interface ProductHit {
   id: string; sku: string; name: string; brand: string | null;
   category: string; unitPricePesewas: number; costPricePesewas: number;
@@ -62,6 +77,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
   const paymentReference = useCart((s) => s.paymentReference);
   const cashGiven = useCart((s) => s.cashGivenPesewas);
   const customer = useCart((s) => s.customer);
+  const fulfillingOrderId = useCart((s) => s.fulfillingOrderId);
   const subtotal = useCart((s) => s.subtotalPesewas)();
   const total = useCart((s) => s.totalPesewas)();
   const vat = useCart((s) => s.vatBreakdown)();
@@ -297,6 +313,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
     if (printerFailed) toast += `  ⚠ Receipt queued — ${printerError ?? 'printer offline'}.`;
     setCompletedToast(toast);
     setLastReceipt(receipt);
+    void writeBackOrderFulfilment(saleId);
     clearCart();
     setDiscountRaw('');
     setDiscountReason('');
@@ -382,6 +399,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
     if (printerFailed) toast += `  ⚠ Receipt queued — ${printerError ?? 'printer offline'}.`;
     setCompletedToast(toast);
     setLastReceipt(receipt);
+    void writeBackOrderFulfilment(saleId);
     clearCart();
     setDiscountRaw('');
     setDiscountReason('');
@@ -451,6 +469,11 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
     // bump or lower the factor here if the counter PC needs more/less.
     <div className="min-h-screen bg-bg-deep text-text-primary flex flex-col sale-zoom">
       <AppHeader subtitle="sale" onBack={onExit} />
+      {fulfillingOrderId && (
+        <div className="bg-accent/10 border-b border-accent px-4 py-2 text-accent text-sm text-center">
+          Ringing WhatsApp order #{fulfillingOrderId.slice(-8)} — quoted prices loaded
+        </div>
+      )}
       {/* One column on phones (LAN access), two panes on desktop. */}
       <main className="flex-1 grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-0">
         {/* Left: search + results */}

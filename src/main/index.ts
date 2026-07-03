@@ -14,10 +14,11 @@ import { initTokenStore } from './ipc/session.js';
 import { setPrinterDevMode } from './printer/printer.js';
 import { startSyncWorker } from './sync/push.js';
 import { startPullWorker } from './sync/pull.js';
+import { startOrdersPullWorker } from './sync/pullOrders.js';
 import { createHttpTransport } from './sync/httpTransport.js';
 import { readSyncConfig } from './sync/config.js';
 import { initHttpManager, autostartHttp } from './http/manager.js';
-import { registerIpcHandlers, registerSession5Handlers, registerSession6Handlers, registerSession7Handlers, registerSession8Handlers, registerSession9Handlers, registerSession11Handlers, registerSession11SuppliersHandlers, registerSession12AuditHandlers, registerSession12BreakageHandlers, registerSession12ReprintHandlers, registerSession12StockHandlers, registerSession14ReprintHandlers, registerSession15PeriodHandlers, registerSession15ExcHandlers, registerSession16ReorderHandlers, registerSession17ExpenseHandlers, registerSession18RecoveryHandlers, registerBackupHandlers, registerStatementHandlers, registerCpoHandlers, registerReturnsHandlers, registerSupplierPaymentsHandlers, registerReportsHandlers, registerCatalogTransferHandlers, registerReceiptConfigHandlers, registerSyncHandlers } from './ipc/handlers.js';
+import { registerIpcHandlers, registerSession5Handlers, registerSession6Handlers, registerSession7Handlers, registerSession8Handlers, registerSession9Handlers, registerSession11Handlers, registerSession11SuppliersHandlers, registerSession12AuditHandlers, registerSession12BreakageHandlers, registerSession12ReprintHandlers, registerSession12StockHandlers, registerSession14ReprintHandlers, registerSession15PeriodHandlers, registerSession15ExcHandlers, registerSession16ReorderHandlers, registerSession17ExpenseHandlers, registerSession18RecoveryHandlers, registerBackupHandlers, registerStatementHandlers, registerCpoHandlers, registerReturnsHandlers, registerSupplierPaymentsHandlers, registerReportsHandlers, registerCatalogTransferHandlers, registerReceiptConfigHandlers, registerSyncHandlers, registerPendingOrdersHandlers } from './ipc/handlers.js';
 
 log.initialize();
 log.transports.file.level = 'info';
@@ -160,6 +161,7 @@ app.whenReady().then(() => {
   registerCatalogTransferHandlers(registry, db, app, deviceId);
   registerReceiptConfigHandlers(registry, db, deviceId);
   registerSyncHandlers(registry, db, deviceId);
+  registerPendingOrdersHandlers(registry, db, deviceId);
   log.info(`[main] IPC handlers registered: ${registry.handlers.size} channels`);
 
   // Embedded HTTP transport. Opt-in via COUNTER_HTTP=1 so production desktop
@@ -200,6 +202,9 @@ app.whenReady().then(() => {
     const transport = createHttpTransport(syncCfg.centralUrl, syncCfg.token);
     startSyncWorker(db, syncCfg.shopId, transport);
     if (syncCfg.role !== 'HQ') startPullWorker(db, transport); // shops pull catalog; HQ is the source
+    // Orders pull runs on EVERY shop (including HQ) — unlike catalog, HQ has
+    // no special role here; any branch can fulfil a WhatsApp order.
+    startOrdersPullWorker(db, transport);
     log.info(`[sync] workers started for ${syncCfg.role} ${syncCfg.shopId} -> ${syncCfg.centralUrl}`);
   }
 

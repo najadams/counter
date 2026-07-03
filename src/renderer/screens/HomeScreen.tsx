@@ -23,6 +23,7 @@ import { formatMoney, formatMoneyWithCurrency, parseCedisToPesewas } from '../..
 import type { ShiftCloseBackupResult, AccessInfoResponse } from '../../shared/types/ipc';
 import SaleScreen from './SaleScreen';
 import VoidSaleScreen from './VoidSaleScreen';
+import PendingOrdersScreen from './PendingOrdersScreen';
 import BreakageScreen from './BreakageScreen';
 import ConsumptionScreen from './ConsumptionScreen';
 import StockReceiveScreen from './StockReceiveScreen';
@@ -32,7 +33,7 @@ import DailySummaryScreen from './DailySummaryScreen';
 import CustomersScreen from './CustomersScreen';
 import ReportsScreen from './ReportsScreen';
 
-type View = 'home' | 'sale' | 'void' | 'breakage' | 'consumption' | 'stock' | 'settings' | 'stocktake' | 'summary' | 'customers' | 'reports';
+type View = 'home' | 'sale' | 'void' | 'breakage' | 'consumption' | 'stock' | 'settings' | 'stocktake' | 'summary' | 'customers' | 'reports' | 'pendingOrders';
 
 export default function HomeScreen() {
   const shiftId = useSession((s) => s.shiftId);
@@ -47,6 +48,22 @@ export default function HomeScreen() {
   const [step, setStep] = useState<'idle' | 'count' | 'reconciled'>('idle');
   const [pendingReprints, setPendingReprints] = useState<Array<{ id: string; saleId: string; saleTotalPesewas: number; reason: string }>>([]);
   const [reprintAck, setReprintAck] = useState(false);
+  const [pendingOrderCount, setPendingOrderCount] = useState(0);
+
+  // Polled rather than pushed — the pull worker writes pending_orders in the
+  // background on its own interval; this just reflects whatever landed since
+  // the last check. 20s matches PendingOrdersScreen's own poll so the count
+  // on the menu button doesn't visibly lag the screen you'd land on.
+  useEffect(() => {
+    let cancelled = false;
+    async function refreshPendingOrderCount() {
+      const r = await counter.pendingOrdersList();
+      if (!cancelled && r.success) setPendingOrderCount(r.data.orders.length);
+    }
+    void refreshPendingOrderCount();
+    const interval = window.setInterval(() => void refreshPendingOrderCount(), 20_000);
+    return () => { cancelled = true; window.clearInterval(interval); };
+  }, [view]);
 
   // Reset the "close anyway" acknowledgement whenever the pending list
   // changes — a successful reprint or discard alters the count, and the
@@ -104,6 +121,10 @@ export default function HomeScreen() {
       else if (e.key === 'F6') { e.preventDefault(); setView('customers'); }
       else if (e.key === 'F7') { e.preventDefault(); setView('breakage'); }
       else if (e.key === 'F8') { e.preventDefault(); setView('stock'); }
+      // No hot key: F9 is reserved everywhere in this app as "back to home"
+      // from a child screen (see PendingOrdersScreen and every sibling) —
+      // Home's own keydown listener stays mounted underneath a child screen,
+      // so binding F9 here too would race the child's own F9 "back" handler.
       else if (e.key === 'F10') { e.preventDefault(); setStep('count'); setError(null); }
       else if (e.key === 'F11') { e.preventDefault(); setView('void'); }
       else if (e.key === 'F12') { e.preventDefault(); setView('settings'); }
@@ -121,6 +142,14 @@ export default function HomeScreen() {
   if (view === 'stocktake') return <StocktakeScreen onExit={() => setView('home')} />;
   if (view === 'summary') return <DailySummaryScreen onExit={() => setView('home')} />;
   if (view === 'customers') return <CustomersScreen onExit={() => setView('home')} />;
+  if (view === 'pendingOrders') {
+    return (
+      <PendingOrdersScreen
+        onExit={() => setView('home')}
+        onAccept={() => setView('sale')}
+      />
+    );
+  }
   if (view === 'reports') return (
     <ReportsScreen
       onExit={() => setView('home')}
@@ -161,6 +190,14 @@ export default function HomeScreen() {
 
             <ActionRow kind="primary" label="Sale" hot="F1" caption="Search SKUs, build cart, take payment." onClick={() => setView('sale')} />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <ActionRow
+                kind={pendingOrderCount > 0 ? 'warn' : 'default'}
+                label="WhatsApp orders"
+                caption={pendingOrderCount > 0
+                  ? `${pendingOrderCount} order${pendingOrderCount === 1 ? '' : 's'} waiting on your decision.`
+                  : 'Accept or decline orders the agent confirmed with customers.'}
+                onClick={() => setView('pendingOrders')}
+              />
               <ActionRow label="Cash drop" hot="F2" caption="Hand cash to owner, safe, or supplier." onClick={() => setShowCashDrop(true)} />
               <ActionRow label="Expense" caption="Pay a bill or runner from the till (water, transport, etc.)." onClick={() => setShowExpense(true)} />
               <ActionRow label="Drink" hot="F3" caption="Log worker consumption." onClick={() => setView('consumption')} />
