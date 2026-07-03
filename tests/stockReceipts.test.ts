@@ -121,6 +121,7 @@ describe('receiveStock', () => {
     receiveStock(db, {
       supplierId: supplierId(), locationId: L, workerId: W, supervisorApprovalId: SUP,
       lines: [{ productId: voltic.id, quantity: 10, unitId: packId, unitCostPesewas: 3600 }],
+      allowLargeCostSwing: true, // fixture cost 200 -> 600 is the point of the test
       deviceId: D,
     });
     const updated = (db.prepare('SELECT cost_price_pesewas FROM products WHERE id = ?').get(voltic.id) as { cost_price_pesewas: number }).cost_price_pesewas;
@@ -154,6 +155,7 @@ describe('receiveStock', () => {
         { productId: voltic.id, quantity: 10, unitId: packId, unitCostPesewas: 3600 },
         { productId: voltic.id, quantity: 5,  unitId: packId, unitCostPesewas: 3800 },
       ],
+      allowLargeCostSwing: true, // fixture cost 200 -> 611 is the point of the test
       deviceId: D,
     });
     const updated = (db.prepare('SELECT cost_price_pesewas FROM products WHERE id = ?').get(voltic.id) as { cost_price_pesewas: number }).cost_price_pesewas;
@@ -167,6 +169,65 @@ describe('receiveStock', () => {
       lines: [{ productId: p.id, quantity: 24, unitCostPesewas: 600 }], deviceId: D,
     });
     expect(r.productsUpdated).toBe(0);
+  });
+
+  it('COST_SWING: refuses a >±50% implied cost change unless confirmed', () => {
+    const p = star(); // seeded cost 600/bottle
+    const attempt = () => receiveStock(db, {
+      supplierId: supplierId(), locationId: L, workerId: W, supervisorApprovalId: SUP,
+      // The classic mistake: 24 bottles received "at 25" because the worker
+      // typed the per-crate figure into the wrong unit, or vice versa.
+      lines: [{ productId: p.id, quantity: 24, unitCostPesewas: 25 }],
+      deviceId: D,
+    });
+    expect(attempt).toThrow(/COST_SWING/);
+    // Nothing written by the refused receipt.
+    expect(unitsOnHand(db, p.id, L)).toBe(0);
+    expect((db.prepare('SELECT cost_price_pesewas FROM products WHERE id = ?').get(p.id) as { cost_price_pesewas: number }).cost_price_pesewas).toBe(600);
+
+    // Confirmed: goes through and updates the cost.
+    receiveStock(db, {
+      supplierId: supplierId(), locationId: L, workerId: W, supervisorApprovalId: SUP,
+      lines: [{ productId: p.id, quantity: 24, unitCostPesewas: 25 }],
+      allowLargeCostSwing: true,
+      deviceId: D,
+    });
+    expect(unitsOnHand(db, p.id, L)).toBe(24);
+  });
+
+  it('COST_SWING: a <50% cost move passes without confirmation', () => {
+    const p = star(); // 600 → 850 is +41.7%
+    receiveStock(db, {
+      supplierId: supplierId(), locationId: L, workerId: W, supervisorApprovalId: SUP,
+      lines: [{ productId: p.id, quantity: 24, unitCostPesewas: 850 }],
+      deviceId: D,
+    });
+    expect((db.prepare('SELECT cost_price_pesewas FROM products WHERE id = ?').get(p.id) as { cost_price_pesewas: number }).cost_price_pesewas).toBe(850);
+  });
+
+  it('supplier receipt bumps suppliers.current_balance_pesewas by the receipt value', () => {
+    const p = star();
+    const sid = supplierId();
+    const before = (db.prepare('SELECT current_balance_pesewas AS b FROM suppliers WHERE id = ?').get(sid) as { b: number }).b;
+    receiveStock(db, {
+      supplierId: sid, locationId: L, workerId: W, supervisorApprovalId: SUP,
+      lines: [{ productId: p.id, quantity: 24, unitCostPesewas: 600 }],
+      deviceId: D,
+    });
+    const after = (db.prepare('SELECT current_balance_pesewas AS b FROM suppliers WHERE id = ?').get(sid) as { b: number }).b;
+    expect(after - before).toBe(24 * 600);
+  });
+
+  it('opening stock does NOT touch any supplier balance', () => {
+    const p = star();
+    const totalBefore = (db.prepare('SELECT COALESCE(SUM(current_balance_pesewas), 0) AS t FROM suppliers').get() as { t: number }).t;
+    receiveStock(db, {
+      supplierId: null, isOpeningStock: true, locationId: L, workerId: W, supervisorApprovalId: SUP,
+      lines: [{ productId: p.id, quantity: 24, unitCostPesewas: 600 }],
+      deviceId: D,
+    });
+    const totalAfter = (db.prepare('SELECT COALESCE(SUM(current_balance_pesewas), 0) AS t FROM suppliers').get() as { t: number }).t;
+    expect(totalAfter).toBe(totalBefore);
   });
 
   it('multi-line receipt is atomic', () => {

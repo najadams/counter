@@ -105,17 +105,42 @@ describe('volume tier auto-applies in completeSale', () => {
     expect(r.totalPesewas).toBe(12 * 720);
   });
 
-  it('does NOT increase price (worker selling below tier price stays below)', async () => {
+  it('REFUSES a worker price below the floor (list and tier) — must go through discount', async () => {
+    const p = star();
+    addTier(db, { productId: p.id, channel: 'WALK_IN', minQuantity: 12, unitPricePesewas: 750, actorWorkerId: owner, deviceId: D });
+    // Worker quotes 700 — below both the 800 list and the 750 tier. The price
+    // floor rejects it: an untracked price cut is exactly the leak the floor
+    // exists to close. The legitimate path is list price + audited discount.
+    const salesBefore = (db.prepare('SELECT COUNT(*) AS n FROM sales').get() as { n: number }).n;
+    await expect(completeSale(db, {
+      shiftId, workerId: W, workerName: 'Naj', locationId: L, channel: 'WALK_IN',
+      lines: [{ productId: p.id, quantity: 12, unitPricePesewas: 700 }],
+      paymentMethod: 'CASH', cashGivenPesewas: 8400, deviceId: D, shopName: 'T',
+    })).rejects.toThrow(/below the lowest allowed price/);
+    // No sale row leaked out of the failed attempt.
+    expect((db.prepare('SELECT COUNT(*) AS n FROM sales').get() as { n: number }).n).toBe(salesBefore);
+  });
+
+  it('accepts the tier price itself as the floor when quantity qualifies', async () => {
     const p = star();
     addTier(db, { productId: p.id, channel: 'WALK_IN', minQuantity: 12, unitPricePesewas: 750, actorWorkerId: owner, deviceId: D });
     const r = await completeSale(db, {
       shiftId, workerId: W, workerName: 'Naj', locationId: L, channel: 'WALK_IN',
-      lines: [{ productId: p.id, quantity: 12, unitPricePesewas: 700 }], // worker quoted 700 (lower than tier)
-      paymentMethod: 'CASH', cashGivenPesewas: 8400, deviceId: D, shopName: 'T',
+      lines: [{ productId: p.id, quantity: 12, unitPricePesewas: 750 }], // exactly the tier floor
+      paymentMethod: 'CASH', cashGivenPesewas: 9000, deviceId: D, shopName: 'T',
     });
-    expect(r.totalPesewas).toBe(12 * 700);
-    const row = db.prepare('SELECT applied_tier_id FROM sale_lines WHERE sale_id = ?').get(r.saleId) as { applied_tier_id: string | null };
-    expect(row.applied_tier_id).toBeNull(); // tier did NOT apply because worker price was already lower
+    expect(r.totalPesewas).toBe(12 * 750);
+  });
+
+  it('snapshots the list price on every sale line', async () => {
+    const p = star();
+    const r = await completeSale(db, {
+      shiftId, workerId: W, workerName: 'Naj', locationId: L, channel: 'WALK_IN',
+      lines: [{ productId: p.id, quantity: 2, unitPricePesewas: 800 }],
+      paymentMethod: 'CASH', cashGivenPesewas: 1600, deviceId: D, shopName: 'T',
+    });
+    const row = db.prepare('SELECT list_price_pesewas FROM sale_lines WHERE sale_id = ?').get(r.saleId) as { list_price_pesewas: number };
+    expect(row.list_price_pesewas).toBe(800);
   });
 
   it("audit's appliedTierCount counts tiers applied", async () => {

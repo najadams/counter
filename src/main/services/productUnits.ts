@@ -177,6 +177,23 @@ export function updateUnit(db: DB, input: UpdateUnitInput): void {
       if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) {
         throw new Error('conversionFactor must be a positive integer');
       }
+      // A factor that has been used is history: sale lines and stock
+      // movements reference this unit, and downstream math (report
+      // canonical conversion, duplicate-as-new-sale) reads the CURRENT
+      // factor. Changing it would silently reinterpret those records.
+      // The packaging changed? Deactivate this unit and create a new one.
+      if (value !== existing.conversion_factor) {
+        const used =
+          db.prepare('SELECT 1 FROM sale_lines WHERE applied_unit_id = ? LIMIT 1').get(input.unitId) ??
+          db.prepare('SELECT 1 FROM stock_movements WHERE source_unit_id = ? LIMIT 1').get(input.unitId);
+        if (used) {
+          throw new Error(
+            `unit '${existing.unit_name}' has been used in sales or stock movements; ` +
+            `its conversion factor is locked. Deactivate it and create a new unit ` +
+            `with the new factor instead.`,
+          );
+        }
+      }
     }
     if (key === 'unitName') {
       const name = String(value).trim();

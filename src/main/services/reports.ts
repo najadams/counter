@@ -345,10 +345,9 @@ export function getReportsOverview(db: DB, input: GetReportsOverviewInput): Repo
     .get() as { withBalance: number; overLimit: number };
 
   // --- 5. Payables -------------------------------------------------------
-  // suppliers.current_balance_pesewas: positive = we owe them. The
-  // receiveStock flow doesn't auto-bump this today, so the figure is what
-  // payments have decremented vs. whatever was on file. Honest caveat is in
-  // the supplier-payments UI — we just total it here.
+  // suppliers.current_balance_pesewas: positive = we owe them. Stock
+  // receipts increment it by the receipt value; supplier payments decrement
+  // it. Receipts recorded before that wiring landed aren't reflected.
   const payables = db
     .prepare(
       `SELECT COALESCE(SUM(CASE WHEN current_balance_pesewas > 0 THEN current_balance_pesewas ELSE 0 END), 0)
@@ -407,14 +406,18 @@ export function getReportsOverview(db: DB, input: GetReportsOverviewInput): Repo
   }
 
   // --- 8. Top sellers this week ------------------------------------------
+  // sale_lines.quantity is in the SOLD unit (2 CRATE, 5 BOTTLE); scale by the
+  // applied unit's conversion factor so unitsSold is canonical and crates
+  // don't count the same as single bottles.
   const topSellers = db
     .prepare(
       `SELECT p.id AS productId, p.sku, p.name,
-              SUM(sl.quantity) AS unitsSold,
+              SUM(sl.quantity * COALESCE(pu.conversion_factor, 1)) AS unitsSold,
               SUM(sl.line_total_pesewas) AS revenuePesewas
          FROM sale_lines sl
          JOIN sales s ON s.id = sl.sale_id
          JOIN products p ON p.id = sl.product_id
+         LEFT JOIN product_units pu ON pu.id = sl.applied_unit_id
          WHERE s.voided = 0
            AND s.created_at >= ? AND s.created_at < ?
          GROUP BY p.id
@@ -772,16 +775,20 @@ export function getMarginReport(db: DB, input: MarginReportInput): MarginReportR
   requireReportsActor(db, input.actorWorkerId);
   const { fromISO, toExclusiveISO } = dateRangeToISO(input.fromDate, input.toDate);
 
+  // unitsSold in canonical units (quantity × applied-unit factor) so mixed
+  // crate/bottle sales aggregate honestly. Money columns are per-line
+  // snapshots and need no conversion.
   const byProductRows = db
     .prepare(
       `SELECT p.id AS productId, p.sku, p.name, p.category, p.brand,
-              SUM(sl.quantity) AS unitsSold,
+              SUM(sl.quantity * COALESCE(pu.conversion_factor, 1)) AS unitsSold,
               SUM(sl.line_total_pesewas) AS revenuePesewas,
               SUM(sl.unit_cost_pesewas * sl.quantity) AS cogsPesewas,
               SUM(sl.margin_pesewas) AS marginPesewas
          FROM sale_lines sl
          JOIN sales s ON s.id = sl.sale_id
          JOIN products p ON p.id = sl.product_id
+         LEFT JOIN product_units pu ON pu.id = sl.applied_unit_id
          WHERE s.voided = 0
            AND s.created_at >= ? AND s.created_at < ?
          GROUP BY p.id
@@ -797,7 +804,7 @@ export function getMarginReport(db: DB, input: MarginReportInput): MarginReportR
   const byCategoryRows = db
     .prepare(
       `SELECT p.category AS category,
-              SUM(sl.quantity) AS unitsSold,
+              SUM(sl.quantity * COALESCE(pu.conversion_factor, 1)) AS unitsSold,
               SUM(sl.line_total_pesewas) AS revenuePesewas,
               SUM(sl.unit_cost_pesewas * sl.quantity) AS cogsPesewas,
               SUM(sl.margin_pesewas) AS marginPesewas,
@@ -805,6 +812,7 @@ export function getMarginReport(db: DB, input: MarginReportInput): MarginReportR
          FROM sale_lines sl
          JOIN sales s ON s.id = sl.sale_id
          JOIN products p ON p.id = sl.product_id
+         LEFT JOIN product_units pu ON pu.id = sl.applied_unit_id
          WHERE s.voided = 0
            AND s.created_at >= ? AND s.created_at < ?
          GROUP BY p.category
@@ -895,8 +903,8 @@ export interface InventoryRow {
   reorderThreshold: number;
   belowReorder: boolean;
   stockout: boolean;
-  unitsSoldInWindow: number;       // units in the velocity window
-  /** unitsOnHand / (unitsSoldInWindow / windowDays). NULL if no sales in window. */
+  unitsSoldInWindow: number;       // canonical units sold in the velocity window
+  /** unitsOnHand / (unitsSoldInWindow / windowDays), both canonical. NULL if no sales in window. */
   daysOfSupply: number | null;
   lastReceivedAt: string | null;
   lastSoldAt: string | null;
@@ -936,9 +944,10 @@ export function getInventoryReport(db: DB, input: InventoryReportInput): Invento
                  JOIN sales s ON s.id = sl.sale_id
                  WHERE sl.product_id = p.id AND s.voided = 0)
                 AS lastSoldAt,
-              (SELECT COALESCE(SUM(sl.quantity), 0)
+              (SELECT COALESCE(SUM(sl.quantity * COALESCE(pu.conversion_factor, 1)), 0)
                  FROM sale_lines sl
                  JOIN sales s ON s.id = sl.sale_id
+                 LEFT JOIN product_units pu ON pu.id = sl.applied_unit_id
                  WHERE sl.product_id = p.id AND s.voided = 0
                    AND s.created_at >= ?)
                 AS unitsSoldInWindow

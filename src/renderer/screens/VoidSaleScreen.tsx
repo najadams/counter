@@ -65,14 +65,28 @@ export default function VoidSaleScreen({ onExit, onDuplicate }: { onExit: () => 
     const r = await counter.getSaleLines(saleId);
     if (!r.success) { setError(r.error); return; }
     const data = r.data;
+    // A duplicate is a NEW sale, so it rings at today's prices, not the
+    // original's snapshot prices — the backend refuses lines priced below
+    // the current list (price floor), and stale prices would trip it.
+    const repriced = await counter.repriceLines({
+      channel: data.channel,
+      lines: data.lines.map((l) => ({ productId: l.productId, unitId: l.unitId })),
+    });
+    if (!repriced.success) { setError(repriced.error); return; }
+    const freshPrice = new Map(
+      repriced.data.lines.map((l) => [`${l.productId}:${l.unitId ?? ''}`, l.unitPricePesewas]),
+    );
     loadLines(
-      data.lines.map((l) => ({
-        productId: l.productId, sku: l.productSku, name: l.productName,
-        unitId: l.unitId, unitName: l.unitName, factor: l.factor,
-        basePricePesewas: l.unitPricePesewas, unitPricePesewas: l.unitPricePesewas,
-        appliedTierId: null, appliedTierMinQuantity: null,
-        quantity: l.quantity, unitsOnHand: l.unitsOnHand,
-      })),
+      data.lines.map((l) => {
+        const price = freshPrice.get(`${l.productId}:${l.unitId ?? ''}`) ?? l.unitPricePesewas;
+        return {
+          productId: l.productId, sku: l.productSku, name: l.productName,
+          unitId: l.unitId, unitName: l.unitName, factor: l.factor,
+          basePricePesewas: price, unitPricePesewas: price,
+          appliedTierId: null, appliedTierMinQuantity: null,
+          quantity: l.quantity, unitsOnHand: l.unitsOnHand,
+        };
+      }),
       data.channel,
       data.customerId && data.customerName
         ? { id: data.customerId, displayName: data.customerName, phone: '', currentBalancePesewas: 0 }

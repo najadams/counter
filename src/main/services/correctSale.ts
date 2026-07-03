@@ -21,7 +21,7 @@ import type { Database as DB } from 'better-sqlite3';
 import { logAudit } from '../db/audit.js';
 import { assertNotSealed } from './periods.js';
 import { getPrinter, type Station } from '../printer/printer.js';
-import { voidSaleCore } from './voids.js';
+import { loadSaleOutflows, voidSaleCore } from './voids.js';
 import {
   completeSaleCore, flagReceiptFailed,
   type CompleteSaleLine, type SalePaymentInput, type SaleChannel,
@@ -109,16 +109,11 @@ export async function correctSale(db: DB, input: CorrectSaleInput): Promise<Corr
   }>;
   if (origSaleLines.length === 0) throw new Error('correctSale: original has no lines (corrupt)');
 
-  // Original lines for the VOID reversal (need cost + conversion factor).
-  const voidLines = db.prepare(
-    `SELECT sl.product_id, sl.quantity, sl.unit_cost_pesewas,
-            COALESCE(pu.conversion_factor, 1) AS conversion_factor
-       FROM sale_lines sl
-       LEFT JOIN product_units pu ON pu.id = sl.applied_unit_id
-       WHERE sl.sale_id = ?`,
-  ).all(input.originalSaleId) as Array<{
-    product_id: string; quantity: number; unit_cost_pesewas: number; conversion_factor: number;
-  }>;
+  // Original stock outflows for the VOID reversal — exact canonical
+  // quantities and cost values, immune to conversion-factor edits since
+  // the sale (same rationale as voidSale).
+  const voidLines = loadSaleOutflows(db, input.originalSaleId);
+  if (voidLines.length === 0) throw new Error('correctSale: original has no stock movements (corrupt)');
 
   // The corrected cart = original lines (verbatim, snapshot-priced) + additions.
   const correctedLines: CompleteSaleLine[] = [

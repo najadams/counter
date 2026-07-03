@@ -177,15 +177,17 @@ export function generateDailySummary(
     )
     .get(locationId, dayStart, next) as { loss: number; rate: number | null } | undefined;
 
-  // Top 5 SKUs by revenue
+  // Top 5 SKUs by revenue. unitsSold in canonical units (quantity × applied
+  // unit factor) so crate and bottle sales aggregate honestly.
   const topSkus = db
     .prepare(
       `SELECT p.sku, p.name,
               SUM(sl.line_total_pesewas) AS revenue,
-              SUM(sl.quantity) AS unitsSold
+              SUM(sl.quantity * COALESCE(pu.conversion_factor, 1)) AS unitsSold
          FROM sale_lines sl
          JOIN sales s ON s.id = sl.sale_id
          JOIN products p ON p.id = sl.product_id
+         LEFT JOIN product_units pu ON pu.id = sl.applied_unit_id
          WHERE s.location_id = ? AND s.voided = 0
            AND s.created_at >= ? AND s.created_at < ?
          GROUP BY p.id

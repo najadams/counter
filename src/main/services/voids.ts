@@ -74,24 +74,14 @@ export function voidSale(db: DB, input: VoidSaleInput): VoidSaleResult {
   const businessDate = sale.created_at.slice(0, 10);
   assertNotSealed(db, sale.location_id, businessDate, `voiding sale ${input.saleId}`);
 
-  // sale_lines.quantity is in the UNIT the cashier sold (1 CASE, 2 PACK,
-  // 5 PCS). Stock_movements are in canonical units. To restore inventory
-  // we must scale by the conversion_factor of the applied unit. Pre-0015
-  // sale_lines (legacy, no applied_unit_id) get factor=1 from the LEFT JOIN,
-  // matching the canonical-only behaviour they had at sale time.
-  const lines = db
-    .prepare(
-      `SELECT sl.id, sl.product_id, sl.quantity, sl.unit_cost_pesewas,
-              COALESCE(pu.conversion_factor, 1) AS conversion_factor
-         FROM sale_lines sl
-         LEFT JOIN product_units pu ON pu.id = sl.applied_unit_id
-         WHERE sl.sale_id = ?`,
-    )
-    .all(input.saleId) as Array<{
-      id: string; product_id: string; quantity: number;
-      unit_cost_pesewas: number; conversion_factor: number;
-    }>;
-  if (lines.length === 0) throw new Error(`voidSale: sale has no lines (corrupt)`);
+  // Reverse from the sale's ORIGINAL stock movements, not from sale_lines ×
+  // the unit's conversion factor. The original movement already holds the
+  // exact canonical quantity and cost that left the shelf at sale time; a
+  // conversion factor edited since the sale (CRATE 24 → 12) must not change
+  // what the reversal restores. Filter to the sale outflows only — a prior
+  // partial return's inflow rows (positive) must not be re-reversed.
+  const lines = loadSaleOutflows(db, input.saleId);
+  if (lines.length === 0) throw new Error(`voidSale: sale has no stock movements (corrupt)`);
 
   const result = db.transaction(() => voidSaleCore(db, {
     sale,
@@ -105,9 +95,32 @@ export function voidSale(db: DB, input: VoidSaleInput): VoidSaleResult {
   return { saleId: input.saleId, ...result };
 }
 
+export interface VoidReversalLine {
+  product_id: string;
+  /** Canonical units that left the shelf at sale time (positive). */
+  canonical_qty: number;
+  /** Per-canonical-unit cost snapshotted on the original movement. */
+  unit_cost_pesewas: number;
+  /** Exact cost value of the original outflow (positive). */
+  total_value_pesewas: number;
+}
+
+/** The sale's original outflow movements, sign-flipped to positives — the
+ *  exact canonical quantities and cost values the reversal must restore. */
+export function loadSaleOutflows(db: DB, saleId: string): VoidReversalLine[] {
+  return db
+    .prepare(
+      `SELECT product_id, -quantity AS canonical_qty,
+              unit_cost_pesewas, -total_value_pesewas AS total_value_pesewas
+         FROM stock_movements
+         WHERE sale_id = ? AND quantity < 0`,
+    )
+    .all(saleId) as VoidReversalLine[];
+}
+
 export interface VoidSaleCoreParams {
   sale: { id: string; location_id: string; customer_id: string | null; is_credit: number };
-  lines: Array<{ product_id: string; quantity: number; unit_cost_pesewas: number; conversion_factor: number }>;
+  lines: VoidReversalLine[];
   workerId: string;
   reason: string;
   deviceId: string;
@@ -130,24 +143,19 @@ export function voidSaleCore(
   let customerDelta = 0;
   let reversalMovementCount = 0;
 
-  // 1) Reversing stock movements (positive, SALE_VOID_REVERSAL). Canonical
-  //    quantity = quantity × conversion_factor; cost basis kept exactly equal
-  //    to the original sale_line via the total_value override.
+  // 1) Reversing stock movements (positive, SALE_VOID_REVERSAL) — exact
+  //    mirrors of the original outflows: same canonical quantity, same
+  //    per-canonical cost, same total value.
   for (const line of p.lines) {
-    const canonicalQty = line.quantity * line.conversion_factor;
-    const perCanonicalCost = line.conversion_factor === 1
-      ? line.unit_cost_pesewas
-      : Math.round(line.unit_cost_pesewas / line.conversion_factor);
-    const lineValuePesewas = line.unit_cost_pesewas * line.quantity;
     insertStockMovement(db, {
       productId: line.product_id,
       locationId: p.sale.location_id,
-      quantity: canonicalQty,
+      quantity: line.canonical_qty,
       reasonCode: 'SALE_VOID_REVERSAL',
       workerId: p.workerId,
       saleId: p.sale.id,
-      unitCostPesewas: perCanonicalCost,
-      totalValuePesewasOverride: lineValuePesewas,
+      unitCostPesewas: line.unit_cost_pesewas,
+      totalValuePesewasOverride: line.total_value_pesewas,
       supervisorApprovalId: p.supervisorApprovalId ?? undefined,
       notes: p.reason.slice(0, 200),
       deviceId: p.deviceId,

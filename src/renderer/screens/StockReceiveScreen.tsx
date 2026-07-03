@@ -33,6 +33,11 @@ export default function StockReceiveScreen({ onExit }: { onExit: () => void }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  // Backend refused the receipt with a COST_SWING error; hold the approved
+  // supervisor credentials so "Receive anyway" can retry with the override.
+  const [costSwing, setCostSwing] = useState<{
+    message: string; supervisorWorkerId: string; supervisorPin: string;
+  } | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -117,21 +122,33 @@ export default function StockReceiveScreen({ onExit }: { onExit: () => void }) {
 
   const totalValue = lines.reduce((s, l) => s + l.quantity * l.unitCostPesewas, 0);
 
-  async function approve(supervisorWorkerId: string, supervisorPin: string) {
+  async function approve(supervisorWorkerId: string, supervisorPin: string, allowLargeCostSwing = false) {
     if (lines.length === 0) { setError('Add at least one line.'); return; }
     if (!isOpeningStock && !supplierId) { setError('Pick a supplier.'); return; }
     setSubmitting(true);
     setError(null);
+    setCostSwing(null);
     const r = await counter.receiveStock({
       supplierId: isOpeningStock ? null : supplierId,
       isOpeningStock,
       supervisorWorkerId, supervisorPin,
       lines: lines.map((l) => ({ productId: l.productId, quantity: l.quantity, unitCostPesewas: l.unitCostPesewas, unitId: l.unitId })),
       notes: notes.trim() || null,
+      allowLargeCostSwing,
     });
     setSubmitting(false);
     setAskingSupervisor(false);
-    if (!r.success) { setError(r.error); return; }
+    if (!r.success) {
+      if (r.error.includes('COST_SWING')) {
+        setCostSwing({
+          message: r.error.replace(/^.*?COST_SWING:\s*/, ''),
+          supervisorWorkerId, supervisorPin,
+        });
+        return;
+      }
+      setError(r.error);
+      return;
+    }
     setInfo(`Received ${r.data.movementCount} line(s) worth ${formatMoneyWithCurrency(r.data.totalValuePesewas)}. ${r.data.productsCostUpdated} cost(s) updated.`);
     setLines([]); setNotes('');
   }
@@ -265,6 +282,26 @@ export default function StockReceiveScreen({ onExit }: { onExit: () => void }) {
           placeholder="Notes (optional)" className="bg-bg-input border border-border-strong px-3 py-2 text-sm" rows={2} />
 
         {error && <div className="bg-bg-deep border border-danger px-4 py-2 text-danger text-sm">{error}</div>}
+
+        {costSwing && (
+          <div className="bg-bg-deep border border-warning px-4 py-3 text-sm flex flex-col gap-3">
+            <div className="text-warning font-semibold">Large cost change — check before receiving</div>
+            <div className="text-text-secondary">{costSwing.message}</div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setCostSwing(null)}
+                className="px-4 py-2 border border-border hover:bg-bg-elevated">
+                Go back and fix
+              </button>
+              <button
+                onClick={() => void approve(costSwing.supervisorWorkerId, costSwing.supervisorPin, true)}
+                disabled={submitting}
+                className="bg-warning text-ink px-4 py-2 font-semibold disabled:opacity-40">
+                Cost is correct — receive anyway
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="flex gap-3">
           <button onClick={onExit} className="px-5 py-3 border border-border hover:bg-bg-elevated">Cancel</button>

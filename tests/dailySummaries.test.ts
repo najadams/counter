@@ -147,12 +147,14 @@ describe('stocktake-derived shrinkage', () => {
 
 describe('top SKUs + reorder alerts', () => {
   it('top 5 by revenue', async () => {
-    const products = db.prepare("SELECT id, sku FROM products ORDER BY sku LIMIT 3").all() as Array<{ id: string; sku: string }>;
+    // Ring each product at its own list price — the price floor refuses
+    // anything below the channel list.
+    const products = db.prepare("SELECT id, sku, walk_in_price_pesewas AS price FROM products ORDER BY sku LIMIT 3").all() as Array<{ id: string; sku: string; price: number }>;
     for (const p of products) {
       await completeSale(db, {
         shiftId, workerId: W, workerName: 'Naj', locationId: L, channel: 'WALK_IN',
-        lines: [{ productId: p.id, quantity: 1, unitPricePesewas: 800 }],
-        paymentMethod: 'CASH', cashGivenPesewas: 800, deviceId: D, shopName: 'T',
+        lines: [{ productId: p.id, quantity: 1, unitPricePesewas: p.price }],
+        paymentMethod: 'CASH', cashGivenPesewas: p.price, deviceId: D, shopName: 'T',
       });
     }
     const r = generateDailySummary(db, { date: todayIso(), locationId: L, workerId: W, deviceId: D });

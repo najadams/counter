@@ -332,6 +332,9 @@ export function completeSaleCore(
     quantityInUnit: number;
     quantityCanonical: number;
     unitPricePesewas: number;
+    /** Channel list price for this unit at ring time — snapshotted on the
+     *  line so underpricing stays detectable after catalog price changes. */
+    listPricePesewas: number;
     canonicalUnitCostPesewas: number;    // products.cost_price_pesewas / factor (rounded down — see note)
   };
   const resolvedLines: ResolvedLine[] = [];
@@ -380,28 +383,53 @@ export function completeSaleCore(
     let unitPrice = l.unitPricePesewas;
     let appliedTierId: string | null = null;
 
+    // Channel list price for this unit — the walk-in/wholesale/route price the
+    // catalog says this unit sells at. Snapshotted on the line below.
+    const listPrice = priceForUnit(db, l.productId, unit ? unit.id : null, input.channel);
+
     // lockPrices (sale correction): use the line's price verbatim, skipping
-    // tier/override re-pricing, so re-ringing the original lines can't shift
-    // their totals if prices changed since the original sale.
+    // tier/override re-pricing AND the price floor, so re-ringing the original
+    // lines can't shift their totals if prices changed since the original sale.
     if (!input.lockPrices) {
+      // The floor: the lowest price this line may be rung at without a
+      // discount. Starts at the list price; a customer override or a volume
+      // tier can legitimately lower it.
+      let floorPrice = listPrice;
+
       // Wave C.2: per-customer price override beats the line's input price.
       // Override is per-display-unit (same units as l.unitPricePesewas), so
       // no factor conversion needed here. Tier may still beat the override
       // if a volume break gives a better price.
       if (input.customerId && unit) {
         const ov = findBestOverride(db, input.customerId, l.productId, unit.id, input.channel);
-        if (ov && ov.pricePesewas < unitPrice) {
-          unitPrice = ov.pricePesewas;
+        if (ov) {
+          floorPrice = Math.min(floorPrice, ov.pricePesewas);
+          if (ov.pricePesewas < unitPrice) {
+            unitPrice = ov.pricePesewas;
+          }
         }
       }
 
-      if (tier && tier.unitPricePesewas < unitPrice) {
+      if (tier) {
         // Tier is per-canonical-unit; convert to per-unit for line math.
         const tierUnitPrice = tier.unitPricePesewas * factor;
+        floorPrice = Math.min(floorPrice, tierUnitPrice);
         if (tierUnitPrice < unitPrice) {
           unitPrice = tierUnitPrice;
           appliedTierId = tier.id;
         }
+      }
+
+      // Price floor: the client's quoted price is not trusted below the best
+      // legitimate price. Anything lower must go through the discount field,
+      // which is supervisor-gated above a threshold and always audited.
+      if (unitPrice < floorPrice) {
+        const productName = productRows.get(l.productId)!.name;
+        throw new Error(
+          `completeSale: ${productName} priced at ${unitPrice} pesewas, below the lowest ` +
+          `allowed price of ${floorPrice} for this unit/channel. Ring it at the list price ` +
+          `and record the reduction as a discount instead.`,
+        );
       }
     }
     appliedTierIds.push(appliedTierId);
@@ -414,6 +442,7 @@ export function completeSaleCore(
       quantityInUnit: l.quantity,
       quantityCanonical,
       unitPricePesewas: unitPrice,
+      listPricePesewas: listPrice,
       canonicalUnitCostPesewas: canonicalCost,
     });
   }
@@ -604,10 +633,10 @@ export function completeSaleCore(
       db.prepare(
         `INSERT INTO sale_lines (
           id, sale_id, product_id, quantity,
-          unit_price_pesewas, unit_cost_pesewas,
+          unit_price_pesewas, unit_cost_pesewas, list_price_pesewas,
           line_total_pesewas, margin_pesewas, applied_tier_id, applied_unit_id,
           created_by, updated_by, device_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         lineId,
         saleId,
@@ -617,6 +646,7 @@ export function completeSaleCore(
         // sale_lines.unit_cost_pesewas snapshots cost-per-unit-sold (NOT canonical).
         // We compute it as canonicalCost * factor so margin = unit_price - unit_cost.
         line.canonicalUnitCostPesewas * line.factor,
+        line.listPricePesewas,
         lineTotal,
         margin,
         tierId,

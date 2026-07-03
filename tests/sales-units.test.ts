@@ -207,4 +207,77 @@ describe('CRATE unit (24×)', () => {
       { unitName: 'UNIT', quantityInUnit: 6, canonicalQuantity: 6 },
     ]);
   });
+
+  it('void restores the ORIGINAL canonical quantity even if the factor is tampered with post-sale', async () => {
+    const { voidSale } = await import('../src/main/services/voids');
+    const before = unitsOnHand(db, starId, L);
+    const r = await completeSale(db, {
+      shiftId, workerId: W, workerName: 'Naj', locationId: L, channel: 'WALK_IN',
+      lines: [{ productId: starId, unitId: crateId, quantity: 2, unitPricePesewas: 18000 }],
+      paymentMethod: 'CASH', cashGivenPesewas: 36000, deviceId: D, shopName: 'T',
+    });
+    expect(unitsOnHand(db, starId, L)).toBe(before - 48);
+    // Simulate the corruption path updateUnit now forbids: the factor row is
+    // edited underneath the sale (old build, direct DB write). The reversal
+    // must NOT trust the current factor — it restores from the original
+    // stock movement.
+    db.prepare('UPDATE product_units SET conversion_factor = 12 WHERE id = ?').run(crateId);
+    voidSale(db, {
+      saleId: r.saleId, reason: 'unit factor tamper test',
+      supervisorWorkerId: SUP, supervisorPin: '9999', workerId: W, deviceId: D,
+    });
+    expect(unitsOnHand(db, starId, L)).toBe(before); // +48 restored, not +24
+  });
+
+  it('report quantities are canonical: 2 CRATE + 6 bottles counts as 54 units, not 8', async () => {
+    const { getMarginReport, getInventoryReport } = await import('../src/main/services/reports');
+    const defUnit = (db.prepare(`SELECT id FROM product_units WHERE product_id = ? AND unit_name = 'UNIT'`).get(starId) as { id: string }).id;
+    await completeSale(db, {
+      shiftId, workerId: W, workerName: 'Naj', locationId: L, channel: 'WALK_IN',
+      lines: [
+        { productId: starId, unitId: crateId, quantity: 2, unitPricePesewas: 18000 },
+        { productId: starId, unitId: defUnit, quantity: 6, unitPricePesewas: 800 },
+      ],
+      paymentMethod: 'CASH', cashGivenPesewas: 40800, deviceId: D, shopName: 'T',
+    });
+    const today = new Date().toISOString().slice(0, 10);
+    const margin = getMarginReport(db, { actorWorkerId: owner, fromDate: today, toDate: today });
+    const starRow = margin.byProduct.find((p) => p.productId === starId);
+    expect(starRow?.unitsSold).toBe(2 * 24 + 6); // canonical, not 2 + 6
+    // Inventory velocity in canonical units too, so daysOfSupply is honest:
+    // 240 - 54 = 186 on hand, 54 sold in the 30d window → ~103 days, not ~700.
+    const inv = getInventoryReport(db, { actorWorkerId: owner });
+    const invRow = inv.rows.find((r2) => r2.productId === starId);
+    expect(invRow?.unitsSoldInWindow).toBe(54);
+    expect(invRow?.unitsOnHand).toBe(186);
+    expect(invRow?.daysOfSupply).toBe(Math.round((186 / (54 / 30)) * 10) / 10);
+  });
+});
+
+describe('conversion-factor lock', () => {
+  it('refuses a factor change once the unit is used in a sale; price stays editable', async () => {
+    const { updateUnit } = await import('../src/main/services/productUnits');
+    const crateId = addUnit(db, {
+      productId: starId, unitName: 'CRATE', conversionFactor: 24, pricePesewas: 18000,
+      isPurchaseUnit: true, isSaleUnit: true, actorWorkerId: owner, deviceId: D,
+    }).unitId;
+    // Unused unit: factor edits are fine (fixing a typo before first use).
+    updateUnit(db, { unitId: crateId, fields: { conversionFactor: 25 }, actorWorkerId: owner, deviceId: D });
+    updateUnit(db, { unitId: crateId, fields: { conversionFactor: 24 }, actorWorkerId: owner, deviceId: D });
+
+    await completeSale(db, {
+      shiftId, workerId: W, workerName: 'Naj', locationId: L, channel: 'WALK_IN',
+      lines: [{ productId: starId, unitId: crateId, quantity: 1, unitPricePesewas: 18000 }],
+      paymentMethod: 'CASH', cashGivenPesewas: 18000, deviceId: D, shopName: 'T',
+    });
+
+    expect(() =>
+      updateUnit(db, { unitId: crateId, fields: { conversionFactor: 12 }, actorWorkerId: owner, deviceId: D }),
+    ).toThrow(/conversion factor is locked/);
+    // Same-value "change" and price changes stay allowed.
+    updateUnit(db, { unitId: crateId, fields: { conversionFactor: 24, pricePesewas: 19000 }, actorWorkerId: owner, deviceId: D });
+    const row = db.prepare('SELECT conversion_factor, price_pesewas FROM product_units WHERE id = ?').get(crateId) as { conversion_factor: number; price_pesewas: number };
+    expect(row.conversion_factor).toBe(24);
+    expect(row.price_pesewas).toBe(19000);
+  });
 });

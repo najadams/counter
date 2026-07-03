@@ -33,6 +33,11 @@ export interface ReceiveStockInput {
   supervisorApprovalId: string;
   lines: StockReceiptLine[];
   notes?: string | null;
+  /** Confirm a receipt whose implied per-canonical cost moves a product's
+   *  cost by more than ±50%. Without this the receipt is refused with a
+   *  COST_SWING error so a per-crate/per-bottle mix-up can't silently
+   *  poison the cost basis (and every margin figure after it). */
+  allowLargeCostSwing?: boolean;
   deviceId: string;
 }
 
@@ -103,79 +108,104 @@ export function receiveStock(
     productMap.set(line.productId, { name: p.name, oldCost: p.cost_price_pesewas });
   }
 
+  // Resolve units + convert to canonical BEFORE any writes, so the cost-swing
+  // guard can see the receipt's implied per-canonical costs pre-flight.
+  const resolvedLines = input.lines.map((line) => {
+    let factor = 1;
+    let unitId: string | null = null;
+    if (line.unitId) {
+      const u = getUnit(db, line.unitId);
+      if (!u) throw new Error(`receiveStock: unit ${line.unitId} not found`);
+      if (!u.active) throw new Error(`receiveStock: unit ${line.unitId} is inactive`);
+      if (u.productId !== line.productId) {
+        throw new Error(`receiveStock: unit ${line.unitId} does not belong to product ${line.productId}`);
+      }
+      if (!u.isPurchaseUnit) {
+        throw new Error(`receiveStock: unit '${u.unitName}' is not flagged as a purchase unit`);
+      }
+      factor = u.conversionFactor;
+      unitId = u.id;
+    }
+    const canonicalQty = line.quantity * factor;
+    // Truth: total spent on this line, in pesewas. EXACT — the user typed
+    // (quantity, per-purchase-unit cost) and we just multiply integers.
+    // No division means no rounding here.
+    const lineTotalPesewas = line.quantity * line.unitCostPesewas;
+    // Display: per-canonical-unit cost, rounded. Used for analysis and as
+    // the cost-snapshot at sale time. May differ from
+    // lineTotalPesewas / canonicalQty by ±0.5 pesewa due to rounding, but
+    // the line total above stays exact.
+    const canonicalUnitCost = Math.round(lineTotalPesewas / canonicalQty);
+    return { ...line, unitId, canonicalQty, lineTotalPesewas, canonicalUnitCost };
+  });
+
+  // Per-receipt cost accumulator: productId -> { value (pesewas), qty (canonical) }.
+  // Used below to set the new canonical cost = sum value / sum canonical
+  // qty across JUST this receipt's lines for that product. "Latest
+  // receipt wins" semantics — prior inflows do not influence the new
+  // cost. Multi-line receipts for the same product (rare but allowed)
+  // get a weighted average of just this receipt's lines.
+  const receiptCost = new Map<string, { value: number; qty: number }>();
+  for (const line of resolvedLines) {
+    const acc = receiptCost.get(line.productId) ?? { value: 0, qty: 0 };
+    acc.value += line.lineTotalPesewas;
+    acc.qty += line.canonicalQty;
+    receiptCost.set(line.productId, acc);
+  }
+
+  // Cost-swing guard: the most damaging receipt mistake is typing the
+  // per-bottle cost against a CRATE unit (or vice versa), which shifts the
+  // product's cost basis by the conversion factor and poisons every margin
+  // figure after it. Refuse a >±50% implied cost change unless the caller
+  // confirms with allowLargeCostSwing. Marker prefix is matched by the UI.
+  if (!input.allowLargeCostSwing) {
+    const swings: string[] = [];
+    for (const [productId, acc] of receiptCost) {
+      if (acc.qty <= 0) continue;
+      const newCost = Math.round(acc.value / acc.qty);
+      const old = productMap.get(productId)!.oldCost;
+      if (old > 0 && (newCost > old * 1.5 || newCost < old * 0.5)) {
+        swings.push(`${productMap.get(productId)!.name}: ${old} → ${newCost} pesewas per canonical unit`);
+      }
+    }
+    if (swings.length > 0) {
+      throw new Error(
+        `COST_SWING: this receipt changes cost by more than 50% — ${swings.join('; ')}. ` +
+        `Check that each cost was entered per the CHOSEN unit (a crate costs more than a ` +
+        `bottle). If the new cost is genuinely right, confirm to receive anyway.`,
+      );
+    }
+  }
+
   const movementIds: string[] = [];
   let totalValuePesewas = 0;
   let productsUpdated = 0;
   const now = new Date().toISOString();
 
   const tx = db.transaction(() => {
-    const productsTouched = new Set<string>();
-    // Per-receipt cost accumulator: productId -> { value (pesewas), qty (canonical) }.
-    // Used below to set the new canonical cost = sum value / sum canonical
-    // qty across JUST this receipt's lines for that product. "Latest
-    // receipt wins" semantics — prior inflows do not influence the new
-    // cost. Multi-line receipts for the same product (rare but allowed)
-    // get a weighted average of just this receipt's lines.
-    const receiptCost = new Map<string, { value: number; qty: number }>();
-
-    for (const line of input.lines) {
-      // Resolve unit + convert to canonical.
-      let factor = 1;
-      let unitId: string | null = null;
-      if (line.unitId) {
-        const u = getUnit(db, line.unitId);
-        if (!u) throw new Error(`receiveStock: unit ${line.unitId} not found`);
-        if (!u.active) throw new Error(`receiveStock: unit ${line.unitId} is inactive`);
-        if (u.productId !== line.productId) {
-          throw new Error(`receiveStock: unit ${line.unitId} does not belong to product ${line.productId}`);
-        }
-        if (!u.isPurchaseUnit) {
-          throw new Error(`receiveStock: unit '${u.unitName}' is not flagged as a purchase unit`);
-        }
-        factor = u.conversionFactor;
-        unitId = u.id;
-      }
-      const canonicalQty = line.quantity * factor;
-
-      // Truth: total spent on this line, in pesewas. EXACT — the user typed
-      // (quantity, per-purchase-unit cost) and we just multiply integers.
-      // No division means no rounding here.
-      const lineTotalPesewas = line.quantity * line.unitCostPesewas;
-      // Display: per-canonical-unit cost, rounded. Used for analysis and as
-      // the cost-snapshot at sale time. May differ from
-      // lineTotalPesewas / canonicalQty by ±0.5 pesewa due to rounding, but
-      // the line total above stays exact.
-      const canonicalUnitCost = Math.round(lineTotalPesewas / canonicalQty);
-
+    for (const line of resolvedLines) {
       const sm = insertStockMovement(db, {
         productId: line.productId,
         locationId: input.locationId,
-        quantity: canonicalQty,
+        quantity: line.canonicalQty,
         reasonCode,
         workerId: input.workerId,
         supervisorApprovalId: input.supervisorApprovalId,
-        unitCostPesewas: canonicalUnitCost,
+        unitCostPesewas: line.canonicalUnitCost,
         // Preserve the EXACT total. Without this, total_value would be
         // canonicalQty × canonicalUnitCost — and for any line whose
         // box-cost isn't evenly divisible, that quietly understates
         // (or overstates) what we actually spent.
-        totalValuePesewasOverride: lineTotalPesewas,
+        totalValuePesewasOverride: line.lineTotalPesewas,
         notes: input.notes ?? null,
         deviceId: input.deviceId,
       });
-      if (unitId) {
+      if (line.unitId) {
         db.prepare('UPDATE stock_movements SET source_unit_id = ?, updated_at = ? WHERE id = ?')
-          .run(unitId, new Date().toISOString(), sm.id);
+          .run(line.unitId, new Date().toISOString(), sm.id);
       }
       movementIds.push(sm.id);
       totalValuePesewas += sm.totalValuePesewas;
-      productsTouched.add(line.productId);
-
-      // Accumulate this line into the receipt-cost map.
-      const acc = receiptCost.get(line.productId) ?? { value: 0, qty: 0 };
-      acc.value += lineTotalPesewas;
-      acc.qty += canonicalQty;
-      receiptCost.set(line.productId, acc);
     }
 
     // Latest-receipt-wins cost recompute. The new canonical cost is the
@@ -188,9 +218,8 @@ export function receiveStock(
     // at all under this model (they don't go through receiveStock).
     // Multi-line receipts for the same product get an honest weighted
     // average across just those lines.
-    for (const productId of productsTouched) {
-      const acc = receiptCost.get(productId);
-      if (!acc || acc.qty <= 0) continue;
+    for (const [productId, acc] of receiptCost) {
+      if (acc.qty <= 0) continue;
       const newCost = Math.round(acc.value / acc.qty);
       const old = productMap.get(productId)!.oldCost;
       if (old !== newCost) {
@@ -201,6 +230,18 @@ export function receiveStock(
         ).run(newCost, now, input.workerId, productId);
         productsUpdated++;
       }
+    }
+
+    // Supplier receipts increase what we owe the supplier, so the payables
+    // KPI reflects deliveries, not just whatever balance was keyed in by
+    // hand. Supplier payments decrement this the same way they always have.
+    if (!input.isOpeningStock && input.supplierId) {
+      db.prepare(
+        `UPDATE suppliers
+            SET current_balance_pesewas = current_balance_pesewas + ?,
+                updated_at = ?, updated_by = ?
+            WHERE id = ?`,
+      ).run(totalValuePesewas, now, input.workerId, input.supplierId);
     }
 
     logAudit(db, {
@@ -214,6 +255,7 @@ export function receiveStock(
         lineCount: input.lines.length,
         totalValuePesewas,
         productsCostUpdated: productsUpdated,
+        supplierBalanceDeltaPesewas: !input.isOpeningStock && input.supplierId ? totalValuePesewas : 0,
         supervisorApprovalId: input.supervisorApprovalId,
       },
       deviceId: input.deviceId,
