@@ -4,9 +4,13 @@
 
 import { useEffect, useState } from 'react';
 import { counter } from '../../lib/ipc';
-import type { SyncStatus } from '../../../shared/types/ipc';
+import { useSession } from '../../store/session';
+import type { SyncStatus, AddShopResult } from '../../../shared/types/ipc';
 
 export function SyncTab(): JSX.Element {
+  const role_ = useSession((s) => s.workerRole);
+  const isOwner = role_ === 'OWNER' || role_ === 'FOUNDER';
+
   const [status, setStatus] = useState<SyncStatus | null>(null);
   const [shopId, setShopId] = useState('');
   const [centralUrl, setCentralUrl] = useState('');
@@ -58,7 +62,7 @@ export function SyncTab(): JSX.Element {
         </div>
       )}
 
-      <div className="space-y-4">
+      <fieldset disabled={!isOwner} className="space-y-4">
         <Field label="Shop code / id" value={shopId} onChange={setShopId} placeholder="e.g. osu" />
         <Field label="Central URL" value={centralUrl} onChange={setCentralUrl} placeholder="https://central.example.com" />
         <Field
@@ -72,14 +76,107 @@ export function SyncTab(): JSX.Element {
             <RoleBtn active={role === 'HQ'} onClick={() => setRole('HQ')}>HQ (owns the catalog)</RoleBtn>
           </div>
         </div>
-      </div>
+      </fieldset>
 
       {err && <div className="border border-danger bg-danger/10 text-danger text-sm px-3 py-2 rounded">{err}</div>}
       {msg && <div className="border border-success bg-success/10 text-success text-sm px-3 py-2 rounded">{msg}</div>}
+      {!isOwner && <div className="text-text-tertiary text-xs">Only OWNER or FOUNDER can change sync settings.</div>}
 
-      <button onClick={() => void save()} disabled={saving}
+      <button onClick={() => void save()} disabled={!isOwner || saving}
         className="bg-accent text-ink px-5 py-2 font-semibold hover:bg-accent-light disabled:opacity-50">
         {saving ? 'Saving…' : 'Save sync settings'}
+      </button>
+
+      {status?.configured && isOwner && <AddBranchSection />}
+    </div>
+  );
+}
+
+/** Settings -> Sync -> "Add a new branch": self-service onboarding for a
+ *  SIBLING shop under THIS install's own company. Requires this install to
+ *  already be provisioned (gated by the parent's `status?.configured` check).
+ *  The new branch's token is shown exactly once, mirroring the OWNER-PIN
+ *  recovery-code flow in SetupScreen.tsx — the OWNER must acknowledge they've
+ *  copied it before the panel can be dismissed. */
+function AddBranchSection(): JSX.Element {
+  const [newShopId, setNewShopId] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [created, setCreated] = useState<AddShopResult | null>(null);
+  const [acknowledged, setAcknowledged] = useState(false);
+
+  async function addBranch(): Promise<void> {
+    const shopId = newShopId.trim();
+    if (!shopId) { setErr('Shop code is required.'); return; }
+    setBusy(true); setErr(null);
+    const r = await counter.syncAddShop({ shopId });
+    setBusy(false);
+    if (!r.success) { setErr(r.error); return; }
+    setCreated(r.data);
+    setAcknowledged(false);
+  }
+
+  function dismiss(): void {
+    setCreated(null);
+    setNewShopId('');
+    setAcknowledged(false);
+  }
+
+  if (created) {
+    return (
+      <div className="border-2 border-accent rounded p-6 space-y-4">
+        <div>
+          <h3 className="font-semibold">Branch &quot;{created.shopId}&quot; created</h3>
+          <p className="text-text-tertiary text-sm mt-1">
+            Copy these details into that branch&apos;s own Settings → Sync, then
+            restart Counter there. The token is shown only once.
+          </p>
+        </div>
+
+        <div className="bg-bg-deep border border-border rounded p-4 space-y-2 text-sm">
+          <Row label="Shop code / id" value={created.shopId} />
+          <Row label="Central URL" value={created.centralUrl} />
+          <Row label="Role" value="Shop (sells; pulls catalog)" />
+          <div>
+            <div className="text-text-secondary text-xs uppercase tracking-wider mb-1">Sync token</div>
+            <div className="font-mono text-sm break-all bg-bg-input border border-border-strong p-2 rounded">
+              {created.token}
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-warning/10 border border-warning/40 rounded p-3 text-warning text-sm">
+          This token will not be shown again. If it's lost, add the branch again
+          to mint a fresh one.
+        </div>
+
+        <label className="flex items-center gap-3 text-sm">
+          <input type="checkbox" checked={acknowledged} onChange={(e) => setAcknowledged(e.target.checked)} />
+          I have copied these details to the new branch&apos;s install.
+        </label>
+
+        <button onClick={dismiss} disabled={!acknowledged}
+          className="w-full py-2 rounded bg-accent text-ink font-semibold disabled:opacity-50">
+          Done
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border border-border rounded p-4 space-y-3">
+      <div>
+        <h3 className="font-semibold">Add a new branch</h3>
+        <p className="text-text-tertiary text-sm mt-1">
+          Onboard another location under this same company — no SQL, no operator
+          involved. It joins as a Shop (sells; pulls the catalog from here).
+        </p>
+      </div>
+      <Field label="New branch's shop code / id" value={newShopId} onChange={setNewShopId} placeholder="e.g. osu-2" />
+      {err && <div className="border border-danger bg-danger/10 text-danger text-sm px-3 py-2 rounded">{err}</div>}
+      <button onClick={() => void addBranch()} disabled={busy}
+        className="bg-accent text-ink px-5 py-2 font-semibold hover:bg-accent-light disabled:opacity-50">
+        {busy ? 'Adding…' : 'Add branch'}
       </button>
     </div>
   );

@@ -324,13 +324,16 @@ Still **not** built yet (don't promise these): a touch-optimised layout —
 the till UI is keyboard-first, so a phone is usable but cramped — and remote
 receipt printing. Phones can ring up sales; the receipt prints on the host.
 
-## 10. Multiple shops — sync (PLANNED, Phase 3 — not built yet)
+## 10. Multiple shops — sync (LIVE — central store deployed, multi-tenant)
 
-> **Status: design only. None of this ships today.** It is documented here so
-> the single-shop schema choices already in place (every table carries
-> `device_id` and `synced_at`; `sales` carries `location_id`) stay coherent as
-> we grow. The full design, with schema and SQL, is in
-> `docs/phase3-network-and-sync.md`. Don't promise any of §10 to the owner yet.
+> **Status: built and running**, not just designed. The shop-side push/pull
+> workers (`src/main/sync/*`) start automatically at boot once a shop is
+> provisioned; the central store is a live, multi-tenant Supabase project
+> (`pakfonjgxcnxdkgpuafg`) with a real client company walled off from every
+> other by `company_id` + RLS — see `supabase/migrations/` and
+> `supabase/functions/{ingest,catalog,add-shop,bootstrap-company}`. The fuller
+> design narrative (including open questions) is still in
+> `docs/phase3-network-and-sync.md`.
 
 ### The model
 
@@ -355,16 +358,40 @@ What we will **not** do: make the central database the live system of record
 price and try to merge, or wire shops directly to each other. Everything is
 hub-and-spoke through the central store.
 
-### Setting up a new shop (planned flow)
+### Onboarding — two paths, deliberately different trust levels
 
-1. Install Counter and run the first-run wizard as normal (§3) — this still
-   creates a local OWNER.
-2. Under Settings → Sync, enter the shop's short code (e.g. `OSU`), the central
-   URL, and the per-shop sync token the owner issues.
-3. The app registers with the central store, receives its `shop_id`, and pulls
-   down the current catalog/prices/workers.
-4. Background sync runs from then on. The shop works offline; it catches up when
-   it reconnects.
+**Adding a branch to a company that already has Counter** is self-service, no
+SQL, no operator involved:
+
+1. From an already-provisioned branch, an OWNER/FOUNDER opens Settings → Sync →
+   **"Add a new branch"**, types the new branch's shop code, clicks Add.
+2. The app asks the central store to mint a sibling shop under *this install's
+   own company* (the existing branch's own token proves which company —
+   `supabase/functions/add-shop`). The new branch always joins as role `SHOP`
+   (never a second `HQ` — that would make the catalog function's "which HQ do I
+   serve from" ambiguous).
+3. The new shop's `shop_id` / central URL / token are shown **once**, in a
+   recovery-code-style panel (copy it down before dismissing).
+4. Install Counter on the new branch's PC, run the first-run wizard (§3) for its
+   own local OWNER, then paste those three values into *that* install's
+   Settings → Sync and restart. Background sync starts at boot from then on;
+   the branch works offline and catches up when it reconnects.
+
+**Bringing on a brand-new client company** (the first branch of a business that
+has never used Counter) is operator-only, on purpose — otherwise anyone with a
+copy of the app could spin up unlimited companies against the Supabase project
+for free:
+
+```
+PROVISION_ADMIN_SECRET=<secret> npm run provision:company -- ACME "Acme Drinks Ltd" OSU HQ
+```
+
+This hits `supabase/functions/bootstrap-company`, gated by an admin secret set
+once via `supabase secrets set PROVISION_ADMIN_SECRET=<random> --project-ref
+pakfonjgxcnxdkgpuafg` (never committed). It prints the new company's first
+shop's onboarding details the same way — paste them into that first branch's
+Settings → Sync, same as step 4 above. Every subsequent branch for that company
+goes through the self-service path.
 
 ### Sync health
 
@@ -375,26 +402,37 @@ in the per-shop sequence numbers — a gap means data went missing in transit,
 which is itself worth investigating (same anti-shrinkage instinct as the rest of
 the app).
 
-### Security
+### Security — including multi-tenant isolation
 
-Shop-to-central traffic runs over real HTTPS to the central host (which has a
+Shop-to-central traffic runs over real HTTPS to the central host (Supabase has a
 proper certificate), so the LAN self-signed-cert problem in §9 never arises for
-data leaving the building. Each shop authenticates with its own revocable token,
-and the central store never dials into shops — every connection starts from the
-shop side.
+data leaving the building. Each shop authenticates with its own revocable
+bearer token (only its sha256 hash is stored centrally), and the central store
+never dials into shops — every connection starts from the shop side.
+
+Counter is **multi-tenant**: multiple separate client companies share the one
+central project, and none can see another's data. A token resolves to
+`(company_id, shop_id)` server-side — a shop can never assert which company it
+belongs to, only prove it via its own token — and the Edge Functions (`ingest`,
+`catalog`, `add-shop`) stamp/scope every row by that resolved `company_id`.
+Row-Level Security is on for every central table with no policies, so even the
+Supabase auto-REST API can't read anything; only the service-role Edge
+Functions touch these tables.
 
 ### Consolidated reporting
 
-The central store (Postgres) is where the owner sees everything at once: revenue
-by shop, stock by shop, cross-shop audit. Each shop's own local reports keep
+The central store (Postgres, on Supabase) is where the owner sees everything at
+once: revenue by shop, stock by shop, cross-shop audit — scoped to one company
+at a time (`sales_central` view and friends). Each shop's own local reports keep
 working offline, unchanged.
 
 ### Not yet decided (see the design doc)
 
 Whether customers and the worker roster are owned per-shop or centrally (this
-affects credit and logins across shops), how inter-shop stock transfers are
-recorded, and where the central store is hosted. These are open questions in
-`docs/phase3-network-and-sync.md`, not settled plans.
+affects credit and logins across shops), and how inter-shop stock transfers are
+recorded. These are open questions in `docs/phase3-network-and-sync.md`, not
+settled plans. (Central hosting itself is decided: Supabase, project
+`pakfonjgxcnxdkgpuafg`.)
 
 ## 11. VAT — the two build variants
 
