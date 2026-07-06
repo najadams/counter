@@ -6,6 +6,7 @@
 
 import { useState } from 'react';
 import { formatMoney, formatMoneyWithCurrency, parseCedisToPesewas } from '../../shared/lib/money';
+import { FeedbackBanner } from './FeedbackBanner';
 
 export type TenderMethod = 'CASH' | 'MOMO_MTN' | 'MOMO_VODAFONE' | 'MOMO_AIRTELTIGO' | 'CREDIT' | 'BANK_TRANSFER';
 
@@ -38,11 +39,13 @@ export interface SplitPaymentResult {
 export function SplitPaymentModal({
   totalPesewas,
   hasCustomer,
+  customerCashOnly,
   onCancel,
   onConfirm,
 }: {
   totalPesewas: number;
   hasCustomer: boolean;
+  customerCashOnly?: boolean;
   onCancel: () => void;
   onConfirm: (result: SplitPaymentResult) => void;
 }) {
@@ -89,6 +92,9 @@ export function SplitPaymentModal({
       }
       if (r.method === 'CREDIT' && !hasCustomer) {
         return setError(`Credit tender requires a customer. Pick one before splitting.`);
+      }
+      if (r.method === 'CREDIT' && customerCashOnly) {
+        return setError(`This customer is marked cash-only. Credit tender is blocked.`);
       }
       let cashGiven: number | null = null;
       if (r.method === 'CASH' && r.cashGivenRaw.trim() !== '') {
@@ -188,7 +194,7 @@ export function SplitPaymentModal({
           </div>
         </div>
 
-        {error && <div className="text-sm text-danger bg-danger/10 border border-danger/40 rounded px-3 py-2">{error}</div>}
+        {error && <FeedbackBanner>{error}</FeedbackBanner>}
 
         <div className="flex justify-end gap-3 pt-2">
           <button onClick={onCancel}
@@ -205,6 +211,7 @@ export function SplitPaymentModal({
         <p className="text-xs text-text-tertiary">
           Sum of all tenders must equal the sale total before you can complete the sale.
           MoMo tenders need a transaction reference. Credit tenders need a customer selected.
+          Cash-only customers cannot receive credit tenders.
         </p>
       </div>
     </div>

@@ -6,6 +6,7 @@ import { counter } from '../lib/ipc';
 import { useSession } from '../store/session';
 import { AppHeader } from '../components/AppHeader';
 import { formatMoney, parseCedisToPesewas } from '../../shared/lib/money';
+import { FeedbackBanner } from '../components/FeedbackBanner';
 
 export default function OpenShiftScreen() {
   const [raw, setRaw] = useState('');
@@ -86,7 +87,7 @@ export default function OpenShiftScreen() {
           )}
         </div>
         {error && (
-          <div className="bg-bg-surface border border-danger px-5 py-3 text-danger text-sm">{error}</div>
+          <FeedbackBanner>{error}</FeedbackBanner>
         )}
       </main>
     </div>

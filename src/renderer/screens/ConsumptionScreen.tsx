@@ -6,6 +6,7 @@ import { counter } from '../lib/ipc';
 import { AppHeader } from '../components/AppHeader';
 import { SupervisorPinModal } from '../components/SupervisorPinModal';
 import { formatMoney, formatMoneyWithCurrency } from '../../shared/lib/money';
+import { FeedbackBanner } from '../components/FeedbackBanner';
 
 interface ProductHit {
   id: string; sku: string; name: string;
@@ -138,7 +139,7 @@ export default function ConsumptionScreen({ onExit }: { onExit: () => void }) {
                   : null}
               </div>
             )}
-            {error && <div className="bg-bg-deep border border-danger px-4 py-2 text-danger text-sm">{error}</div>}
+            {error && <FeedbackBanner>{error}</FeedbackBanner>}
             <div className="flex gap-3">
               <button onClick={() => setSelected(null)} className="px-5 py-3 border border-border hover:bg-bg-elevated">Cancel</button>
               <button

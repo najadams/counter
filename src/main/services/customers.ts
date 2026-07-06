@@ -10,6 +10,7 @@ export interface CustomerSearchResult {
   customerType: string;
   currentBalancePesewas: number;
   creditLimitPesewas: number;
+  cashOnly: boolean;
   blocked: boolean;
   preferredChannel: 'WALK_IN' | 'WHOLESALE' | 'ROUTE' | null;
 }
@@ -38,6 +39,7 @@ export function searchCustomers(
       `SELECT id, display_name AS displayName, phone, customer_type AS customerType,
               current_balance_pesewas AS currentBalancePesewas,
               credit_limit_pesewas AS creditLimitPesewas,
+              cash_only AS cashOnly,
               blocked,
               preferred_channel AS preferredChannel
          FROM customers
@@ -55,6 +57,7 @@ export function searchCustomers(
       customerType: string;
       currentBalancePesewas: number;
       creditLimitPesewas: number;
+      cashOnly: number;
       blocked: number;
       preferredChannel: 'WALK_IN' | 'WHOLESALE' | 'ROUTE' | null;
     }>;
@@ -66,6 +69,7 @@ export function searchCustomers(
     customerType: r.customerType,
     currentBalancePesewas: r.currentBalancePesewas,
     creditLimitPesewas: r.creditLimitPesewas,
+    cashOnly: r.cashOnly === 1,
     blocked: r.blocked === 1,
     preferredChannel: r.preferredChannel,
   }));

@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { counter } from '../../lib/ipc';
 import { useSession } from '../../store/session';
 import { formatMoneyWithCurrency } from '../../../shared/lib/money';
+import { FeedbackBanner } from '../../components/FeedbackBanner';
 
 interface Reprint {
   id: string; saleId: string; reason: string;
@@ -71,7 +72,7 @@ export function ReprintQueueTab() {
         </button>
       </div>
 
-      {error && <div className="bg-danger/10 border border-danger/40 text-danger text-sm px-3 py-2 rounded">{error}</div>}
+      {error && <FeedbackBanner>{error}</FeedbackBanner>}
       {info && <div className="bg-success/10 border border-success/40 text-success text-sm px-3 py-2 rounded">{info}</div>}
 
       <div className="bg-bg-elevated rounded border border-border-subtle overflow-hidden">
@@ -166,7 +167,7 @@ function DiscardModal({ reprint, onCancel, onDone }: {
             placeholder="customer left, paper out for hours, etc."
             className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle" />
         </label>
-        {err && <div className="text-sm text-danger bg-danger/10 border border-danger/40 rounded px-3 py-2">{err}</div>}
+        {err && <FeedbackBanner>{err}</FeedbackBanner>}
         <div className="flex justify-end gap-3">
           <button type="button" onClick={onCancel} disabled={busy}
             className="px-4 py-2 border border-border hover:bg-bg-deep text-sm">Cancel</button>

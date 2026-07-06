@@ -1,4 +1,4 @@
-// InventoryTab — point-in-time stock valuation. Every active SKU with units
+// InventoryTab — point-in-time net stock valuation. Every active SKU with units
 // on hand, value at cost, value at retail, days-of-supply, last received /
 // last sold. Filter buttons for "below reorder" and "stockouts".
 //
@@ -10,6 +10,7 @@ import { counter } from '../../lib/ipc';
 import { formatMoney, formatMoneyWithCurrency } from '../../../shared/lib/money';
 import { buildCsvFilename, exportRowsAsCsv, pesewasToCsvNumber } from '../../lib/csv';
 import type { ReportsInventoryResponse } from '../../../shared/types/ipc';
+import { FeedbackBanner } from '../../components/FeedbackBanner';
 
 type Filter = 'all' | 'belowReorder' | 'stockout' | 'inStock';
 type Sort =
@@ -84,10 +85,10 @@ export function InventoryTab() {
         { header: 'category', get: (r) => r.category },
         { header: 'brand', get: (r) => r.brand ?? '' },
         { header: 'units_on_hand', get: (r) => r.unitsOnHand },
-        { header: 'cost_per_unit_cedis', get: (r) => pesewasToCsvNumber(r.costPerUnitPesewas) },
-        { header: 'retail_per_unit_cedis', get: (r) => pesewasToCsvNumber(r.retailPerUnitPesewas) },
-        { header: 'total_at_cost_cedis', get: (r) => pesewasToCsvNumber(r.totalAtCostPesewas) },
-        { header: 'total_at_retail_cedis', get: (r) => pesewasToCsvNumber(r.totalAtRetailPesewas) },
+        { header: 'net_cost_per_unit_cedis', get: (r) => pesewasToCsvNumber(r.costPerUnitPesewas) },
+        { header: 'net_retail_per_unit_cedis', get: (r) => pesewasToCsvNumber(r.retailPerUnitPesewas) },
+        { header: 'net_total_at_cost_cedis', get: (r) => pesewasToCsvNumber(r.totalAtCostPesewas) },
+        { header: 'net_total_at_retail_cedis', get: (r) => pesewasToCsvNumber(r.totalAtRetailPesewas) },
         { header: 'reorder_threshold', get: (r) => r.reorderThreshold },
         { header: 'below_reorder', get: (r) => r.belowReorder ? 'yes' : 'no' },
         { header: 'stockout', get: (r) => r.stockout ? 'yes' : 'no' },
@@ -128,15 +129,15 @@ export function InventoryTab() {
         </div>
       </div>
 
-      {error && <div className="bg-danger/10 border border-danger/40 text-danger text-sm px-3 py-2">{error}</div>}
+      {error && <FeedbackBanner>{error}</FeedbackBanner>}
       {loading && !data && <div className="text-text-tertiary text-sm">Loading…</div>}
 
       {data && (
         <>
           <section className="grid grid-cols-5 gap-3">
-            <Stat label="Total at cost" value={formatMoneyWithCurrency(data.totalAtCostPesewas)}
+            <Stat label="Net at cost" value={formatMoneyWithCurrency(data.totalAtCostPesewas)}
               onClick={() => setFilter('all')} active={filter === 'all'} />
-            <Stat label="Total at retail" value={formatMoneyWithCurrency(data.totalAtRetailPesewas)} />
+            <Stat label="Net at retail" value={formatMoneyWithCurrency(data.totalAtRetailPesewas)} />
             <Stat label="Active SKUs" value={String(data.activeSkuCount)}
               onClick={() => setFilter('inStock')} active={filter === 'inStock'} />
             <Stat label="Below reorder" value={String(data.belowReorderCount)} tone="warning"
@@ -164,8 +165,8 @@ export function InventoryTab() {
                     <SortHeader label="Product" col="name" current={sort} dir={dir} onSort={clickSort} align="left" />
                     <SortHeader label="Category" col="category" current={sort} dir={dir} onSort={clickSort} align="left" />
                     <SortHeader label="On hand" col="onHand" current={sort} dir={dir} onSort={clickSort} />
-                    <SortHeader label="At cost" col="atCost" current={sort} dir={dir} onSort={clickSort} />
-                    <SortHeader label="At retail" col="atRetail" current={sort} dir={dir} onSort={clickSort} />
+                    <SortHeader label="Net cost" col="atCost" current={sort} dir={dir} onSort={clickSort} />
+                    <SortHeader label="Net retail" col="atRetail" current={sort} dir={dir} onSort={clickSort} />
                     <SortHeader label="DoS" col="dos" current={sort} dir={dir} onSort={clickSort} />
                     <SortHeader label="Last sold" col="lastSold" current={sort} dir={dir} onSort={clickSort} align="left" />
                   </tr>

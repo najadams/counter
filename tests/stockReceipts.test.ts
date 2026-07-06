@@ -30,6 +30,20 @@ afterEach(() => { db.close(); });
 
 function star() { return db.prepare("SELECT id, cost_price_pesewas FROM products WHERE sku = 'STAR-330'").get() as { id: string; cost_price_pesewas: number }; }
 function supplierId() { return (db.prepare("SELECT id FROM suppliers LIMIT 1").get() as { id: string }).id; }
+function createPO(id: string, supplier: string, product: string, qty: number, unitCost: number) {
+  db.prepare(
+    `INSERT INTO purchase_orders (
+       id, supplier_id, location_id, status, po_number, ordered_at,
+       total_ordered_pesewas, created_by, updated_by, device_id
+     ) VALUES (?, ?, ?, 'DRAFT', ?, '2026-07-01T00:00:00.000Z', ?, ?, ?, ?)`,
+  ).run(id, supplier, L, `PO-${id}`, qty * unitCost, W, W, D);
+  db.prepare(
+    `INSERT INTO purchase_order_lines (
+       id, purchase_order_id, product_id, quantity_ordered, unit_cost_pesewas,
+       line_total_ordered_pesewas, created_by, updated_by, device_id
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(`${id}-line`, id, product, qty, unitCost, qty * unitCost, W, W, D);
+}
 
 describe('listActiveSuppliers', () => {
   it('returns active non-deleted', () => {
@@ -216,6 +230,76 @@ describe('receiveStock', () => {
     });
     const after = (db.prepare('SELECT current_balance_pesewas AS b FROM suppliers WHERE id = ?').get(sid) as { b: number }).b;
     expect(after - before).toBe(24 * 600);
+  });
+
+  it('creates structured supplier invoice rows for normal receipts', () => {
+    const p = star();
+    const sid = supplierId();
+    const r = receiveStock(db, {
+      supplierId: sid, locationId: L, workerId: W, supervisorApprovalId: SUP,
+      supplierInvoiceNumber: 'INV-1001',
+      supplierInvoiceDate: '2026-07-01',
+      supplierDueDate: '2026-07-08',
+      lines: [{ productId: p.id, quantity: 10, unitCostPesewas: 600 }],
+      deviceId: D,
+    });
+    expect(r.supplierInvoiceId).toMatch(/^sinv-/);
+    const inv = db.prepare(
+      `SELECT invoice_number, due_date, total_pesewas, total_paid_pesewas, status
+         FROM supplier_invoices WHERE id = ?`,
+    ).get(r.supplierInvoiceId) as {
+      invoice_number: string; due_date: string; total_pesewas: number; total_paid_pesewas: number; status: string;
+    };
+    expect(inv).toEqual({
+      invoice_number: 'INV-1001',
+      due_date: '2026-07-08',
+      total_pesewas: 6000,
+      total_paid_pesewas: 0,
+      status: 'OPEN',
+    });
+    const line = db.prepare(
+      `SELECT product_id, quantity, canonical_quantity, unit_cost_pesewas, line_total_pesewas
+         FROM supplier_invoice_lines WHERE supplier_invoice_id = ?`,
+    ).get(r.supplierInvoiceId) as {
+      product_id: string; quantity: number; canonical_quantity: number; unit_cost_pesewas: number; line_total_pesewas: number;
+    };
+    expect(line).toEqual({
+      product_id: p.id,
+      quantity: 10,
+      canonical_quantity: 10,
+      unit_cost_pesewas: 600,
+      line_total_pesewas: 6000,
+    });
+  });
+
+  it('matches receipts to PO lines and rejects over-receiving', () => {
+    const p = star();
+    const sid = supplierId();
+    createPO('po-receipt-match', sid, p.id, 10, 600);
+
+    receiveStock(db, {
+      supplierId: sid, locationId: L, workerId: W, supervisorApprovalId: SUP,
+      purchaseOrderId: 'po-receipt-match',
+      lines: [{ productId: p.id, quantity: 4, unitCostPesewas: 600 }],
+      deviceId: D,
+    });
+
+    const line = db.prepare(
+      `SELECT quantity_received, line_total_received_pesewas
+         FROM purchase_order_lines WHERE id = ?`,
+    ).get('po-receipt-match-line') as { quantity_received: number; line_total_received_pesewas: number };
+    expect(line).toEqual({ quantity_received: 4, line_total_received_pesewas: 2400 });
+    const po = db.prepare(
+      `SELECT total_received_pesewas, status FROM purchase_orders WHERE id = ?`,
+    ).get('po-receipt-match') as { total_received_pesewas: number; status: string };
+    expect(po).toEqual({ total_received_pesewas: 2400, status: 'PARTIALLY_RECEIVED' });
+
+    expect(() => receiveStock(db, {
+      supplierId: sid, locationId: L, workerId: W, supervisorApprovalId: SUP,
+      purchaseOrderId: 'po-receipt-match',
+      lines: [{ productId: p.id, quantity: 7, unitCostPesewas: 600 }],
+      deviceId: D,
+    })).toThrow(/exceeds the open PO quantity/);
   });
 
   it('opening stock does NOT touch any supplier balance', () => {

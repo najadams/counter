@@ -35,6 +35,7 @@ export interface CartCustomer {
   displayName: string;
   phone: string;
   currentBalancePesewas: number;
+  cashOnly?: boolean;
   preferredChannel?: 'WALK_IN' | 'WHOLESALE' | 'ROUTE' | null;
 }
 

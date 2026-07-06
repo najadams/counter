@@ -6,6 +6,7 @@ import { useSession } from '../store/session';
 import { AppHeader } from '../components/AppHeader';
 import { formatMoney, formatMoneyWithCurrency } from '../../shared/lib/money';
 import type { DailySummaryGenerateResponse } from '../../shared/types/ipc';
+import { FeedbackBanner } from '../components/FeedbackBanner';
 
 interface SummaryRow { date: string; locationId: string; revenuePesewas: number; numSales: number;
   shrinkageRate: number | null; generatedAt: string; whatsappSentAt: string | null }
@@ -167,15 +168,15 @@ export default function DailySummaryScreen({ onExit }: { onExit: () => void }) {
           )}
 
           {info && <div className="bg-bg-surface border border-success px-4 py-2 text-success text-sm">{info}</div>}
-          {error && <div className="bg-bg-surface border border-danger px-4 py-2 text-danger text-sm">{error}</div>}
+          {error && <FeedbackBanner>{error}</FeedbackBanner>}
 
           {!detail && <div className="text-text-tertiary text-sm">No summary for {selectedDate} yet — click Generate.</div>}
 
           {detail && (
             <div className="flex flex-col gap-4">
               <div className="grid grid-cols-3 gap-3">
-                <KPI label="Revenue" value={formatMoneyWithCurrency(detail.totalRevenuePesewas)} />
-                <KPI label="Margin" value={formatMoneyWithCurrency(detail.grossMarginPesewas)} subtle={`${detail.totalRevenuePesewas > 0 ? ((detail.grossMarginPesewas / detail.totalRevenuePesewas) * 100).toFixed(1) + '%' : '—'}`} />
+                <KPI label="Net revenue" value={formatMoneyWithCurrency(detail.totalRevenuePesewas)} />
+                <KPI label="Net margin" value={formatMoneyWithCurrency(detail.grossMarginPesewas)} subtle={`${detail.totalRevenuePesewas > 0 ? ((detail.grossMarginPesewas / detail.totalRevenuePesewas) * 100).toFixed(1) + '%' : '—'}`} />
                 <KPI label="Sales" value={String(detail.numSales)} subtle={`${detail.numUniqueCustomers} customers`} />
                 <KPI label="Breakage loss" value={formatMoneyWithCurrency(detail.totalBreakageValuePesewas)} tone={detail.totalBreakageValuePesewas > 0 ? 'danger' : 'ok'} />
                 <KPI label="Consumption value" value={formatMoneyWithCurrency(detail.totalConsumptionValuePesewas)} />

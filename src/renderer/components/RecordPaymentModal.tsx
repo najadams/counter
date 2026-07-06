@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { counter } from '../lib/ipc';
 import { formatMoney, formatMoneyWithCurrency, parseCedisToPesewas } from '../../shared/lib/money';
+import { FeedbackBanner } from './FeedbackBanner';
 
 interface OpenSale { saleId: string; createdAt: string; totalPesewas: number; paidPesewas: number; outstandingPesewas: number; ageDays: number }
 
@@ -199,7 +200,7 @@ export function RecordPaymentModal({
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)}
           placeholder="Notes (optional)" className="bg-bg-input border border-border-strong px-3 py-2 text-sm" rows={2} />
 
-        {error && <div className="bg-bg-deep border border-danger px-4 py-2 text-danger text-sm">{error}</div>}
+        {error && <FeedbackBanner>{error}</FeedbackBanner>}
 
         <div className="flex gap-3 mt-2">
           <button onClick={onCancel} className="px-5 py-3 border border-border hover:bg-bg-elevated">Cancel</button>

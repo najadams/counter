@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react';
 import { counter } from '../../lib/ipc';
 import { useSession } from '../../store/session';
+import { FeedbackBanner } from '../../components/FeedbackBanner';
 
 interface Entry {
   id: string; workerId: string; workerName: string; workerRole: string;
@@ -164,7 +165,7 @@ export function AuditLogTab() {
         </div>
       </div>
 
-      {error && <div className="bg-danger/10 border border-danger/40 text-danger text-sm px-3 py-2 rounded">{error}</div>}
+      {error && <FeedbackBanner>{error}</FeedbackBanner>}
 
       <div className="bg-bg-elevated rounded border border-border-subtle overflow-hidden">
         <table className="w-full text-sm">

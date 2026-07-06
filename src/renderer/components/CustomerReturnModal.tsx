@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react';
 import { counter } from '../lib/ipc';
 import { SupervisorPinModal } from './SupervisorPinModal';
 import { formatMoney, parseCedisToPesewas } from '../../shared/lib/money';
+import { FeedbackBanner } from './FeedbackBanner';
 
 interface Props {
   customerId: string;
@@ -105,7 +106,7 @@ export function CustomerReturnModal({ customerId, customerName, onClose, onRecor
 
         <div className="p-6 space-y-4">
           {error && (
-            <div className="border border-danger bg-danger/10 text-danger px-3 py-2 rounded text-sm">{error}</div>
+            <FeedbackBanner>{error}</FeedbackBanner>
           )}
 
           <div className="grid grid-cols-2 gap-3">

@@ -1,13 +1,11 @@
-// Ad-hoc stock receipt: goods arrived from supplier, no PO yet.
+// Stock receipt: goods arrived from supplier, with optional PO/invoice matching.
 // Each line gets a RECEIVED_FROM_SUPPLIER stock_movement (positive qty,
 // supervisor approval required by reason_code config). The product's
 // cost_price_pesewas is updated to the latest received cost so future
 // sale_lines snapshot the new cost.
-//
-// Full PO matching (compare ordered vs received vs paid, partial receipts,
-// multiple deliveries) lands in Week 4.
 
 import type { Database as DB } from 'better-sqlite3';
+import { v4 as uuidv4 } from 'uuid';
 import { logAudit } from '../db/audit.js';
 import { insertStockMovement } from './stockMovements.js';
 import { getUnit } from './productUnits.js';
@@ -31,6 +29,12 @@ export interface ReceiveStockInput {
   locationId: string;
   workerId: string;
   supervisorApprovalId: string;
+  purchaseOrderId?: string | null;
+  supplierInvoiceNumber?: string | null;
+  supplierInvoiceDate?: string | null;
+  supplierDueDate?: string | null;
+  transportCostPesewas?: number;
+  loadingCostPesewas?: number;
   lines: StockReceiptLine[];
   notes?: string | null;
   /** Confirm a receipt whose implied per-canonical cost moves a product's
@@ -43,8 +47,16 @@ export interface ReceiveStockInput {
 
 export interface ReceiveStockResult {
   movementIds: string[];
+  supplierInvoiceId: string | null;
   totalValuePesewas: number;
+  totalPayablePesewas: number;
   productsUpdated: number;
+}
+
+function addDaysISO(isoDate: string, days: number): string {
+  const d = new Date(`${isoDate}T00:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + Math.max(0, days));
+  return d.toISOString().slice(0, 10);
 }
 
 /**
@@ -78,20 +90,48 @@ export function receiveStock(
     input.isOpeningStock ? 'opening-stock entry' : 'receiving stock from a supplier',
   );
 
+  let supplierInfo: { id: string; payment_terms_days: number; credit_limit_pesewas: number; current_balance_pesewas: number } | null = null;
   if (input.isOpeningStock) {
     if (input.supplierId) {
       throw new Error('receiveStock: opening stock cannot reference a supplier');
+    }
+    if (
+      input.supplierInvoiceNumber || input.supplierInvoiceDate || input.supplierDueDate || input.purchaseOrderId ||
+      (input.transportCostPesewas ?? 0) > 0 || (input.loadingCostPesewas ?? 0) > 0
+    ) {
+      throw new Error('receiveStock: opening stock cannot carry supplier invoice or PO details');
     }
   } else {
     if (!input.supplierId) {
       throw new Error('receiveStock: supplierId is required unless isOpeningStock=true');
     }
     const supplier = db
-      .prepare('SELECT id, active, deleted_at FROM suppliers WHERE id = ?')
-      .get(input.supplierId) as { id: string; active: number; deleted_at: string | null } | undefined;
+      .prepare(
+        `SELECT id, active, deleted_at, payment_terms_days, credit_limit_pesewas, current_balance_pesewas
+           FROM suppliers WHERE id = ?`,
+      )
+      .get(input.supplierId) as
+        | { id: string; active: number; deleted_at: string | null; payment_terms_days: number; credit_limit_pesewas: number; current_balance_pesewas: number }
+        | undefined;
     if (!supplier || supplier.active !== 1 || supplier.deleted_at) {
       throw new Error(`receiveStock: supplier ${input.supplierId} not found or inactive`);
     }
+    supplierInfo = supplier;
+    if (input.purchaseOrderId) {
+      const po = db.prepare('SELECT supplier_id, status FROM purchase_orders WHERE id = ?')
+        .get(input.purchaseOrderId) as { supplier_id: string; status: string } | undefined;
+      if (!po || po.supplier_id !== input.supplierId || po.status === 'CANCELLED') {
+        throw new Error(`receiveStock: purchase order ${input.purchaseOrderId} is not open for this supplier`);
+      }
+    }
+  }
+  const transportCostPesewas = input.transportCostPesewas ?? 0;
+  const loadingCostPesewas = input.loadingCostPesewas ?? 0;
+  if (!Number.isInteger(transportCostPesewas) || transportCostPesewas < 0) {
+    throw new Error('receiveStock: transportCostPesewas must be a non-negative integer');
+  }
+  if (!Number.isInteger(loadingCostPesewas) || loadingCostPesewas < 0) {
+    throw new Error('receiveStock: loadingCostPesewas must be a non-negative integer');
   }
   const reasonCode = input.isOpeningStock ? 'OPENING_STOCK' : 'RECEIVED_FROM_SUPPLIER';
 
@@ -146,11 +186,40 @@ export function receiveStock(
   // cost. Multi-line receipts for the same product (rare but allowed)
   // get a weighted average of just this receipt's lines.
   const receiptCost = new Map<string, { value: number; qty: number }>();
+  const poReceiptByProduct = new Map<string, { value: number; qty: number }>();
   for (const line of resolvedLines) {
     const acc = receiptCost.get(line.productId) ?? { value: 0, qty: 0 };
     acc.value += line.lineTotalPesewas;
     acc.qty += line.canonicalQty;
     receiptCost.set(line.productId, acc);
+
+    const poAcc = poReceiptByProduct.get(line.productId) ?? { value: 0, qty: 0 };
+    poAcc.value += line.lineTotalPesewas;
+    poAcc.qty += line.canonicalQty;
+    poReceiptByProduct.set(line.productId, poAcc);
+  }
+
+  if (input.purchaseOrderId) {
+    const remainingRows = db.prepare(
+      `SELECT product_id AS productId,
+              COALESCE(SUM(quantity_ordered - quantity_received), 0) AS remainingQty
+         FROM purchase_order_lines
+        WHERE purchase_order_id = ?
+        GROUP BY product_id`,
+    ).all(input.purchaseOrderId) as Array<{ productId: string; remainingQty: number }>;
+    const remainingByProduct = new Map(remainingRows.map((r) => [r.productId, r.remainingQty]));
+    for (const [productId, acc] of poReceiptByProduct) {
+      const remainingQty = remainingByProduct.get(productId);
+      if (remainingQty === undefined) {
+        throw new Error(`receiveStock: product ${productId} is not on purchase order ${input.purchaseOrderId}`);
+      }
+      if (acc.qty > remainingQty) {
+        throw new Error(
+          `receiveStock: receipt quantity for product ${productId} exceeds the open PO quantity ` +
+          `(${acc.qty} > ${remainingQty})`,
+        );
+      }
+    }
   }
 
   // Cost-swing guard: the most damaging receipt mistake is typing the
@@ -178,8 +247,10 @@ export function receiveStock(
   }
 
   const movementIds: string[] = [];
+  const lineMovementIds: string[] = [];
   let totalValuePesewas = 0;
   let productsUpdated = 0;
+  let createdSupplierInvoiceId: string | null = null;
   const now = new Date().toISOString();
 
   const tx = db.transaction(() => {
@@ -190,6 +261,7 @@ export function receiveStock(
         quantity: line.canonicalQty,
         reasonCode,
         workerId: input.workerId,
+        purchaseOrderId: input.purchaseOrderId ?? null,
         supervisorApprovalId: input.supervisorApprovalId,
         unitCostPesewas: line.canonicalUnitCost,
         // Preserve the EXACT total. Without this, total_value would be
@@ -205,7 +277,131 @@ export function receiveStock(
           .run(line.unitId, new Date().toISOString(), sm.id);
       }
       movementIds.push(sm.id);
+      lineMovementIds.push(sm.id);
       totalValuePesewas += sm.totalValuePesewas;
+    }
+
+    let supplierInvoiceId: string | null = null;
+    if (!input.isOpeningStock && input.supplierId) {
+      const invoiceDate = input.supplierInvoiceDate ?? now.slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(invoiceDate)) throw new Error('receiveStock: supplierInvoiceDate must be YYYY-MM-DD');
+      const dueDate = input.supplierDueDate
+        ?? addDaysISO(invoiceDate, supplierInfo?.payment_terms_days ?? 0);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) throw new Error('receiveStock: supplierDueDate must be YYYY-MM-DD');
+      const totalPayablePesewas = totalValuePesewas + transportCostPesewas + loadingCostPesewas;
+      if (
+        supplierInfo &&
+        supplierInfo.credit_limit_pesewas > 0 &&
+        supplierInfo.current_balance_pesewas + totalPayablePesewas > supplierInfo.credit_limit_pesewas
+      ) {
+        throw new Error(
+          `receiveStock: supplier credit limit exceeded ` +
+          `(${supplierInfo.current_balance_pesewas + totalPayablePesewas} > ${supplierInfo.credit_limit_pesewas} pesewas)`,
+        );
+      }
+      supplierInvoiceId = `sinv-${uuidv4()}`;
+      createdSupplierInvoiceId = supplierInvoiceId;
+      const invoiceNumber = input.supplierInvoiceNumber?.trim() || `AUTO-${supplierInvoiceId.slice(-8)}`;
+      db.prepare(
+        `INSERT INTO supplier_invoices (
+           id, supplier_id, purchase_order_id, invoice_number, invoice_date, due_date,
+           total_pesewas, total_paid_pesewas, status, transport_cost_pesewas, loading_cost_pesewas, notes,
+           created_by, updated_by, device_id
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 'OPEN', ?, ?, ?, ?, ?, ?)`,
+      ).run(
+        supplierInvoiceId,
+        input.supplierId,
+        input.purchaseOrderId ?? null,
+        invoiceNumber,
+        invoiceDate,
+        dueDate,
+        totalPayablePesewas,
+        transportCostPesewas,
+        loadingCostPesewas,
+        input.notes?.trim() || null,
+        input.workerId,
+        input.workerId,
+        input.deviceId,
+      );
+      const allocatedTransport = allocateLandedCost(
+        resolvedLines.map((line) => line.lineTotalPesewas),
+        transportCostPesewas,
+      );
+      const allocatedLoading = allocateLandedCost(
+        resolvedLines.map((line) => line.lineTotalPesewas),
+        loadingCostPesewas,
+      );
+      for (let i = 0; i < resolvedLines.length; i++) {
+        const line = resolvedLines[i]!;
+        const lineTransport = allocatedTransport[i] ?? 0;
+        const lineLoading = allocatedLoading[i] ?? 0;
+        db.prepare(
+          `INSERT INTO supplier_invoice_lines (
+             id, supplier_invoice_id, stock_movement_id, product_id, source_unit_id,
+             quantity, canonical_quantity, unit_cost_pesewas, line_total_pesewas,
+             allocated_transport_cost_pesewas, allocated_loading_cost_pesewas, landed_line_total_pesewas,
+             created_by, updated_by, device_id
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).run(
+          `sil-${uuidv4()}`,
+          supplierInvoiceId,
+          lineMovementIds[i] ?? null,
+          line.productId,
+          line.unitId,
+          line.quantity,
+          line.canonicalQty,
+          line.unitCostPesewas,
+          line.lineTotalPesewas,
+          lineTransport,
+          lineLoading,
+          line.lineTotalPesewas + lineTransport + lineLoading,
+          input.workerId,
+          input.workerId,
+          input.deviceId,
+        );
+      }
+      if (input.purchaseOrderId) {
+        for (const [productId, acc] of poReceiptByProduct) {
+          let remainingQty = acc.qty;
+          let remainingValue = acc.value;
+          const poLines = db.prepare(
+            `SELECT id, quantity_ordered - quantity_received AS remainingQty
+               FROM purchase_order_lines
+              WHERE purchase_order_id = ?
+                AND product_id = ?
+                AND quantity_received < quantity_ordered
+              ORDER BY created_at ASC, id ASC`,
+          ).all(input.purchaseOrderId, productId) as Array<{ id: string; remainingQty: number }>;
+          for (const poLine of poLines) {
+            if (remainingQty <= 0) break;
+            const qty = Math.min(remainingQty, poLine.remainingQty);
+            const value = qty === remainingQty
+              ? remainingValue
+              : Math.round((acc.value * qty) / acc.qty);
+            db.prepare(
+              `UPDATE purchase_order_lines
+                  SET quantity_received = quantity_received + ?,
+                      line_total_received_pesewas = line_total_received_pesewas + ?,
+                      updated_at = ?, updated_by = ?
+                WHERE id = ?`,
+            ).run(qty, value, now, input.workerId, poLine.id);
+            remainingQty -= qty;
+            remainingValue -= value;
+          }
+        }
+        db.prepare(
+          `UPDATE purchase_orders
+              SET total_received_pesewas = total_received_pesewas + ?,
+                  received_at = COALESCE(received_at, ?),
+                  status = CASE
+                    WHEN total_received_pesewas + ? >= total_ordered_pesewas THEN 'RECEIVED'
+                    WHEN status IN ('DRAFT','PLACED') THEN 'PARTIALLY_RECEIVED'
+                    ELSE status
+                  END,
+                  updated_at = ?, updated_by = ?
+            WHERE id = ?`,
+        ).run(totalValuePesewas, now, totalValuePesewas, now, input.workerId, input.purchaseOrderId);
+      }
     }
 
     // Latest-receipt-wins cost recompute. The new canonical cost is the
@@ -241,7 +437,7 @@ export function receiveStock(
             SET current_balance_pesewas = current_balance_pesewas + ?,
                 updated_at = ?, updated_by = ?
             WHERE id = ?`,
-      ).run(totalValuePesewas, now, input.workerId, input.supplierId);
+      ).run(totalValuePesewas + transportCostPesewas + loadingCostPesewas, now, input.workerId, input.supplierId);
     }
 
     logAudit(db, {
@@ -254,8 +450,17 @@ export function receiveStock(
         isOpeningStock: !!input.isOpeningStock,
         lineCount: input.lines.length,
         totalValuePesewas,
+        transportCostPesewas,
+        loadingCostPesewas,
+        totalPayablePesewas: totalValuePesewas + transportCostPesewas + loadingCostPesewas,
+        supplierInvoiceId,
+        supplierInvoiceNumber: input.supplierInvoiceNumber?.trim() || null,
+        supplierDueDate: input.supplierDueDate ?? null,
+        purchaseOrderId: input.purchaseOrderId ?? null,
         productsCostUpdated: productsUpdated,
-        supplierBalanceDeltaPesewas: !input.isOpeningStock && input.supplierId ? totalValuePesewas : 0,
+        supplierBalanceDeltaPesewas: !input.isOpeningStock && input.supplierId
+          ? totalValuePesewas + transportCostPesewas + loadingCostPesewas
+          : 0,
         supervisorApprovalId: input.supervisorApprovalId,
       },
       deviceId: input.deviceId,
@@ -263,7 +468,28 @@ export function receiveStock(
   });
 
   tx();
-  return { movementIds, totalValuePesewas, productsUpdated };
+  return {
+    movementIds,
+    supplierInvoiceId: createdSupplierInvoiceId,
+    totalValuePesewas,
+    totalPayablePesewas: totalValuePesewas + transportCostPesewas + loadingCostPesewas,
+    productsUpdated,
+  };
+}
+
+function allocateLandedCost(lineTotals: number[], costPesewas: number): number[] {
+  if (costPesewas <= 0) return lineTotals.map(() => 0);
+  const goodsTotal = lineTotals.reduce((sum, value) => sum + value, 0);
+  if (goodsTotal <= 0) {
+    return lineTotals.map((_, index) => (index === lineTotals.length - 1 ? costPesewas : 0));
+  }
+  let allocated = 0;
+  return lineTotals.map((lineTotal, index) => {
+    if (index === lineTotals.length - 1) return costPesewas - allocated;
+    const share = Math.round((costPesewas * lineTotal) / goodsTotal);
+    allocated += share;
+    return share;
+  });
 }
 
 export interface SupplierSummary {

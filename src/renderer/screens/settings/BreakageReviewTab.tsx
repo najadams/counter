@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { counter } from '../../lib/ipc';
 import { useSession } from '../../store/session';
 import { formatMoneyWithCurrency } from '../../../shared/lib/money';
+import { FeedbackBanner } from '../../components/FeedbackBanner';
 
 interface Row {
   id: string; productId: string; productName: string; productSku: string;
@@ -147,7 +148,7 @@ export function BreakageReviewTab() {
         )}
       </div>
 
-      {error && <div className="bg-danger/10 border border-danger/40 text-danger text-sm px-3 py-2 rounded">{error}</div>}
+      {error && <FeedbackBanner>{error}</FeedbackBanner>}
 
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
         {loading && <div className="col-span-full text-center text-text-tertiary py-6">Loading…</div>}

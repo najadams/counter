@@ -14,6 +14,9 @@
 
 import type { Database as DB } from 'better-sqlite3';
 import { DEFAULT_LOCATION_ID } from '../../shared/lib/constants.js';
+import { extractInclusiveVat, VAT_ENABLED } from '../../shared/lib/vat.js';
+import { listTaxPaymentsForPeriod, type TaxPaymentRow } from './taxPayments.js';
+import { creditPrincipalExpr } from './customerCredit.js';
 
 const ALLOWED_ROLES = new Set(['OWNER', 'FOUNDER', 'SUPERVISOR']);
 
@@ -77,6 +80,28 @@ function pctChange(curr: number, prev: number): number | null {
 
 interface SumRow { sumPesewas: number; sumCount: number }
 
+function taxableFromInclusive(pesewas: number): number {
+  if (!VAT_ENABLED) return Math.max(0, Math.round(pesewas));
+  return extractInclusiveVat(Math.max(0, Math.round(pesewas))).taxablePesewas;
+}
+
+function taxableSql(expr: string): string {
+  return VAT_ENABLED ? `ROUND((${expr}) * 10000.0 / 12000.0)` : `(${expr})`;
+}
+
+function lineNetRevenueSql(): string {
+  if (!VAT_ENABLED) return 'sl.line_total_pesewas';
+  return `CASE
+            WHEN s.taxable_pesewas > 0 AND s.subtotal_pesewas > 0
+              THEN ROUND(s.taxable_pesewas * sl.line_total_pesewas * 1.0 / s.subtotal_pesewas)
+            ELSE ${taxableSql('sl.line_total_pesewas')}
+          END`;
+}
+
+function lineNetCogsSql(): string {
+  return taxableSql('sl.unit_cost_pesewas * sl.quantity');
+}
+
 function salesTotalsBetween(db: DB, fromISO: string, toExclusiveISO: string): SumRow {
   const r = db
     .prepare(
@@ -95,19 +120,24 @@ function marginTotalsBetween(db: DB, fromISO: string, toExclusiveISO: string): {
   cogsPesewas: number;
   marginPesewas: number;
 } {
-  // sale_lines.margin_pesewas is enforced by CHECK to be exactly
-  // (unit_price - unit_cost) * quantity, so we can trust it.
-  // We exclude voided sales by joining; sale_lines for voided sales stay in
-  // the table but the parent sale is voided, so we filter on s.voided=0.
+  // In the VAT build, margin is based on the shop's real economic value:
+  // revenue after output tax, and cost after claimable input tax.
+  const netRevenue = lineNetRevenueSql();
+  const netCogs = lineNetCogsSql();
   const r = db
     .prepare(
-      `SELECT COALESCE(SUM(sl.line_total_pesewas), 0)                         AS revenuePesewas,
-              COALESCE(SUM(sl.unit_cost_pesewas * sl.quantity), 0)            AS cogsPesewas,
-              COALESCE(SUM(sl.margin_pesewas), 0)                             AS marginPesewas
-         FROM sale_lines sl
-         JOIN sales s ON s.id = sl.sale_id
-         WHERE s.voided = 0
-           AND s.created_at >= ? AND s.created_at < ?`,
+      `WITH line_profit AS (
+         SELECT ${netRevenue} AS revenuePesewas,
+                ${netCogs} AS cogsPesewas
+           FROM sale_lines sl
+           JOIN sales s ON s.id = sl.sale_id
+          WHERE s.voided = 0
+            AND s.created_at >= ? AND s.created_at < ?
+       )
+       SELECT COALESCE(SUM(revenuePesewas), 0) AS revenuePesewas,
+              COALESCE(SUM(cogsPesewas), 0) AS cogsPesewas,
+              COALESCE(SUM(revenuePesewas - cogsPesewas), 0) AS marginPesewas
+         FROM line_profit`,
     )
     .get(fromISO, toExclusiveISO) as { revenuePesewas: number; cogsPesewas: number; marginPesewas: number };
   return r;
@@ -199,6 +229,346 @@ export interface ReportsOverview {
   }>;
 }
 
+export interface ReportsTaxesInput {
+  actorWorkerId: string;
+  fromDate: string;
+  toDate: string;
+}
+
+export interface ReportsTaxes {
+  fromDate: string;
+  toDate: string;
+  salesInclusivePesewas: number;
+  salesTaxablePesewas: number;
+  outputVatPesewas: number;
+  outputNhilPesewas: number;
+  outputGetfundPesewas: number;
+  outputTaxTotalPesewas: number;
+  soldGoodsInclusiveCostPesewas: number;
+  soldGoodsTaxableCostPesewas: number;
+  purchaseInclusivePesewas: number;
+  purchaseTaxablePesewas: number;
+  inputVatPesewas: number;
+  inputNhilPesewas: number;
+  inputGetfundPesewas: number;
+  inputTaxTotalPesewas: number;
+  netVatPayablePesewas: number;
+  taxPaidPesewas: number;
+  taxBalancePesewas: number;
+  saleCount: number;
+  voidedSaleCount: number;
+  voidedSalesInclusivePesewas: number;
+  voidedOutputTaxTotalPesewas: number;
+  supplierInvoiceCount: number;
+  byDay: Array<{
+    date: string;
+    salesInclusivePesewas: number;
+    outputTaxPesewas: number;
+    voidedSalesInclusivePesewas: number;
+    voidedOutputTaxPesewas: number;
+    soldGoodsInclusiveCostPesewas: number;
+    purchaseInclusivePesewas: number;
+    inputTaxPesewas: number;
+    netPayablePesewas: number;
+  }>;
+  voidedReceipts: Array<{
+    saleId: string;
+    saleAt: string;
+    voidedAt: string;
+    totalPesewas: number;
+    outputTaxPesewas: number;
+    voidReason: string | null;
+    cashierName: string;
+    voidedByName: string | null;
+  }>;
+  taxPayments: TaxPaymentRow[];
+  supplierInputs: Array<{
+    supplierId: string;
+    supplierName: string;
+    invoiceCount: number;
+    purchaseInclusivePesewas: number;
+    inputTaxPesewas: number;
+  }>;
+}
+
+function assertDateOnly(label: string, value: string): void {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new Error(`${label} must be YYYY-MM-DD`);
+  }
+}
+
+function addOneDayISO(date: string): string {
+  const d = new Date(`${date}T00:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+export function getTaxesReport(db: DB, input: ReportsTaxesInput): ReportsTaxes {
+  requireReportsActor(db, input.actorWorkerId);
+  assertDateOnly('fromDate', input.fromDate);
+  assertDateOnly('toDate', input.toDate);
+  if (input.toDate < input.fromDate) throw new Error('toDate must be on or after fromDate');
+
+  const toExclusiveDate = addOneDayISO(input.toDate);
+
+  const output = db
+    .prepare(
+      `SELECT COALESCE(SUM(total_pesewas), 0) AS salesInclusivePesewas,
+              COALESCE(SUM(taxable_pesewas), 0) AS salesTaxablePesewas,
+              COALESCE(SUM(vat_pesewas), 0) AS outputVatPesewas,
+              COALESCE(SUM(nhil_pesewas), 0) AS outputNhilPesewas,
+              COALESCE(SUM(getfund_pesewas), 0) AS outputGetfundPesewas,
+              COUNT(*) AS saleCount
+         FROM sales
+         WHERE voided = 0
+           AND date(created_at) >= ?
+           AND date(created_at) < ?`,
+    )
+    .get(input.fromDate, toExclusiveDate) as {
+      salesInclusivePesewas: number;
+      salesTaxablePesewas: number;
+      outputVatPesewas: number;
+      outputNhilPesewas: number;
+      outputGetfundPesewas: number;
+      saleCount: number;
+    };
+
+  const voidedReceipts = db
+    .prepare(
+      `SELECT s.id AS saleId,
+              s.created_at AS saleAt,
+              s.voided_at AS voidedAt,
+              s.total_pesewas AS totalPesewas,
+              (s.vat_pesewas + s.nhil_pesewas + s.getfund_pesewas) AS outputTaxPesewas,
+              s.void_reason AS voidReason,
+              cashier.full_name AS cashierName,
+              voider.full_name AS voidedByName
+         FROM sales s
+         JOIN workers cashier ON cashier.id = s.worker_id
+         LEFT JOIN workers voider ON voider.id = s.voided_by
+        WHERE s.voided = 1
+          AND s.voided_at IS NOT NULL
+          AND date(s.voided_at) >= ?
+          AND date(s.voided_at) < ?
+        ORDER BY s.voided_at DESC`,
+    )
+    .all(input.fromDate, toExclusiveDate) as Array<{
+      saleId: string;
+      saleAt: string;
+      voidedAt: string;
+      totalPesewas: number;
+      outputTaxPesewas: number;
+      voidReason: string | null;
+      cashierName: string;
+      voidedByName: string | null;
+    }>;
+  const voidedSalesInclusivePesewas = voidedReceipts.reduce((sum, r) => sum + r.totalPesewas, 0);
+  const voidedOutputTaxTotalPesewas = voidedReceipts.reduce((sum, r) => sum + r.outputTaxPesewas, 0);
+
+  const soldGoodsCost = db
+    .prepare(
+      `SELECT COALESCE(SUM(sl.unit_cost_pesewas * sl.quantity), 0) AS soldGoodsInclusiveCostPesewas
+         FROM sale_lines sl
+         JOIN sales s ON s.id = sl.sale_id
+        WHERE s.voided = 0
+          AND date(s.created_at) >= ?
+          AND date(s.created_at) < ?`,
+    )
+    .get(input.fromDate, toExclusiveDate) as { soldGoodsInclusiveCostPesewas: number };
+  const soldGoodsInput = extractInclusiveVat(soldGoodsCost.soldGoodsInclusiveCostPesewas);
+
+  const inputRows = db
+    .prepare(
+      `SELECT si.id AS invoiceId, si.invoice_date AS invoiceDate,
+              si.supplier_id AS supplierId, s.name AS supplierName,
+              SUM(CASE
+                    WHEN sil.landed_line_total_pesewas > 0 THEN sil.landed_line_total_pesewas
+                    ELSE sil.line_total_pesewas + sil.allocated_transport_cost_pesewas + sil.allocated_loading_cost_pesewas
+                  END) AS purchaseInclusivePesewas
+         FROM supplier_invoice_lines sil
+         JOIN supplier_invoices si ON si.id = sil.supplier_invoice_id
+         JOIN suppliers s ON s.id = si.supplier_id
+         WHERE si.status != 'VOID'
+           AND si.invoice_date >= ?
+           AND si.invoice_date < ?
+         GROUP BY si.id, si.invoice_date, si.supplier_id, s.name`,
+    )
+    .all(input.fromDate, toExclusiveDate) as Array<{
+      invoiceId: string;
+      invoiceDate: string;
+      supplierId: string;
+      supplierName: string;
+      purchaseInclusivePesewas: number;
+    }>;
+
+  let purchaseInclusivePesewas = 0;
+  let purchaseTaxablePesewas = 0;
+  let inputVatPesewas = 0;
+  let inputNhilPesewas = 0;
+  let inputGetfundPesewas = 0;
+  const byDayMap = new Map<string, {
+    date: string;
+    salesInclusivePesewas: number;
+    outputTaxPesewas: number;
+    voidedSalesInclusivePesewas: number;
+    voidedOutputTaxPesewas: number;
+    soldGoodsInclusiveCostPesewas: number;
+    purchaseInclusivePesewas: number;
+    inputTaxPesewas: number;
+    netPayablePesewas: number;
+  }>();
+  const supplierMap = new Map<string, {
+    supplierId: string;
+    supplierName: string;
+    invoiceIds: Set<string>;
+    purchaseInclusivePesewas: number;
+    inputTaxPesewas: number;
+  }>();
+
+  function dayRow(date: string) {
+    const existing = byDayMap.get(date);
+    if (existing) return existing;
+    const row = {
+      date,
+      salesInclusivePesewas: 0,
+      outputTaxPesewas: 0,
+      voidedSalesInclusivePesewas: 0,
+      voidedOutputTaxPesewas: 0,
+      soldGoodsInclusiveCostPesewas: 0,
+      purchaseInclusivePesewas: 0,
+      inputTaxPesewas: 0,
+      netPayablePesewas: 0,
+    };
+    byDayMap.set(date, row);
+    return row;
+  }
+
+  const outputDays = db
+    .prepare(
+      `SELECT date(created_at) AS date,
+              COALESCE(SUM(total_pesewas), 0) AS salesInclusivePesewas,
+              COALESCE(SUM(vat_pesewas + nhil_pesewas + getfund_pesewas), 0) AS outputTaxPesewas
+         FROM sales
+         WHERE voided = 0
+           AND date(created_at) >= ?
+           AND date(created_at) < ?
+         GROUP BY date(created_at)
+         ORDER BY date(created_at) ASC`,
+    )
+    .all(input.fromDate, toExclusiveDate) as Array<{ date: string; salesInclusivePesewas: number; outputTaxPesewas: number }>;
+  for (const row of outputDays) {
+    const d = dayRow(row.date);
+    d.salesInclusivePesewas = row.salesInclusivePesewas;
+    d.outputTaxPesewas = row.outputTaxPesewas;
+  }
+
+  for (const row of voidedReceipts) {
+    const d = dayRow(row.voidedAt.slice(0, 10));
+    d.voidedSalesInclusivePesewas += row.totalPesewas;
+    d.voidedOutputTaxPesewas += row.outputTaxPesewas;
+  }
+
+  const soldGoodsDays = db
+    .prepare(
+      `SELECT date(s.created_at) AS date,
+              COALESCE(SUM(sl.unit_cost_pesewas * sl.quantity), 0) AS soldGoodsInclusiveCostPesewas
+         FROM sale_lines sl
+         JOIN sales s ON s.id = sl.sale_id
+        WHERE s.voided = 0
+          AND date(s.created_at) >= ?
+          AND date(s.created_at) < ?
+        GROUP BY date(s.created_at)
+        ORDER BY date(s.created_at) ASC`,
+    )
+    .all(input.fromDate, toExclusiveDate) as Array<{ date: string; soldGoodsInclusiveCostPesewas: number }>;
+  for (const row of soldGoodsDays) {
+    const d = dayRow(row.date);
+    const breakdown = extractInclusiveVat(row.soldGoodsInclusiveCostPesewas);
+    d.soldGoodsInclusiveCostPesewas = row.soldGoodsInclusiveCostPesewas;
+    d.inputTaxPesewas = breakdown.vatPesewas + breakdown.nhilPesewas + breakdown.getfundPesewas;
+  }
+
+  for (const row of inputRows) {
+    const breakdown = extractInclusiveVat(row.purchaseInclusivePesewas);
+    const inputTax = breakdown.vatPesewas + breakdown.nhilPesewas + breakdown.getfundPesewas;
+    purchaseInclusivePesewas += row.purchaseInclusivePesewas;
+    purchaseTaxablePesewas += breakdown.taxablePesewas;
+    inputVatPesewas += breakdown.vatPesewas;
+    inputNhilPesewas += breakdown.nhilPesewas;
+    inputGetfundPesewas += breakdown.getfundPesewas;
+
+    const d = dayRow(row.invoiceDate);
+    d.purchaseInclusivePesewas += row.purchaseInclusivePesewas;
+    d.inputTaxPesewas += inputTax;
+
+    const key = row.supplierId;
+    const supplier = supplierMap.get(key) ?? {
+      supplierId: row.supplierId,
+      supplierName: row.supplierName,
+      invoiceIds: new Set<string>(),
+      purchaseInclusivePesewas: 0,
+      inputTaxPesewas: 0,
+    };
+    supplier.invoiceIds.add(row.invoiceId);
+    supplier.purchaseInclusivePesewas += row.purchaseInclusivePesewas;
+    supplier.inputTaxPesewas += inputTax;
+    supplierMap.set(key, supplier);
+  }
+
+  for (const d of byDayMap.values()) {
+    d.netPayablePesewas = d.outputTaxPesewas - d.inputTaxPesewas;
+  }
+
+  const outputTaxTotalPesewas = output.outputVatPesewas + output.outputNhilPesewas + output.outputGetfundPesewas;
+  const inputTaxTotalPesewas = soldGoodsInput.vatPesewas + soldGoodsInput.nhilPesewas + soldGoodsInput.getfundPesewas;
+  const netVatPayablePesewas = outputTaxTotalPesewas - inputTaxTotalPesewas;
+  const taxPayments = listTaxPaymentsForPeriod(db, {
+    locationId: DEFAULT_LOCATION_ID,
+    fromDate: input.fromDate,
+    toDate: input.toDate,
+  });
+  const taxPaidPesewas = taxPayments.reduce((sum, p) => sum + p.amountPesewas, 0);
+
+  return {
+    fromDate: input.fromDate,
+    toDate: input.toDate,
+    salesInclusivePesewas: output.salesInclusivePesewas,
+    salesTaxablePesewas: output.salesTaxablePesewas,
+    outputVatPesewas: output.outputVatPesewas,
+    outputNhilPesewas: output.outputNhilPesewas,
+    outputGetfundPesewas: output.outputGetfundPesewas,
+    outputTaxTotalPesewas,
+    soldGoodsInclusiveCostPesewas: soldGoodsCost.soldGoodsInclusiveCostPesewas,
+    soldGoodsTaxableCostPesewas: soldGoodsInput.taxablePesewas,
+    purchaseInclusivePesewas,
+    purchaseTaxablePesewas,
+    inputVatPesewas: soldGoodsInput.vatPesewas,
+    inputNhilPesewas: soldGoodsInput.nhilPesewas,
+    inputGetfundPesewas: soldGoodsInput.getfundPesewas,
+    inputTaxTotalPesewas,
+    netVatPayablePesewas,
+    taxPaidPesewas,
+    taxBalancePesewas: netVatPayablePesewas - taxPaidPesewas,
+    saleCount: output.saleCount,
+    voidedSaleCount: voidedReceipts.length,
+    voidedSalesInclusivePesewas,
+    voidedOutputTaxTotalPesewas,
+    supplierInvoiceCount: inputRows.length,
+    byDay: Array.from(byDayMap.values()).sort((a, b) => a.date.localeCompare(b.date)),
+    voidedReceipts,
+    taxPayments,
+    supplierInputs: Array.from(supplierMap.values())
+      .map((s) => ({
+        supplierId: s.supplierId,
+        supplierName: s.supplierName,
+        invoiceCount: s.invoiceIds.size,
+        purchaseInclusivePesewas: s.purchaseInclusivePesewas,
+        inputTaxPesewas: s.inputTaxPesewas,
+      }))
+      .sort((a, b) => b.inputTaxPesewas - a.inputTaxPesewas),
+  };
+}
+
 export interface GetReportsOverviewInput {
   actorWorkerId: string;
   locationId?: string;
@@ -286,8 +656,14 @@ export function getReportsOverview(db: DB, input: GetReportsOverviewInput): Repo
            WHERE shift_id = ?`,
       )
       .get(s.id) as { s: number };
+    const taxPaymentsCash = db
+      .prepare(
+        `SELECT COALESCE(SUM(amount_pesewas), 0) AS s FROM tax_payments
+           WHERE shift_id = ? AND payment_method = 'CASH'`,
+      )
+      .get(s.id) as { s: number };
     openTillExpected +=
-      s.openingCashPesewas + cashSales.s + debtPaymentsCash.s - drops.s - expenses.s;
+      s.openingCashPesewas + cashSales.s + debtPaymentsCash.s - drops.s - expenses.s - taxPaymentsCash.s;
   }
 
   const lastClosed = db
@@ -378,8 +754,8 @@ export function getReportsOverview(db: DB, input: GetReportsOverviewInput): Repo
   let invAtCost = 0, invAtRetail = 0, belowReorder = 0, stockout = 0;
   for (const r of invRows) {
     if (r.onHand > 0) {
-      invAtCost += r.onHand * r.costEach;
-      invAtRetail += r.onHand * r.retailEach;
+      invAtCost += r.onHand * taxableFromInclusive(r.costEach);
+      invAtRetail += r.onHand * taxableFromInclusive(r.retailEach);
     }
     if (r.onHand <= 0) stockout++;
     else if (r.reorderThreshold > 0 && r.onHand <= r.reorderThreshold) belowReorder++;
@@ -457,7 +833,7 @@ export function getReportsOverview(db: DB, input: GetReportsOverviewInput): Repo
     daysSinceLastSale: r.lastSaleAt
       ? Math.max(0, Math.floor((nowMs - new Date(r.lastSaleAt).getTime()) / 86_400_000))
       : null,
-    stockValueAtCostPesewas: r.unitsOnHand * r.costEach,
+    stockValueAtCostPesewas: r.unitsOnHand * taxableFromInclusive(r.costEach),
   }));
 
   // --- 10. Recent stocktake variance events ------------------------------
@@ -611,6 +987,534 @@ export interface SalesReportResult {
   byChannel: SalesByChannel[];
   byPaymentMethod: SalesByPaymentMethod[];
   byCashier: SalesByCashier[];
+}
+
+export interface GraphsReportInput {
+  actorWorkerId: string;
+  fromDate: string;
+  toDate: string;
+}
+
+export interface GraphsReportResult {
+  fromDate: string;
+  toDate: string;
+  totals: {
+    revenuePesewas: number;
+    netProfitPesewas: number;
+    taxPayablePesewas: number;
+    expensesPesewas: number;
+    drawingsPesewas: number;
+    supplierPaymentsPesewas: number;
+    taxPaidPesewas: number;
+    creditOutstandingPesewas: number;
+    stockAtCostPesewas: number;
+    numSales: number;
+  };
+  series: Array<{
+    date: string;
+    revenuePesewas: number;
+    netProfitPesewas: number;
+    taxPayablePesewas: number;
+    expensesPesewas: number;
+    drawingsPesewas: number;
+    numSales: number;
+  }>;
+  topProductsByProfit: Array<{
+    productId: string; sku: string; name: string; category: string;
+    unitsSold: number; revenuePesewas: number; grossProfitPesewas: number; marginBps: number;
+  }>;
+  categoryProfit: Array<{
+    category: string; revenuePesewas: number; grossProfitPesewas: number; marginBps: number;
+  }>;
+  slowStock: Array<{
+    productId: string; sku: string; name: string; category: string;
+    unitsOnHand: number; stockValuePesewas: number; daysSinceLastSale: number | null;
+  }>;
+  customerValue: Array<{
+    customerId: string; name: string; revenuePesewas: number; numSales: number;
+    avgBasketPesewas: number; lastPurchaseAt: string; abcClass: 'A' | 'B' | 'C';
+  }>;
+  creditAging: Array<{ bucket: string; amountPesewas: number; customerCount: number }>;
+  expensesByCategory: Array<{ category: string; amountPesewas: number }>;
+  drawingsByCategory: Array<{ category: string; amountPesewas: number }>;
+  moneyOut: Array<{ kind: string; amountPesewas: number }>;
+  stockoutForecast: Array<{
+    productId: string; sku: string; name: string; category: string;
+    unitsOnHand: number; unitsSold: number; avgDailyUnitsSold: number;
+    daysCover: number | null; reorderThreshold: number; stockValuePesewas: number;
+  }>;
+  cashVarianceByWorker: Array<{
+    workerId: string; workerName: string; closedShifts: number;
+    netVariancePesewas: number; totalAbsoluteVariancePesewas: number;
+    avgAbsoluteVariancePesewas: number; worstShortPesewas: number; worstOverPesewas: number;
+  }>;
+  deliveryByDay: Array<{
+    date: string; deliveredCount: number; failedCount: number;
+    deliveryFeePesewas: number; deliveryCostPesewas: number; deliveryProfitPesewas: number;
+  }>;
+  deliveryByDriver: Array<{
+    driverId: string; driverName: string; deliveredCount: number; failedCount: number;
+    deliveryFeePesewas: number; deliveryCostPesewas: number; deliveryProfitPesewas: number;
+  }>;
+}
+
+export function getGraphsReport(db: DB, input: GraphsReportInput): GraphsReportResult {
+  requireReportsActor(db, input.actorWorkerId);
+  const { fromISO, toExclusiveISO } = dateRangeToISO(input.fromDate, input.toDate);
+  const from = new Date(`${input.fromDate}T00:00:00.000Z`);
+  const to = new Date(`${input.toDate}T00:00:00.000Z`);
+  const dayMs = 86_400_000;
+  const days = Math.max(1, Math.floor((to.getTime() - from.getTime()) / dayMs) + 1);
+
+  const series = new Map<string, GraphsReportResult['series'][number]>();
+  for (let i = 0; i < days; i++) {
+    const d = new Date(from.getTime() + i * dayMs).toISOString().slice(0, 10);
+    series.set(d, {
+      date: d,
+      revenuePesewas: 0,
+      netProfitPesewas: 0,
+      taxPayablePesewas: 0,
+      expensesPesewas: 0,
+      drawingsPesewas: 0,
+      numSales: 0,
+    });
+  }
+
+  const revenueRows = db
+    .prepare(
+      `SELECT date(created_at, 'localtime') AS date,
+              COALESCE(SUM(total_pesewas), 0) AS revenuePesewas,
+              COUNT(*) AS numSales,
+              COALESCE(SUM(vat_pesewas + nhil_pesewas + getfund_pesewas), 0) AS outputTaxPesewas
+         FROM sales
+        WHERE voided = 0
+          AND created_at >= ? AND created_at < ?
+        GROUP BY date(created_at, 'localtime')`,
+    )
+    .all(fromISO, toExclusiveISO) as Array<{
+      date: string;
+      revenuePesewas: number;
+      numSales: number;
+      outputTaxPesewas: number;
+    }>;
+  for (const row of revenueRows) {
+    const d = series.get(row.date);
+    if (!d) continue;
+    d.revenuePesewas = row.revenuePesewas;
+    d.numSales = row.numSales;
+    d.taxPayablePesewas += row.outputTaxPesewas;
+  }
+
+  const netRevenue = lineNetRevenueSql();
+  const netCogs = lineNetCogsSql();
+  const profitRows = db
+    .prepare(
+      `SELECT date(s.created_at, 'localtime') AS date,
+              COALESCE(SUM(${netRevenue} - ${netCogs}), 0) AS netProfitPesewas,
+              COALESCE(SUM(sl.unit_cost_pesewas * sl.quantity), 0) AS soldGoodsInclusiveCostPesewas
+         FROM sale_lines sl
+         JOIN sales s ON s.id = sl.sale_id
+        WHERE s.voided = 0
+          AND s.created_at >= ? AND s.created_at < ?
+        GROUP BY date(s.created_at, 'localtime')`,
+    )
+    .all(fromISO, toExclusiveISO) as Array<{
+      date: string;
+      netProfitPesewas: number;
+      soldGoodsInclusiveCostPesewas: number;
+    }>;
+  for (const row of profitRows) {
+    const d = series.get(row.date);
+    if (!d) continue;
+    const costInputTax = extractInclusiveVat(Math.max(0, Math.round(row.soldGoodsInclusiveCostPesewas)));
+    d.netProfitPesewas = row.netProfitPesewas;
+    d.taxPayablePesewas -= costInputTax.vatPesewas + costInputTax.nhilPesewas + costInputTax.getfundPesewas;
+  }
+
+  const expenseRows = db
+    .prepare(
+      `SELECT date(created_at, 'localtime') AS date,
+              COALESCE(SUM(amount_pesewas), 0) AS expensesPesewas
+         FROM petty_cash_expenses
+        WHERE created_at >= ? AND created_at < ?
+        GROUP BY date(created_at, 'localtime')`,
+    )
+    .all(fromISO, toExclusiveISO) as Array<{ date: string; expensesPesewas: number }>;
+  for (const row of expenseRows) {
+    const d = series.get(row.date);
+    if (d) d.expensesPesewas = row.expensesPesewas;
+  }
+
+  const drawingRows = db
+    .prepare(
+      `SELECT date(created_at, 'localtime') AS date,
+              COALESCE(SUM(amount_pesewas), 0) AS drawingsPesewas
+         FROM owner_drawings
+        WHERE created_at >= ? AND created_at < ?
+        GROUP BY date(created_at, 'localtime')`,
+    )
+    .all(fromISO, toExclusiveISO) as Array<{ date: string; drawingsPesewas: number }>;
+  for (const row of drawingRows) {
+    const d = series.get(row.date);
+    if (d) d.drawingsPesewas = row.drawingsPesewas;
+  }
+
+  const rows = Array.from(series.values()).sort((a, b) => a.date.localeCompare(b.date));
+  const supplierPaymentsPesewas = (db
+    .prepare(
+      `SELECT COALESCE(SUM(amount_pesewas), 0) AS total
+         FROM supplier_payments
+        WHERE paid_at >= ? AND paid_at < ?`,
+    )
+    .get(fromISO, toExclusiveISO) as { total: number }).total;
+  const taxPaidPesewas = listTaxPaymentsForPeriod(db, {
+    locationId: DEFAULT_LOCATION_ID,
+    fromDate: input.fromDate,
+    toDate: input.toDate,
+  }).reduce((sum, payment) => sum + payment.amountPesewas, 0);
+  const creditOutstandingPesewas = (db
+    .prepare(
+      `SELECT COALESCE(SUM(outstandingPesewas), 0) AS total
+         FROM (
+           SELECT s.id,
+                  MAX(0, ${creditPrincipalExpr('s')} -
+                    COALESCE((SELECT SUM(cpa.amount_pesewas)
+                                FROM customer_payment_allocations cpa
+                               WHERE cpa.sale_id = s.id), 0)
+                  ) AS outstandingPesewas
+             FROM sales s
+            WHERE s.is_credit = 1 AND s.voided = 0
+         )`,
+    )
+    .get() as { total: number }).total;
+  const stockAtCostPesewas = (db
+    .prepare(
+      `WITH stock AS (
+         SELECT product_id, COALESCE(SUM(quantity), 0) AS unitsOnHand
+           FROM stock_movements
+          WHERE location_id = ?
+          GROUP BY product_id
+       )
+       SELECT COALESCE(SUM(stock.unitsOnHand * p.cost_price_pesewas), 0) AS total
+         FROM stock
+         JOIN products p ON p.id = stock.product_id
+        WHERE stock.unitsOnHand > 0
+          AND p.deleted_at IS NULL`,
+    )
+    .get(DEFAULT_LOCATION_ID) as { total: number }).total;
+
+  const totals = rows.reduce(
+    (acc, r) => ({
+      revenuePesewas: acc.revenuePesewas + r.revenuePesewas,
+      netProfitPesewas: acc.netProfitPesewas + r.netProfitPesewas,
+      taxPayablePesewas: acc.taxPayablePesewas + r.taxPayablePesewas,
+      expensesPesewas: acc.expensesPesewas + r.expensesPesewas,
+      drawingsPesewas: acc.drawingsPesewas + r.drawingsPesewas,
+      supplierPaymentsPesewas: acc.supplierPaymentsPesewas,
+      taxPaidPesewas: acc.taxPaidPesewas,
+      creditOutstandingPesewas: acc.creditOutstandingPesewas,
+      stockAtCostPesewas: acc.stockAtCostPesewas,
+      numSales: acc.numSales + r.numSales,
+    }),
+    {
+      revenuePesewas: 0,
+      netProfitPesewas: 0,
+      taxPayablePesewas: 0,
+      expensesPesewas: 0,
+      drawingsPesewas: 0,
+      supplierPaymentsPesewas,
+      taxPaidPesewas,
+      creditOutstandingPesewas,
+      stockAtCostPesewas,
+      numSales: 0,
+    },
+  );
+
+  const productRevenue = lineNetRevenueSql();
+  const productCogs = lineNetCogsSql();
+  const topProductsByProfit = db
+    .prepare(
+      `SELECT p.id AS productId, p.sku, p.name, p.category,
+              COALESCE(SUM(sl.quantity), 0) AS unitsSold,
+              COALESCE(SUM(${productRevenue}), 0) AS revenuePesewas,
+              COALESCE(SUM(${productRevenue} - ${productCogs}), 0) AS grossProfitPesewas
+         FROM sale_lines sl
+         JOIN sales s ON s.id = sl.sale_id
+         JOIN products p ON p.id = sl.product_id
+        WHERE s.voided = 0
+          AND s.created_at >= ? AND s.created_at < ?
+        GROUP BY p.id
+        HAVING grossProfitPesewas != 0 OR revenuePesewas > 0
+        ORDER BY grossProfitPesewas DESC, revenuePesewas DESC
+        LIMIT 10`,
+    )
+    .all(fromISO, toExclusiveISO)
+    .map((r) => {
+      const row = r as {
+        productId: string; sku: string; name: string; category: string;
+        unitsSold: number; revenuePesewas: number; grossProfitPesewas: number;
+      };
+      return { ...row, marginBps: row.revenuePesewas > 0 ? Math.round((row.grossProfitPesewas * 10000) / row.revenuePesewas) : 0 };
+    });
+
+  const categoryProfit = db
+    .prepare(
+      `SELECT p.category,
+              COALESCE(SUM(${productRevenue}), 0) AS revenuePesewas,
+              COALESCE(SUM(${productRevenue} - ${productCogs}), 0) AS grossProfitPesewas
+         FROM sale_lines sl
+         JOIN sales s ON s.id = sl.sale_id
+         JOIN products p ON p.id = sl.product_id
+        WHERE s.voided = 0
+          AND s.created_at >= ? AND s.created_at < ?
+        GROUP BY p.category
+        HAVING revenuePesewas > 0
+        ORDER BY grossProfitPesewas DESC`,
+    )
+    .all(fromISO, toExclusiveISO)
+    .map((r) => {
+      const row = r as { category: string; revenuePesewas: number; grossProfitPesewas: number };
+      return { ...row, marginBps: row.revenuePesewas > 0 ? Math.round((row.grossProfitPesewas * 10000) / row.revenuePesewas) : 0 };
+    });
+
+  const slowStock = db
+    .prepare(
+      `WITH stock AS (
+         SELECT product_id, COALESCE(SUM(quantity), 0) AS unitsOnHand
+           FROM stock_movements
+          WHERE location_id = ?
+          GROUP BY product_id
+       ),
+       last_sales AS (
+         SELECT sl.product_id, MAX(s.created_at) AS lastSaleAt
+           FROM sale_lines sl
+           JOIN sales s ON s.id = sl.sale_id
+          WHERE s.voided = 0
+          GROUP BY sl.product_id
+       )
+       SELECT p.id AS productId, p.sku, p.name, p.category,
+              stock.unitsOnHand,
+              stock.unitsOnHand * p.cost_price_pesewas AS stockValuePesewas,
+              CASE
+                WHEN last_sales.lastSaleAt IS NULL THEN NULL
+                ELSE CAST(julianday('now') - julianday(last_sales.lastSaleAt) AS INTEGER)
+              END AS daysSinceLastSale
+         FROM stock
+         JOIN products p ON p.id = stock.product_id
+         LEFT JOIN last_sales ON last_sales.product_id = p.id
+        WHERE stock.unitsOnHand > 0
+          AND p.deleted_at IS NULL
+        ORDER BY
+          CASE WHEN last_sales.lastSaleAt IS NULL THEN 1 ELSE 0 END DESC,
+          daysSinceLastSale DESC,
+          stockValuePesewas DESC
+        LIMIT 10`,
+    )
+    .all(DEFAULT_LOCATION_ID) as GraphsReportResult['slowStock'];
+
+  const customerValueRaw = db
+    .prepare(
+      `SELECT c.id AS customerId, c.display_name AS name,
+              COALESCE(SUM(s.total_pesewas), 0) AS revenuePesewas,
+              COUNT(*) AS numSales,
+              MAX(s.created_at) AS lastPurchaseAt
+         FROM sales s
+         JOIN customers c ON c.id = s.customer_id
+        WHERE s.voided = 0
+          AND s.customer_id IS NOT NULL
+          AND s.created_at >= ? AND s.created_at < ?
+        GROUP BY c.id
+        HAVING revenuePesewas > 0
+        ORDER BY revenuePesewas DESC
+        LIMIT 12`,
+    )
+    .all(fromISO, toExclusiveISO) as Array<{
+      customerId: string; name: string; revenuePesewas: number; numSales: number; lastPurchaseAt: string;
+    }>;
+  const customerValue = customerValueRaw.map((row, idx) => ({
+    ...row,
+    avgBasketPesewas: row.numSales > 0 ? Math.round(row.revenuePesewas / row.numSales) : 0,
+    abcClass: idx < Math.ceil(customerValueRaw.length * 0.2)
+      ? 'A' as const
+      : idx < Math.ceil(customerValueRaw.length * 0.5)
+        ? 'B' as const
+        : 'C' as const,
+  }));
+
+  const creditAging = db
+    .prepare(
+      `WITH open_credit AS (
+         SELECT s.customer_id AS customerId,
+                CASE
+                  WHEN COALESCE(s.credit_due_date, date(s.created_at, '+' || c.credit_terms_days || ' days')) >= date('now') THEN 'Current'
+                  WHEN julianday('now') - julianday(COALESCE(s.credit_due_date, date(s.created_at, '+' || c.credit_terms_days || ' days'))) <= 30 THEN '1-30 overdue'
+                  WHEN julianday('now') - julianday(COALESCE(s.credit_due_date, date(s.created_at, '+' || c.credit_terms_days || ' days'))) <= 60 THEN '31-60 overdue'
+                  WHEN julianday('now') - julianday(COALESCE(s.credit_due_date, date(s.created_at, '+' || c.credit_terms_days || ' days'))) <= 90 THEN '61-90 overdue'
+                  ELSE '90+ overdue'
+                END AS bucket,
+                MAX(0, ${creditPrincipalExpr('s')} -
+                  COALESCE((SELECT SUM(cpa.amount_pesewas)
+                              FROM customer_payment_allocations cpa
+                             WHERE cpa.sale_id = s.id), 0)
+                ) AS outstandingPesewas
+           FROM sales s
+           JOIN customers c ON c.id = s.customer_id
+          WHERE s.is_credit = 1 AND s.voided = 0
+       )
+       SELECT bucket,
+              COALESCE(SUM(outstandingPesewas), 0) AS amountPesewas,
+              COUNT(DISTINCT CASE WHEN outstandingPesewas > 0 THEN customerId END) AS customerCount
+         FROM open_credit
+        WHERE outstandingPesewas > 0
+        GROUP BY bucket`,
+    )
+    .all() as GraphsReportResult['creditAging'];
+
+  const expensesByCategory = db
+    .prepare(
+      `SELECT category, COALESCE(SUM(amount_pesewas), 0) AS amountPesewas
+         FROM petty_cash_expenses
+        WHERE created_at >= ? AND created_at < ?
+        GROUP BY category
+        ORDER BY amountPesewas DESC`,
+    )
+    .all(fromISO, toExclusiveISO) as GraphsReportResult['expensesByCategory'];
+
+  const drawingsByCategory = db
+    .prepare(
+      `SELECT category, COALESCE(SUM(amount_pesewas), 0) AS amountPesewas
+         FROM owner_drawings
+        WHERE created_at >= ? AND created_at < ?
+        GROUP BY category
+        ORDER BY amountPesewas DESC`,
+    )
+    .all(fromISO, toExclusiveISO) as GraphsReportResult['drawingsByCategory'];
+
+  const moneyOut = [
+    { kind: 'Supplier payments', amountPesewas: supplierPaymentsPesewas },
+    { kind: 'Tax paid', amountPesewas: taxPaidPesewas },
+    { kind: 'Expenses', amountPesewas: totals.expensesPesewas },
+    { kind: 'Drawings', amountPesewas: totals.drawingsPesewas },
+  ].filter((row) => row.amountPesewas > 0);
+
+  const stockoutForecast = db
+    .prepare(
+      `WITH stock AS (
+         SELECT product_id, COALESCE(SUM(quantity), 0) AS unitsOnHand
+           FROM stock_movements
+          WHERE location_id = ?
+          GROUP BY product_id
+       ),
+       sales_window AS (
+         SELECT sl.product_id, COALESCE(SUM(sl.quantity), 0) AS unitsSold
+           FROM sale_lines sl
+           JOIN sales s ON s.id = sl.sale_id
+          WHERE s.voided = 0
+            AND s.created_at >= ? AND s.created_at < ?
+          GROUP BY sl.product_id
+       )
+       SELECT p.id AS productId, p.sku, p.name, p.category,
+              COALESCE(stock.unitsOnHand, 0) AS unitsOnHand,
+              COALESCE(sales_window.unitsSold, 0) AS unitsSold,
+              ROUND(COALESCE(sales_window.unitsSold, 0) * 1.0 / ?, 2) AS avgDailyUnitsSold,
+              CASE
+                WHEN COALESCE(sales_window.unitsSold, 0) > 0
+                  THEN ROUND(COALESCE(stock.unitsOnHand, 0) * ? * 1.0 / sales_window.unitsSold, 1)
+                ELSE NULL
+              END AS daysCover,
+              p.reorder_threshold AS reorderThreshold,
+              COALESCE(stock.unitsOnHand, 0) * p.cost_price_pesewas AS stockValuePesewas
+         FROM products p
+         LEFT JOIN stock ON stock.product_id = p.id
+         LEFT JOIN sales_window ON sales_window.product_id = p.id
+        WHERE p.active = 1
+          AND p.deleted_at IS NULL
+          AND (COALESCE(stock.unitsOnHand, 0) > 0 OR COALESCE(sales_window.unitsSold, 0) > 0)
+        ORDER BY
+          CASE WHEN COALESCE(sales_window.unitsSold, 0) > 0 THEN 0 ELSE 1 END ASC,
+          CASE WHEN COALESCE(sales_window.unitsSold, 0) > 0
+               THEN COALESCE(stock.unitsOnHand, 0) * ? * 1.0 / sales_window.unitsSold
+               ELSE 999999 END ASC,
+          sales_window.unitsSold DESC
+        LIMIT 12`,
+    )
+    .all(DEFAULT_LOCATION_ID, fromISO, toExclusiveISO, days, days, days) as GraphsReportResult['stockoutForecast'];
+
+  const cashVarianceByWorker = db
+    .prepare(
+      `SELECT w.id AS workerId, w.full_name AS workerName,
+              COUNT(*) AS closedShifts,
+              COALESCE(SUM(s.cash_variance_pesewas), 0) AS netVariancePesewas,
+              COALESCE(SUM(ABS(s.cash_variance_pesewas)), 0) AS totalAbsoluteVariancePesewas,
+              ROUND(COALESCE(AVG(ABS(s.cash_variance_pesewas)), 0)) AS avgAbsoluteVariancePesewas,
+              COALESCE(MIN(s.cash_variance_pesewas), 0) AS worstShortPesewas,
+              COALESCE(MAX(s.cash_variance_pesewas), 0) AS worstOverPesewas
+         FROM shifts s
+         JOIN workers w ON w.id = s.worker_id
+        WHERE s.closed_at IS NOT NULL
+          AND s.cash_variance_pesewas IS NOT NULL
+          AND s.closed_at >= ? AND s.closed_at < ?
+        GROUP BY w.id
+        ORDER BY totalAbsoluteVariancePesewas DESC, closedShifts DESC
+        LIMIT 10`,
+    )
+    .all(fromISO, toExclusiveISO) as GraphsReportResult['cashVarianceByWorker'];
+
+  const deliveryByDay = db
+    .prepare(
+      `SELECT date(COALESCE(delivered_at, delivery_failed_at, updated_at), 'localtime') AS date,
+              SUM(CASE WHEN delivery_status = 'DELIVERED' THEN 1 ELSE 0 END) AS deliveredCount,
+              SUM(CASE WHEN delivery_status = 'FAILED' THEN 1 ELSE 0 END) AS failedCount,
+              COALESCE(SUM(delivery_fee_pesewas), 0) AS deliveryFeePesewas,
+              COALESCE(SUM(delivery_cost_pesewas), 0) AS deliveryCostPesewas,
+              COALESCE(SUM(COALESCE(delivery_profit_pesewas, delivery_fee_pesewas - delivery_cost_pesewas)), 0) AS deliveryProfitPesewas
+         FROM pending_orders
+        WHERE delivery_status IN ('DELIVERED', 'FAILED')
+          AND COALESCE(delivered_at, delivery_failed_at, updated_at) >= ?
+          AND COALESCE(delivered_at, delivery_failed_at, updated_at) < ?
+        GROUP BY date(COALESCE(delivered_at, delivery_failed_at, updated_at), 'localtime')
+        ORDER BY date ASC`,
+    )
+    .all(fromISO, toExclusiveISO) as GraphsReportResult['deliveryByDay'];
+
+  const deliveryByDriver = db
+    .prepare(
+      `SELECT COALESCE(w.id, 'unassigned') AS driverId,
+              COALESCE(w.full_name, 'Unassigned') AS driverName,
+              SUM(CASE WHEN po.delivery_status = 'DELIVERED' THEN 1 ELSE 0 END) AS deliveredCount,
+              SUM(CASE WHEN po.delivery_status = 'FAILED' THEN 1 ELSE 0 END) AS failedCount,
+              COALESCE(SUM(po.delivery_fee_pesewas), 0) AS deliveryFeePesewas,
+              COALESCE(SUM(po.delivery_cost_pesewas), 0) AS deliveryCostPesewas,
+              COALESCE(SUM(COALESCE(po.delivery_profit_pesewas, po.delivery_fee_pesewas - po.delivery_cost_pesewas)), 0) AS deliveryProfitPesewas
+         FROM pending_orders po
+         LEFT JOIN workers w ON w.id = po.driver_id
+        WHERE po.delivery_status IN ('DELIVERED', 'FAILED')
+          AND COALESCE(po.delivered_at, po.delivery_failed_at, po.updated_at) >= ?
+          AND COALESCE(po.delivered_at, po.delivery_failed_at, po.updated_at) < ?
+        GROUP BY COALESCE(w.id, 'unassigned')
+        ORDER BY deliveryProfitPesewas DESC, deliveredCount DESC
+        LIMIT 10`,
+    )
+    .all(fromISO, toExclusiveISO) as GraphsReportResult['deliveryByDriver'];
+
+  return {
+    fromDate: input.fromDate,
+    toDate: input.toDate,
+    totals,
+    series: rows,
+    topProductsByProfit,
+    categoryProfit,
+    slowStock,
+    customerValue,
+    creditAging,
+    expensesByCategory,
+    drawingsByCategory,
+    moneyOut,
+    stockoutForecast,
+    cashVarianceByWorker,
+    deliveryByDay,
+    deliveryByDriver,
+  };
 }
 
 export function getSalesReport(db: DB, input: SalesReportInput): SalesReportResult {
@@ -774,25 +1678,34 @@ export interface MarginReportResult {
 export function getMarginReport(db: DB, input: MarginReportInput): MarginReportResult {
   requireReportsActor(db, input.actorWorkerId);
   const { fromISO, toExclusiveISO } = dateRangeToISO(input.fromDate, input.toDate);
+  const netRevenue = lineNetRevenueSql();
+  const netCogs = lineNetCogsSql();
 
   // unitsSold in canonical units (quantity × applied-unit factor) so mixed
   // crate/bottle sales aggregate honestly. Money columns are per-line
   // snapshots and need no conversion.
   const byProductRows = db
     .prepare(
-      `SELECT p.id AS productId, p.sku, p.name, p.category, p.brand,
-              SUM(sl.quantity * COALESCE(pu.conversion_factor, 1)) AS unitsSold,
-              SUM(sl.line_total_pesewas) AS revenuePesewas,
-              SUM(sl.unit_cost_pesewas * sl.quantity) AS cogsPesewas,
-              SUM(sl.margin_pesewas) AS marginPesewas
-         FROM sale_lines sl
-         JOIN sales s ON s.id = sl.sale_id
-         JOIN products p ON p.id = sl.product_id
-         LEFT JOIN product_units pu ON pu.id = sl.applied_unit_id
-         WHERE s.voided = 0
-           AND s.created_at >= ? AND s.created_at < ?
-         GROUP BY p.id
-         ORDER BY marginPesewas DESC`,
+      `WITH line_profit AS (
+         SELECT p.id AS productId, p.sku, p.name, p.category, p.brand,
+                sl.quantity * COALESCE(pu.conversion_factor, 1) AS unitsSold,
+                ${netRevenue} AS revenuePesewas,
+                ${netCogs} AS cogsPesewas
+           FROM sale_lines sl
+           JOIN sales s ON s.id = sl.sale_id
+           JOIN products p ON p.id = sl.product_id
+           LEFT JOIN product_units pu ON pu.id = sl.applied_unit_id
+          WHERE s.voided = 0
+            AND s.created_at >= ? AND s.created_at < ?
+       )
+       SELECT productId, sku, name, category, brand,
+              SUM(unitsSold) AS unitsSold,
+              SUM(revenuePesewas) AS revenuePesewas,
+              SUM(cogsPesewas) AS cogsPesewas,
+              SUM(revenuePesewas - cogsPesewas) AS marginPesewas
+         FROM line_profit
+        GROUP BY productId
+        ORDER BY marginPesewas DESC`,
     )
     .all(fromISO, toExclusiveISO) as Array<Omit<MarginPerProduct, 'marginBps'>>;
 
@@ -803,20 +1716,27 @@ export function getMarginReport(db: DB, input: MarginReportInput): MarginReportR
 
   const byCategoryRows = db
     .prepare(
-      `SELECT p.category AS category,
-              SUM(sl.quantity * COALESCE(pu.conversion_factor, 1)) AS unitsSold,
-              SUM(sl.line_total_pesewas) AS revenuePesewas,
-              SUM(sl.unit_cost_pesewas * sl.quantity) AS cogsPesewas,
-              SUM(sl.margin_pesewas) AS marginPesewas,
-              COUNT(DISTINCT p.id) AS productCount
-         FROM sale_lines sl
-         JOIN sales s ON s.id = sl.sale_id
-         JOIN products p ON p.id = sl.product_id
-         LEFT JOIN product_units pu ON pu.id = sl.applied_unit_id
-         WHERE s.voided = 0
-           AND s.created_at >= ? AND s.created_at < ?
-         GROUP BY p.category
-         ORDER BY marginPesewas DESC`,
+      `WITH line_profit AS (
+         SELECT p.id AS productId, p.category AS category,
+                sl.quantity * COALESCE(pu.conversion_factor, 1) AS unitsSold,
+                ${netRevenue} AS revenuePesewas,
+                ${netCogs} AS cogsPesewas
+           FROM sale_lines sl
+           JOIN sales s ON s.id = sl.sale_id
+           JOIN products p ON p.id = sl.product_id
+           LEFT JOIN product_units pu ON pu.id = sl.applied_unit_id
+          WHERE s.voided = 0
+            AND s.created_at >= ? AND s.created_at < ?
+       )
+       SELECT category,
+              SUM(unitsSold) AS unitsSold,
+              SUM(revenuePesewas) AS revenuePesewas,
+              SUM(cogsPesewas) AS cogsPesewas,
+              SUM(revenuePesewas - cogsPesewas) AS marginPesewas,
+              COUNT(DISTINCT productId) AS productCount
+         FROM line_profit
+        GROUP BY category
+        ORDER BY marginPesewas DESC`,
     )
     .all(fromISO, toExclusiveISO) as Array<Omit<MarginPerCategory, 'marginBps'>>;
 
@@ -827,33 +1747,42 @@ export function getMarginReport(db: DB, input: MarginReportInput): MarginReportR
 
   const belowCostSummary = db
     .prepare(
-      `SELECT COUNT(*) AS numLines,
-              COALESCE(SUM(-sl.margin_pesewas), 0) AS totalLossPesewas
-         FROM sale_lines sl
-         JOIN sales s ON s.id = sl.sale_id
-         WHERE s.voided = 0
-           AND s.created_at >= ? AND s.created_at < ?
-           AND sl.margin_pesewas < 0`,
+      `WITH line_profit AS (
+         SELECT ${netRevenue} - ${netCogs} AS marginPesewas
+           FROM sale_lines sl
+           JOIN sales s ON s.id = sl.sale_id
+          WHERE s.voided = 0
+            AND s.created_at >= ? AND s.created_at < ?
+       )
+       SELECT COUNT(*) AS numLines,
+              COALESCE(SUM(-marginPesewas), 0) AS totalLossPesewas
+         FROM line_profit
+        WHERE marginPesewas < 0`,
     )
     .get(fromISO, toExclusiveISO) as { numLines: number; totalLossPesewas: number };
 
   const belowCostWorst = db
     .prepare(
-      `SELECT s.id AS saleId, s.created_at AS saleAt,
-              p.id AS productId, p.sku, p.name,
-              sl.quantity, sl.unit_price_pesewas AS unitPricePesewas,
-              sl.unit_cost_pesewas AS unitCostPesewas,
-              sl.margin_pesewas AS marginPesewas,
-              w.full_name AS workerName
-         FROM sale_lines sl
-         JOIN sales s ON s.id = sl.sale_id
-         JOIN products p ON p.id = sl.product_id
-         JOIN workers w ON w.id = s.worker_id
-         WHERE s.voided = 0
-           AND s.created_at >= ? AND s.created_at < ?
-           AND sl.margin_pesewas < 0
-         ORDER BY sl.margin_pesewas ASC
-         LIMIT 10`,
+      `WITH line_profit AS (
+         SELECT s.id AS saleId, s.created_at AS saleAt,
+                p.id AS productId, p.sku, p.name,
+                sl.quantity,
+                ${taxableSql('sl.unit_price_pesewas')} AS unitPricePesewas,
+                ${taxableSql('sl.unit_cost_pesewas')} AS unitCostPesewas,
+                ${netRevenue} - ${netCogs} AS marginPesewas,
+                w.full_name AS workerName
+           FROM sale_lines sl
+           JOIN sales s ON s.id = sl.sale_id
+           JOIN products p ON p.id = sl.product_id
+           JOIN workers w ON w.id = s.worker_id
+          WHERE s.voided = 0
+            AND s.created_at >= ? AND s.created_at < ?
+       )
+       SELECT *
+         FROM line_profit
+        WHERE marginPesewas < 0
+        ORDER BY marginPesewas ASC
+        LIMIT 10`,
     )
     .all(fromISO, toExclusiveISO) as MarginReportResult['belowCost']['worst'];
 
@@ -969,8 +1898,10 @@ export function getInventoryReport(db: DB, input: InventoryReportInput): Invento
     const belowReorder = !stockout && r.reorderThreshold > 0 && r.unitsOnHand <= r.reorderThreshold;
     if (stockout) stockoutCount++;
     if (belowReorder) belowReorderCount++;
-    const atCost = Math.max(0, r.unitsOnHand) * r.costPerUnitPesewas;
-    const atRetail = Math.max(0, r.unitsOnHand) * r.retailPerUnitPesewas;
+    const costPerUnitPesewas = taxableFromInclusive(r.costPerUnitPesewas);
+    const retailPerUnitPesewas = taxableFromInclusive(r.retailPerUnitPesewas);
+    const atCost = Math.max(0, r.unitsOnHand) * costPerUnitPesewas;
+    const atRetail = Math.max(0, r.unitsOnHand) * retailPerUnitPesewas;
     totalAtCost += atCost;
     totalAtRetail += atRetail;
     const daysOfSupply = r.unitsSoldInWindow > 0 && r.unitsOnHand > 0
@@ -978,6 +1909,8 @@ export function getInventoryReport(db: DB, input: InventoryReportInput): Invento
       : null;
     return {
       ...r,
+      costPerUnitPesewas,
+      retailPerUnitPesewas,
       totalAtCostPesewas: atCost,
       totalAtRetailPesewas: atRetail,
       belowReorder,

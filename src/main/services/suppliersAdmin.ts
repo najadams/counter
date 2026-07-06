@@ -30,6 +30,8 @@ export interface AdminSupplier {
   phone: string | null;
   email: string | null;
   paymentTermsDays: number;
+  creditLimitPesewas: number;
+  paymentSchedule: 'ON_RECEIPT' | 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY' | 'CUSTOM';
   currentBalancePesewas: number;
   notes: string | null;
   active: boolean;
@@ -40,6 +42,8 @@ export function listSuppliersForAdmin(db: DB): AdminSupplier[] {
     .prepare(
       `SELECT id, name, contact_person AS contactPerson, phone, email,
               payment_terms_days AS paymentTermsDays,
+              credit_limit_pesewas AS creditLimitPesewas,
+              payment_schedule AS paymentSchedule,
               current_balance_pesewas AS currentBalancePesewas,
               notes, active
          FROM suppliers
@@ -56,6 +60,8 @@ export interface AddSupplierInput {
   phone?: string | null;
   email?: string | null;
   paymentTermsDays?: number;
+  creditLimitPesewas?: number;
+  paymentSchedule?: 'ON_RECEIPT' | 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY' | 'CUSTOM';
   notes?: string | null;
   actorWorkerId: string;
   deviceId: string;
@@ -75,9 +81,9 @@ export function addSupplier(db: DB, input: AddSupplierInput): { supplierId: stri
   db.prepare(
     `INSERT INTO suppliers (
       id, name, contact_person, phone, email,
-      payment_terms_days, current_balance_pesewas, notes, active,
+      payment_terms_days, credit_limit_pesewas, payment_schedule, current_balance_pesewas, notes, active,
       created_by, updated_by, device_id
-    ) VALUES (?, ?, ?, ?, ?, ?, 0, ?, 1, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 1, ?, ?, ?)`,
   ).run(
     id,
     input.name.trim(),
@@ -85,6 +91,8 @@ export function addSupplier(db: DB, input: AddSupplierInput): { supplierId: stri
     phone,
     input.email?.trim() || null,
     input.paymentTermsDays ?? 0,
+    input.creditLimitPesewas ?? 0,
+    input.paymentSchedule ?? 'ON_RECEIPT',
     input.notes?.trim() || null,
     input.actorWorkerId,
     input.actorWorkerId,
@@ -96,7 +104,12 @@ export function addSupplier(db: DB, input: AddSupplierInput): { supplierId: stri
     action: 'SUPPLIER_ADDED',
     entityType: 'suppliers',
     entityId: id,
-    afterValue: { name: input.name.trim(), phone, paymentTermsDays: input.paymentTermsDays ?? 0 },
+    afterValue: {
+      name: input.name.trim(), phone,
+      paymentTermsDays: input.paymentTermsDays ?? 0,
+      creditLimitPesewas: input.creditLimitPesewas ?? 0,
+      paymentSchedule: input.paymentSchedule ?? 'ON_RECEIPT',
+    },
     deviceId: input.deviceId,
   });
 
@@ -111,6 +124,8 @@ export interface UpdateSupplierInput {
     phone: string | null;
     email: string | null;
     paymentTermsDays: number;
+    creditLimitPesewas: number;
+    paymentSchedule: 'ON_RECEIPT' | 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY' | 'CUSTOM';
     notes: string | null;
   }>;
   actorWorkerId: string;
@@ -123,6 +138,8 @@ export function updateSupplier(db: DB, input: UpdateSupplierInput): void {
     .prepare(
       `SELECT id, name, contact_person AS contactPerson, phone, email,
               payment_terms_days AS paymentTermsDays, notes
+              , credit_limit_pesewas AS creditLimitPesewas,
+              payment_schedule AS paymentSchedule
          FROM suppliers WHERE id = ? AND deleted_at IS NULL`,
     )
     .get(input.supplierId) as Record<string, unknown> | undefined;
@@ -160,6 +177,20 @@ export function updateSupplier(db: DB, input: UpdateSupplierInput): void {
     }
     sets.push('payment_terms_days = ?');
     vals.push(f.paymentTermsDays);
+  }
+  if (f.creditLimitPesewas !== undefined) {
+    if (!Number.isInteger(f.creditLimitPesewas) || f.creditLimitPesewas < 0) {
+      throw new Error('creditLimitPesewas must be a non-negative integer');
+    }
+    sets.push('credit_limit_pesewas = ?');
+    vals.push(f.creditLimitPesewas);
+  }
+  if (f.paymentSchedule !== undefined) {
+    if (!['ON_RECEIPT', 'WEEKLY', 'BIWEEKLY', 'MONTHLY', 'CUSTOM'].includes(f.paymentSchedule)) {
+      throw new Error('invalid paymentSchedule');
+    }
+    sets.push('payment_schedule = ?');
+    vals.push(f.paymentSchedule);
   }
   if (f.notes !== undefined) {
     sets.push('notes = ?');

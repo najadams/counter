@@ -13,10 +13,15 @@ import { useEffect, useState } from 'react';
 import { AppHeader } from '../components/AppHeader';
 import { OverviewTab } from './reports/OverviewTab';
 import { SalesTab } from './reports/SalesTab';
+import { GraphsTab } from './reports/GraphsTab';
 import { MarginTab } from './reports/MarginTab';
 import { InventoryTab } from './reports/InventoryTab';
+import { DrawingsTab } from './reports/DrawingsTab';
+import { PriceIntelligenceTab } from './reports/PriceIntelligenceTab';
+import { CustomerIntelligenceTab } from './reports/CustomerIntelligenceTab';
+import { TaxesTab } from './reports/TaxesTab';
 
-type Tab = 'overview' | 'sales' | 'margin' | 'inventory';
+type Tab = 'overview' | 'sales' | 'graphs' | 'taxes' | 'margin' | 'inventory' | 'drawings' | 'prices' | 'customers';
 
 interface Props {
   onExit: () => void;
@@ -49,8 +54,13 @@ export default function ReportsScreen({
           <div className="flex">
             <TabBtn active={tab === 'overview'} onClick={() => setTab('overview')}>Overview</TabBtn>
             <TabBtn active={tab === 'sales'} onClick={() => setTab('sales')}>Sales</TabBtn>
+            <TabBtn active={tab === 'graphs'} onClick={() => setTab('graphs')}>Graphs</TabBtn>
+            <TabBtn active={tab === 'taxes'} onClick={() => setTab('taxes')}>Taxes</TabBtn>
             <TabBtn active={tab === 'margin'} onClick={() => setTab('margin')}>Margin</TabBtn>
             <TabBtn active={tab === 'inventory'} onClick={() => setTab('inventory')}>Inventory</TabBtn>
+            <TabBtn active={tab === 'drawings'} onClick={() => setTab('drawings')}>Drawings</TabBtn>
+            <TabBtn active={tab === 'prices'} onClick={() => setTab('prices')}>Prices</TabBtn>
+            <TabBtn active={tab === 'customers'} onClick={() => setTab('customers')}>Customers</TabBtn>
           </div>
           <button onClick={onExit}
             className="px-4 py-2 border border-border hover:bg-bg-elevated text-sm">
@@ -68,8 +78,13 @@ export default function ReportsScreen({
           />
         )}
         {tab === 'sales' && <SalesTab />}
+        {tab === 'graphs' && <GraphsTab />}
+        {tab === 'taxes' && <TaxesTab />}
         {tab === 'margin' && <MarginTab />}
         {tab === 'inventory' && <InventoryTab />}
+        {tab === 'drawings' && <DrawingsTab />}
+        {tab === 'prices' && <PriceIntelligenceTab />}
+        {tab === 'customers' && <CustomerIntelligenceTab />}
       </main>
     </div>
   );

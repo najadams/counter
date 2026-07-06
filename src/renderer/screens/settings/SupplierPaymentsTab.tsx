@@ -12,8 +12,9 @@ import { counter } from '../../lib/ipc';
 import { useSession } from '../../store/session';
 import { formatMoneyWithCurrency, parseCedisToPesewas } from '../../../shared/lib/money';
 import type {
-  SupplierPaymentRow, SupplierStatementRow,
+  SupplierInvoiceRow, SupplierPaymentRow, SupplierStatementRow,
 } from '../../../shared/types/ipc';
+import { FeedbackBanner } from '../../components/FeedbackBanner';
 
 interface AdminSupplier {
   id: string;
@@ -35,6 +36,7 @@ export function SupplierPaymentsTab() {
 
   const [statements, setStatements] = useState<SupplierStatementRow[]>([]);
   const [payments, setPayments] = useState<SupplierPaymentRow[]>([]);
+  const [invoices, setInvoices] = useState<SupplierInvoiceRow[]>([]);
   const [suppliers, setSuppliers] = useState<AdminSupplier[]>([]);
   const [filterSupplier, setFilterSupplier] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
@@ -42,18 +44,21 @@ export function SupplierPaymentsTab() {
   const [showRecord, setShowRecord] = useState<{ presetSupplierId?: string } | null>(null);
 
   async function refresh() {
-    const [stmtRes, payRes, supRes] = await Promise.all([
+    const [stmtRes, payRes, invRes, supRes] = await Promise.all([
       counter.listSupplierStatements({ includeInactive: false }),
       counter.listSupplierPayments({
         supplierId: filterSupplier || null, limit: 100,
       }),
+      counter.listSupplierInvoices({ supplierId: filterSupplier || null, includePaid: false, limit: 100 }),
       counter.listSuppliersForAdmin(),
     ]);
     if (!stmtRes.success) { setError(stmtRes.error); return; }
     if (!payRes.success)  { setError(payRes.error); return; }
+    if (!invRes.success)  { setError(invRes.error); return; }
     if (!supRes.success)  { setError(supRes.error); return; }
     setStatements(stmtRes.data.rows);
     setPayments(payRes.data.payments);
+    setInvoices(invRes.data.invoices);
     setSuppliers(
       supRes.data.suppliers.map((s) => ({ id: s.id, name: s.name, active: s.active })),
     );
@@ -91,7 +96,7 @@ export function SupplierPaymentsTab() {
         </button>
       </div>
 
-      {error && <div className="bg-danger/10 border border-danger/40 text-danger text-sm px-3 py-2 rounded">{error}</div>}
+      {error && <FeedbackBanner>{error}</FeedbackBanner>}
       {info && <div className="bg-success/10 border border-success/40 text-success text-sm px-3 py-2 rounded">{info}</div>}
 
       {/* Statements: who do we owe? */}
@@ -105,6 +110,7 @@ export function SupplierPaymentsTab() {
                 <th className="text-right px-4 py-3">Cached balance</th>
                 <th className="text-right px-4 py-3">Lifetime received</th>
                 <th className="text-right px-4 py-3">Lifetime paid</th>
+                <th className="text-right px-4 py-3">Open invoices</th>
                 <th className="text-left px-4 py-3">Last receipt</th>
                 <th className="text-left px-4 py-3">Last payment</th>
                 <th className="px-4 py-3"></th>
@@ -112,7 +118,7 @@ export function SupplierPaymentsTab() {
             </thead>
             <tbody>
               {statements.length === 0 && (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-text-tertiary">
+                <tr><td colSpan={8} className="px-4 py-8 text-center text-text-tertiary">
                   No active suppliers. Add suppliers under the Suppliers tab.
                 </td></tr>
               )}
@@ -137,6 +143,12 @@ export function SupplierPaymentsTab() {
                     <td className="px-4 py-3 text-right tabular-nums text-text-secondary">
                       {formatMoneyWithCurrency(r.lifetimePaidPesewas)}
                     </td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      <span className={r.overdueInvoiceCount > 0 ? 'text-danger' : 'text-text-secondary'}>
+                        {r.openInvoiceCount}
+                      </span>
+                      {r.nextDueDate && <div className="text-xs text-text-tertiary">next {new Date(r.nextDueDate).toLocaleDateString()}</div>}
+                    </td>
                     <td className="px-4 py-3 text-text-tertiary text-xs">
                       {r.lastReceiptAt ? new Date(r.lastReceiptAt).toLocaleDateString() : '—'}
                     </td>
@@ -159,10 +171,53 @@ export function SupplierPaymentsTab() {
         </div>
         <p className="text-xs text-text-tertiary mt-2 leading-relaxed">
           "Cached balance" is what the system currently believes we owe. Positive = we owe them,
-          negative = we've overpaid / paid in advance. "Lifetime received" comes from the audit
-          log of past stock receipts — receipts older than the audit-tracking change will not
-          appear here, so the number may be lower than reality on older shops.
+          negative = we've overpaid / paid in advance. "Lifetime received" now comes from structured
+          supplier invoice rows created by stock receipts.
         </p>
+      </section>
+
+      <section>
+        <h3 className="text-xs uppercase tracking-wider text-text-tertiary mb-2">Open supplier invoices</h3>
+        <div className="bg-bg-elevated rounded border border-border-subtle overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-bg-deep text-text-tertiary uppercase text-xs">
+              <tr>
+                <th className="text-left px-4 py-3">Invoice</th>
+                <th className="text-left px-4 py-3">Supplier</th>
+                <th className="text-left px-4 py-3">Due</th>
+                <th className="text-right px-4 py-3">Total</th>
+                <th className="text-right px-4 py-3">Paid</th>
+                <th className="text-right px-4 py-3">Outstanding</th>
+                <th className="text-left px-4 py-3">Match</th>
+              </tr>
+            </thead>
+            <tbody>
+              {invoices.length === 0 && (
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-text-tertiary">
+                  No open supplier invoices.
+                </td></tr>
+              )}
+              {invoices.map((inv) => {
+                const overdue = inv.dueDate && inv.dueDate < new Date().toISOString().slice(0, 10);
+                return (
+                  <tr key={inv.id} className="border-t border-border-subtle hover:bg-bg-deep/40">
+                    <td className="px-4 py-3 font-mono">{inv.invoiceNumber}</td>
+                    <td className="px-4 py-3">{inv.supplierName}</td>
+                    <td className={`px-4 py-3 ${overdue ? 'text-danger' : 'text-text-secondary'}`}>
+                      {inv.dueDate ? new Date(inv.dueDate).toLocaleDateString() : '—'}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">{formatMoneyWithCurrency(inv.totalPesewas)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-text-secondary">{formatMoneyWithCurrency(inv.totalPaidPesewas)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-warning">{formatMoneyWithCurrency(inv.outstandingPesewas)}</td>
+                    <td className="px-4 py-3 text-text-tertiary text-xs">
+                      {inv.purchaseOrderId ? `PO ${inv.purchaseOrderId.slice(-8)}` : 'receipt-only'}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       {/* Recent payments log */}
@@ -215,7 +270,10 @@ export function SupplierPaymentsTab() {
                   <td className="px-4 py-3 text-text-secondary">{p.paymentMethod}</td>
                   <td className="px-4 py-3 text-text-secondary">{p.paymentReference ?? '—'}</td>
                   <td className="px-4 py-3 text-text-secondary">{p.approvedByName}</td>
-                  <td className="px-4 py-3 text-text-tertiary text-xs">{p.notes ?? ''}</td>
+                  <td className="px-4 py-3 text-text-tertiary text-xs">
+                    {p.allocatedPesewas > 0 ? `allocated ${formatMoneyWithCurrency(p.allocatedPesewas)}` : 'unallocated'}
+                    {p.notes ? ` · ${p.notes}` : ''}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -339,7 +397,7 @@ function RecordPaymentModal({
             className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle" />
         </label>
 
-        {err && <div className="text-sm text-danger bg-danger/10 border border-danger/40 rounded px-3 py-2">{err}</div>}
+        {err && <FeedbackBanner>{err}</FeedbackBanner>}
 
         <div className="flex justify-end gap-3 pt-2">
           <button type="button" onClick={onClose} disabled={busy}

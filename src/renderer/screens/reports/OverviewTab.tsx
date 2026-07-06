@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { counter } from '../../lib/ipc';
 import { formatMoney, formatMoneyWithCurrency } from '../../../shared/lib/money';
 import type { ReportsOverviewResponse } from '../../../shared/types/ipc';
+import { FeedbackBanner } from '../../components/FeedbackBanner';
 
 interface Props {
   onOpenCustomers?: () => void;
@@ -35,9 +36,7 @@ export function OverviewTab({
   useEffect(() => { void refresh(); /* eslint-disable-next-line */ }, []);
   useEffect(() => { registerRefresh?.(refresh, loading); /* eslint-disable-next-line */ }, [loading]);
 
-  if (error) return (
-    <div className="bg-danger/10 border border-danger/40 text-danger text-sm px-3 py-2 rounded">{error}</div>
-  );
+  if (error) return <FeedbackBanner>{error}</FeedbackBanner>;
   if (!data) return <div className="text-text-tertiary text-sm">Loading dashboard…</div>;
 
   return (
@@ -74,10 +73,10 @@ export function OverviewTab({
         />
 
         <KpiCard
-          label="Gross margin · this month"
+          label="Net margin · this month"
           value={formatMoneyWithCurrency(data.margin.grossMarginPesewas)}
           sub={data.margin.revenuePesewas > 0
-            ? `${(data.margin.grossMarginBps / 100).toFixed(1)}% · COGS ${formatMoneyWithCurrency(data.margin.cogsPesewas)}`
+            ? `${(data.margin.grossMarginBps / 100).toFixed(1)}% · net COGS ${formatMoneyWithCurrency(data.margin.cogsPesewas)}`
             : 'No sales yet this month'}
         />
         <KpiCard
@@ -93,9 +92,9 @@ export function OverviewTab({
             : null}
         />
         <KpiCard
-          label="Inventory · at cost"
+          label="Net inventory · at cost"
           value={formatMoneyWithCurrency(data.inventory.totalAtCostPesewas)}
-          sub={`${data.inventory.activeSkuCount} active SKUs · at retail ${formatMoneyWithCurrency(data.inventory.totalAtRetailPesewas)}`}
+          sub={`${data.inventory.activeSkuCount} active SKUs · net retail ${formatMoneyWithCurrency(data.inventory.totalAtRetailPesewas)}`}
           footer={
             <div className="flex gap-3 text-xs">
               {data.inventory.belowReorderCount > 0 && (

@@ -46,6 +46,37 @@ export interface SupplierPaymentRow {
   allocatedPesewas: number;
 }
 
+export interface SupplierInvoiceRow {
+  id: string;
+  supplierId: string;
+  supplierName: string;
+  purchaseOrderId: string | null;
+  invoiceNumber: string;
+  invoiceDate: string;
+  dueDate: string | null;
+  totalPesewas: number;
+  totalPaidPesewas: number;
+  outstandingPesewas: number;
+  status: 'OPEN' | 'PARTIALLY_PAID' | 'PAID' | 'DISPUTED' | 'VOID';
+  notes: string | null;
+  createdAt: string;
+}
+
+export interface SupplierStatementLineRow {
+  invoiceId: string;
+  invoiceNumber: string;
+  productSku: string;
+  productName: string;
+  quantity: number;
+  canonicalQuantity: number;
+  unitName: string | null;
+  unitCostPesewas: number;
+  lineTotalPesewas: number;
+  allocatedTransportCostPesewas: number;
+  allocatedLoadingCostPesewas: number;
+  landedLineTotalPesewas: number;
+}
+
 export interface ListSupplierPaymentsInput {
   supplierId?: string | null;
   /** ISO date YYYY-MM-DD inclusive */
@@ -98,7 +129,7 @@ export function listSupplierPayments(
               w.full_name AS approvedByName,
               sp.notes,
               sp.created_at AS createdAt,
-              COALESCE((SELECT SUM(amount_pesewas) FROM supplier_payment_allocations
+              COALESCE((SELECT SUM(amount_pesewas) FROM supplier_invoice_payment_allocations
                          WHERE supplier_payment_id = sp.id), 0) AS allocatedPesewas
          FROM supplier_payments sp
          JOIN suppliers s ON s.id = sp.supplier_id
@@ -117,9 +148,14 @@ export interface SupplierStatementRow {
   supplierName: string;
   active: boolean;
   paymentTermsDays: number;
+  creditLimitPesewas: number;
+  paymentSchedule: string;
   currentBalancePesewas: number;        // cached: positive = we owe them
   lifetimePaidPesewas: number;          // sum of all supplier_payments
-  lifetimeReceivedCostPesewas: number;  // sum of stock receipts (line_total = qty * unit_cost)
+  lifetimeReceivedCostPesewas: number;  // sum of landed receipt lines
+  openInvoiceCount: number;
+  overdueInvoiceCount: number;
+  nextDueDate: string | null;
   lastPaidAt: string | null;
   lastReceiptAt: string | null;
 }
@@ -142,19 +178,34 @@ export function listSupplierStatements(
     .prepare(
       `SELECT s.id AS supplierId, s.name AS supplierName, s.active AS active,
               s.payment_terms_days AS paymentTermsDays,
+              s.credit_limit_pesewas AS creditLimitPesewas,
+              s.payment_schedule AS paymentSchedule,
               s.current_balance_pesewas AS currentBalancePesewas,
               COALESCE((SELECT SUM(amount_pesewas) FROM supplier_payments
                          WHERE supplier_id = s.id), 0) AS lifetimePaidPesewas,
-              COALESCE((SELECT SUM(CAST(json_extract(al.after_value, '$.totalValuePesewas') AS INTEGER))
-                         FROM audit_log al
-                         WHERE al.action IN ('STOCK_RECEIVED','OPENING_STOCK_ENTERED')
-                           AND json_extract(al.after_value, '$.supplierId') = s.id), 0)
+              COALESCE((SELECT SUM(CASE
+                           WHEN landed_line_total_pesewas > 0 THEN landed_line_total_pesewas
+                           ELSE line_total_pesewas
+                         END)
+                         FROM supplier_invoice_lines sil
+                         JOIN supplier_invoices si ON si.id = sil.supplier_invoice_id
+                         WHERE si.supplier_id = s.id AND si.status != 'VOID'), 0)
                 AS lifetimeReceivedCostPesewas,
+              (SELECT COUNT(*) FROM supplier_invoices si
+                 WHERE si.supplier_id = s.id AND si.status IN ('OPEN','PARTIALLY_PAID','DISPUTED'))
+                AS openInvoiceCount,
+              (SELECT COUNT(*) FROM supplier_invoices si
+                 WHERE si.supplier_id = s.id AND si.status IN ('OPEN','PARTIALLY_PAID','DISPUTED')
+                   AND si.due_date IS NOT NULL AND si.due_date < date('now'))
+                AS overdueInvoiceCount,
+              (SELECT MIN(due_date) FROM supplier_invoices si
+                 WHERE si.supplier_id = s.id AND si.status IN ('OPEN','PARTIALLY_PAID','DISPUTED')
+                   AND si.due_date IS NOT NULL)
+                AS nextDueDate,
               (SELECT MAX(paid_at) FROM supplier_payments
                  WHERE supplier_id = s.id) AS lastPaidAt,
-              (SELECT MAX(al.created_at) FROM audit_log al
-                 WHERE al.action IN ('STOCK_RECEIVED','OPENING_STOCK_ENTERED')
-                   AND json_extract(al.after_value, '$.supplierId') = s.id)
+              (SELECT MAX(created_at) FROM supplier_invoices si
+                 WHERE si.supplier_id = s.id)
                 AS lastReceiptAt
          FROM suppliers s
          WHERE s.deleted_at IS NULL ${whereActive}
@@ -170,6 +221,7 @@ export interface RecordSupplierPaymentInput {
   paymentMethod: string;         // FK into payment_methods.code
   paymentReference?: string | null;
   paidAt?: string | null;        // ISO; defaults to now
+  allocations?: Array<{ supplierInvoiceId: string; amountPesewas: number }>;
   notes?: string | null;
   actorWorkerId: string;
   deviceId: string;
@@ -178,6 +230,27 @@ export interface RecordSupplierPaymentInput {
 export interface RecordSupplierPaymentResult {
   paymentId: string;
   newSupplierBalancePesewas: number;
+  totalAllocatedPesewas: number;
+  unallocatedPesewas: number;
+  allocations: Array<{ supplierInvoiceId: string; amountPesewas: number }>;
+}
+
+function listOpenSupplierInvoices(db: DB, supplierId: string): SupplierInvoiceRow[] {
+  return db.prepare(
+    `SELECT si.id, si.supplier_id AS supplierId, s.name AS supplierName,
+            si.purchase_order_id AS purchaseOrderId,
+            si.invoice_number AS invoiceNumber, si.invoice_date AS invoiceDate,
+            si.due_date AS dueDate, si.total_pesewas AS totalPesewas,
+            si.total_paid_pesewas AS totalPaidPesewas,
+            si.total_pesewas - si.total_paid_pesewas AS outstandingPesewas,
+            si.status, si.notes, si.created_at AS createdAt
+       FROM supplier_invoices si
+       JOIN suppliers s ON s.id = si.supplier_id
+      WHERE si.supplier_id = ?
+        AND si.status IN ('OPEN','PARTIALLY_PAID','DISPUTED')
+        AND si.total_pesewas > si.total_paid_pesewas
+      ORDER BY COALESCE(si.due_date, si.invoice_date) ASC, si.created_at ASC`,
+  ).all(supplierId) as SupplierInvoiceRow[];
 }
 
 export function recordSupplierPayment(
@@ -230,6 +303,31 @@ export function recordSupplierPayment(
       input.actorWorkerId, input.actorWorkerId, input.deviceId,
     );
 
+    const openInvoices = listOpenSupplierInvoices(db, input.supplierId);
+    let plan: Array<{ supplierInvoiceId: string; amountPesewas: number }>;
+    if (input.allocations && input.allocations.length > 0) {
+      const openMap = new Map(openInvoices.map((i) => [i.id, i]));
+      const sum = input.allocations.reduce((s, a) => s + a.amountPesewas, 0);
+      if (sum > input.amountPesewas) throw new Error(`supplier payment allocations exceed payment amount`);
+      for (const a of input.allocations) {
+        const inv = openMap.get(a.supplierInvoiceId);
+        if (!inv) throw new Error(`invoice ${a.supplierInvoiceId} is not open for this supplier`);
+        if (!Number.isInteger(a.amountPesewas) || a.amountPesewas <= 0) throw new Error('allocation amount must be positive');
+        if (a.amountPesewas > inv.outstandingPesewas) throw new Error(`allocation exceeds invoice outstanding`);
+      }
+      plan = input.allocations;
+    } else {
+      plan = [];
+      let remaining = input.amountPesewas;
+      for (const inv of openInvoices) {
+        if (remaining <= 0) break;
+        const take = Math.min(remaining, inv.outstandingPesewas);
+        if (take > 0) plan.push({ supplierInvoiceId: inv.id, amountPesewas: take });
+        remaining -= take;
+      }
+    }
+    const totalAllocated = plan.reduce((s, a) => s + a.amountPesewas, 0);
+
     // Decrement cached supplier balance. Allowed to go negative (we
     // overpaid / paid an advance) — schema doesn't constrain sign.
     db.prepare(
@@ -237,6 +335,72 @@ export function recordSupplierPayment(
                             updated_at = ?, updated_by = ?
          WHERE id = ?`,
     ).run(input.amountPesewas, now, input.actorWorkerId, input.supplierId);
+
+    for (const a of plan) {
+      db.prepare(
+        `INSERT INTO supplier_invoice_payment_allocations (
+           id, supplier_payment_id, supplier_invoice_id, amount_pesewas,
+           created_by, updated_by, device_id
+         ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      ).run(
+        `sipa-${uuidv4()}`, paymentId, a.supplierInvoiceId, a.amountPesewas,
+        input.actorWorkerId, input.actorWorkerId, input.deviceId,
+      );
+      db.prepare(
+        `UPDATE supplier_invoices
+            SET total_paid_pesewas = total_paid_pesewas + ?,
+                status = CASE
+                  WHEN total_paid_pesewas + ? >= total_pesewas THEN 'PAID'
+                  ELSE 'PARTIALLY_PAID'
+                END,
+                updated_at = ?, updated_by = ?
+          WHERE id = ?`,
+      ).run(a.amountPesewas, a.amountPesewas, now, input.actorWorkerId, a.supplierInvoiceId);
+
+      const invoice = db.prepare(
+        `SELECT purchase_order_id AS purchaseOrderId
+           FROM supplier_invoices
+          WHERE id = ?`,
+      ).get(a.supplierInvoiceId) as { purchaseOrderId: string | null } | undefined;
+      if (invoice?.purchaseOrderId) {
+        db.prepare(
+          `INSERT INTO supplier_payment_allocations (
+             id, supplier_payment_id, purchase_order_id, amount_pesewas,
+             created_by, updated_by, device_id
+           ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        ).run(
+          `spa-${uuidv4()}`,
+          paymentId,
+          invoice.purchaseOrderId,
+          a.amountPesewas,
+          input.actorWorkerId,
+          input.actorWorkerId,
+          input.deviceId,
+        );
+        db.prepare(
+          `UPDATE purchase_orders
+              SET total_paid_pesewas = total_paid_pesewas + ?,
+                  paid_at = CASE
+                    WHEN total_paid_pesewas + ? >= total_ordered_pesewas THEN COALESCE(paid_at, ?)
+                    ELSE paid_at
+                  END,
+                  status = CASE
+                    WHEN total_paid_pesewas + ? >= total_ordered_pesewas THEN 'PAID'
+                    ELSE status
+                  END,
+                  updated_at = ?, updated_by = ?
+            WHERE id = ?`,
+        ).run(
+          a.amountPesewas,
+          a.amountPesewas,
+          paidAt,
+          a.amountPesewas,
+          now,
+          input.actorWorkerId,
+          invoice.purchaseOrderId,
+        );
+      }
+    }
 
     logAudit(db, {
       workerId: input.actorWorkerId,
@@ -249,6 +413,9 @@ export function recordSupplierPayment(
         paymentMethod: input.paymentMethod,
         paymentReference: input.paymentReference?.trim() || null,
         paidAt,
+        totalAllocatedPesewas: totalAllocated,
+        unallocatedPesewas: input.amountPesewas - totalAllocated,
+        allocations: plan,
       },
       deviceId: input.deviceId,
     });
@@ -260,5 +427,71 @@ export function recordSupplierPayment(
     .prepare('SELECT current_balance_pesewas FROM suppliers WHERE id = ?')
     .get(input.supplierId) as { current_balance_pesewas: number };
 
-  return { paymentId, newSupplierBalancePesewas: after.current_balance_pesewas };
+  const allocations = db.prepare(
+    `SELECT supplier_invoice_id AS supplierInvoiceId, amount_pesewas AS amountPesewas
+       FROM supplier_invoice_payment_allocations
+      WHERE supplier_payment_id = ?
+      ORDER BY created_at ASC`,
+  ).all(paymentId) as Array<{ supplierInvoiceId: string; amountPesewas: number }>;
+  const totalAllocated = allocations.reduce((s, a) => s + a.amountPesewas, 0);
+
+  return {
+    paymentId,
+    newSupplierBalancePesewas: after.current_balance_pesewas,
+    totalAllocatedPesewas: totalAllocated,
+    unallocatedPesewas: input.amountPesewas - totalAllocated,
+    allocations,
+  };
+}
+
+export function listSupplierInvoices(
+  db: DB,
+  input: { supplierId?: string | null; includePaid?: boolean; limit?: number } = {},
+): SupplierInvoiceRow[] {
+  const where: string[] = [];
+  const params: unknown[] = [];
+  if (input.supplierId) { where.push('si.supplier_id = ?'); params.push(input.supplierId); }
+  if (!input.includePaid) where.push("si.status != 'PAID' AND si.status != 'VOID'");
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  return db.prepare(
+    `SELECT si.id, si.supplier_id AS supplierId, s.name AS supplierName,
+            si.purchase_order_id AS purchaseOrderId,
+            si.invoice_number AS invoiceNumber, si.invoice_date AS invoiceDate,
+            si.due_date AS dueDate, si.total_pesewas AS totalPesewas,
+            si.total_paid_pesewas AS totalPaidPesewas,
+            si.total_pesewas - si.total_paid_pesewas AS outstandingPesewas,
+            si.status, si.notes, si.created_at AS createdAt
+       FROM supplier_invoices si
+       JOIN suppliers s ON s.id = si.supplier_id
+       ${whereSql}
+      ORDER BY COALESCE(si.due_date, si.invoice_date) ASC, si.created_at DESC
+      LIMIT ?`,
+  ).all(...params, Math.min(Math.max(input.limit ?? 100, 1), 500)) as SupplierInvoiceRow[];
+}
+
+export function getSupplierStatementLines(
+  db: DB,
+  supplierId: string,
+  includePaid = false,
+): SupplierStatementLineRow[] {
+  const paidSql = includePaid ? '' : "AND si.status != 'PAID'";
+  return db.prepare(
+    `SELECT si.id AS invoiceId, si.invoice_number AS invoiceNumber,
+            p.sku AS productSku, p.name AS productName,
+            sil.quantity, sil.canonical_quantity AS canonicalQuantity,
+            pu.unit_name AS unitName,
+            sil.unit_cost_pesewas AS unitCostPesewas,
+            sil.line_total_pesewas AS lineTotalPesewas,
+            sil.allocated_transport_cost_pesewas AS allocatedTransportCostPesewas,
+            sil.allocated_loading_cost_pesewas AS allocatedLoadingCostPesewas,
+            CASE WHEN sil.landed_line_total_pesewas > 0 THEN sil.landed_line_total_pesewas
+                 ELSE sil.line_total_pesewas
+            END AS landedLineTotalPesewas
+       FROM supplier_invoice_lines sil
+       JOIN supplier_invoices si ON si.id = sil.supplier_invoice_id
+       JOIN products p ON p.id = sil.product_id
+       LEFT JOIN product_units pu ON pu.id = sil.source_unit_id
+      WHERE si.supplier_id = ? ${paidSql}
+      ORDER BY COALESCE(si.due_date, si.invoice_date) ASC, si.invoice_number ASC, p.name ASC`,
+  ).all(supplierId) as SupplierStatementLineRow[];
 }

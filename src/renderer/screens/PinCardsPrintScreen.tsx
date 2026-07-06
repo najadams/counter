@@ -8,6 +8,7 @@
 
 import { useEffect, useState } from 'react';
 import { counter } from '../lib/ipc';
+import { FeedbackBanner } from '../components/FeedbackBanner';
 
 interface Worker {
   id: string; fullName: string; phone: string; role: string; active: boolean;
@@ -100,9 +101,7 @@ export function PinCardsPrintScreen({ onExit }: { onExit: () => void }) {
           </div>
         </div>
         {error && (
-          <div className="max-w-3xl mx-auto px-12 mb-4 bg-danger/10 border border-danger/40 text-danger px-3 py-2 rounded text-sm">
-            {error}
-          </div>
+          <FeedbackBanner className="max-w-3xl mx-auto mb-4">{error}</FeedbackBanner>
         )}
         <p className="max-w-3xl mx-auto px-12 text-text-tertiary text-xs mb-6">
           PINs are stored encrypted and cannot be printed. Write each worker's PIN on the card by hand

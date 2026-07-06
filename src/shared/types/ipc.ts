@@ -179,6 +179,7 @@ export interface CustomerSearchResponse {
   customers: Array<{
     id: string; displayName: string; phone: string; customerType: string;
     currentBalancePesewas: number; creditLimitPesewas: number; blocked: boolean;
+    cashOnly: boolean;
     preferredChannel: 'WALK_IN' | 'WHOLESALE' | 'ROUTE' | null;
   }>;
 }
@@ -333,6 +334,12 @@ export interface StockReceiveRequest {
   isOpeningStock?: boolean;
   supervisorWorkerId: string;
   supervisorPin: string;
+  purchaseOrderId?: string | null;
+  supplierInvoiceNumber?: string | null;
+  supplierInvoiceDate?: string | null;
+  supplierDueDate?: string | null;
+  transportCostPesewas?: number;
+  loadingCostPesewas?: number;
   lines: Array<{ productId: string; quantity: number; unitCostPesewas: number; unitId?: string | null }>;
   notes?: string | null;
   /** Confirm a receipt the backend refused with a COST_SWING error (implied
@@ -342,7 +349,9 @@ export interface StockReceiveRequest {
 }
 export interface StockReceiveResponse {
   movementCount: number;
+  supplierInvoiceId: string | null;
   totalValuePesewas: number;
+  totalPayablePesewas: number;
   productsCostUpdated: number;
 }
 
@@ -393,6 +402,9 @@ export const IPC_CHANNELS_S5 = {
   CASH_DROP_RECORD: 'cash-drop:record',
   CASH_DROP_LIST: 'cash-drop:list',
   CASH_DROP_GET_EXPECTED: 'cash-drop:get-expected',
+  DRAWING_POLICY_LIST: 'drawing-policy:list',
+  DRAWING_POLICY_UPSERT: 'drawing-policy:upsert',
+  DRAWING_REPORT: 'drawing:report',
   DAILY_SUMMARY_GENERATE: 'daily-summary:generate',
   DAILY_SUMMARY_GET: 'daily-summary:get',
   DAILY_SUMMARY_LIST: 'daily-summary:list',
@@ -438,17 +450,41 @@ export interface StocktakeGetWithLinesResponse {
 
 export interface CashDropRecordRequest {
   shiftId: string; amountPesewas: number; recipient: string; notes?: string | null;
+  category?: 'GENERIC_DROP' | 'OWNER_DRAWING' | 'FAMILY_SUPPORT' | 'OWNER_SALARY' | 'OTHER_DRAWING';
+  drawingPolicyId?: string | null;
   supervisorWorkerId: string; supervisorPin: string;
 }
 export interface CashDropRecordResponse { cashCountId: string; expectedCashAfterDropPesewas: number }
 export interface CashDropListRequest { shiftId: string }
 export interface CashDropListResponse {
   drops: Array<{ id: string; amountPesewas: number; notes: string | null;
+    category: 'GENERIC_DROP' | 'OWNER_DRAWING' | 'FAMILY_SUPPORT' | 'OWNER_SALARY' | 'OTHER_DRAWING';
+    beneficiaryName: string | null;
     supervisorId: string | null; createdAt: string; workerName: string;
     supervisorName: string | null }>;
 }
 export interface CashDropGetExpectedRequest { shiftId: string }
 export interface CashDropGetExpectedResponse { expectedCashPesewas: number }
+
+export type DrawingCategory = 'OWNER_DRAWING' | 'FAMILY_SUPPORT' | 'OWNER_SALARY' | 'OTHER_DRAWING';
+export type DrawingCadence = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'AD_HOC';
+export interface DrawingPolicyRow {
+  id: string; category: DrawingCategory; beneficiaryName: string;
+  cadence: DrawingCadence; limitPesewas: number; active: boolean; notes: string | null;
+}
+export interface DrawingPolicyListResponse { policies: DrawingPolicyRow[] }
+export interface DrawingPolicyUpsertRequest {
+  id?: string | null; category: DrawingCategory; beneficiaryName: string;
+  cadence: DrawingCadence; limitPesewas: number; active?: boolean; notes?: string | null;
+}
+export interface DrawingPolicyUpsertResponse { policyId: string }
+export interface DrawingReportRequest {
+  period: 'DAILY' | 'WEEKLY' | 'MONTHLY';
+  fromDate: string; toDate: string; locationId?: string | null;
+}
+export interface DrawingReportResponse {
+  rows: Array<{ periodKey: string; category: DrawingCategory; beneficiaryName: string; totalPesewas: number; count: number }>;
+}
 
 export interface DailySummaryGenerateRequest { date: string; locationId?: string }
 // Mirrors the DailySummary shape returned by dailySummaries.ts. The list
@@ -505,6 +541,10 @@ export interface ProductAdminListResponse {
     isReturnable: boolean; bottleDepositPesewas: number;
     costPricePesewas: number; walkInPricePesewas: number;
     wholesalePricePesewas: number; routePricePesewas: number;
+    minimumPricePesewas: number;
+    competitorPricePesewas: number | null;
+    competitorName: string | null;
+    competitorCheckedAt: string | null;
     reorderThreshold: number; reorderQuantity: number;
     primarySupplierId: string | null;
     defaultLeadTimeDays: number; shelfLifeDays: number | null;
@@ -522,6 +562,10 @@ export interface ProductAddRequest {
   isReturnable?: boolean; bottleDepositPesewas?: number;
   costPricePesewas: number; walkInPricePesewas: number;
   wholesalePricePesewas: number; routePricePesewas: number;
+  minimumPricePesewas?: number;
+  competitorPricePesewas?: number | null;
+  competitorName?: string | null;
+  competitorCheckedAt?: string | null;
   reorderThreshold?: number; reorderQuantity?: number;
   primarySupplierId?: string | null;
   defaultLeadTimeDays?: number; shelfLifeDays?: number | null;
@@ -553,6 +597,11 @@ export interface ProductUpdateRequest {
     isReturnable: boolean; bottleDepositPesewas: number;
     costPricePesewas: number; walkInPricePesewas: number;
     wholesalePricePesewas: number; routePricePesewas: number;
+    minimumPricePesewas: number;
+    competitorPricePesewas: number | null;
+    competitorName: string | null;
+    competitorCheckedAt: string | null;
+    priceChangeReason: string | null;
     reorderThreshold: number; reorderQuantity: number;
     primarySupplierId: string | null;
     defaultLeadTimeDays: number; shelfLifeDays: number | null;
@@ -574,6 +623,7 @@ export interface CustomerCreateRequest {
   locationDescription?: string | null;
   creditLimitPesewas?: number;
   creditTermsDays?: number;
+  cashOnly?: boolean;
   preferredChannel?: 'WALK_IN' | 'WHOLESALE' | 'ROUTE' | null;
   notes?: string | null;
 }
@@ -589,6 +639,7 @@ export interface CustomerUpdateRequest {
     locationDescription: string | null;
     creditLimitPesewas: number;
     creditTermsDays: number;
+    cashOnly: boolean;
     preferredChannel: 'WALK_IN' | 'WHOLESALE' | 'ROUTE' | null;
     notes: string | null;
   }>;
@@ -680,11 +731,24 @@ export const IPC_CHANNELS_S8 = {
   CUSTOMER_LIST_BY_OUTSTANDING: 'customer:list-by-outstanding',
   CUSTOMER_AGING_SUMMARY: 'customer:aging-summary',
   CUSTOMER_RECONCILE: 'customer:reconcile',
+  DEBT_COLLECTION_GET: 'debt-collection:get',
+  DEBT_COLLECTION_QUEUE: 'debt-collection:queue',
+  DEBT_FOLLOWUP_RECORD: 'debt-collection:followup-record',
+  DEBT_STATUS_SET: 'debt-collection:status-set',
+  PAYMENT_PROMISE_UPDATE: 'debt-collection:promise-update',
 } as const;
+
+export type DebtStatus = 'CURRENT' | 'OVERDUE' | 'PROMISED' | 'RECOVERABLE' | 'DOUBTFUL' | 'DEAD';
+export type DebtContactMethod = 'CALL' | 'WHATSAPP' | 'VISIT' | 'IN_PERSON' | 'SMS' | 'OTHER';
+export type DebtFollowupOutcome =
+  | 'NO_ANSWER' | 'PROMISED_TO_PAY' | 'PART_PAID' | 'DISPUTED'
+  | 'REFUSED' | 'REMINDER_SENT' | 'OTHER';
+export type PaymentPromiseStatus = 'OPEN' | 'KEPT' | 'BROKEN' | 'CANCELLED';
 
 export interface CustomerOverviewRequest { customerId: string }
 export interface CustomerOverviewResponse {
   id: string; displayName: string; phone: string; customerType: string;
+  cashOnly: boolean;
   creditLimitPesewas: number;
   preferredChannel: 'WALK_IN' | 'WHOLESALE' | 'ROUTE' | null;
   cachedBalancePesewas: number; trueBalancePesewas: number; driftPesewas: number;
@@ -692,13 +756,18 @@ export interface CustomerOverviewResponse {
   utilizationBps: number;
   ageOfOldestUnpaidDays: number | null;
   agingBuckets: { bucket0_30: number; bucket31_60: number; bucket61_90: number; bucket90_plus: number };
-  recentSales: Array<{ id: string; createdAt: string; totalPesewas: number; amountOutstandingPesewas: number; voided: boolean }>;
+  recentSales: Array<{ id: string; createdAt: string; totalPesewas: number; creditPesewas: number; amountOutstandingPesewas: number; voided: boolean }>;
   recentPayments: Array<{ id: string; receivedAt: string; amountPesewas: number; paymentMethod: string; paymentReference: string | null }>;
 }
 
 export interface CustomerOpenSalesRequest { customerId: string }
 export interface CustomerOpenSalesResponse {
-  sales: Array<{ saleId: string; createdAt: string; totalPesewas: number; paidPesewas: number; outstandingPesewas: number; ageDays: number }>;
+  sales: Array<{
+    saleId: string; createdAt: string; totalPesewas: number; creditPesewas: number;
+    paidPesewas: number; outstandingPesewas: number; ageDays: number;
+    dueDate: string | null; daysOverdue: number | null;
+    debtStatus: DebtStatus;
+  }>;
 }
 
 export interface CustomerRecordPaymentRequest {
@@ -742,6 +811,96 @@ export interface CustomerAgingSummaryResponse {
 export interface CustomerReconcileRequest { customerId: string }
 export interface CustomerReconcileResponse {
   previousCached: number; newCached: number; driftPesewas: number;
+}
+
+export interface DebtCollectionSale {
+  saleId: string;
+  customerId: string;
+  customerName: string;
+  phone: string;
+  createdAt: string;
+  totalPesewas: number;
+  creditPesewas: number;
+  paidPesewas: number;
+  outstandingPesewas: number;
+  dueDate: string | null;
+  daysOverdue: number | null;
+  debtStatus: DebtStatus;
+  cashOnly: boolean;
+  creditLimitPesewas: number;
+  lastFollowUpAt: string | null;
+  nextFollowUpAt: string | null;
+  openPromise: {
+    id: string;
+    promisedAmountPesewas: number;
+    promiseDueDate: string;
+    status: PaymentPromiseStatus;
+    notes: string | null;
+  } | null;
+}
+
+export interface DebtFollowupRow {
+  id: string;
+  customerId: string;
+  saleId: string | null;
+  contactMethod: DebtContactMethod;
+  outcome: DebtFollowupOutcome;
+  notes: string | null;
+  nextFollowUpAt: string | null;
+  createdAt: string;
+  workerName: string;
+}
+
+export interface PaymentPromiseRow {
+  id: string;
+  customerId: string;
+  saleId: string | null;
+  promisedAmountPesewas: number;
+  promiseDueDate: string;
+  status: PaymentPromiseStatus;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DebtCollectionGetRequest { customerId: string }
+export interface DebtCollectionGetResponse {
+  customerId: string;
+  customerName: string;
+  phone: string;
+  cashOnly: boolean;
+  blocked: boolean;
+  blockedReason: string | null;
+  creditLimitPesewas: number;
+  totalOutstandingPesewas: number;
+  oldestOverdueDays: number | null;
+  openSales: DebtCollectionSale[];
+  recentFollowUps: DebtFollowupRow[];
+  promises: PaymentPromiseRow[];
+}
+
+export interface DebtCollectionQueueRequest { includeCurrent?: boolean; limit?: number }
+export interface DebtCollectionQueueResponse { rows: DebtCollectionSale[] }
+
+export interface DebtFollowupRecordRequest {
+  customerId: string;
+  saleId?: string | null;
+  contactMethod: DebtContactMethod;
+  outcome: DebtFollowupOutcome;
+  notes?: string | null;
+  nextFollowUpAt?: string | null;
+  promisedAmountPesewas?: number | null;
+  promiseDueDate?: string | null;
+}
+export interface DebtFollowupRecordResponse { followupId: string; promiseId: string | null }
+
+export interface DebtStatusSetRequest { saleId: string; status: DebtStatus }
+export interface DebtSimpleResponse { ok: true }
+
+export interface PaymentPromiseUpdateRequest {
+  promiseId: string;
+  status: PaymentPromiseStatus;
+  fulfilledPaymentId?: string | null;
 }
 
 // --- Session 9b: product units UI surface ---------------------------------
@@ -837,6 +996,8 @@ export interface AdminSupplier {
   phone: string | null;
   email: string | null;
   paymentTermsDays: number;
+  creditLimitPesewas: number;
+  paymentSchedule: 'ON_RECEIPT' | 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY' | 'CUSTOM';
   currentBalancePesewas: number;
   notes: string | null;
   active: boolean;
@@ -849,6 +1010,8 @@ export interface SupplierAddRequest {
   phone?: string | null;
   email?: string | null;
   paymentTermsDays?: number;
+  creditLimitPesewas?: number;
+  paymentSchedule?: 'ON_RECEIPT' | 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY' | 'CUSTOM';
   notes?: string | null;
 }
 export interface SupplierAddResponse { supplierId: string }
@@ -861,6 +1024,8 @@ export interface SupplierUpdateRequest {
     phone: string | null;
     email: string | null;
     paymentTermsDays: number;
+    creditLimitPesewas: number;
+    paymentSchedule: 'ON_RECEIPT' | 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY' | 'CUSTOM';
     notes: string | null;
   }>;
 }
@@ -1555,6 +1720,8 @@ export const IPC_CHANNELS_SUP_PAY = {
   SUPPLIER_PAYMENT_LIST: 'supplier-payment:list',
   SUPPLIER_PAYMENT_RECORD: 'supplier-payment:record',
   SUPPLIER_STATEMENTS_LIST: 'supplier-payment:statements',
+  SUPPLIER_INVOICE_LIST: 'supplier-payment:invoice-list',
+  SUPPLIER_STATEMENT_LINES: 'supplier-payment:statement-lines',
 } as const;
 
 export interface SupplierPaymentRow {
@@ -1591,11 +1758,15 @@ export interface SupplierPaymentRecordRequest {
   paymentMethod: string;
   paymentReference?: string | null;
   paidAt?: string | null;
+  allocations?: Array<{ supplierInvoiceId: string; amountPesewas: number }>;
   notes?: string | null;
 }
 export interface SupplierPaymentRecordResponse {
   paymentId: string;
   newSupplierBalancePesewas: number;
+  totalAllocatedPesewas: number;
+  unallocatedPesewas: number;
+  allocations: Array<{ supplierInvoiceId: string; amountPesewas: number }>;
 }
 
 export interface SupplierStatementRow {
@@ -1603,22 +1774,53 @@ export interface SupplierStatementRow {
   supplierName: string;
   active: boolean;
   paymentTermsDays: number;
+  creditLimitPesewas: number;
+  paymentSchedule: string;
   currentBalancePesewas: number;
   lifetimePaidPesewas: number;
   lifetimeReceivedCostPesewas: number;
+  openInvoiceCount: number;
+  overdueInvoiceCount: number;
+  nextDueDate: string | null;
   lastPaidAt: string | null;
   lastReceiptAt: string | null;
 }
 export interface SupplierStatementsListRequest { includeInactive?: boolean }
 export interface SupplierStatementsListResponse { rows: SupplierStatementRow[] }
+export interface SupplierInvoiceRow {
+  id: string; supplierId: string; supplierName: string;
+  purchaseOrderId: string | null; invoiceNumber: string;
+  invoiceDate: string; dueDate: string | null;
+  totalPesewas: number; totalPaidPesewas: number; outstandingPesewas: number;
+  status: 'OPEN' | 'PARTIALLY_PAID' | 'PAID' | 'DISPUTED' | 'VOID';
+  notes: string | null; createdAt: string;
+}
+export interface SupplierInvoiceListRequest { supplierId?: string | null; includePaid?: boolean; limit?: number }
+export interface SupplierInvoiceListResponse { invoices: SupplierInvoiceRow[] }
+export interface SupplierStatementLinesRequest { supplierId: string; includePaid?: boolean }
+export interface SupplierStatementLineRow {
+  invoiceId: string; invoiceNumber: string; productSku: string; productName: string;
+  quantity: number; canonicalQuantity: number; unitName: string | null;
+  unitCostPesewas: number; lineTotalPesewas: number;
+  allocatedTransportCostPesewas: number; allocatedLoadingCostPesewas: number;
+  landedLineTotalPesewas: number;
+}
+export interface SupplierStatementLinesResponse { rows: SupplierStatementLineRow[] }
 
 // --- Reports / overview dashboard ----------------------------------------
 
 export const IPC_CHANNELS_REPORTS = {
   REPORTS_OVERVIEW: 'reports:overview',
   REPORTS_SALES: 'reports:sales',
+  REPORTS_GRAPHS: 'reports:graphs',
   REPORTS_MARGIN: 'reports:margin',
   REPORTS_INVENTORY: 'reports:inventory',
+  REPORTS_PRICE_INTELLIGENCE: 'reports:price-intelligence',
+  REPORTS_PRICE_HISTORY: 'reports:price-history',
+  REPORTS_LANDED_COSTS: 'reports:landed-costs',
+  REPORTS_CUSTOMER_INTELLIGENCE: 'reports:customer-intelligence',
+  REPORTS_TAXES: 'reports:taxes',
+  REPORTS_TAX_PAYMENT_RECORD: 'reports:tax-payment-record',
 } as const;
 
 export interface ReportsOverviewRequest {
@@ -1715,6 +1917,120 @@ export interface ReportsSalesResponse {
   }>;
 }
 
+// --- Reports: Graphs -----------------------------------------------------
+
+export interface ReportsGraphsRequest {
+  fromDate: string;
+  toDate: string;
+}
+
+export interface ReportsGraphsResponse {
+  fromDate: string;
+  toDate: string;
+  totals: {
+    revenuePesewas: number;
+    netProfitPesewas: number;
+    taxPayablePesewas: number;
+    expensesPesewas: number;
+    drawingsPesewas: number;
+    supplierPaymentsPesewas: number;
+    taxPaidPesewas: number;
+    creditOutstandingPesewas: number;
+    stockAtCostPesewas: number;
+    numSales: number;
+  };
+  series: Array<{
+    date: string;
+    revenuePesewas: number;
+    netProfitPesewas: number;
+    taxPayablePesewas: number;
+    expensesPesewas: number;
+    drawingsPesewas: number;
+    numSales: number;
+  }>;
+  topProductsByProfit: Array<{
+    productId: string;
+    sku: string;
+    name: string;
+    category: string;
+    unitsSold: number;
+    revenuePesewas: number;
+    grossProfitPesewas: number;
+    marginBps: number;
+  }>;
+  categoryProfit: Array<{
+    category: string;
+    revenuePesewas: number;
+    grossProfitPesewas: number;
+    marginBps: number;
+  }>;
+  slowStock: Array<{
+    productId: string;
+    sku: string;
+    name: string;
+    category: string;
+    unitsOnHand: number;
+    stockValuePesewas: number;
+    daysSinceLastSale: number | null;
+  }>;
+  customerValue: Array<{
+    customerId: string;
+    name: string;
+    revenuePesewas: number;
+    numSales: number;
+    avgBasketPesewas: number;
+    lastPurchaseAt: string;
+    abcClass: 'A' | 'B' | 'C';
+  }>;
+  creditAging: Array<{
+    bucket: string;
+    amountPesewas: number;
+    customerCount: number;
+  }>;
+  expensesByCategory: Array<{ category: string; amountPesewas: number }>;
+  drawingsByCategory: Array<{ category: string; amountPesewas: number }>;
+  moneyOut: Array<{ kind: string; amountPesewas: number }>;
+  stockoutForecast: Array<{
+    productId: string;
+    sku: string;
+    name: string;
+    category: string;
+    unitsOnHand: number;
+    unitsSold: number;
+    avgDailyUnitsSold: number;
+    daysCover: number | null;
+    reorderThreshold: number;
+    stockValuePesewas: number;
+  }>;
+  cashVarianceByWorker: Array<{
+    workerId: string;
+    workerName: string;
+    closedShifts: number;
+    netVariancePesewas: number;
+    totalAbsoluteVariancePesewas: number;
+    avgAbsoluteVariancePesewas: number;
+    worstShortPesewas: number;
+    worstOverPesewas: number;
+  }>;
+  deliveryByDay: Array<{
+    date: string;
+    deliveredCount: number;
+    failedCount: number;
+    deliveryFeePesewas: number;
+    deliveryCostPesewas: number;
+    deliveryProfitPesewas: number;
+  }>;
+  deliveryByDriver: Array<{
+    driverId: string;
+    driverName: string;
+    deliveredCount: number;
+    failedCount: number;
+    deliveryFeePesewas: number;
+    deliveryCostPesewas: number;
+    deliveryProfitPesewas: number;
+  }>;
+}
+
 // --- Reports: Margin -----------------------------------------------------
 
 export interface ReportsMarginRequest {
@@ -1784,6 +2100,145 @@ export interface ReportsInventoryResponse {
     daysOfSupply: number | null;
     lastReceivedAt: string | null;
     lastSoldAt: string | null;
+  }>;
+}
+
+export interface ReportsTaxesRequest {
+  fromDate: string;
+  toDate: string;
+}
+
+export interface ReportsTaxesResponse {
+  fromDate: string;
+  toDate: string;
+  salesInclusivePesewas: number;
+  salesTaxablePesewas: number;
+  outputVatPesewas: number;
+  outputNhilPesewas: number;
+  outputGetfundPesewas: number;
+  outputTaxTotalPesewas: number;
+  soldGoodsInclusiveCostPesewas: number;
+  soldGoodsTaxableCostPesewas: number;
+  purchaseInclusivePesewas: number;
+  purchaseTaxablePesewas: number;
+  inputVatPesewas: number;
+  inputNhilPesewas: number;
+  inputGetfundPesewas: number;
+  inputTaxTotalPesewas: number;
+  netVatPayablePesewas: number;
+  taxPaidPesewas: number;
+  taxBalancePesewas: number;
+  saleCount: number;
+  voidedSaleCount: number;
+  voidedSalesInclusivePesewas: number;
+  voidedOutputTaxTotalPesewas: number;
+  supplierInvoiceCount: number;
+  byDay: Array<{
+    date: string;
+    salesInclusivePesewas: number;
+    outputTaxPesewas: number;
+    voidedSalesInclusivePesewas: number;
+    voidedOutputTaxPesewas: number;
+    soldGoodsInclusiveCostPesewas: number;
+    purchaseInclusivePesewas: number;
+    inputTaxPesewas: number;
+    netPayablePesewas: number;
+  }>;
+  voidedReceipts: Array<{
+    saleId: string;
+    saleAt: string;
+    voidedAt: string;
+    totalPesewas: number;
+    outputTaxPesewas: number;
+    voidReason: string | null;
+    cashierName: string;
+    voidedByName: string | null;
+  }>;
+  taxPayments: Array<{
+    id: string;
+    taxPeriodFrom: string;
+    taxPeriodTo: string;
+    amountPesewas: number;
+    paymentMethod: string;
+    paymentReference: string | null;
+    paidAt: string;
+    notes: string | null;
+    workerName: string;
+    shiftId: string | null;
+  }>;
+  supplierInputs: Array<{
+    supplierId: string;
+    supplierName: string;
+    invoiceCount: number;
+    purchaseInclusivePesewas: number;
+    inputTaxPesewas: number;
+  }>;
+}
+
+export interface ReportsTaxPaymentRecordRequest {
+  taxPeriodFrom: string;
+  taxPeriodTo: string;
+  amountPesewas: number;
+  paymentMethod: 'CASH' | 'MOMO_MTN' | 'MOMO_VODAFONE' | 'MOMO_AIRTELTIGO' | 'BANK_TRANSFER';
+  paymentReference?: string | null;
+  paidAt?: string | null;
+  notes?: string | null;
+}
+export interface ReportsTaxPaymentRecordResponse { paymentId: string }
+
+export interface ReportsPriceIntelligenceResponse {
+  rows: Array<{
+    productId: string; sku: string; productName: string;
+    costPricePesewas: number; minimumPricePesewas: number;
+    walkInPricePesewas: number; wholesalePricePesewas: number; routePricePesewas: number;
+    competitorPricePesewas: number | null; competitorName: string | null; competitorCheckedAt: string | null;
+    walkInVsMinimumPesewas: number; walkInVsCompetitorPesewas: number | null;
+  }>;
+}
+export interface ReportsPriceHistoryRequest {
+  fromDate?: string; toDate?: string; productId?: string | null; limit?: number;
+}
+export interface ReportsPriceHistoryResponse {
+  rows: Array<{
+    id: string; productId: string; sku: string; productName: string;
+    fieldName: string; oldPesewas: number | null; newPesewas: number | null;
+    competitorName: string | null; reason: string | null; changedAt: string; changedBy: string;
+  }>;
+}
+export interface ReportsLandedCostsRequest {
+  fromDate?: string; toDate?: string; supplierId?: string | null;
+}
+export interface ReportsLandedCostsResponse {
+  rows: Array<{
+    invoiceId: string; invoiceNumber: string; supplierName: string;
+    productId: string; sku: string; productName: string;
+    lineTotalPesewas: number;
+    allocatedTransportCostPesewas: number;
+    allocatedLoadingCostPesewas: number;
+    landedLineTotalPesewas: number;
+  }>;
+}
+export interface ReportsCustomerIntelligenceRequest {
+  asOfDateISO?: string; inactiveDays?: number;
+}
+export interface ReportsCustomerIntelligenceResponse {
+  rows: Array<{
+    customerId: string; name: string; phone: string | null;
+    lastPurchaseAt: string | null; daysInactive: number | null;
+    purchaseCount: number; purchaseFrequencyDays: number | null;
+    totalValuePesewas: number; monthlyValuePesewas: number;
+    abcClass: 'A' | 'B' | 'C';
+  }>;
+  inactive: Array<{
+    customerId: string; name: string; phone: string | null;
+    lastPurchaseAt: string | null; daysInactive: number | null;
+    purchaseCount: number; purchaseFrequencyDays: number | null;
+    totalValuePesewas: number; monthlyValuePesewas: number;
+    abcClass: 'A' | 'B' | 'C';
+  }>;
+  topProducts: Array<{
+    customerId: string; customerName: string; productId: string; sku: string;
+    productName: string; unitsSold: number; revenuePesewas: number;
   }>;
 }
 
@@ -1994,10 +2449,14 @@ export interface CatalogImportApplyResponse {
 
 export const IPC_CHANNELS_PENDING_ORDERS = {
   PENDING_ORDERS_LIST: 'pending-orders:list',
+  PENDING_ORDERS_DELIVERY_LIST: 'pending-orders:delivery-list',
   PENDING_ORDERS_GET: 'pending-orders:get',
   PENDING_ORDERS_RESOLVE_FOR_CART: 'pending-orders:resolve-for-cart',
   PENDING_ORDERS_REJECT: 'pending-orders:reject',
   PENDING_ORDERS_MARK_FULFILLED: 'pending-orders:mark-fulfilled',
+  PENDING_ORDERS_MARK_PACKED: 'pending-orders:mark-packed',
+  PENDING_ORDERS_MARK_DISPATCHED: 'pending-orders:mark-dispatched',
+  PENDING_ORDERS_COMPLETE_DELIVERY: 'pending-orders:complete-delivery',
 } as const;
 
 export interface PendingOrderLine {
@@ -2019,6 +2478,12 @@ export interface PendingOrderSummary {
   quoteExpiresAt: string | null;
   receivedAt: string;
   lineCount: number;
+  deliveryStatus: string;
+  driverId: string | null;
+  driverName: string | null;
+  deliveryFeePesewas: number;
+  deliveryCostPesewas: number;
+  deliveryProfitPesewas: number | null;
 }
 export interface PendingOrderDetail extends PendingOrderSummary {
   subtotalPesewas: number;
@@ -2026,12 +2491,28 @@ export interface PendingOrderDetail extends PendingOrderSummary {
   lines: PendingOrderLine[];
   fulfilledSaleId: string | null;
   rejectReason: string | null;
+  packedAt: string | null;
+  dispatchedAt: string | null;
+  deliveredAt: string | null;
+  deliveryFailedAt: string | null;
+  deliveryFailureReason: string | null;
+  deliveryConfirmationCode: string | null;
+  deliveryConfirmationName: string | null;
 }
 
 export interface PendingOrdersListResponse { orders: PendingOrderSummary[] }
 export interface PendingOrderGetRequest { orderId: string }
 export interface PendingOrderRejectRequest { orderId: string; reason: string }
 export interface PendingOrderMarkFulfilledRequest { orderId: string; saleId: string }
+export interface PendingOrderMarkPackedRequest { orderId: string }
+export interface PendingOrderMarkDispatchedRequest {
+  orderId: string; driverId: string; deliveryFeePesewas?: number; deliveryCostPesewas?: number;
+}
+export interface PendingOrderCompleteDeliveryRequest {
+  orderId: string; outcome: 'DELIVERED' | 'FAILED';
+  confirmationCode?: string | null; confirmationName?: string | null; failureReason?: string | null;
+}
+export interface PendingOrderCompleteDeliveryResponse { deliveryProfitPesewas: number | null }
 
 export interface ResolvedCartLine {
   productId: string;
@@ -2051,4 +2532,3 @@ export interface ResolvedPendingOrder {
   customerPhone: string;
   lines: ResolvedCartLine[];
 }
-

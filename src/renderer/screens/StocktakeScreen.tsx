@@ -5,6 +5,7 @@ import { counter } from '../lib/ipc';
 import { AppHeader } from '../components/AppHeader';
 import { SupervisorPinModal } from '../components/SupervisorPinModal';
 import { formatMoney, formatMoneyWithCurrency } from '../../shared/lib/money';
+import { FeedbackBanner } from '../components/FeedbackBanner';
 
 interface ActiveStocktake {
   id: string; status: string; startedAt: string;
@@ -152,7 +153,7 @@ export default function StocktakeScreen({ onExit }: { onExit: () => void }) {
         </div>
 
         {info && <div className="bg-bg-surface border border-success px-5 py-3 text-success text-sm">{info}</div>}
-        {error && <div className="bg-bg-surface border border-danger px-5 py-3 text-danger text-sm">{error}</div>}
+        {error && <FeedbackBanner>{error}</FeedbackBanner>}
 
         {!active && (
           <div className="bg-bg-surface border border-border p-6 flex items-center justify-between">

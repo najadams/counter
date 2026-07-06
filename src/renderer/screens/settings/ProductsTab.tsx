@@ -8,6 +8,7 @@ import { counter } from '../../lib/ipc';
 import { useSession } from '../../store/session';
 import { formatMoney, parseCedisToPesewas } from '../../../shared/lib/money';
 import { formatStockCompact } from '../../../shared/lib/units';
+import { FeedbackBanner } from '../../components/FeedbackBanner';
 
 interface AdminProduct {
   id: string; sku: string; barcode: string | null; name: string;
@@ -16,6 +17,10 @@ interface AdminProduct {
   isReturnable: boolean; bottleDepositPesewas: number;
   costPricePesewas: number; walkInPricePesewas: number;
   wholesalePricePesewas: number; routePricePesewas: number;
+  minimumPricePesewas: number;
+  competitorPricePesewas: number | null;
+  competitorName: string | null;
+  competitorCheckedAt: string | null;
   reorderThreshold: number; reorderQuantity: number;
   primarySupplierId: string | null;
   defaultLeadTimeDays: number; shelfLifeDays: number | null;
@@ -94,7 +99,7 @@ export function ProductsTab() {
       </div>
 
       {info && <div className="bg-bg-surface border border-success px-5 py-3 text-success text-sm">{info}</div>}
-      {error && <div className="bg-bg-surface border border-danger px-5 py-3 text-danger text-sm">{error}</div>}
+      {error && <FeedbackBanner>{error}</FeedbackBanner>}
 
       <div className="bg-bg-surface border border-border overflow-hidden">
         <table className="w-full text-sm">
@@ -164,7 +169,6 @@ export function ProductsTab() {
           mode="add"
           onCancel={() => setShowAdd(false)}
           onDone={(msg) => { setShowAdd(false); flash(msg, 'info'); void refresh(); }}
-          onError={(e) => flash(e, 'error')}
         />
       )}
       {editing && (
@@ -173,7 +177,6 @@ export function ProductsTab() {
           existing={editing}
           onCancel={() => setEditing(null)}
           onDone={(msg) => { setEditing(null); flash(msg, 'info'); void refresh(); }}
-          onError={(e) => flash(e, 'error')}
         />
       )}
       {historyFor && (
@@ -187,12 +190,11 @@ export function ProductsTab() {
   );
 }
 
-function ProductFormModal({ mode, existing, onCancel, onDone, onError }: {
+function ProductFormModal({ mode, existing, onCancel, onDone }: {
   mode: 'add' | 'edit';
   existing?: AdminProduct;
   onCancel: () => void;
   onDone: (msg: string) => void;
-  onError: (e: string) => void;
 }) {
   const [sku, setSku] = useState(existing?.sku ?? '');
   const [name, setName] = useState(existing?.name ?? '');
@@ -207,12 +209,14 @@ function ProductFormModal({ mode, existing, onCancel, onDone, onError }: {
   const [walkIn, setWalkIn] = useState(existing ? formatMoney(existing.walkInPricePesewas) : '');
   const [wholesale, setWholesale] = useState(existing ? formatMoney(existing.wholesalePricePesewas) : '');
   const [route, setRoute] = useState(existing ? formatMoney(existing.routePricePesewas) : '');
+  const [priceReason, setPriceReason] = useState('');
   const [reorderThreshold, setReorderThreshold] = useState(String(existing?.reorderThreshold ?? 0));
   const [reorderQty, setReorderQty] = useState(String(existing?.reorderQuantity ?? 0));
   const [countClass, setCountClass] = useState<'A' | 'B' | 'C' | ''>(existing?.countClass ?? '');
   const [leadTime, setLeadTime] = useState(String(existing?.defaultLeadTimeDays ?? 7));
   const [shelfLife, setShelfLife] = useState(existing?.shelfLifeDays != null ? String(existing.shelfLifeDays) : '');
   const [submitting, setSubmitting] = useState(false);
+  const [modalError, setModalError] = useState<string | null>(null);
 
   // Draft units for ADD mode — created in the same transaction as the
   // product so we don't end up with a product that has no sellable units.
@@ -235,21 +239,26 @@ function ProductFormModal({ mode, existing, onCancel, onDone, onError }: {
   // app fall back to the smallest sellable unit.
   const [defaultSaleUnitName, setDefaultSaleUnitName] = useState('');
 
+  function showModalError(message: string) {
+    setModalError(message);
+  }
+
   function addDraftUnit() {
     const name = du_name.trim().toUpperCase();
     const factor = Number(du_factor.replace(/\D/g, ''));
     const price = parseCedisToPesewas(du_price);
-    if (!name) { onError('Unit name is required.'); return; }
-    if (!factor || factor <= 0) { onError('Conversion factor must be a positive integer.'); return; }
-    if (price == null) { onError('Price must be a valid amount (e.g. 12.50).'); return; }
-    if (!du_sale && !du_purchase) { onError('Mark the unit as sellable, purchasable, or both.'); return; }
+    if (!name) { showModalError('Unit name is required.'); return; }
+    if (!factor || factor <= 0) { showModalError('Conversion factor must be a positive integer.'); return; }
+    if (price == null) { showModalError('Price must be a valid amount (e.g. 12.50).'); return; }
+    if (!du_sale && !du_purchase) { showModalError('Mark the unit as sellable, purchasable, or both.'); return; }
     if (draftUnits.some((u) => u.unitName === name)) {
-      onError(`Already added a unit called ${name}.`); return;
+      showModalError(`Already added a unit called ${name}.`); return;
     }
     setDraftUnits([...draftUnits, {
       unitName: name, conversionFactor: factor, pricePesewas: price,
       isSaleUnit: du_sale, isPurchaseUnit: du_purchase,
     }]);
+    setModalError(null);
     setDuName(''); setDuFactor(''); setDuPrice('');
   }
   function removeDraftUnit(idx: number) {
@@ -266,13 +275,17 @@ function ProductFormModal({ mode, existing, onCancel, onDone, onError }: {
 
   async function submit() {
     setSubmitting(true);
+    setModalError(null);
     const costP = parseCedisToPesewas(cost);
     const walkInP = parseCedisToPesewas(walkIn);
     const wholesaleP = parseCedisToPesewas(wholesale);
     const routeP = parseCedisToPesewas(route);
     const depositP = parseCedisToPesewas(deposit);
-    if (costP == null || walkInP == null || wholesaleP == null || routeP == null || depositP == null) {
-      onError('Prices must be valid numbers (e.g. 5.50).');
+    if (
+      costP == null || walkInP == null || wholesaleP == null || routeP == null ||
+      depositP == null
+    ) {
+      showModalError('Prices must be valid numbers (e.g. 5.50).');
       setSubmitting(false);
       return;
     }
@@ -299,7 +312,7 @@ function ProductFormModal({ mode, existing, onCancel, onDone, onError }: {
         shelfLifeDays: shelfLifeN,
         units: draftUnits.length > 0 ? draftUnits : undefined,
       });
-      if (!r.success) { setSubmitting(false); onError(r.error); return; }
+      if (!r.success) { setSubmitting(false); showModalError(r.error); return; }
       // Apply the chosen "Default at the till" unit. unitIds line up with the
       // draftUnits order they were created in, so map the picked name to its id.
       if (defaultSaleUnitName) {
@@ -309,7 +322,7 @@ function ProductFormModal({ mode, existing, onCancel, onDone, onError }: {
             productId: r.data.productId,
             fields: { primarySaleUnitId: r.data.unitIds[idx] },
           });
-          if (!pr.success) { setSubmitting(false); onError(pr.error); return; }
+          if (!pr.success) { setSubmitting(false); showModalError(pr.error); return; }
         }
       }
       setSubmitting(false);
@@ -326,13 +339,14 @@ function ProductFormModal({ mode, existing, onCancel, onDone, onError }: {
           isReturnable, bottleDepositPesewas: depositP,
           costPricePesewas: costP, walkInPricePesewas: walkInP,
           wholesalePricePesewas: wholesaleP, routePricePesewas: routeP,
+          priceChangeReason: priceReason.trim() || null,
           reorderThreshold: reorderThresholdN, reorderQuantity: reorderQtyN,
         countClass: countClass || null,
           defaultLeadTimeDays: leadTimeN, shelfLifeDays: shelfLifeN,
         },
       });
       setSubmitting(false);
-      if (!r.success) { onError(r.error); return; }
+      if (!r.success) { showModalError(r.error); return; }
       const warn = r.data.warnings.length > 0 ? ` Warning: ${r.data.warnings.join(', ')}.` : '';
       onDone(`Product updated.${warn}`);
     }
@@ -355,6 +369,12 @@ function ProductFormModal({ mode, existing, onCancel, onDone, onError }: {
             className="text-text-tertiary hover:text-text-primary text-xl leading-none"
             aria-label="Close">✕</button>
         </div>
+
+        {modalError && (
+          <FeedbackBanner className="mx-8 mt-4 flex-shrink-0">
+            {modalError}
+          </FeedbackBanner>
+        )}
 
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto px-8 py-6 flex flex-col gap-5">
@@ -430,6 +450,12 @@ function ProductFormModal({ mode, existing, onCancel, onDone, onError }: {
               className="w-full bg-bg-input border border-border-strong px-3 py-2 font-mono tnum" />
           </Field>
         </div>
+        {mode === 'edit' && (
+          <Field label="Change reason">
+            <input value={priceReason} onChange={(e) => setPriceReason(e.target.value)}
+              className="w-full bg-bg-input border border-border-strong px-3 py-2" />
+          </Field>
+        )}
         <h4 className="text-text-secondary uppercase tracking-wider text-xs mt-2">Replenishment</h4>
         <div className="grid grid-cols-3 gap-3">
           <Field label="Reorder threshold">
@@ -568,11 +594,11 @@ function ProductFormModal({ mode, existing, onCancel, onDone, onError }: {
             productId={existing.id}
             initialPrimaryPurchaseUnitId={existing.primaryPurchaseUnitId}
             initialPrimarySaleUnitId={existing.primarySaleUnitId}
-            onError={onError}
+            onError={showModalError}
           />
         )}
         {mode === 'edit' && existing && (
-          <PricingTiersEditor productId={existing.id} onError={onError} />
+          <PricingTiersEditor productId={existing.id} onError={showModalError} />
         )}
         </div>
         {/* Sticky footer */}

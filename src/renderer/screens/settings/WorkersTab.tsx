@@ -5,6 +5,7 @@ import { PinCardsPrintScreen } from '../PinCardsPrintScreen';
 import { counter } from '../../lib/ipc';
 import { useSession } from '../../store/session';
 import { formatMoneyWithCurrency } from '../../../shared/lib/money';
+import { FeedbackBanner } from '../../components/FeedbackBanner';
 
 interface AdminWorker {
   id: string; fullName: string; phone: string; role: string; active: boolean;
@@ -96,7 +97,7 @@ export function WorkersTab() {
       </div>
 
       {info && <div className="bg-bg-surface border border-success px-5 py-3 text-success text-sm">{info}</div>}
-      {error && <div className="bg-bg-surface border border-danger px-5 py-3 text-danger text-sm">{error}</div>}
+      {error && <FeedbackBanner>{error}</FeedbackBanner>}
 
       <div className="bg-bg-surface border border-border overflow-hidden">
         <table className="w-full">

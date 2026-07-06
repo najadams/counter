@@ -29,6 +29,7 @@ import {
 } from '../../shared/lib/constants';
 import { SupervisorPinModal } from '../components/SupervisorPinModal';
 import { TouchCheckoutSheet } from '../components/TouchCheckoutSheet';
+import { FeedbackBanner } from '../components/FeedbackBanner';
 import { useIsTouch } from '../hooks/useIsTouch';
 import { chimeSuccess, chimeWarning, flashBody } from '../lib/feedback';
 
@@ -265,6 +266,10 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
       setError('Add items before choosing payment.');
       return;
     }
+    if (method === 'CREDIT' && customer?.cashOnly) {
+      setError(`${customer.displayName} is marked cash-only. Use cash, MoMo, or remove the customer.`);
+      return;
+    }
     setError(null);
     setPaymentMethod(method);
     setShowPaymentModal(method);
@@ -274,6 +279,11 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
     setShowSplit(false);
     setSubmitting(true);
     setError(null);
+    if (result.payments.some((p) => p.method === 'CREDIT') && customer?.cashOnly) {
+      setSubmitting(false);
+      setError(`${customer.displayName} is marked cash-only. Credit tender is blocked.`);
+      return;
+    }
     const sup = pendingSupervisor;
     if (discount > 0 && discount > Math.max(Math.floor((subtotal * DISCOUNT_PERCENT_THRESHOLD_BPS) / 10000), DISCOUNT_ABS_THRESHOLD_PESEWAS)) {
       if (!sup) {
@@ -347,6 +357,10 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
     if (paymentMethod === 'CREDIT' && !customer) {
       setError('Pick a customer for credit.');
       setShowPaymentModal('CREDIT');
+      return;
+    }
+    if (paymentMethod === 'CREDIT' && customer?.cashOnly) {
+      setError(`${customer.displayName} is marked cash-only. Use another payment method.`);
       return;
     }
 
@@ -566,6 +580,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
                     <div className="text-text-primary text-sm truncate">{customer.displayName}</div>
                     <div className="text-text-tertiary text-xs truncate">
                       {customer.phone} · bal {formatMoneyWithCurrency(customer.currentBalancePesewas)}
+                      {customer.cashOnly ? ' · cash only' : ''}
                     </div>
                   </div>
                   <div className="flex gap-2 shrink-0">
@@ -597,6 +612,11 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
                   Switch
                 </button>
               </div>
+            )}
+            {error && (
+              <FeedbackBanner className="sticky top-0 z-10">
+                {error}
+              </FeedbackBanner>
             )}
           </div>
           <ul className="flex-1 overflow-y-auto max-h-[40vh] lg:max-h-none">
@@ -697,7 +717,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
                   <> · cash <span className="font-mono tnum">{formatMoney(cashGiven)}</span> · change <span className="font-mono tnum">{formatMoney(Math.max(0, cashGiven - total))}</span></>
                 )}
                 {paymentMethod === 'CREDIT' && customer && (
-                  <> · {customer.displayName}</>
+                  <> · {customer.displayName}{customer.cashOnly ? ' · cash-only' : ''}</>
                 )}
               </div>
             )}
@@ -734,9 +754,6 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
               </>
             )}
 
-            {error && (
-              <div className="bg-bg-deep border border-danger px-4 py-2 text-danger text-sm">{error}</div>
-            )}
             {completedToast && (
               <div className="bg-bg-deep border border-success px-4 py-2 text-success text-sm flex items-center justify-between gap-3">
                 <span>{completedToast}</span>
@@ -770,6 +787,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
         <SplitPaymentModal
           totalPesewas={total}
           hasCustomer={!!customer}
+          customerCashOnly={customer?.cashOnly}
           onCancel={() => setShowSplit(false)}
           onConfirm={(r) => void submitWithSplit(r)}
         />
@@ -909,6 +927,7 @@ function CustomerPickerModal({
                   displayName: c.displayName,
                   phone: c.phone,
                   currentBalancePesewas: c.currentBalancePesewas,
+                  cashOnly: c.cashOnly,
                   preferredChannel: (c as { preferredChannel?: 'WALK_IN' | 'WHOLESALE' | 'ROUTE' | null }).preferredChannel ?? null,
                 })}
                 className={[
@@ -918,6 +937,7 @@ function CustomerPickerModal({
                 <div className="text-text-primary">{c.displayName}</div>
                 <div className="text-text-tertiary text-xs">
                   {c.phone} · balance {formatMoneyWithCurrency(c.currentBalancePesewas)}
+                  {c.cashOnly ? ' · cash only' : ''}
                 </div>
               </button>
             </li>
@@ -946,6 +966,7 @@ function CustomerPickerModal({
                 displayName: c.displayName,
                 phone: c.phone,
                 currentBalancePesewas: c.currentBalancePesewas,
+                cashOnly: c.cashOnly,
                 preferredChannel: null,
               });
             }}
@@ -1134,6 +1155,7 @@ function PaymentModal(p: PaymentModalProps) {
       p.setPaymentReference(refRaw.trim());
     } else if (isCredit) {
       if (!p.customer) return;
+      if (p.customer.cashOnly) return;
     }
     p.onConfirm();
   }
@@ -1220,6 +1242,7 @@ function PaymentModal(p: PaymentModalProps) {
                     onClick={() => p.setCustomer({
                       id: c.id, displayName: c.displayName, phone: c.phone,
                       currentBalancePesewas: c.currentBalancePesewas,
+                      cashOnly: c.cashOnly,
                       preferredChannel: (c as { preferredChannel?: 'WALK_IN' | 'WHOLESALE' | 'ROUTE' | null }).preferredChannel ?? null,
                     })}
                     className={[
@@ -1229,6 +1252,7 @@ function PaymentModal(p: PaymentModalProps) {
                     <div className="text-text-primary">{c.displayName}</div>
                     <div className="text-text-tertiary text-xs">
                       {c.phone} · balance {formatMoneyWithCurrency(c.currentBalancePesewas)}
+                      {c.cashOnly ? ' · cash only' : ''}
                     </div>
                   </button>
                 </li>
@@ -1237,6 +1261,7 @@ function PaymentModal(p: PaymentModalProps) {
             {p.customer && (
               <div className="text-text-secondary text-sm">
                 Selected: <span className="text-text-primary">{p.customer.displayName}</span>
+                {p.customer.cashOnly && <span className="text-danger ml-2">cash-only</span>}
               </div>
             )}
             {showCreate && (
@@ -1250,6 +1275,7 @@ function PaymentModal(p: PaymentModalProps) {
                     displayName: c.displayName,
                     phone: c.phone,
                     currentBalancePesewas: c.currentBalancePesewas,
+                    cashOnly: c.cashOnly,
                   });
                 }}
               />
@@ -1264,13 +1290,16 @@ function PaymentModal(p: PaymentModalProps) {
             disabled={
               (isCash && (cashPesewas == null || cashPesewas < p.totalPesewas)) ||
               (isMomo && refRaw.trim() === '') ||
-              (isCredit && !p.customer)
+              (isCredit && (!p.customer || p.customer.cashOnly))
             }
             className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Confirm
           </button>
         </div>
+        {isCredit && p.customer?.cashOnly && (
+          <div className="text-danger text-sm">This customer is cash-only. Use cash, MoMo, or clear the customer.</div>
+        )}
       </div>
     </div>
   );

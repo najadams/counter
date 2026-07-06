@@ -19,6 +19,7 @@ export interface CustomerOverview {
   displayName: string;
   phone: string;
   customerType: string;
+  cashOnly: boolean;
   creditLimitPesewas: number;
   preferredChannel: 'WALK_IN' | 'WHOLESALE' | 'ROUTE' | null;
   cachedBalancePesewas: number;
@@ -30,7 +31,7 @@ export interface CustomerOverview {
   utilizationBps: number;          // balance / limit, 0..10000+; >10000 = over limit
   ageOfOldestUnpaidDays: number | null;
   agingBuckets: { bucket0_30: number; bucket31_60: number; bucket61_90: number; bucket90_plus: number };
-  recentSales: Array<{ id: string; createdAt: string; totalPesewas: number; amountOutstandingPesewas: number; voided: boolean }>;
+  recentSales: Array<{ id: string; createdAt: string; totalPesewas: number; creditPesewas: number; amountOutstandingPesewas: number; voided: boolean }>;
   recentPayments: Array<{ id: string; receivedAt: string; amountPesewas: number; paymentMethod: string; paymentReference: string | null }>;
 }
 
@@ -38,10 +39,16 @@ export interface OpenSale {
   saleId: string;
   createdAt: string;
   totalPesewas: number;
+  creditPesewas: number;
   paidPesewas: number;            // sum of allocations to this sale
-  outstandingPesewas: number;     // total - paid
+  outstandingPesewas: number;     // credit principal - paid
   ageDays: number;
+  dueDate: string | null;
+  daysOverdue: number | null;
+  debtStatus: DebtStatus;
 }
+
+export type DebtStatus = 'CURRENT' | 'OVERDUE' | 'PROMISED' | 'RECOVERABLE' | 'DOUBTFUL' | 'DEAD';
 
 function ageDays(iso: string, now = new Date()): number {
   const t = new Date(iso).getTime();
@@ -55,28 +62,93 @@ function bucketFor(age: number): 'bucket0_30' | 'bucket31_60' | 'bucket61_90' | 
   return 'bucket90_plus';
 }
 
+function todayISO(now = new Date()): string {
+  return now.toISOString().slice(0, 10);
+}
+
+function addDaysISO(iso: string, days: number): string {
+  const d = new Date(`${iso.slice(0, 10)}T00:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + Math.max(0, days));
+  return d.toISOString().slice(0, 10);
+}
+
+function daysBetweenDates(fromDate: string, toDate: string): number {
+  const from = new Date(`${fromDate}T00:00:00.000Z`).getTime();
+  const to = new Date(`${toDate}T00:00:00.000Z`).getTime();
+  return Math.floor((to - from) / (24 * 60 * 60 * 1000));
+}
+
+function effectiveDebtStatus(stored: DebtStatus, dueDate: string | null, now = new Date()): DebtStatus {
+  if (stored !== 'CURRENT') return stored;
+  if (dueDate && dueDate < todayISO(now)) return 'OVERDUE';
+  return stored;
+}
+
+export function creditPrincipalExpr(alias = 's'): string {
+  return `COALESCE(
+    (SELECT SUM(sp.amount_pesewas)
+       FROM sale_payments sp
+      WHERE sp.sale_id = ${alias}.id AND sp.payment_method = 'CREDIT'),
+    CASE WHEN ${alias}.is_credit = 1 THEN ${alias}.total_pesewas ELSE 0 END
+  )`;
+}
+
+export function computeTrueBalance(db: DB, customerId: string): number {
+  const row = db
+    .prepare(
+      `SELECT
+         COALESCE((
+           SELECT SUM(${creditPrincipalExpr('s')})
+             FROM sales s
+            WHERE s.customer_id = ? AND s.is_credit = 1 AND s.voided = 0
+         ), 0)
+         -
+         COALESCE((SELECT SUM(cpa.amount_pesewas) FROM customer_payment_allocations cpa
+                     JOIN sales s ON s.id = cpa.sale_id
+                     WHERE s.customer_id = ?), 0) AS balance`,
+    )
+    .get(customerId, customerId) as { balance: number };
+  return row.balance;
+}
+
 /** Open credit sales for a customer (any with outstanding > 0), oldest first. */
 export function listOpenSalesForCustomer(db: DB, customerId: string, now = new Date()): OpenSale[] {
   const sales = db
     .prepare(
       `SELECT s.id, s.created_at AS createdAt, s.total_pesewas AS totalPesewas,
+              ${creditPrincipalExpr('s')} AS creditPesewas,
+              s.credit_due_date AS dueDate,
+              s.debt_status AS debtStatus,
+              c.credit_terms_days AS creditTermsDays,
               COALESCE((SELECT SUM(amount_pesewas) FROM customer_payment_allocations
                           WHERE sale_id = s.id), 0) AS paidPesewas
          FROM sales s
+         JOIN customers c ON c.id = s.customer_id
          WHERE s.customer_id = ? AND s.is_credit = 1 AND s.voided = 0
          ORDER BY s.created_at ASC`,
     )
-    .all(customerId) as Array<{ id: string; createdAt: string; totalPesewas: number; paidPesewas: number }>;
+    .all(customerId) as Array<{
+      id: string; createdAt: string; totalPesewas: number; creditPesewas: number;
+      paidPesewas: number; dueDate: string | null; debtStatus: DebtStatus; creditTermsDays: number;
+    }>;
 
   return sales
-    .map((s) => ({
-      saleId: s.id,
-      createdAt: s.createdAt,
-      totalPesewas: s.totalPesewas,
-      paidPesewas: s.paidPesewas,
-      outstandingPesewas: s.totalPesewas - s.paidPesewas,
-      ageDays: ageDays(s.createdAt, now),
-    }))
+    .map((s) => {
+      const dueDate = s.dueDate ?? addDaysISO(s.createdAt, s.creditTermsDays);
+      const daysOverdue = dueDate < todayISO(now) ? daysBetweenDates(dueDate, todayISO(now)) : null;
+      return {
+        saleId: s.id,
+        createdAt: s.createdAt,
+        totalPesewas: s.totalPesewas,
+        creditPesewas: s.creditPesewas,
+        paidPesewas: s.paidPesewas,
+        outstandingPesewas: s.creditPesewas - s.paidPesewas,
+        ageDays: ageDays(s.createdAt, now),
+        dueDate,
+        daysOverdue,
+        debtStatus: effectiveDebtStatus(s.debtStatus, dueDate, now),
+      };
+    })
     .filter((s) => s.outstandingPesewas > 0);
 }
 
@@ -101,26 +173,12 @@ export function reconcileCustomerBalance(db: DB, customerId: string): { previous
   };
 }
 
-function computeTrueBalance(db: DB, customerId: string): number {
-  const row = db
-    .prepare(
-      `SELECT
-         COALESCE((SELECT SUM(total_pesewas) FROM sales
-                     WHERE customer_id = ? AND is_credit = 1 AND voided = 0), 0)
-         -
-         COALESCE((SELECT SUM(cpa.amount_pesewas) FROM customer_payment_allocations cpa
-                     JOIN sales s ON s.id = cpa.sale_id
-                     WHERE s.customer_id = ?), 0) AS balance`,
-    )
-    .get(customerId, customerId) as { balance: number };
-  return row.balance;
-}
-
 export function getCustomerOverview(db: DB, customerId: string, now = new Date()): CustomerOverview {
   const cust = db
     .prepare(
       `SELECT id, display_name AS displayName, phone, customer_type AS customerType,
               credit_limit_pesewas AS creditLimitPesewas,
+              cash_only AS cashOnly,
               current_balance_pesewas AS cachedBalancePesewas,
               blocked, blocked_reason AS blockedReason,
               preferred_channel AS preferredChannel
@@ -129,6 +187,7 @@ export function getCustomerOverview(db: DB, customerId: string, now = new Date()
     .get(customerId) as
     | { id: string; displayName: string; phone: string; customerType: string;
         creditLimitPesewas: number; cachedBalancePesewas: number;
+        cashOnly: number;
         blocked: number; blockedReason: string | null;
         preferredChannel: 'WALK_IN' | 'WHOLESALE' | 'ROUTE' | null }
     | undefined;
@@ -146,12 +205,13 @@ export function getCustomerOverview(db: DB, customerId: string, now = new Date()
   const recentSales = db
     .prepare(
       `SELECT s.id, s.created_at AS createdAt, s.total_pesewas AS totalPesewas, s.voided,
+              ${creditPrincipalExpr('s')} AS creditPesewas,
               COALESCE((SELECT SUM(amount_pesewas) FROM customer_payment_allocations
                           WHERE sale_id = s.id), 0) AS paidPesewas
          FROM sales s WHERE s.customer_id = ?
          ORDER BY s.created_at DESC LIMIT 10`,
     )
-    .all(customerId) as Array<{ id: string; createdAt: string; totalPesewas: number; voided: number; paidPesewas: number }>;
+    .all(customerId) as Array<{ id: string; createdAt: string; totalPesewas: number; creditPesewas: number; voided: number; paidPesewas: number }>;
 
   const recentPayments = db
     .prepare(
@@ -172,6 +232,7 @@ export function getCustomerOverview(db: DB, customerId: string, now = new Date()
     displayName: cust.displayName,
     phone: cust.phone,
     customerType: cust.customerType,
+    cashOnly: cust.cashOnly === 1,
     creditLimitPesewas: cust.creditLimitPesewas,
     preferredChannel: cust.preferredChannel,
     cachedBalancePesewas: cust.cachedBalancePesewas,
@@ -184,7 +245,8 @@ export function getCustomerOverview(db: DB, customerId: string, now = new Date()
     agingBuckets: buckets,
     recentSales: recentSales.map((s) => ({
       id: s.id, createdAt: s.createdAt, totalPesewas: s.totalPesewas,
-      amountOutstandingPesewas: s.totalPesewas - s.paidPesewas,
+      creditPesewas: s.creditPesewas,
+      amountOutstandingPesewas: Math.max(0, s.creditPesewas - s.paidPesewas),
       voided: s.voided === 1,
     })),
     recentPayments,
@@ -391,7 +453,7 @@ export function listCustomersByOutstanding(
   const enriched: CustomerWithOutstanding[] = rows.map((r) => {
     const trueBalance = computeTrueBalance(db, r.id);
     const open = listOpenSalesForCustomer(db, r.id, now);
-    const oldest = open.length > 0 ? open[open.length - 1]?.ageDays ?? null : null;
+    const oldest = open.length > 0 ? open[0]?.ageDays ?? null : null;
     return {
       id: r.id,
       displayName: r.displayName,

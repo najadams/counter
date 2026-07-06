@@ -12,7 +12,10 @@ import { completeSale } from '../src/main/services/sales';
 import { _setPrinter, _resetPrinter } from '../src/main/printer/printer';
 import { applyOrders, pullOrdersOnce } from '../src/main/sync/pullOrders';
 import {
-  getPendingOrder, listPendingOrders, markPendingOrderFulfilled, rejectPendingOrder,
+  completePendingOrderDelivery,
+  getPendingOrder, listDeliveryOrders, listPendingOrders,
+  markPendingOrderDispatched, markPendingOrderFulfilled, markPendingOrderPacked,
+  rejectPendingOrder,
 } from '../src/main/services/pendingOrders';
 import type { OrderPullRow, OrdersPullTransport } from '../src/shared/sync';
 
@@ -222,5 +225,40 @@ describe('markPendingOrderFulfilled', () => {
       `SELECT op FROM sync_outbox WHERE table_name = 'pending_orders' ORDER BY seq DESC LIMIT 1`,
     ).get() as { op: string };
     expect(row.op).toBe('UPDATE');
+  });
+});
+
+describe('delivery operations', () => {
+  it('tracks packed, dispatched, delivered confirmation and profitability', async () => {
+    applyOrders(db, [fakeOrderRow()], D);
+    const saleId = await makeRealSaleId();
+    markPendingOrderFulfilled(db, { orderId: 'wa-order-1', saleId, workerId: W, deviceId: D });
+
+    markPendingOrderPacked(db, { orderId: 'wa-order-1', workerId: W, deviceId: D });
+    markPendingOrderDispatched(db, {
+      orderId: 'wa-order-1',
+      driverId: 'dev-supervisor-1',
+      deliveryFeePesewas: 200,
+      deliveryCostPesewas: 50,
+      workerId: W,
+      deviceId: D,
+    });
+    const result = completePendingOrderDelivery(db, {
+      orderId: 'wa-order-1',
+      outcome: 'DELIVERED',
+      confirmationCode: '1234',
+      confirmationName: 'Ama',
+      workerId: W,
+      deviceId: D,
+    });
+
+    const margin = (db.prepare('SELECT SUM(margin_pesewas) AS m FROM sale_lines WHERE sale_id = ?')
+      .get(saleId) as { m: number }).m;
+    expect(result.deliveryProfitPesewas).toBe(margin + 150);
+    const order = getPendingOrder(db, 'wa-order-1');
+    expect(order?.deliveryStatus).toBe('DELIVERED');
+    expect(order?.deliveryConfirmationCode).toBe('1234');
+    expect(order?.deliveryProfitPesewas).toBe(margin + 150);
+    expect(listDeliveryOrders(db).some((o) => o.id === 'wa-order-1')).toBe(true);
   });
 });

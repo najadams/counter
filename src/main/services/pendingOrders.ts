@@ -17,6 +17,7 @@
 import type { Database as DB } from 'better-sqlite3';
 import { logAudit } from '../db/audit.js';
 import { unitsOnHand } from './stockMovements.js';
+import { VAT_ENABLED } from '../../shared/lib/vat.js';
 
 export interface PendingOrderLine {
   productId: string;
@@ -33,6 +34,23 @@ export interface PendingOrderLine {
   lineTotalPesewas: number;
 }
 
+function taxableSql(expr: string): string {
+  return VAT_ENABLED ? `ROUND((${expr}) * 10000.0 / 12000.0)` : `(${expr})`;
+}
+
+function lineNetRevenueSql(): string {
+  if (!VAT_ENABLED) return 'sl.line_total_pesewas';
+  return `CASE
+            WHEN s.taxable_pesewas > 0 AND s.subtotal_pesewas > 0
+              THEN ROUND(s.taxable_pesewas * sl.line_total_pesewas * 1.0 / s.subtotal_pesewas)
+            ELSE ${taxableSql('sl.line_total_pesewas')}
+          END`;
+}
+
+function lineNetCogsSql(): string {
+  return taxableSql('sl.unit_cost_pesewas * sl.quantity');
+}
+
 export interface PendingOrderSummary {
   id: string;
   status: string;
@@ -43,6 +61,12 @@ export interface PendingOrderSummary {
   quoteExpiresAt: string | null;
   receivedAt: string;
   lineCount: number;
+  deliveryStatus: string;
+  driverId: string | null;
+  driverName: string | null;
+  deliveryFeePesewas: number;
+  deliveryCostPesewas: number;
+  deliveryProfitPesewas: number | null;
 }
 
 export interface PendingOrderDetail extends PendingOrderSummary {
@@ -51,6 +75,13 @@ export interface PendingOrderDetail extends PendingOrderSummary {
   lines: PendingOrderLine[];
   fulfilledSaleId: string | null;
   rejectReason: string | null;
+  packedAt: string | null;
+  dispatchedAt: string | null;
+  deliveredAt: string | null;
+  deliveryFailedAt: string | null;
+  deliveryFailureReason: string | null;
+  deliveryConfirmationCode: string | null;
+  deliveryConfirmationName: string | null;
 }
 
 interface RawRow {
@@ -58,6 +89,11 @@ interface RawRow {
   channel: string; subtotal_pesewas: number; total_pesewas: number;
   quote_expires_at: string | null; confirmed_at: string | null; received_at: string;
   lines_json: string; fulfilled_sale_id: string | null; reject_reason: string | null;
+  delivery_status: string; driver_id: string | null; driver_name: string | null;
+  delivery_fee_pesewas: number; delivery_cost_pesewas: number; delivery_profit_pesewas: number | null;
+  packed_at: string | null; dispatched_at: string | null; delivered_at: string | null;
+  delivery_failed_at: string | null; delivery_failure_reason: string | null;
+  delivery_confirmation_code: string | null; delivery_confirmation_name: string | null;
 }
 
 /** Raw shape stored in lines_json (pullOrders.ts's applyOrders writes this —
@@ -89,12 +125,30 @@ function toDetail(db: DB, r: RawRow): PendingOrderDetail {
     quoteExpiresAt: r.quote_expires_at, confirmedAt: r.confirmed_at, receivedAt: r.received_at,
     lines, lineCount: lines.length,
     fulfilledSaleId: r.fulfilled_sale_id, rejectReason: r.reject_reason,
+    deliveryStatus: r.delivery_status,
+    driverId: r.driver_id,
+    driverName: r.driver_name,
+    deliveryFeePesewas: r.delivery_fee_pesewas,
+    deliveryCostPesewas: r.delivery_cost_pesewas,
+    deliveryProfitPesewas: r.delivery_profit_pesewas,
+    packedAt: r.packed_at,
+    dispatchedAt: r.dispatched_at,
+    deliveredAt: r.delivered_at,
+    deliveryFailedAt: r.delivery_failed_at,
+    deliveryFailureReason: r.delivery_failure_reason,
+    deliveryConfirmationCode: r.delivery_confirmation_code,
+    deliveryConfirmationName: r.delivery_confirmation_name,
   };
 }
 
 const ROW_COLS = `id, status, customer_phone, customer_name, channel,
   subtotal_pesewas, total_pesewas, quote_expires_at, confirmed_at, received_at,
-  lines_json, fulfilled_sale_id, reject_reason`;
+  lines_json, fulfilled_sale_id, reject_reason,
+  delivery_status, driver_id,
+  (SELECT full_name FROM workers w WHERE w.id = pending_orders.driver_id) AS driver_name,
+  delivery_fee_pesewas, delivery_cost_pesewas, delivery_profit_pesewas,
+  packed_at, dispatched_at, delivered_at, delivery_failed_at, delivery_failure_reason,
+  delivery_confirmation_code, delivery_confirmation_name`;
 
 /** Orders awaiting a shop decision, oldest first — a FIFO queue reads
  *  naturally as "what's been waiting longest". Defaults to just CONFIRMED
@@ -107,6 +161,17 @@ export function listPendingOrders(db: DB, opts: { statuses?: string[] } = {}): P
   const rows = db.prepare(
     `SELECT ${ROW_COLS} FROM pending_orders WHERE status IN (${placeholders}) ORDER BY received_at ASC`,
   ).all(...statuses) as RawRow[];
+  return rows.map((r) => toDetail(db, r));
+}
+
+export function listDeliveryOrders(db: DB): PendingOrderSummary[] {
+  const rows = db.prepare(
+    `SELECT ${ROW_COLS}
+      FROM pending_orders
+      WHERE status = 'FULFILLED'
+        AND delivery_status IN ('NOT_STARTED','PACKED','DISPATCHED','DELIVERED','FAILED')
+      ORDER BY COALESCE(dispatched_at, packed_at, delivered_at, updated_at) DESC`,
+  ).all() as RawRow[];
   return rows.map((r) => toDetail(db, r));
 }
 
@@ -261,5 +326,128 @@ export function markPendingOrderFulfilled(db: DB, input: MarkPendingOrderFulfill
     entityId: input.orderId,
     afterValue: { saleId: input.saleId },
     deviceId: input.deviceId,
+  });
+}
+
+export function markPendingOrderPacked(
+  db: DB,
+  input: { orderId: string; workerId: string; deviceId: string },
+): void {
+  const row = db.prepare('SELECT status, delivery_status FROM pending_orders WHERE id = ?').get(input.orderId) as
+    | { status: string; delivery_status: string } | undefined;
+  if (!row) throw new Error(`markPendingOrderPacked: order ${input.orderId} not found`);
+  if (row.status !== 'FULFILLED') throw new Error(`markPendingOrderPacked: order must be fulfilled by a sale first`);
+  if (!['NOT_STARTED', 'FAILED'].includes(row.delivery_status)) {
+    throw new Error(`markPendingOrderPacked: order delivery is ${row.delivery_status}`);
+  }
+  const now = new Date().toISOString();
+  db.prepare(
+    `UPDATE pending_orders
+        SET delivery_status = 'PACKED', packed_at = ?, packed_by = ?,
+            delivery_failed_at = NULL, delivery_failure_reason = NULL,
+            updated_at = ?, updated_by = ?
+      WHERE id = ?`,
+  ).run(now, input.workerId, now, input.workerId, input.orderId);
+  auditDelivery(db, input.workerId, input.deviceId, input.orderId, 'WHATSAPP_ORDER_PACKED', {});
+}
+
+export function markPendingOrderDispatched(
+  db: DB,
+  input: { orderId: string; driverId: string; deliveryFeePesewas?: number; deliveryCostPesewas?: number; workerId: string; deviceId: string },
+): void {
+  const fee = input.deliveryFeePesewas ?? 0;
+  const cost = input.deliveryCostPesewas ?? 0;
+  if (!Number.isInteger(fee) || fee < 0) throw new Error('deliveryFeePesewas must be a non-negative integer');
+  if (!Number.isInteger(cost) || cost < 0) throw new Error('deliveryCostPesewas must be a non-negative integer');
+  const row = db.prepare('SELECT status, delivery_status FROM pending_orders WHERE id = ?').get(input.orderId) as
+    | { status: string; delivery_status: string } | undefined;
+  if (!row) throw new Error(`markPendingOrderDispatched: order ${input.orderId} not found`);
+  if (row.status !== 'FULFILLED') throw new Error(`markPendingOrderDispatched: order must be fulfilled by a sale first`);
+  if (row.delivery_status !== 'PACKED') throw new Error(`markPendingOrderDispatched: order must be packed first`);
+  const driver = db.prepare(
+    `SELECT id, active, deleted_at, terminated_at FROM workers WHERE id = ?`,
+  ).get(input.driverId) as { id: string; active: number; deleted_at: string | null; terminated_at: string | null } | undefined;
+  if (!driver || driver.active !== 1 || driver.deleted_at || driver.terminated_at) {
+    throw new Error(`markPendingOrderDispatched: driver ${input.driverId} not active`);
+  }
+  const now = new Date().toISOString();
+  db.prepare(
+    `UPDATE pending_orders
+        SET delivery_status = 'DISPATCHED', dispatched_at = ?, dispatched_by = ?,
+            driver_id = ?, delivery_fee_pesewas = ?, delivery_cost_pesewas = ?,
+            updated_at = ?, updated_by = ?
+      WHERE id = ?`,
+  ).run(now, input.workerId, input.driverId, fee, cost, now, input.workerId, input.orderId);
+  auditDelivery(db, input.workerId, input.deviceId, input.orderId, 'WHATSAPP_ORDER_DISPATCHED', {
+    driverId: input.driverId, deliveryFeePesewas: fee, deliveryCostPesewas: cost,
+  });
+}
+
+export function completePendingOrderDelivery(
+  db: DB,
+  input: {
+    orderId: string; outcome: 'DELIVERED' | 'FAILED';
+    confirmationCode?: string | null; confirmationName?: string | null; failureReason?: string | null;
+    workerId: string; deviceId: string;
+  },
+): { deliveryProfitPesewas: number | null } {
+  const row = db.prepare(
+    `SELECT delivery_status, fulfilled_sale_id, delivery_fee_pesewas, delivery_cost_pesewas
+       FROM pending_orders WHERE id = ?`,
+  ).get(input.orderId) as
+    | { delivery_status: string; fulfilled_sale_id: string | null; delivery_fee_pesewas: number; delivery_cost_pesewas: number }
+    | undefined;
+  if (!row) throw new Error(`completePendingOrderDelivery: order ${input.orderId} not found`);
+  if (row.delivery_status !== 'DISPATCHED') throw new Error(`completePendingOrderDelivery: order must be dispatched first`);
+  const now = new Date().toISOString();
+  if (input.outcome === 'FAILED') {
+    const reason = input.failureReason?.trim();
+    if (!reason) throw new Error('completePendingOrderDelivery: failure reason required');
+    db.prepare(
+      `UPDATE pending_orders
+          SET delivery_status = 'FAILED', delivery_failed_at = ?,
+              delivery_failure_reason = ?, updated_at = ?, updated_by = ?
+        WHERE id = ?`,
+    ).run(now, reason, now, input.workerId, input.orderId);
+    auditDelivery(db, input.workerId, input.deviceId, input.orderId, 'WHATSAPP_ORDER_DELIVERY_FAILED', { reason });
+    return { deliveryProfitPesewas: null };
+  }
+
+  const confirmationCode = input.confirmationCode?.trim() || null;
+  const netRevenue = lineNetRevenueSql();
+  const netCogs = lineNetCogsSql();
+  const margin = row.fulfilled_sale_id
+    ? (db.prepare(
+      `SELECT COALESCE(SUM(${netRevenue} - ${netCogs}), 0) AS margin
+         FROM sale_lines sl
+         JOIN sales s ON s.id = sl.sale_id
+        WHERE sl.sale_id = ?`,
+    ).get(row.fulfilled_sale_id) as { margin: number }).margin
+    : 0;
+  const deliveryProfit = margin + row.delivery_fee_pesewas - row.delivery_cost_pesewas;
+  db.prepare(
+    `UPDATE pending_orders
+        SET delivery_status = 'DELIVERED', delivered_at = ?, delivered_by = ?,
+            delivery_confirmation_code = ?, delivery_confirmation_name = ?,
+            delivery_profit_pesewas = ?, updated_at = ?, updated_by = ?
+      WHERE id = ?`,
+  ).run(
+    now, input.workerId, confirmationCode, input.confirmationName?.trim() || null,
+    deliveryProfit, now, input.workerId, input.orderId,
+  );
+  auditDelivery(db, input.workerId, input.deviceId, input.orderId, 'WHATSAPP_ORDER_DELIVERED', {
+    confirmationCode, deliveryProfitPesewas: deliveryProfit,
+  });
+  return { deliveryProfitPesewas: deliveryProfit };
+}
+
+function auditDelivery(db: DB, workerId: string, deviceId: string, orderId: string, action: string, afterValue: object): void {
+  logAudit(db, {
+    workerId,
+    action,
+    entityType: 'pending_orders',
+    entityId: orderId,
+    afterValue,
+    deviceId,
   });
 }

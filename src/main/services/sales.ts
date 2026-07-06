@@ -22,6 +22,7 @@ import { getPrinter, type Station } from '../printer/printer.js';
 import type { SaleReceipt } from '../printer/receipt.js';
 import { getReceiptConfig } from './receiptConfig.js';
 import { vatForSale, VAT_ENABLED } from '../../shared/lib/vat.js';
+import { computeTrueBalance } from './customerCredit.js';
 
 export type SaleChannel = 'WALK_IN' | 'WHOLESALE' | 'ROUTE';
 
@@ -285,17 +286,30 @@ export function completeSaleCore(
   // Legacy isCredit boolean used downstream for stock movement reason +
   // sales.is_credit flag. Keep meaning: "this sale has any credit tender."
   const isCredit = hasCredit;
+  let creditCustomer: {
+    id: string;
+    blocked: number;
+    current_balance_pesewas: number;
+    credit_limit_pesewas: number;
+    credit_terms_days: number;
+    cash_only: number;
+  } | null = null;
   if (input.customerId) {
     const cust = db
       .prepare(
-        `SELECT id, blocked, current_balance_pesewas, credit_limit_pesewas
+        `SELECT id, blocked, current_balance_pesewas, credit_limit_pesewas,
+                credit_terms_days, cash_only
            FROM customers WHERE id = ? AND deleted_at IS NULL`,
       )
       .get(input.customerId) as
-      | { id: string; blocked: number; current_balance_pesewas: number; credit_limit_pesewas: number }
+      | {
+          id: string; blocked: number; current_balance_pesewas: number;
+          credit_limit_pesewas: number; credit_terms_days: number; cash_only: number;
+        }
       | undefined;
     if (!cust) throw new Error(`completeSale: customer ${input.customerId} not found`);
     if (cust.blocked === 1) throw new Error(`completeSale: customer is blocked from credit`);
+    creditCustomer = cust;
   }
 
   // --- compute totals -------------------------------------------------------
@@ -426,9 +440,9 @@ export function completeSaleCore(
       if (unitPrice < floorPrice) {
         const productName = productRows.get(l.productId)!.name;
         throw new Error(
-          `completeSale: ${productName} priced at ${unitPrice} pesewas, below the lowest ` +
-          `allowed price of ${floorPrice} for this unit/channel. Ring it at the list price ` +
-          `and record the reduction as a discount instead.`,
+          `completeSale: ${productName} is priced at ${unitPrice} pesewas, below the ` +
+          `active catalog price of ${floorPrice} for this unit/channel. Ring it at the ` +
+          `catalog price and record any approved reduction as a discount.`,
         );
       }
     }
@@ -534,6 +548,25 @@ export function completeSaleCore(
     );
   }
 
+  const creditAmount = payments
+    .filter((p) => p.method === 'CREDIT')
+    .reduce((sum, p) => sum + p.amountPesewas, 0);
+  if (hasCredit && creditCustomer) {
+    if (creditCustomer.cash_only === 1) {
+      throw new Error('completeSale: customer is marked cash-only; credit sale blocked');
+    }
+    const currentCreditBalance = computeTrueBalance(db, creditCustomer.id);
+    if (
+      creditCustomer.credit_limit_pesewas > 0 &&
+      currentCreditBalance + creditAmount > creditCustomer.credit_limit_pesewas
+    ) {
+      throw new Error(
+        `completeSale: credit would exceed customer limit ` +
+        `(${currentCreditBalance + creditAmount} > ${creditCustomer.credit_limit_pesewas} pesewas)`,
+      );
+    }
+  }
+
   // Pick the "primary" method = largest tender. Stable tiebreaker: first occurrence.
   let primary = payments[0]!;
   for (const p of payments) if (p.amountPesewas > primary.amountPesewas) primary = p;
@@ -552,6 +585,13 @@ export function completeSaleCore(
 
   const saleId = `sa-${uuidv4()}`;
   const now = new Date().toISOString();
+  const creditDueDate = hasCredit && creditCustomer
+    ? (() => {
+        const d = new Date(`${now.slice(0, 10)}T00:00:00.000Z`);
+        d.setUTCDate(d.getUTCDate() + Math.max(0, creditCustomer.credit_terms_days));
+        return d.toISOString().slice(0, 10);
+      })()
+    : null;
 
   // Day-lock guard: refuse new sales after a sealed business day. Same
   // pattern as voids.ts and breakage.ts — sealed days must never accept
@@ -566,9 +606,9 @@ export function completeSaleCore(
         id, shift_id, worker_id, location_id, customer_id, channel,
         subtotal_pesewas, discount_pesewas, discount_reason, total_pesewas,
         taxable_pesewas, vat_pesewas, nhil_pesewas, getfund_pesewas,
-        payment_method, payment_reference, is_credit,
+        payment_method, payment_reference, is_credit, credit_due_date,
         created_by, updated_by, device_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       saleId,
       input.shiftId,
@@ -587,6 +627,7 @@ export function completeSaleCore(
       primary.method,
       primary.reference ?? null,
       isCredit ? 1 : 0,
+      creditDueDate,
       input.workerId,
       input.workerId,
       input.deviceId,
@@ -681,9 +722,6 @@ export function completeSaleCore(
     // full sale total. For a split CASH 100 + CREDIT 500 sale the customer
     // owes 500, not 600 — the 100 cash is already in the till.
     if (isCredit && input.customerId) {
-      const creditAmount = payments
-        .filter((p) => p.method === 'CREDIT')
-        .reduce((sum, p) => sum + p.amountPesewas, 0);
       if (creditAmount > 0) {
         db.prepare(
           `UPDATE customers

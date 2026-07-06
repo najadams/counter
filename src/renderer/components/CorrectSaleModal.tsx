@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react';
 import { counter } from '../lib/ipc';
 import { formatMoney, formatMoneyWithCurrency } from '../../shared/lib/money';
+import { FeedbackBanner } from './FeedbackBanner';
 
 interface RecentSale {
   id: string; channel: string; totalPesewas: number; workerName: string;
@@ -159,7 +160,7 @@ export function CorrectSaleModal({ sale, onCancel, onDone }: {
           ))}
         </ul>
 
-        {error && <div className="bg-bg-deep border border-danger px-4 py-2 text-danger text-sm">{error}</div>}
+        {error && <FeedbackBanner>{error}</FeedbackBanner>}
 
         {/* Totals + confirm pinned to the bottom of the sheet so they're always
             reachable without hunting. */}

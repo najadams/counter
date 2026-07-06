@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { counter } from '../../lib/ipc';
 import { useSession } from '../../store/session';
 import type { SyncStatus, AddShopResult } from '../../../shared/types/ipc';
+import { FeedbackBanner } from '../../components/FeedbackBanner';
 
 export function SyncTab(): JSX.Element {
   const role_ = useSession((s) => s.workerRole);
@@ -78,7 +79,7 @@ export function SyncTab(): JSX.Element {
         </div>
       </fieldset>
 
-      {err && <div className="border border-danger bg-danger/10 text-danger text-sm px-3 py-2 rounded">{err}</div>}
+      {err && <FeedbackBanner>{err}</FeedbackBanner>}
       {msg && <div className="border border-success bg-success/10 text-success text-sm px-3 py-2 rounded">{msg}</div>}
       {!isOwner && <div className="text-text-tertiary text-xs">Only OWNER or FOUNDER can change sync settings.</div>}
 
@@ -173,7 +174,7 @@ function AddBranchSection(): JSX.Element {
         </p>
       </div>
       <Field label="New branch's shop code / id" value={newShopId} onChange={setNewShopId} placeholder="e.g. osu-2" />
-      {err && <div className="border border-danger bg-danger/10 text-danger text-sm px-3 py-2 rounded">{err}</div>}
+      {err && <FeedbackBanner>{err}</FeedbackBanner>}
       <button onClick={() => void addBranch()} disabled={busy}
         className="bg-accent text-ink px-5 py-2 font-semibold hover:bg-accent-light disabled:opacity-50">
         {busy ? 'Adding…' : 'Add branch'}

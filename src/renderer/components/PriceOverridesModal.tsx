@@ -11,6 +11,7 @@ import { counter } from '../lib/ipc';
 import { useSession } from '../store/session';
 import { formatMoney, parseCedisToPesewas } from '../../shared/lib/money';
 import type { CpoOverrideRow } from '../../shared/types/ipc';
+import { FeedbackBanner } from './FeedbackBanner';
 
 interface Props {
   customerId: string;
@@ -71,9 +72,9 @@ export function PriceOverridesModal({ customerId, customerName, onClose }: Props
 
         <div className="p-6 space-y-4">
           {error && (
-            <div className="border border-danger bg-danger/10 text-danger px-3 py-2 rounded text-sm">
+            <FeedbackBanner>
               {error}
-            </div>
+            </FeedbackBanner>
           )}
 
           {!isOwner && (

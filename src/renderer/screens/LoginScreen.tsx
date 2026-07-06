@@ -7,6 +7,7 @@ import { counter } from '../lib/ipc';
 import { useSession } from '../store/session';
 import { AppHeader } from '../components/AppHeader';
 import { RecoveryResetModal } from '../components/RecoveryResetModal';
+import { FeedbackBanner } from '../components/FeedbackBanner';
 
 interface Candidate { id: string; fullName: string; role: string }
 
@@ -130,7 +131,7 @@ export default function LoginScreen() {
             {submitting ? 'Signing in…' : 'Sign in'}
           </button>
           {error && (
-            <div className="bg-bg-surface border border-danger px-5 py-3 text-danger text-sm">{error}</div>
+            <FeedbackBanner>{error}</FeedbackBanner>
           )}
           <button
             type="button"

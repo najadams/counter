@@ -14,6 +14,7 @@ import { useEffect, useRef, useState } from 'react';
 import { counter } from '../lib/ipc';
 import { formatMoneyWithCurrency } from '../../shared/lib/money';
 import type { CustomerStatementResponse } from '../../shared/types/ipc';
+import { FeedbackBanner } from './FeedbackBanner';
 
 interface Props {
   customerId: string;
@@ -83,7 +84,9 @@ export function CustomerStatementModal({ customerId, onClose }: Props): JSX.Elem
       `}</style>
       <div className="statement-modal bg-white text-black rounded shadow-xl max-w-3xl w-full max-h-[90vh] overflow-auto">
         {error && (
-          <div className="p-6 text-red-600">Failed to load statement: {error}</div>
+          <div className="p-6">
+            <FeedbackBanner>Failed to load statement: {error}</FeedbackBanner>
+          </div>
         )}
         {!error && !data && (
           <div className="p-12 text-center text-gray-600">Loading statement…</div>

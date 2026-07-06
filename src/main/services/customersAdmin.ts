@@ -35,6 +35,7 @@ export interface CreateCustomerInput {
   geoLng?: number | null;
   creditLimitPesewas?: number;
   creditTermsDays?: number;
+  cashOnly?: boolean;
   preferredChannel?: 'WALK_IN' | 'WHOLESALE' | 'ROUTE' | null;
   notes?: string | null;
   actorWorkerId: string;
@@ -90,9 +91,9 @@ export function createCustomer(
     `INSERT INTO customers (
       id, display_name, phone, alternate_phone, customer_type,
       business_name, location_description, geo_lat, geo_lng,
-      credit_limit_pesewas, credit_terms_days, preferred_channel, notes,
+      credit_limit_pesewas, credit_terms_days, cash_only, preferred_channel, notes,
       created_by, updated_by, device_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     customerId,
     input.displayName.trim(),
@@ -105,6 +106,7 @@ export function createCustomer(
     input.geoLng ?? null,
     credit,
     terms,
+    input.cashOnly ? 1 : 0,
     input.preferredChannel ?? null,
     input.notes ?? null,
     input.actorWorkerId,
@@ -117,7 +119,7 @@ export function createCustomer(
     action: 'CUSTOMER_CREATED',
     entityType: 'customers',
     entityId: customerId,
-    afterValue: { displayName: input.displayName, phone, customerType: ctype, creditLimitPesewas: credit },
+    afterValue: { displayName: input.displayName, phone, customerType: ctype, creditLimitPesewas: credit, cashOnly: !!input.cashOnly },
     deviceId: input.deviceId,
   });
 
@@ -136,6 +138,7 @@ export interface UpdateCustomerInput {
     geoLng: number | null;
     creditLimitPesewas: number;
     creditTermsDays: number;
+    cashOnly: boolean;
     preferredChannel: 'WALK_IN' | 'WHOLESALE' | 'ROUTE' | null;
     notes: string | null;
   }>;
@@ -148,7 +151,7 @@ export function updateCustomer(db: DB, input: UpdateCustomerInput): void {
     .prepare(
       `SELECT id, display_name, alternate_phone, customer_type, business_name,
               location_description, geo_lat, geo_lng, credit_limit_pesewas,
-              credit_terms_days, preferred_channel, notes
+              credit_terms_days, cash_only, preferred_channel, notes
          FROM customers WHERE id = ? AND deleted_at IS NULL`,
     )
     .get(input.customerId) as Record<string, unknown> | undefined;
@@ -165,6 +168,7 @@ export function updateCustomer(db: DB, input: UpdateCustomerInput): void {
     geoLat: 'geo_lat', geoLng: 'geo_lng',
     creditLimitPesewas: 'credit_limit_pesewas',
     creditTermsDays: 'credit_terms_days',
+    cashOnly: 'cash_only',
     preferredChannel: 'preferred_channel',
     notes: 'notes',
   };
@@ -186,6 +190,9 @@ export function updateCustomer(db: DB, input: UpdateCustomerInput): void {
       if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
         throw new Error(`${key} must be a non-negative integer`);
       }
+    }
+    if (key === 'cashOnly') {
+      value = value ? 1 : 0;
     }
     if (key === 'preferredChannel' && value !== null && value !== undefined &&
         !['WALK_IN', 'WHOLESALE', 'ROUTE'].includes(value as string)) {

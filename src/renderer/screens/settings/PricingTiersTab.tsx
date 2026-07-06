@@ -12,6 +12,7 @@ import { counter } from '../../lib/ipc';
 import { useSession } from '../../store/session';
 import { formatMoney, parseCedisToPesewas } from '../../../shared/lib/money';
 import type { PricingTierRow, PricingChannel } from '../../../shared/types/ipc';
+import { FeedbackBanner } from '../../components/FeedbackBanner';
 
 interface AdminProduct {
   id: string; sku: string; name: string;
@@ -190,7 +191,7 @@ export function PricingTiersTab() {
             </div>
 
             {info && <div className="border border-success bg-success/10 text-success px-3 py-2 rounded text-sm">{info}</div>}
-            {error && <div className="border border-danger bg-danger/10 text-danger px-3 py-2 rounded text-sm">{error}</div>}
+            {error && <FeedbackBanner>{error}</FeedbackBanner>}
 
             {/* Tier table */}
             <div className="overflow-x-auto border border-border-subtle rounded">

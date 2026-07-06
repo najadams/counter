@@ -277,6 +277,14 @@ export function computeAndCloseShift(
     )
     .get(shiftId) as { total: number };
 
+  const taxPaymentsCashRow = db
+    .prepare(
+      `SELECT COALESCE(SUM(amount_pesewas), 0) AS total
+         FROM tax_payments
+        WHERE shift_id = ? AND payment_method = 'CASH'`,
+    )
+    .get(shiftId) as { total: number };
+
   // Cash brought into the till by customers paying down credit during the
   // shift. customer_payments.payment_method = 'CASH' is real cash received;
   // RETURN_CREDIT (synthetic, from customerReturns) and MOMO_*/BANK_TRANSFER
@@ -294,7 +302,8 @@ export function computeAndCloseShift(
     + cashSalesRow.total
     + debtPaymentsCashRow.total
     - cashDropsRow.total
-    - expensesRow.total;
+    - expensesRow.total
+    - taxPaymentsCashRow.total;
   const variance = closeCount.counted_pesewas - expected;
 
   // Total breakage value during this shift (negative pesewas in stock_movements).

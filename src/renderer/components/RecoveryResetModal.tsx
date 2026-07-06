@@ -13,6 +13,7 @@
 
 import { useEffect, useState } from 'react';
 import { counter } from '../lib/ipc';
+import { FeedbackBanner } from './FeedbackBanner';
 
 interface OwnerRow { id: string; fullName: string; hasCode: boolean }
 
@@ -89,7 +90,7 @@ export function RecoveryResetModal({ onClose }: { onClose: () => void }) {
                 ))}
               </div>
             )}
-            {error && <div className="text-sm text-danger bg-danger/10 border border-danger/40 rounded px-3 py-2">{error}</div>}
+            {error && <FeedbackBanner>{error}</FeedbackBanner>}
             <div className="flex justify-end gap-3 pt-2">
               <button onClick={onClose} className="px-4 py-2 border border-border hover:bg-bg-deep text-sm">Cancel</button>
               <button
@@ -136,7 +137,7 @@ export function RecoveryResetModal({ onClose }: { onClose: () => void }) {
                   className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle font-mono tracking-widest" />
               </label>
             </div>
-            {error && <div className="text-sm text-danger bg-danger/10 border border-danger/40 rounded px-3 py-2">{error}</div>}
+            {error && <FeedbackBanner>{error}</FeedbackBanner>}
             <div className="flex justify-end gap-3 pt-2">
               <button onClick={() => setStep('pick')} disabled={busy}
                 className="px-4 py-2 border border-border hover:bg-bg-deep text-sm">Back</button>

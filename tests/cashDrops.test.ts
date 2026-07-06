@@ -12,8 +12,10 @@ import {
   computeAndCloseShift, openShift, submitClosingCount,
 } from '../src/main/services/shifts';
 import {
-  getCurrentExpectedCash, listCashDropsForShift, recordCashDrop,
+  getCurrentExpectedCash, getDrawingReport, listCashDropsForShift,
+  recordCashDrop, upsertDrawingPolicy,
 } from '../src/main/services/cashDrops';
+import { recordExpense } from '../src/main/services/expenses';
 
 const __filename = fileURLToPath(import.meta.url);
 const migrationsDir = path.resolve(path.dirname(__filename), '../migrations');
@@ -111,6 +113,45 @@ describe('recordCashDrop', () => {
     expect(a.action).toBe('CASH_DROP_RECORDED');
   });
 
+  it('records owner/family drawings separately from generic drops', () => {
+    const r = recordCashDrop(db, {
+      shiftId, workerId: W, amountPesewas: 1000, recipient: 'Dad',
+      category: 'OWNER_DRAWING',
+      supervisorWorkerId: SUP, supervisorPin: '9999', deviceId: D,
+    });
+    const drawing = db.prepare('SELECT category, beneficiary_name, amount_pesewas FROM owner_drawings WHERE cash_count_id = ?')
+      .get(r.cashCountId) as { category: string; beneficiary_name: string; amount_pesewas: number };
+    expect(drawing).toEqual({ category: 'OWNER_DRAWING', beneficiary_name: 'Dad', amount_pesewas: 1000 });
+    expect(listCashDropsForShift(db, shiftId)[0]?.category).toBe('OWNER_DRAWING');
+    const a = db.prepare(`SELECT action FROM audit_log WHERE entity_id = ?`).get(r.cashCountId) as { action: string };
+    expect(a.action).toBe('OWNER_DRAWING_RECORDED');
+  });
+
+  it('enforces recurring drawing policy caps and reports by period', () => {
+    const policy = upsertDrawingPolicy(db, {
+      category: 'FAMILY_SUPPORT',
+      beneficiaryName: 'Family',
+      cadence: 'MONTHLY',
+      limitPesewas: 1500,
+      workerId: W,
+      deviceId: D,
+    });
+    recordCashDrop(db, {
+      shiftId, workerId: W, amountPesewas: 1000, recipient: 'Family',
+      category: 'FAMILY_SUPPORT', drawingPolicyId: policy.policyId,
+      supervisorWorkerId: SUP, supervisorPin: '9999', deviceId: D,
+    });
+    expect(() => recordCashDrop(db, {
+      shiftId, workerId: W, amountPesewas: 600, recipient: 'Family',
+      category: 'FAMILY_SUPPORT', drawingPolicyId: policy.policyId,
+      supervisorWorkerId: SUP, supervisorPin: '9999', deviceId: D,
+    })).toThrow(/policy limit exceeded/);
+    const today = new Date().toISOString().slice(0, 10);
+    const rows = getDrawingReport(db, { period: 'MONTHLY', fromDate: today.slice(0, 8) + '01', toDate: today });
+    expect(rows[0]?.category).toBe('FAMILY_SUPPORT');
+    expect(rows[0]?.totalPesewas).toBe(1000);
+  });
+
   it('expectedCashAfterDropPesewas reports the new balance', () => {
     addCashSale(2000); // expected = 5000 + 2000 = 7000
     const r = recordCashDrop(db, {
@@ -131,6 +172,20 @@ describe('getCurrentExpectedCash', () => {
       supervisorWorkerId: SUP, supervisorPin: '9999', deviceId: D,
     });
     expect(getCurrentExpectedCash(db, shiftId)).toBe(7000);
+  });
+
+  it('subtracts petty cash expenses the same way shift close does', () => {
+    addCashSale(3000);
+    recordExpense(db, {
+      shiftId, locationId: L, workerId: W,
+      amountPesewas: 1200, category: 'TRANSPORT',
+      description: 'runner fare', deviceId: D,
+    });
+    expect(getCurrentExpectedCash(db, shiftId)).toBe(6800);
+    submitClosingCount(db, shiftId, 6800, W, D);
+    const closed = computeAndCloseShift(db, shiftId, W, D);
+    expect(closed.expectedPesewas).toBe(6800);
+    expect(closed.variancePesewas).toBe(0);
   });
 });
 

@@ -5,8 +5,17 @@ import { useEffect, useState } from 'react';
 import { counter } from '../lib/ipc';
 import { SupervisorPinModal } from './SupervisorPinModal';
 import { formatMoneyWithCurrency, parseCedisToPesewas } from '../../shared/lib/money';
+import type { DrawingPolicyRow } from '../../shared/types/ipc';
+import { FeedbackBanner } from './FeedbackBanner';
 
 const COMMON_RECIPIENTS = ['Owner', 'Bank deposit', 'Supplier payment', 'Other'];
+const CATEGORIES = [
+  { value: 'GENERIC_DROP', label: 'Generic cash drop' },
+  { value: 'OWNER_DRAWING', label: 'Owner drawing' },
+  { value: 'FAMILY_SUPPORT', label: 'Family support' },
+  { value: 'OWNER_SALARY', label: 'Owner salary' },
+  { value: 'OTHER_DRAWING', label: 'Other drawing' },
+] as const;
 
 export function CashDropModal({ shiftId, onClose, onDone }: {
   shiftId: string; onClose: () => void; onDone: () => void;
@@ -14,6 +23,9 @@ export function CashDropModal({ shiftId, onClose, onDone }: {
   const [expected, setExpected] = useState<number | null>(null);
   const [amount, setAmount] = useState('');
   const [recipient, setRecipient] = useState(COMMON_RECIPIENTS[0]!);
+  const [category, setCategory] = useState<typeof CATEGORIES[number]['value']>('GENERIC_DROP');
+  const [policies, setPolicies] = useState<DrawingPolicyRow[]>([]);
+  const [drawingPolicyId, setDrawingPolicyId] = useState('');
   const [customRecipient, setCustomRecipient] = useState('');
   const [notes, setNotes] = useState('');
   const [askingSupervisor, setAskingSupervisor] = useState(false);
@@ -23,11 +35,15 @@ export function CashDropModal({ shiftId, onClose, onDone }: {
     void (async () => {
       const r = await counter.getExpectedCash(shiftId);
       if (r.success) setExpected(r.data.expectedCashPesewas);
+      const p = await counter.listDrawingPolicies();
+      if (p.success) setPolicies(p.data.policies.filter((row) => row.active));
     })();
   }, [shiftId]);
 
   const amountPesewas = parseCedisToPesewas(amount);
-  const finalRecipient = recipient === 'Other' ? customRecipient.trim() : recipient;
+  const selectedPolicy = policies.find((p) => p.id === drawingPolicyId);
+  const finalRecipient = selectedPolicy?.beneficiaryName
+    ?? (recipient === 'Other' ? customRecipient.trim() : recipient);
   const valid = amountPesewas !== null && amountPesewas > 0 && finalRecipient.length > 0
     && (expected === null || amountPesewas <= expected);
 
@@ -36,6 +52,8 @@ export function CashDropModal({ shiftId, onClose, onDone }: {
     setError(null);
     const r = await counter.recordCashDrop({
       shiftId, amountPesewas, recipient: finalRecipient,
+      category,
+      drawingPolicyId: drawingPolicyId || null,
       notes: notes.trim() || null,
       supervisorWorkerId, supervisorPin,
     });
@@ -63,6 +81,29 @@ export function CashDropModal({ shiftId, onClose, onDone }: {
               Exceeds expected cash by {formatMoneyWithCurrency(amountPesewas - expected)}.
             </div>
           )}
+          <label className="text-text-secondary text-xs uppercase tracking-wider">Category</label>
+          <select
+            value={category}
+            onChange={(e) => { setCategory(e.target.value as typeof category); setDrawingPolicyId(''); }}
+            className="bg-bg-input border border-border-strong px-3 py-3 text-text-primary">
+            {CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+          </select>
+          {category !== 'GENERIC_DROP' && (
+            <>
+              <label className="text-text-secondary text-xs uppercase tracking-wider">Drawing policy</label>
+              <select
+                value={drawingPolicyId}
+                onChange={(e) => setDrawingPolicyId(e.target.value)}
+                className="bg-bg-input border border-border-strong px-3 py-3 text-text-primary">
+                <option value="">No recurring policy</option>
+                {policies.filter((p) => p.category === category).map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.beneficiaryName} · {p.cadence.toLowerCase()} cap {formatMoneyWithCurrency(p.limitPesewas)}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
           <label className="text-text-secondary text-xs uppercase tracking-wider">Recipient</label>
           <select value={recipient} onChange={(e) => setRecipient(e.target.value)}
             className="bg-bg-input border border-border-strong px-3 py-3 text-text-primary">
@@ -74,7 +115,7 @@ export function CashDropModal({ shiftId, onClose, onDone }: {
           )}
           <textarea value={notes} onChange={(e) => setNotes(e.target.value)}
             placeholder="Notes (optional)" className="bg-bg-input border border-border-strong px-3 py-2 text-sm" rows={2} />
-          {error && <div className="bg-bg-deep border border-danger px-4 py-2 text-danger text-sm">{error}</div>}
+          {error && <FeedbackBanner>{error}</FeedbackBanner>}
           <div className="flex gap-3">
             <button onClick={onClose} className="px-5 py-3 border border-border hover:bg-bg-elevated">Cancel</button>
             <button onClick={() => setAskingSupervisor(true)} disabled={!valid}

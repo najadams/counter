@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { counter } from '../../lib/ipc';
 import { useSession } from '../../store/session';
 import { formatMoneyWithCurrency } from '../../../shared/lib/money';
+import { FeedbackBanner } from '../../components/FeedbackBanner';
 
 interface Suggestion {
   productId: string; sku: string; productName: string;
@@ -125,7 +126,7 @@ export function ReorderTab() {
         </div>
       </div>
 
-      {error && <div className="bg-danger/10 border border-danger/40 text-danger text-sm px-3 py-2 rounded">{error}</div>}
+      {error && <FeedbackBanner>{error}</FeedbackBanner>}
       {info && <div className="bg-success/10 border border-success/40 text-success text-sm px-3 py-2 rounded">{info}</div>}
 
       {[...groups.values()].length === 0 && !loading && (

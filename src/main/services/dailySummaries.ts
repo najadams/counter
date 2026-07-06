@@ -8,6 +8,7 @@
 import type { Database as DB } from 'better-sqlite3';
 import { v4 as uuidv4 } from 'uuid';
 import { unitsOnHand } from './stockMovements.js';
+import { VAT_ENABLED } from '../../shared/lib/vat.js';
 
 export interface DailySummary {
   id: string;
@@ -45,6 +46,18 @@ export interface GenerateDailySummaryInput {
   deviceId: string;
 }
 
+function taxableSql(expr: string): string {
+  return VAT_ENABLED ? `ROUND((${expr}) * 10000.0 / 12000.0)` : `(${expr})`;
+}
+
+function saleNetRevenueSql(): string {
+  if (!VAT_ENABLED) return 'total_pesewas';
+  return `CASE
+            WHEN taxable_pesewas > 0 THEN taxable_pesewas
+            ELSE ${taxableSql('total_pesewas')}
+          END`;
+}
+
 /** Generate (or regenerate) the daily summary for a given date+location. */
 export function generateDailySummary(
   db: DB,
@@ -60,9 +73,10 @@ export function generateDailySummary(
   const next = new Date(Date.UTC(y, m - 1, d + 1)).toISOString();
 
   // Sales
+  const saleNetRevenue = saleNetRevenueSql();
   const salesAgg = db
     .prepare(
-      `SELECT COALESCE(SUM(total_pesewas), 0) AS revenue,
+      `SELECT COALESCE(SUM(${saleNetRevenue}), 0) AS revenue,
               COUNT(*) AS num,
               COUNT(DISTINCT customer_id) AS distinct_customers
          FROM sales
@@ -73,7 +87,7 @@ export function generateDailySummary(
 
   const cogsRow = db
     .prepare(
-      `SELECT COALESCE(SUM(sl.unit_cost_pesewas * sl.quantity), 0) AS cogs
+      `SELECT COALESCE(SUM(${taxableSql('sl.unit_cost_pesewas * sl.quantity')}), 0) AS cogs
          FROM sale_lines sl
          JOIN sales s ON s.id = sl.sale_id
          WHERE s.location_id = ? AND s.voided = 0

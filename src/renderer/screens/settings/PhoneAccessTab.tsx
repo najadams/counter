@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { counter } from '../../lib/ipc';
 import type { HttpStatusResponse } from '../../../shared/types/ipc';
+import { FeedbackBanner } from '../../components/FeedbackBanner';
 
 export function PhoneAccessTab() {
   const [status, setStatus] = useState<HttpStatusResponse | null>(null);
@@ -77,7 +78,7 @@ export function PhoneAccessTab() {
         </>
       )}
 
-      {error && <div className="bg-bg-deep border border-danger px-4 py-2 text-danger text-sm">{error}</div>}
+      {error && <FeedbackBanner>{error}</FeedbackBanner>}
 
       <div className="text-text-tertiary text-xs border-t border-border pt-3 flex flex-col gap-2">
         <p><span className="text-text-secondary">First time only:</span> Windows (or macOS) will ask to

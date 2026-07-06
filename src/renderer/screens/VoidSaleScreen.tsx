@@ -9,6 +9,7 @@ import { CorrectSaleModal } from '../components/CorrectSaleModal';
 import { ReceiptPrintModal } from '../components/ReceiptPrintModal';
 import type { SaleReceipt } from '../../shared/lib/receipt';
 import { formatMoney, formatMoneyWithCurrency } from '../../shared/lib/money';
+import { FeedbackBanner } from '../components/FeedbackBanner';
 
 interface RecentSale {
   id: string; createdAt: string; channel: string; totalPesewas: number;
@@ -188,7 +189,7 @@ export default function VoidSaleScreen({ onExit, onDuplicate }: { onExit: () => 
               placeholder="e.g. customer changed mind, wrong product, accidental double-scan"
               className="bg-bg-input border border-border-strong px-4 py-3"
             />
-            {error && <div className="bg-bg-deep border border-danger px-4 py-2 text-danger text-sm">{error}</div>}
+            {error && <FeedbackBanner>{error}</FeedbackBanner>}
             <div className="flex gap-3">
               <button onClick={() => setSelected(null)} className="px-5 py-3 border border-border hover:bg-bg-elevated">Cancel</button>
               <button

@@ -11,8 +11,10 @@ export const SYNCED_EVENT_TABLES = [
   'sales', 'sale_lines', 'sale_payments', 'stock_movements', 'breakage_log',
   'worker_consumption_log', 'audit_log', 'customer_payments', 'customer_payment_allocations',
   'supplier_payments', 'supplier_payment_allocations', 'purchase_orders', 'purchase_order_lines',
+  'supplier_invoices', 'supplier_invoice_lines', 'supplier_invoice_payment_allocations',
   'cash_counts', 'shifts', 'stocktake_events', 'stocktake_lines', 'period_closes',
   'petty_cash_expenses', 'container_movements', 'customer_returns', 'customer_return_lines',
+  'owner_drawings', 'drawing_policies', 'price_history',
   'route_runs', 'route_stops', 'daily_summaries',
   // Phase 4: WhatsApp order accept/reject/fulfil. Unlike every other table in
   // this list, pending_orders rows are MUTATED in place (CONFIRMED ->
@@ -28,7 +30,7 @@ export type SyncedEventTable = (typeof SYNCED_EVENT_TABLES)[number];
  *  unlike every other event table here which is genuinely append-only and
  *  only ever needs INSERT capture. Single source of truth for the "no drift"
  *  trigger-count test in tests/syncOutbox.test.ts. */
-export const MUTABLE_EVENT_TABLES: readonly SyncedEventTable[] = ['pending_orders'];
+export const MUTABLE_EVENT_TABLES: readonly SyncedEventTable[] = ['pending_orders', 'supplier_invoices', 'drawing_policies'];
 
 export interface PushRow {
   seq: number;

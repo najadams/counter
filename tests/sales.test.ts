@@ -374,6 +374,42 @@ describe('completeSale — validation', () => {
       paymentMethod: 'CREDIT', customerId: 'cust-blocked', deviceId: D, shopName: 'TEST',
     })).rejects.toThrow(/blocked/);
   });
+
+  it('rejects cash-only customers for credit', async () => {
+    db.prepare(
+      `INSERT INTO customers (id, display_name, phone, customer_type, credit_limit_pesewas, cash_only,
+         created_by, updated_by, device_id) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)`,
+    ).run('cust-cash-only', 'Cash Only', '+233244111555', 'WALK_IN_REGULAR', 100000, W, W, D);
+    const star = pickProduct('STAR-330');
+    await expect(completeSale(db, {
+      shiftId, workerId: W, workerName: 'Naj', locationId: L, channel: 'WALK_IN',
+      lines: [{ productId: star.id, quantity: 1, unitPricePesewas: 800 }],
+      paymentMethod: 'CREDIT', customerId: 'cust-cash-only', deviceId: D, shopName: 'TEST',
+    })).rejects.toThrow(/cash-only/);
+  });
+
+  it('hard-blocks credit that would exceed the customer limit', async () => {
+    db.prepare(
+      `INSERT INTO customers (id, display_name, phone, customer_type, credit_limit_pesewas,
+         created_by, updated_by, device_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run('cust-limit', 'Limit Customer', '+233244111556', 'WALK_IN_REGULAR', 1000, W, W, D);
+    const star = pickProduct('STAR-330');
+    await completeSale(db, {
+      shiftId, workerId: W, workerName: 'Naj', locationId: L, channel: 'WALK_IN',
+      lines: [{ productId: star.id, quantity: 1, unitPricePesewas: 800 }],
+      paymentMethod: 'CREDIT', customerId: 'cust-limit', deviceId: D, shopName: 'TEST',
+    });
+    db.prepare('UPDATE customers SET current_balance_pesewas = 0 WHERE id = ?').run('cust-limit');
+    await expect(completeSale(db, {
+      shiftId, workerId: W, workerName: 'Naj', locationId: L, channel: 'WALK_IN',
+      lines: [{ productId: star.id, quantity: 1, unitPricePesewas: 800 }],
+      payments: [
+        { method: 'CASH', amountPesewas: 400, cashGivenPesewas: 400 },
+        { method: 'CREDIT', amountPesewas: 400 },
+      ],
+      customerId: 'cust-limit', deviceId: D, shopName: 'TEST',
+    })).rejects.toThrow(/exceed customer limit/);
+  });
 });
 
 describe('completeSale — credit balance', () => {
@@ -390,6 +426,24 @@ describe('completeSale — credit balance', () => {
     });
     const row = db.prepare('SELECT current_balance_pesewas FROM customers WHERE id = ?').get('cust-1') as { current_balance_pesewas: number };
     expect(row.current_balance_pesewas).toBe(1600);
+  });
+
+  it('stores a due date from the customer credit terms', async () => {
+    db.prepare(
+      `INSERT INTO customers (id, display_name, phone, customer_type, credit_limit_pesewas, credit_terms_days,
+         created_by, updated_by, device_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run('cust-terms', 'Terms Customer', '+233244999222', 'WALK_IN_REGULAR', 100000, 7, W, W, D);
+    const star = pickProduct('STAR-330');
+    const before = new Date().toISOString().slice(0, 10);
+    const r = await completeSale(db, {
+      shiftId, workerId: W, workerName: 'Naj', locationId: L, channel: 'WALK_IN',
+      lines: [{ productId: star.id, quantity: 1, unitPricePesewas: 800 }],
+      paymentMethod: 'CREDIT', customerId: 'cust-terms', deviceId: D, shopName: 'TEST',
+    });
+    const row = db.prepare('SELECT credit_due_date FROM sales WHERE id = ?').get(r.saleId) as { credit_due_date: string };
+    const due = new Date(`${before}T00:00:00.000Z`);
+    due.setUTCDate(due.getUTCDate() + 7);
+    expect(row.credit_due_date).toBe(due.toISOString().slice(0, 10));
   });
 
   it('walk-in cash sale does NOT change customer balance', async () => {

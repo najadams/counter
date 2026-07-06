@@ -32,6 +32,7 @@ import StocktakeScreen from './StocktakeScreen';
 import DailySummaryScreen from './DailySummaryScreen';
 import CustomersScreen from './CustomersScreen';
 import ReportsScreen from './ReportsScreen';
+import { FeedbackBanner } from '../components/FeedbackBanner';
 
 type View = 'home' | 'sale' | 'void' | 'breakage' | 'consumption' | 'stock' | 'settings' | 'stocktake' | 'summary' | 'customers' | 'reports' | 'pendingOrders';
 
@@ -278,7 +279,7 @@ export default function HomeScreen() {
                 {closing ? 'Reconciling…' : 'Confirm count'}
               </button>
             </div>
-            {error && <div className="bg-bg-surface border border-danger px-5 py-3 text-danger text-sm">{error}</div>}
+            {error && <FeedbackBanner>{error}</FeedbackBanner>}
           </div>
         )}
 

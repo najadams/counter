@@ -6,8 +6,10 @@ import { counter } from '../lib/ipc';
 import { AppHeader } from '../components/AppHeader';
 import { SupervisorPinModal } from '../components/SupervisorPinModal';
 import { formatMoney, formatMoneyWithCurrency, parseCedisToPesewas } from '../../shared/lib/money';
+import { FeedbackBanner } from '../components/FeedbackBanner';
 
 interface Supplier { id: string; name: string; paymentTermsDays: number; currentBalancePesewas: number }
+interface DraftPO { id: string; poNumber: string; supplierId: string; totalOrderedPesewas: number; lineCount: number; createdAt: string }
 interface ProductHit { id: string; sku: string; name: string; costPricePesewas: number; unitsOnHand: number }
 
 interface DraftLine {
@@ -18,8 +20,15 @@ interface DraftLine {
 
 export default function StockReceiveScreen({ onExit }: { onExit: () => void }) {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [draftPOs, setDraftPOs] = useState<DraftPO[]>([]);
   const [supplierId, setSupplierId] = useState<string>('');
+  const [purchaseOrderId, setPurchaseOrderId] = useState('');
   const [isOpeningStock, setIsOpeningStock] = useState<boolean>(false);
+  const [supplierInvoiceNumber, setSupplierInvoiceNumber] = useState('');
+  const [supplierInvoiceDate, setSupplierInvoiceDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [supplierDueDate, setSupplierDueDate] = useState('');
+  const [transportCost, setTransportCost] = useState('0.00');
+  const [loadingCost, setLoadingCost] = useState('0.00');
   const [productQuery, setProductQuery] = useState('');
   const [hits, setHits] = useState<ProductHit[]>([]);
   const [lines, setLines] = useState<DraftLine[]>([]);
@@ -46,6 +55,8 @@ export default function StockReceiveScreen({ onExit }: { onExit: () => void }) {
         setSuppliers(r.data.suppliers);
         if (r.data.suppliers[0]) setSupplierId(r.data.suppliers[0].id);
       }
+      const po = await counter.reorderListDrafts();
+      if (po.success) setDraftPOs(po.data.drafts);
     })();
     function onKey(e: KeyboardEvent) {
       if (e.key === 'F9' || e.key === 'Escape') {
@@ -66,6 +77,14 @@ export default function StockReceiveScreen({ onExit }: { onExit: () => void }) {
     }, 150);
     return () => { cancelled = true; clearTimeout(t); };
   }, [productQuery]);
+
+  const supplierDraftPOs = draftPOs.filter((po) => po.supplierId === supplierId);
+
+  useEffect(() => {
+    if (purchaseOrderId && !supplierDraftPOs.some((po) => po.id === purchaseOrderId)) {
+      setPurchaseOrderId('');
+    }
+  }, [purchaseOrderId, supplierDraftPOs]);
 
   // Fetch purchase units for the selected product whenever it changes.
   useEffect(() => {
@@ -125,12 +144,23 @@ export default function StockReceiveScreen({ onExit }: { onExit: () => void }) {
   async function approve(supervisorWorkerId: string, supervisorPin: string, allowLargeCostSwing = false) {
     if (lines.length === 0) { setError('Add at least one line.'); return; }
     if (!isOpeningStock && !supplierId) { setError('Pick a supplier.'); return; }
+    const transportCostPesewas = parseCedisToPesewas(transportCost);
+    const loadingCostPesewas = parseCedisToPesewas(loadingCost);
+    if (!isOpeningStock && (transportCostPesewas === null || loadingCostPesewas === null)) {
+      setError('Transport and loading costs must be valid amounts.'); return;
+    }
     setSubmitting(true);
     setError(null);
     setCostSwing(null);
     const r = await counter.receiveStock({
       supplierId: isOpeningStock ? null : supplierId,
       isOpeningStock,
+      purchaseOrderId: isOpeningStock ? null : purchaseOrderId || null,
+      supplierInvoiceNumber: isOpeningStock ? null : supplierInvoiceNumber.trim() || null,
+      supplierInvoiceDate: isOpeningStock ? null : supplierInvoiceDate,
+      supplierDueDate: isOpeningStock ? null : supplierDueDate || null,
+      transportCostPesewas: isOpeningStock ? 0 : transportCostPesewas ?? 0,
+      loadingCostPesewas: isOpeningStock ? 0 : loadingCostPesewas ?? 0,
       supervisorWorkerId, supervisorPin,
       lines: lines.map((l) => ({ productId: l.productId, quantity: l.quantity, unitCostPesewas: l.unitCostPesewas, unitId: l.unitId })),
       notes: notes.trim() || null,
@@ -149,8 +179,8 @@ export default function StockReceiveScreen({ onExit }: { onExit: () => void }) {
       setError(r.error);
       return;
     }
-    setInfo(`Received ${r.data.movementCount} line(s) worth ${formatMoneyWithCurrency(r.data.totalValuePesewas)}. ${r.data.productsCostUpdated} cost(s) updated.`);
-    setLines([]); setNotes('');
+    setInfo(`Received ${r.data.movementCount} line(s) worth ${formatMoneyWithCurrency(r.data.totalValuePesewas)}. Payable ${formatMoneyWithCurrency(r.data.totalPayablePesewas)}. ${r.data.supplierInvoiceId ? `Invoice ${r.data.supplierInvoiceId.slice(-8)} created. ` : ''}${r.data.productsCostUpdated} cost(s) updated.`);
+    setLines([]); setNotes(''); setSupplierInvoiceNumber(''); setPurchaseOrderId(''); setTransportCost('0.00'); setLoadingCost('0.00');
   }
 
   return (
@@ -182,6 +212,70 @@ export default function StockReceiveScreen({ onExit }: { onExit: () => void }) {
                 </option>
               ))}
             </select>
+            {supplierDraftPOs.length > 0 && (
+              <label>
+                <span className="block text-text-secondary text-xs uppercase tracking-wider mb-1">Match to PO</span>
+                <select
+                  value={purchaseOrderId}
+                  onChange={(e) => setPurchaseOrderId(e.target.value)}
+                  className="w-full bg-bg-input border border-border-strong px-3 py-2 text-text-primary"
+                >
+                  <option value="">Receipt only</option>
+                  {supplierDraftPOs.map((po) => (
+                    <option key={po.id} value={po.id}>
+                      {po.poNumber} · {po.lineCount} line(s) · {formatMoney(po.totalOrderedPesewas)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <label>
+                <span className="block text-text-secondary text-xs uppercase tracking-wider mb-1">Supplier invoice #</span>
+                <input
+                  value={supplierInvoiceNumber}
+                  onChange={(e) => setSupplierInvoiceNumber(e.target.value)}
+                  placeholder="e.g. INV-1042"
+                  className="w-full bg-bg-input border border-border-strong px-3 py-2"
+                />
+              </label>
+              <label>
+                <span className="block text-text-secondary text-xs uppercase tracking-wider mb-1">Invoice date</span>
+                <input
+                  type="date"
+                  value={supplierInvoiceDate}
+                  onChange={(e) => setSupplierInvoiceDate(e.target.value)}
+                  className="w-full bg-bg-input border border-border-strong px-3 py-2"
+                />
+              </label>
+              <label>
+                <span className="block text-text-secondary text-xs uppercase tracking-wider mb-1">Due date</span>
+                <input
+                  type="date"
+                  value={supplierDueDate}
+                  onChange={(e) => setSupplierDueDate(e.target.value)}
+                  className="w-full bg-bg-input border border-border-strong px-3 py-2"
+                />
+              </label>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label>
+                <span className="block text-text-secondary text-xs uppercase tracking-wider mb-1">Transport cost</span>
+                <input
+                  value={transportCost}
+                  onChange={(e) => setTransportCost(e.target.value)}
+                  className="w-full bg-bg-input border border-border-strong px-3 py-2"
+                />
+              </label>
+              <label>
+                <span className="block text-text-secondary text-xs uppercase tracking-wider mb-1">Loading cost</span>
+                <input
+                  value={loadingCost}
+                  onChange={(e) => setLoadingCost(e.target.value)}
+                  className="w-full bg-bg-input border border-border-strong px-3 py-2"
+                />
+              </label>
+            </div>
           </>
         )}
 
@@ -281,7 +375,7 @@ export default function StockReceiveScreen({ onExit }: { onExit: () => void }) {
         <textarea value={notes} onChange={(e) => setNotes(e.target.value)}
           placeholder="Notes (optional)" className="bg-bg-input border border-border-strong px-3 py-2 text-sm" rows={2} />
 
-        {error && <div className="bg-bg-deep border border-danger px-4 py-2 text-danger text-sm">{error}</div>}
+        {error && <FeedbackBanner>{error}</FeedbackBanner>}
 
         {costSwing && (
           <div className="bg-bg-deep border border-warning px-4 py-3 text-sm flex flex-col gap-3">

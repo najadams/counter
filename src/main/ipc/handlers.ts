@@ -408,13 +408,21 @@ export function registerIpcHandlers(
         locationId: DEFAULT_LOCATION_ID,
         workerId: w.workerId,
         supervisorApprovalId: req.supervisorWorkerId,
+        purchaseOrderId: req.purchaseOrderId ?? null,
+        supplierInvoiceNumber: req.supplierInvoiceNumber ?? null,
+        supplierInvoiceDate: req.supplierInvoiceDate ?? null,
+        supplierDueDate: req.supplierDueDate ?? null,
+        transportCostPesewas: req.transportCostPesewas ?? 0,
+        loadingCostPesewas: req.loadingCostPesewas ?? 0,
         lines: req.lines, notes: req.notes,
         allowLargeCostSwing: req.allowLargeCostSwing,
         deviceId,
       });
       return {
         movementCount: r.movementIds.length,
+        supplierInvoiceId: r.supplierInvoiceId,
         totalValuePesewas: r.totalValuePesewas,
+        totalPayablePesewas: r.totalPayablePesewas,
         productsCostUpdated: r.productsUpdated,
       };
     },
@@ -487,6 +495,8 @@ import {
   type DailySummaryGenerateRequest, type DailySummaryGenerateResponse,
   type DailySummaryGetRequest, type DailySummaryGetResponse,
   type DailySummaryListRequest, type DailySummaryListResponse,
+  type DrawingPolicyListResponse, type DrawingPolicyUpsertRequest, type DrawingPolicyUpsertResponse,
+  type DrawingReportRequest, type DrawingReportResponse,
   type StocktakeCancelRequest, type StocktakeCancelResponse,
   type StocktakeCompleteRequest, type StocktakeCompleteResponse,
   type StocktakeGetActiveResponse,
@@ -499,7 +509,10 @@ import {
   cancelStocktake, completeStocktake, getActiveStocktake,
   getStocktakeWithLines, listRecentStocktakes, recordStocktakeCount, startStocktake,
 } from '../services/stocktake.js';
-import { getCurrentExpectedCash, listCashDropsForShift, recordCashDrop } from '../services/cashDrops.js';
+import {
+  getCurrentExpectedCash, getDrawingReport, listCashDropsForShift,
+  listDrawingPolicies, recordCashDrop, upsertDrawingPolicy,
+} from '../services/cashDrops.js';
 import {
   generateDailySummary, getDailySummary, listRecentDailySummaries,
 } from '../services/dailySummaries.js';
@@ -563,7 +576,9 @@ export function registerSession5Handlers(
       const w = requireWorker();
       return recordCashDrop(db, {
         shiftId: req.shiftId, workerId: w.workerId,
-        amountPesewas: req.amountPesewas, recipient: req.recipient, notes: req.notes,
+        amountPesewas: req.amountPesewas, recipient: req.recipient,
+        category: req.category, drawingPolicyId: req.drawingPolicyId ?? null,
+        notes: req.notes,
         supervisorWorkerId: req.supervisorWorkerId, supervisorPin: req.supervisorPin, deviceId,
       });
     },
@@ -576,6 +591,24 @@ export function registerSession5Handlers(
   ipcMain.handle(IPC_CHANNELS_S5.CASH_DROP_GET_EXPECTED, wrap<CashDropGetExpectedRequest, CashDropGetExpectedResponse>(
     (req) => { requireWorker(); return { expectedCashPesewas: getCurrentExpectedCash(db, req.shiftId) }; },
     IPC_CHANNELS_S5.CASH_DROP_GET_EXPECTED,
+  ));
+  ipcMain.handle(IPC_CHANNELS_S5.DRAWING_POLICY_LIST, wrap<unknown, DrawingPolicyListResponse>(
+    () => { requireWorker(); return { policies: listDrawingPolicies(db) }; },
+    IPC_CHANNELS_S5.DRAWING_POLICY_LIST,
+  ));
+  ipcMain.handle(IPC_CHANNELS_S5.DRAWING_POLICY_UPSERT, wrap<DrawingPolicyUpsertRequest, DrawingPolicyUpsertResponse>(
+    (req) => {
+      const w = requireWorker();
+      return upsertDrawingPolicy(db, { ...req, workerId: w.workerId, deviceId });
+    },
+    IPC_CHANNELS_S5.DRAWING_POLICY_UPSERT,
+  ));
+  ipcMain.handle(IPC_CHANNELS_S5.DRAWING_REPORT, wrap<DrawingReportRequest, DrawingReportResponse>(
+    (req) => {
+      requireWorker();
+      return { rows: getDrawingReport(db, req) };
+    },
+    IPC_CHANNELS_S5.DRAWING_REPORT,
   ));
 
   ipcMain.handle(IPC_CHANNELS_S5.DAILY_SUMMARY_GENERATE, wrap<DailySummaryGenerateRequest, DailySummaryGenerateResponse>(
@@ -789,11 +822,20 @@ import {
   type CustomerOverviewRequest, type CustomerOverviewResponse,
   type CustomerReconcileRequest, type CustomerReconcileResponse,
   type CustomerRecordPaymentRequest, type CustomerRecordPaymentResponse,
+  type DebtCollectionGetRequest, type DebtCollectionGetResponse,
+  type DebtCollectionQueueRequest, type DebtCollectionQueueResponse,
+  type DebtFollowupRecordRequest, type DebtFollowupRecordResponse,
+  type DebtSimpleResponse, type DebtStatusSetRequest,
+  type PaymentPromiseUpdateRequest,
 } from '../../shared/types/ipc.js';
 import {
   getAgingSummary, getCustomerOverview, listCustomersByOutstanding,
   listOpenSalesForCustomer, recordCustomerPayment, reconcileCustomerBalance,
 } from '../services/customerCredit.js';
+import {
+  getCustomerDebtCollection, listDebtCollectionQueue, recordDebtFollowUp,
+  setSaleDebtStatus, updatePaymentPromiseStatus,
+} from '../services/debtCollection.js';
 
 export function registerSession8Handlers(
   ipcMain: IpcRegistrar,
@@ -837,6 +879,50 @@ export function registerSession8Handlers(
     wrap<CustomerReconcileRequest, CustomerReconcileResponse>(
       (req) => { requireWorker(); return reconcileCustomerBalance(db, req.customerId); },
       IPC_CHANNELS_S8.CUSTOMER_RECONCILE,
+    ),
+  );
+  ipcMain.handle(IPC_CHANNELS_S8.DEBT_COLLECTION_GET,
+    wrap<DebtCollectionGetRequest, DebtCollectionGetResponse>(
+      (req) => { requireWorker(); return getCustomerDebtCollection(db, req.customerId); },
+      IPC_CHANNELS_S8.DEBT_COLLECTION_GET,
+    ),
+  );
+  ipcMain.handle(IPC_CHANNELS_S8.DEBT_COLLECTION_QUEUE,
+    wrap<DebtCollectionQueueRequest, DebtCollectionQueueResponse>(
+      (req) => {
+        requireWorker();
+        return { rows: listDebtCollectionQueue(db, req ?? {}) };
+      },
+      IPC_CHANNELS_S8.DEBT_COLLECTION_QUEUE,
+    ),
+  );
+  ipcMain.handle(IPC_CHANNELS_S8.DEBT_FOLLOWUP_RECORD,
+    wrap<DebtFollowupRecordRequest, DebtFollowupRecordResponse>(
+      (req) => {
+        const w = requireWorker();
+        return recordDebtFollowUp(db, { ...req, workerId: w.workerId, deviceId });
+      },
+      IPC_CHANNELS_S8.DEBT_FOLLOWUP_RECORD,
+    ),
+  );
+  ipcMain.handle(IPC_CHANNELS_S8.DEBT_STATUS_SET,
+    wrap<DebtStatusSetRequest, DebtSimpleResponse>(
+      (req) => {
+        const w = requireWorker();
+        setSaleDebtStatus(db, { ...req, workerId: w.workerId, deviceId });
+        return { ok: true };
+      },
+      IPC_CHANNELS_S8.DEBT_STATUS_SET,
+    ),
+  );
+  ipcMain.handle(IPC_CHANNELS_S8.PAYMENT_PROMISE_UPDATE,
+    wrap<PaymentPromiseUpdateRequest, DebtSimpleResponse>(
+      (req) => {
+        const w = requireWorker();
+        updatePaymentPromiseStatus(db, { ...req, workerId: w.workerId, deviceId });
+        return { ok: true };
+      },
+      IPC_CHANNELS_S8.PAYMENT_PROMISE_UPDATE,
     ),
   );
 }
@@ -2059,11 +2145,14 @@ export function registerReturnsHandlers(
 
 import {
   IPC_CHANNELS_SUP_PAY,
+  type SupplierInvoiceListRequest, type SupplierInvoiceListResponse,
   type SupplierPaymentListRequest, type SupplierPaymentListResponse,
   type SupplierPaymentRecordRequest, type SupplierPaymentRecordResponse,
+  type SupplierStatementLinesRequest, type SupplierStatementLinesResponse,
   type SupplierStatementsListRequest, type SupplierStatementsListResponse,
 } from '../../shared/types/ipc.js';
 import {
+  getSupplierStatementLines, listSupplierInvoices,
   listSupplierPayments, listSupplierStatements, recordSupplierPayment,
 } from '../services/supplierPaymentsAdmin.js';
 
@@ -2089,6 +2178,7 @@ export function registerSupplierPaymentsHandlers(
           paymentMethod: req.paymentMethod,
           paymentReference: req.paymentReference ?? null,
           paidAt: req.paidAt ?? null,
+          allocations: req.allocations,
           notes: req.notes ?? null,
           actorWorkerId: w.workerId,
           deviceId,
@@ -2107,6 +2197,26 @@ export function registerSupplierPaymentsHandlers(
       IPC_CHANNELS_SUP_PAY.SUPPLIER_STATEMENTS_LIST,
     ),
   );
+
+  ipcMain.handle(IPC_CHANNELS_SUP_PAY.SUPPLIER_INVOICE_LIST,
+    wrap<SupplierInvoiceListRequest, SupplierInvoiceListResponse>(
+      (req) => {
+        requireWorker();
+        return { invoices: listSupplierInvoices(db, req ?? {}) };
+      },
+      IPC_CHANNELS_SUP_PAY.SUPPLIER_INVOICE_LIST,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_SUP_PAY.SUPPLIER_STATEMENT_LINES,
+    wrap<SupplierStatementLinesRequest, SupplierStatementLinesResponse>(
+      (req) => {
+        requireWorker();
+        return { rows: getSupplierStatementLines(db, req.supplierId, req.includePaid ?? false) };
+      },
+      IPC_CHANNELS_SUP_PAY.SUPPLIER_STATEMENT_LINES,
+    ),
+  );
 }
 
 // --- Reports / dashboard --------------------------------------------------
@@ -2115,12 +2225,24 @@ import {
   IPC_CHANNELS_REPORTS,
   type ReportsOverviewRequest, type ReportsOverviewResponse,
   type ReportsSalesRequest, type ReportsSalesResponse,
+  type ReportsGraphsRequest, type ReportsGraphsResponse,
   type ReportsMarginRequest, type ReportsMarginResponse,
   type ReportsInventoryRequest, type ReportsInventoryResponse,
+  type ReportsPriceHistoryRequest, type ReportsPriceHistoryResponse,
+  type ReportsPriceIntelligenceResponse,
+  type ReportsLandedCostsRequest, type ReportsLandedCostsResponse,
+  type ReportsCustomerIntelligenceRequest, type ReportsCustomerIntelligenceResponse,
+  type ReportsTaxesRequest, type ReportsTaxesResponse,
+  type ReportsTaxPaymentRecordRequest, type ReportsTaxPaymentRecordResponse,
 } from '../../shared/types/ipc.js';
 import {
-  getReportsOverview, getSalesReport, getMarginReport, getInventoryReport,
+  getReportsOverview, getSalesReport, getGraphsReport, getMarginReport, getInventoryReport, getTaxesReport,
 } from '../services/reports.js';
+import {
+  getLandedCostAllocations, getPriceHistory, getPriceIntelligence,
+} from '../services/priceIntelligence.js';
+import { getCustomerIntelligence } from '../services/customerIntelligence.js';
+import { recordTaxPayment } from '../services/taxPayments.js';
 
 export function registerReportsHandlers(
   ipcMain: IpcRegistrar,
@@ -2156,6 +2278,20 @@ export function registerReportsHandlers(
     ),
   );
 
+  ipcMain.handle(IPC_CHANNELS_REPORTS.REPORTS_GRAPHS,
+    wrap<ReportsGraphsRequest, ReportsGraphsResponse>(
+      (req) => {
+        const w = requireWorker();
+        return getGraphsReport(db, {
+          actorWorkerId: w.workerId,
+          fromDate: req.fromDate,
+          toDate: req.toDate,
+        });
+      },
+      IPC_CHANNELS_REPORTS.REPORTS_GRAPHS,
+    ),
+  );
+
   ipcMain.handle(IPC_CHANNELS_REPORTS.REPORTS_MARGIN,
     wrap<ReportsMarginRequest, ReportsMarginResponse>(
       (req) => {
@@ -2181,6 +2317,98 @@ export function registerReportsHandlers(
         });
       },
       IPC_CHANNELS_REPORTS.REPORTS_INVENTORY,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.REPORTS_PRICE_INTELLIGENCE,
+    wrap<unknown, ReportsPriceIntelligenceResponse>(
+      () => {
+        const w = requireWorker();
+        return getPriceIntelligence(db, { actorWorkerId: w.workerId });
+      },
+      IPC_CHANNELS_REPORTS.REPORTS_PRICE_INTELLIGENCE,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.REPORTS_PRICE_HISTORY,
+    wrap<ReportsPriceHistoryRequest, ReportsPriceHistoryResponse>(
+      (req) => {
+        const w = requireWorker();
+        return getPriceHistory(db, {
+          actorWorkerId: w.workerId,
+          fromDate: req?.fromDate,
+          toDate: req?.toDate,
+          productId: req?.productId,
+          limit: req?.limit,
+        });
+      },
+      IPC_CHANNELS_REPORTS.REPORTS_PRICE_HISTORY,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.REPORTS_LANDED_COSTS,
+    wrap<ReportsLandedCostsRequest, ReportsLandedCostsResponse>(
+      (req) => {
+        const w = requireWorker();
+        return getLandedCostAllocations(db, {
+          actorWorkerId: w.workerId,
+          fromDate: req?.fromDate,
+          toDate: req?.toDate,
+          supplierId: req?.supplierId,
+        });
+      },
+      IPC_CHANNELS_REPORTS.REPORTS_LANDED_COSTS,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.REPORTS_CUSTOMER_INTELLIGENCE,
+    wrap<ReportsCustomerIntelligenceRequest, ReportsCustomerIntelligenceResponse>(
+      (req) => {
+        const w = requireWorker();
+        return getCustomerIntelligence(db, {
+          actorWorkerId: w.workerId,
+          asOfDateISO: req?.asOfDateISO,
+          inactiveDays: req?.inactiveDays,
+        });
+      },
+      IPC_CHANNELS_REPORTS.REPORTS_CUSTOMER_INTELLIGENCE,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.REPORTS_TAXES,
+    wrap<ReportsTaxesRequest, ReportsTaxesResponse>(
+      (req) => {
+        const w = requireWorker();
+        return getTaxesReport(db, {
+          actorWorkerId: w.workerId,
+          fromDate: req.fromDate,
+          toDate: req.toDate,
+        });
+      },
+      IPC_CHANNELS_REPORTS.REPORTS_TAXES,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.REPORTS_TAX_PAYMENT_RECORD,
+    wrap<ReportsTaxPaymentRecordRequest, ReportsTaxPaymentRecordResponse>(
+      (req) => {
+        const w = requireWorker();
+        const openShift = req.paymentMethod === 'CASH' ? requireOpenShift(db) : null;
+        return recordTaxPayment(db, {
+          actorWorkerId: w.workerId,
+          locationId: openShift?.locationId ?? DEFAULT_LOCATION_ID,
+          shiftId: openShift?.shiftId ?? null,
+          taxPeriodFrom: req.taxPeriodFrom,
+          taxPeriodTo: req.taxPeriodTo,
+          amountPesewas: req.amountPesewas,
+          paymentMethod: req.paymentMethod,
+          paymentReference: req.paymentReference ?? null,
+          paidAt: req.paidAt ?? null,
+          notes: req.notes ?? null,
+          deviceId: _deviceId,
+        });
+      },
+      IPC_CHANNELS_REPORTS.REPORTS_TAX_PAYMENT_RECORD,
     ),
   );
 }
@@ -2495,12 +2723,18 @@ export function registerSyncHandlers(ipcMain: IpcRegistrar, db: DB, deviceId: st
 import {
   IPC_CHANNELS_PENDING_ORDERS,
   type PendingOrderGetRequest, type PendingOrderDetail,
+  type PendingOrderCompleteDeliveryRequest, type PendingOrderCompleteDeliveryResponse,
+  type PendingOrderMarkDispatchedRequest,
   type PendingOrderMarkFulfilledRequest,
+  type PendingOrderMarkPackedRequest,
   type PendingOrderRejectRequest, type PendingOrdersListResponse,
   type ResolvedPendingOrder,
 } from '../../shared/types/ipc.js';
 import {
-  getPendingOrder, listPendingOrders, markPendingOrderFulfilled, rejectPendingOrder,
+  completePendingOrderDelivery,
+  getPendingOrder, listDeliveryOrders, listPendingOrders,
+  markPendingOrderDispatched, markPendingOrderFulfilled, markPendingOrderPacked,
+  rejectPendingOrder,
   resolvePendingOrderForCart,
 } from '../services/pendingOrders.js';
 
@@ -2512,6 +2746,11 @@ export function registerPendingOrdersHandlers(
   ipcMain.handle(IPC_CHANNELS_PENDING_ORDERS.PENDING_ORDERS_LIST, wrap<void, PendingOrdersListResponse>(
     () => { requireWorker(); return { orders: listPendingOrders(db) }; },
     IPC_CHANNELS_PENDING_ORDERS.PENDING_ORDERS_LIST,
+  ));
+
+  ipcMain.handle(IPC_CHANNELS_PENDING_ORDERS.PENDING_ORDERS_DELIVERY_LIST, wrap<void, PendingOrdersListResponse>(
+    () => { requireWorker(); return { orders: listDeliveryOrders(db) }; },
+    IPC_CHANNELS_PENDING_ORDERS.PENDING_ORDERS_DELIVERY_LIST,
   ));
 
   ipcMain.handle(IPC_CHANNELS_PENDING_ORDERS.PENDING_ORDERS_GET, wrap<PendingOrderGetRequest, PendingOrderDetail>(
@@ -2549,4 +2788,45 @@ export function registerPendingOrdersHandlers(
     },
     IPC_CHANNELS_PENDING_ORDERS.PENDING_ORDERS_MARK_FULFILLED,
   ));
+
+  ipcMain.handle(IPC_CHANNELS_PENDING_ORDERS.PENDING_ORDERS_MARK_PACKED, wrap<PendingOrderMarkPackedRequest, void>(
+    (req) => {
+      const w = requireWorker();
+      markPendingOrderPacked(db, { orderId: req.orderId, workerId: w.workerId, deviceId });
+    },
+    IPC_CHANNELS_PENDING_ORDERS.PENDING_ORDERS_MARK_PACKED,
+  ));
+
+  ipcMain.handle(IPC_CHANNELS_PENDING_ORDERS.PENDING_ORDERS_MARK_DISPATCHED, wrap<PendingOrderMarkDispatchedRequest, void>(
+    (req) => {
+      const w = requireWorker();
+      markPendingOrderDispatched(db, {
+        orderId: req.orderId,
+        driverId: req.driverId,
+        deliveryFeePesewas: req.deliveryFeePesewas,
+        deliveryCostPesewas: req.deliveryCostPesewas,
+        workerId: w.workerId,
+        deviceId,
+      });
+    },
+    IPC_CHANNELS_PENDING_ORDERS.PENDING_ORDERS_MARK_DISPATCHED,
+  ));
+
+  ipcMain.handle(IPC_CHANNELS_PENDING_ORDERS.PENDING_ORDERS_COMPLETE_DELIVERY,
+    wrap<PendingOrderCompleteDeliveryRequest, PendingOrderCompleteDeliveryResponse>(
+      (req) => {
+        const w = requireWorker();
+        return completePendingOrderDelivery(db, {
+          orderId: req.orderId,
+          outcome: req.outcome,
+          confirmationCode: req.confirmationCode,
+          confirmationName: req.confirmationName,
+          failureReason: req.failureReason,
+          workerId: w.workerId,
+          deviceId,
+        });
+      },
+      IPC_CHANNELS_PENDING_ORDERS.PENDING_ORDERS_COMPLETE_DELIVERY,
+    ),
+  );
 }

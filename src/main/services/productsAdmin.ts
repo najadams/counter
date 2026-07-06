@@ -42,6 +42,10 @@ export interface AddProductInput {
   walkInPricePesewas: number;
   wholesalePricePesewas: number;
   routePricePesewas: number;
+  minimumPricePesewas?: number;
+  competitorPricePesewas?: number | null;
+  competitorName?: string | null;
+  competitorCheckedAt?: string | null;
   reorderThreshold?: number;
   reorderQuantity?: number;
   primarySupplierId?: string | null;
@@ -83,6 +87,7 @@ export function addProduct(db: DB, input: AddProductInput): AddProductResult {
     walkInPricePesewas: input.walkInPricePesewas,
     wholesalePricePesewas: input.wholesalePricePesewas,
     routePricePesewas: input.routePricePesewas,
+    minimumPricePesewas: input.minimumPricePesewas ?? 0,
     bottleDepositPesewas: input.bottleDepositPesewas ?? 0,
   })) {
     if (!Number.isInteger(value) || value < 0) {
@@ -133,10 +138,11 @@ export function addProduct(db: DB, input: AddProductInput): AddProductResult {
         id, sku, barcode, name, category, brand, pack_size_units, unit_volume_ml,
         is_returnable, bottle_deposit_pesewas,
         cost_price_pesewas, walk_in_price_pesewas, wholesale_price_pesewas, route_price_pesewas,
+        minimum_price_pesewas, competitor_price_pesewas, competitor_name, competitor_checked_at,
         reorder_threshold, reorder_quantity, primary_supplier_id,
         default_lead_time_days, shelf_life_days, count_class,
         created_by, updated_by, device_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       productId,
       input.sku.trim(),
@@ -152,6 +158,10 @@ export function addProduct(db: DB, input: AddProductInput): AddProductResult {
       input.walkInPricePesewas,
       input.wholesalePricePesewas,
       input.routePricePesewas,
+      input.minimumPricePesewas ?? 0,
+      input.competitorPricePesewas ?? null,
+      input.competitorName?.trim() || null,
+      input.competitorCheckedAt ?? null,
       input.reorderThreshold ?? 0,
       input.reorderQuantity ?? 0,
       input.primarySupplierId ?? null,
@@ -174,11 +184,33 @@ export function addProduct(db: DB, input: AddProductInput): AddProductResult {
         walkInPricePesewas: input.walkInPricePesewas,
         wholesalePricePesewas: input.wholesalePricePesewas,
         routePricePesewas: input.routePricePesewas,
+        minimumPricePesewas: input.minimumPricePesewas ?? 0,
+        competitorPricePesewas: input.competitorPricePesewas ?? null,
+        competitorName: input.competitorName?.trim() || null,
         warnings,
         initialUnitCount: input.units?.length ?? 0,
       },
       deviceId: input.deviceId,
     });
+
+    const initialPriceRows: Array<[string, number | null, string | null]> = [
+      ['COST', input.costPricePesewas, null],
+      ['WALK_IN', input.walkInPricePesewas, null],
+      ['WHOLESALE', input.wholesalePricePesewas, null],
+      ['ROUTE', input.routePricePesewas, null],
+      ['MINIMUM', input.minimumPricePesewas ?? 0, null],
+    ];
+    if (input.competitorPricePesewas != null) {
+      initialPriceRows.push(['COMPETITOR', input.competitorPricePesewas, input.competitorName?.trim() || null]);
+    }
+    for (const [fieldName, newPesewas, competitorName] of initialPriceRows) {
+      db.prepare(
+        `INSERT INTO price_history (
+           id, product_id, field_name, old_pesewas, new_pesewas,
+           competitor_name, reason, changed_by, device_id
+         ) VALUES (?, ?, ?, NULL, ?, ?, 'initial product create', ?, ?)`,
+      ).run(`ph-${uuidv4()}`, productId, fieldName, newPesewas, competitorName, input.actorWorkerId, input.deviceId);
+    }
 
     for (const [idx, u] of (input.units ?? []).entries()) {
       const name = u.unitName.trim().toUpperCase();
@@ -234,6 +266,10 @@ export interface UpdateProductInput {
     walkInPricePesewas: number;
     wholesalePricePesewas: number;
     routePricePesewas: number;
+    minimumPricePesewas: number;
+    competitorPricePesewas: number | null;
+    competitorName: string | null;
+    competitorCheckedAt: string | null;
     reorderThreshold: number;
     reorderQuantity: number;
     primarySupplierId: string | null;
@@ -245,6 +281,7 @@ export interface UpdateProductInput {
     primaryPurchaseUnitId: string | null;
     /** product_units.id — UI default for sale flows. NULL = canonical. */
     primarySaleUnitId: string | null;
+    priceChangeReason: string | null;
   }>;
   actorWorkerId: string;
   deviceId: string;
@@ -258,6 +295,7 @@ export function updateProduct(db: DB, input: UpdateProductInput): { warnings: st
       `SELECT id, sku, barcode, name, category, brand, pack_size_units, unit_volume_ml,
               is_returnable, bottle_deposit_pesewas, cost_price_pesewas,
               walk_in_price_pesewas, wholesale_price_pesewas, route_price_pesewas,
+              minimum_price_pesewas, competitor_price_pesewas, competitor_name, competitor_checked_at,
               reorder_threshold, reorder_quantity, primary_supplier_id,
               default_lead_time_days, shelf_life_days, active
          FROM products WHERE id = ? AND deleted_at IS NULL`,
@@ -279,6 +317,10 @@ export function updateProduct(db: DB, input: UpdateProductInput): { warnings: st
     walkInPricePesewas: 'walk_in_price_pesewas',
     wholesalePricePesewas: 'wholesale_price_pesewas',
     routePricePesewas: 'route_price_pesewas',
+    minimumPricePesewas: 'minimum_price_pesewas',
+    competitorPricePesewas: 'competitor_price_pesewas',
+    competitorName: 'competitor_name',
+    competitorCheckedAt: 'competitor_checked_at',
     reorderThreshold: 'reorder_threshold', reorderQuantity: 'reorder_quantity',
     countClass: 'count_class',
     primarySupplierId: 'primary_supplier_id',
@@ -316,7 +358,39 @@ export function updateProduct(db: DB, input: UpdateProductInput): { warnings: st
   params.push(input.actorWorkerId);
   params.push(input.productId);
 
+  const priceChangeReason = input.fields.priceChangeReason?.trim() || null;
   db.prepare(`UPDATE products SET ${setParts.join(', ')} WHERE id = ?`).run(...params);
+
+  const historyMap: Record<string, string> = {
+    costPricePesewas: 'COST',
+    walkInPricePesewas: 'WALK_IN',
+    wholesalePricePesewas: 'WHOLESALE',
+    routePricePesewas: 'ROUTE',
+    minimumPricePesewas: 'MINIMUM',
+    competitorPricePesewas: 'COMPETITOR',
+  };
+  for (const [fieldKey, fieldName] of Object.entries(historyMap)) {
+    if (!(fieldKey in before)) continue;
+    const oldValue = before[fieldKey] as number | null;
+    const newValue = after[fieldKey] as number | null;
+    if (oldValue === newValue) continue;
+    db.prepare(
+      `INSERT INTO price_history (
+         id, product_id, field_name, old_pesewas, new_pesewas,
+         competitor_name, reason, changed_by, device_id
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      `ph-${uuidv4()}`,
+      input.productId,
+      fieldName,
+      oldValue,
+      newValue,
+      fieldName === 'COMPETITOR' ? (input.fields.competitorName?.trim() || (existing['competitor_name'] as string | null) || null) : null,
+      priceChangeReason,
+      input.actorWorkerId,
+      input.deviceId,
+    );
+  }
 
   // Recompute warnings for the post-update state.
   const post = db
@@ -383,6 +457,10 @@ export interface AdminProduct {
   walkInPricePesewas: number;
   wholesalePricePesewas: number;
   routePricePesewas: number;
+  minimumPricePesewas: number;
+  competitorPricePesewas: number | null;
+  competitorName: string | null;
+  competitorCheckedAt: string | null;
   reorderThreshold: number;
   reorderQuantity: number;
   primarySupplierId: string | null;
@@ -408,6 +486,10 @@ export function listProductsForAdmin(db: DB, locationId: string): AdminProduct[]
               walk_in_price_pesewas AS walkInPricePesewas,
               wholesale_price_pesewas AS wholesalePricePesewas,
               route_price_pesewas AS routePricePesewas,
+              minimum_price_pesewas AS minimumPricePesewas,
+              competitor_price_pesewas AS competitorPricePesewas,
+              competitor_name AS competitorName,
+              competitor_checked_at AS competitorCheckedAt,
               reorder_threshold AS reorderThreshold,
               reorder_quantity AS reorderQuantity,
               primary_supplier_id AS primarySupplierId,

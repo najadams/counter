@@ -15,6 +15,7 @@ import { useCart, type PaymentMethod } from '../store/cart';
 import { formatMoney, formatMoneyWithCurrency, parseCedisToPesewas } from '../../shared/lib/money';
 import { extractInclusiveVat, VAT_ENABLED } from '../../shared/lib/vat';
 import { CustomerCreateModal } from './CustomerCreateModal';
+import { FeedbackBanner } from './FeedbackBanner';
 
 type Cust = ReturnType<typeof useCart.getState>['customer'];
 
@@ -67,7 +68,7 @@ export function TouchCheckoutSheet(p: TouchCheckoutSheetProps): JSX.Element {
   const canConfirm =
     (tab === 'CASH' && cashPesewas != null && cashPesewas >= p.totalPesewas) ||
     (tab === 'MOMO' && refRaw.trim() !== '') ||
-    (tab === 'CREDIT' && !!p.customer);
+    (tab === 'CREDIT' && !!p.customer && !p.customer.cashOnly);
 
   function pressKey(k: string): void {
     setCashRaw((cur) => {
@@ -214,6 +215,7 @@ export function TouchCheckoutSheet(p: TouchCheckoutSheetProps): JSX.Element {
                     onClick={() => p.setCustomer({
                       id: c.id, displayName: c.displayName, phone: c.phone,
                       currentBalancePesewas: c.currentBalancePesewas,
+                      cashOnly: c.cashOnly,
                       preferredChannel: (c as { preferredChannel?: 'WALK_IN' | 'WHOLESALE' | 'ROUTE' | null }).preferredChannel ?? null,
                     })}
                     className={[
@@ -222,13 +224,19 @@ export function TouchCheckoutSheet(p: TouchCheckoutSheetProps): JSX.Element {
                     ].join(' ')}
                   >
                     <div className="text-text-primary">{c.displayName}</div>
-                    <div className="text-text-tertiary text-xs">{c.phone} · balance {formatMoneyWithCurrency(c.currentBalancePesewas)}</div>
+                    <div className="text-text-tertiary text-xs">
+                      {c.phone} · balance {formatMoneyWithCurrency(c.currentBalancePesewas)}
+                      {c.cashOnly ? ' · cash only' : ''}
+                    </div>
                   </button>
                 </li>
               ))}
             </ul>
             {p.customer && (
-              <div className="text-text-secondary text-sm">Selected: <span className="text-text-primary">{p.customer.displayName}</span></div>
+              <div className="text-text-secondary text-sm">
+                Selected: <span className="text-text-primary">{p.customer.displayName}</span>
+                {p.customer.cashOnly && <span className="text-danger ml-2">cash-only</span>}
+              </div>
             )}
             {showCreate && (
               <CustomerCreateModal
@@ -236,7 +244,7 @@ export function TouchCheckoutSheet(p: TouchCheckoutSheetProps): JSX.Element {
                 onCancel={() => setShowCreate(false)}
                 onCreated={(c) => {
                   setShowCreate(false);
-                  p.setCustomer({ id: c.id, displayName: c.displayName, phone: c.phone, currentBalancePesewas: c.currentBalancePesewas });
+                  p.setCustomer({ id: c.id, displayName: c.displayName, phone: c.phone, currentBalancePesewas: c.currentBalancePesewas, cashOnly: c.cashOnly });
                 }}
               />
             )}
@@ -244,7 +252,7 @@ export function TouchCheckoutSheet(p: TouchCheckoutSheetProps): JSX.Element {
         )}
 
         {p.error && (
-          <div className="bg-bg-deep border border-danger px-4 py-2 text-danger text-sm">{p.error}</div>
+          <FeedbackBanner>{p.error}</FeedbackBanner>
         )}
 
         <button onClick={p.onOpenSplit} className="text-text-tertiary text-sm underline self-start">Split payment instead</button>
@@ -256,6 +264,9 @@ export function TouchCheckoutSheet(p: TouchCheckoutSheetProps): JSX.Element {
         >
           {p.submitting ? 'Completing…' : 'Confirm & complete'}
         </button>
+        {tab === 'CREDIT' && p.customer?.cashOnly && (
+          <div className="text-danger text-sm">This customer is marked cash-only. Use cash, MoMo, or split without credit.</div>
+        )}
       </div>
     </div>
   );

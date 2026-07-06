@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react';
 import { counter } from '../lib/ipc';
 import { formatMoneyWithCurrency } from '../../shared/lib/money';
+import { FeedbackBanner } from './FeedbackBanner';
 
 interface Row {
   movementId: string; createdAt: string; signedQuantity: number;
@@ -49,7 +50,7 @@ export function StockHistoryModal({
 
         <div className="flex-1 overflow-auto p-4">
           {loading && <div className="text-center text-text-tertiary py-6">Loading…</div>}
-          {error && <div className="text-sm text-danger bg-danger/10 border border-danger/40 rounded px-3 py-2 mb-2">{error}</div>}
+          {error && <FeedbackBanner className="mb-2">{error}</FeedbackBanner>}
           {!loading && rows.length === 0 && (
             <div className="text-text-tertiary py-6 text-center">No stock movements recorded yet.</div>
           )}

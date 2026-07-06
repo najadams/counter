@@ -1,4 +1,4 @@
-// MarginTab — gross-margin breakdown by product and category, plus a
+// MarginTab — net gross-margin breakdown by product and category, plus a
 // "below cost" panel highlighting any lines sold at negative margin.
 
 import { useEffect, useMemo, useState } from 'react';
@@ -7,6 +7,7 @@ import { formatMoney, formatMoneyWithCurrency } from '../../../shared/lib/money'
 import { DateRangePicker, defaultDateRange, type DateRange } from '../../components/DateRangePicker';
 import { bpsToCsvPercent, buildCsvFilename, exportRowsAsCsv, pesewasToCsvNumber } from '../../lib/csv';
 import type { ReportsMarginResponse } from '../../../shared/types/ipc';
+import { FeedbackBanner } from '../../components/FeedbackBanner';
 
 type ProductSort = 'margin' | 'revenue' | 'marginBps' | 'units';
 
@@ -60,8 +61,8 @@ export function MarginTab() {
         { header: 'category', get: (r) => r.category },
         { header: 'brand', get: (r) => r.brand ?? '' },
         { header: 'units_sold', get: (r) => r.unitsSold },
-        { header: 'revenue_cedis', get: (r) => pesewasToCsvNumber(r.revenuePesewas) },
-        { header: 'cogs_cedis', get: (r) => pesewasToCsvNumber(r.cogsPesewas) },
+        { header: 'net_revenue_cedis', get: (r) => pesewasToCsvNumber(r.revenuePesewas) },
+        { header: 'net_cogs_cedis', get: (r) => pesewasToCsvNumber(r.cogsPesewas) },
         { header: 'margin_cedis', get: (r) => pesewasToCsvNumber(r.marginPesewas) },
         { header: 'margin_pct', get: (r) => bpsToCsvPercent(r.marginBps) },
       ],
@@ -76,8 +77,8 @@ export function MarginTab() {
         { header: 'category', get: (r) => r.category },
         { header: 'product_count', get: (r) => r.productCount },
         { header: 'units_sold', get: (r) => r.unitsSold },
-        { header: 'revenue_cedis', get: (r) => pesewasToCsvNumber(r.revenuePesewas) },
-        { header: 'cogs_cedis', get: (r) => pesewasToCsvNumber(r.cogsPesewas) },
+        { header: 'net_revenue_cedis', get: (r) => pesewasToCsvNumber(r.revenuePesewas) },
+        { header: 'net_cogs_cedis', get: (r) => pesewasToCsvNumber(r.cogsPesewas) },
         { header: 'margin_cedis', get: (r) => pesewasToCsvNumber(r.marginPesewas) },
         { header: 'margin_pct', get: (r) => bpsToCsvPercent(r.marginBps) },
       ],
@@ -90,15 +91,15 @@ export function MarginTab() {
         <DateRangePicker value={range} onChange={setRange} />
       </div>
 
-      {error && <div className="bg-danger/10 border border-danger/40 text-danger text-sm px-3 py-2">{error}</div>}
+      {error && <FeedbackBanner>{error}</FeedbackBanner>}
       {loading && !data && <div className="text-text-tertiary text-sm">Loading…</div>}
 
       {data && (
         <>
           <section className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <Stat label="Revenue" value={formatMoneyWithCurrency(data.totalRevenuePesewas)} />
-            <Stat label="COGS" value={formatMoneyWithCurrency(data.totalCogsPesewas)} />
-            <Stat label="Gross margin" value={formatMoneyWithCurrency(data.totalMarginPesewas)}
+            <Stat label="Net revenue" value={formatMoneyWithCurrency(data.totalRevenuePesewas)} />
+            <Stat label="Net COGS" value={formatMoneyWithCurrency(data.totalCogsPesewas)} />
+            <Stat label="Net margin" value={formatMoneyWithCurrency(data.totalMarginPesewas)}
               accent={data.totalMarginPesewas < 0 ? 'danger' : 'ok'} />
             <Stat label="Margin %" value={`${(data.totalMarginBps / 100).toFixed(2)}%`}
               accent={data.totalMarginBps < 0 ? 'danger' : 'ok'} />
@@ -177,8 +178,8 @@ export function MarginTab() {
                     <th className="text-left px-4 py-2">Product</th>
                     <th className="text-left px-4 py-2">Category</th>
                     <SortHeader label="Units" col="units" current={sortBy} dir={sortDir} onSort={setSort} />
-                    <SortHeader label="Revenue" col="revenue" current={sortBy} dir={sortDir} onSort={setSort} />
-                    <th className="text-right px-4 py-2">COGS</th>
+                    <SortHeader label="Net revenue" col="revenue" current={sortBy} dir={sortDir} onSort={setSort} />
+                    <th className="text-right px-4 py-2">Net COGS</th>
                     <SortHeader label="Margin ₵" col="margin" current={sortBy} dir={sortDir} onSort={setSort} />
                     <SortHeader label="Margin %" col="marginBps" current={sortBy} dir={sortDir} onSort={setSort} />
                   </tr>
@@ -227,8 +228,8 @@ export function MarginTab() {
                     <th className="text-left px-4 py-2">Category</th>
                     <th className="text-right px-4 py-2">Products</th>
                     <th className="text-right px-4 py-2">Units</th>
-                    <th className="text-right px-4 py-2">Revenue</th>
-                    <th className="text-right px-4 py-2">COGS</th>
+                    <th className="text-right px-4 py-2">Net revenue</th>
+                    <th className="text-right px-4 py-2">Net COGS</th>
                     <th className="text-right px-4 py-2">Margin ₵</th>
                     <th className="text-right px-4 py-2">Margin %</th>
                   </tr>

@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { counter } from '../lib/ipc';
 import { useSession } from '../store/session';
 import { formatMoney, parseCedisToPesewas } from '../../shared/lib/money';
+import { FeedbackBanner } from './FeedbackBanner';
 
 const CATEGORIES: Array<{ value: string; label: string }> = [
   { value: 'UTILITIES', label: 'Utilities (water, light, phone)' },
@@ -183,7 +184,7 @@ export function ExpenseModal({
             className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle text-sm" />
         </label>
 
-        {error && <div className="text-sm text-danger bg-danger/10 border border-danger/40 rounded px-3 py-2">{error}</div>}
+        {error && <FeedbackBanner>{error}</FeedbackBanner>}
 
         <div className="flex justify-end gap-3">
           <button onClick={onCancel} disabled={submitting}

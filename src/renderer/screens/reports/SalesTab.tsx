@@ -7,6 +7,7 @@ import { formatMoney, formatMoneyWithCurrency } from '../../../shared/lib/money'
 import { DateRangePicker, defaultDateRange, type DateRange } from '../../components/DateRangePicker';
 import { buildCsvFilename, exportRowsAsCsv, pesewasToCsvNumber } from '../../lib/csv';
 import type { ReportsSalesResponse, ReportGroupBy } from '../../../shared/types/ipc';
+import { FeedbackBanner } from '../../components/FeedbackBanner';
 
 export function SalesTab() {
   const [range, setRange] = useState<DateRange>(defaultDateRange());
@@ -87,7 +88,7 @@ export function SalesTab() {
         </div>
       </div>
 
-      {error && <div className="bg-danger/10 border border-danger/40 text-danger text-sm px-3 py-2">{error}</div>}
+      {error && <FeedbackBanner>{error}</FeedbackBanner>}
       {loading && !data && <div className="text-text-tertiary text-sm">Loading…</div>}
 
       {data && (

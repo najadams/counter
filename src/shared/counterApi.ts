@@ -117,6 +117,12 @@ export function createCounterApi(invoke: Invoke) {
       invoke<ipc.CashDropListResponse>(ipc.IPC_CHANNELS_S5.CASH_DROP_LIST, { shiftId }),
     getExpectedCash: (shiftId: string) =>
       invoke<ipc.CashDropGetExpectedResponse>(ipc.IPC_CHANNELS_S5.CASH_DROP_GET_EXPECTED, { shiftId }),
+    listDrawingPolicies: () =>
+      invoke<ipc.DrawingPolicyListResponse>(ipc.IPC_CHANNELS_S5.DRAWING_POLICY_LIST, {}),
+    upsertDrawingPolicy: (req: ipc.DrawingPolicyUpsertRequest) =>
+      invoke<ipc.DrawingPolicyUpsertResponse>(ipc.IPC_CHANNELS_S5.DRAWING_POLICY_UPSERT, req),
+    drawingReport: (req: ipc.DrawingReportRequest) =>
+      invoke<ipc.DrawingReportResponse>(ipc.IPC_CHANNELS_S5.DRAWING_REPORT, req),
     generateDailySummary: (req: ipc.DailySummaryGenerateRequest) =>
       invoke<ipc.DailySummaryGenerateResponse>(ipc.IPC_CHANNELS_S5.DAILY_SUMMARY_GENERATE, req),
     getDailySummary: (req: ipc.DailySummaryGetRequest) =>
@@ -165,6 +171,16 @@ export function createCounterApi(invoke: Invoke) {
       invoke<ipc.CustomerAgingSummaryResponse>(ipc.IPC_CHANNELS_S8.CUSTOMER_AGING_SUMMARY, {}),
     reconcileCustomer: (customerId: string) =>
       invoke<ipc.CustomerReconcileResponse>(ipc.IPC_CHANNELS_S8.CUSTOMER_RECONCILE, { customerId }),
+    debtCollectionGet: (customerId: string) =>
+      invoke<ipc.DebtCollectionGetResponse>(ipc.IPC_CHANNELS_S8.DEBT_COLLECTION_GET, { customerId }),
+    debtCollectionQueue: (req: ipc.DebtCollectionQueueRequest = {}) =>
+      invoke<ipc.DebtCollectionQueueResponse>(ipc.IPC_CHANNELS_S8.DEBT_COLLECTION_QUEUE, req),
+    debtFollowupRecord: (req: ipc.DebtFollowupRecordRequest) =>
+      invoke<ipc.DebtFollowupRecordResponse>(ipc.IPC_CHANNELS_S8.DEBT_FOLLOWUP_RECORD, req),
+    debtStatusSet: (saleId: string, status: ipc.DebtStatus) =>
+      invoke<ipc.DebtSimpleResponse>(ipc.IPC_CHANNELS_S8.DEBT_STATUS_SET, { saleId, status }),
+    paymentPromiseUpdate: (promiseId: string, status: ipc.PaymentPromiseStatus, fulfilledPaymentId?: string | null) =>
+      invoke<ipc.DebtSimpleResponse>(ipc.IPC_CHANNELS_S8.PAYMENT_PROMISE_UPDATE, { promiseId, status, fulfilledPaymentId }),
 
     // --- Session 9b: product units UI surface ---
     listProductUnits: (productId: string, activeOnly?: boolean) =>
@@ -337,16 +353,34 @@ export function createCounterApi(invoke: Invoke) {
       invoke<ipc.SupplierPaymentRecordResponse>(ipc.IPC_CHANNELS_SUP_PAY.SUPPLIER_PAYMENT_RECORD, req),
     listSupplierStatements: (req: ipc.SupplierStatementsListRequest) =>
       invoke<ipc.SupplierStatementsListResponse>(ipc.IPC_CHANNELS_SUP_PAY.SUPPLIER_STATEMENTS_LIST, req),
+    listSupplierInvoices: (req: ipc.SupplierInvoiceListRequest = {}) =>
+      invoke<ipc.SupplierInvoiceListResponse>(ipc.IPC_CHANNELS_SUP_PAY.SUPPLIER_INVOICE_LIST, req),
+    supplierStatementLines: (req: ipc.SupplierStatementLinesRequest) =>
+      invoke<ipc.SupplierStatementLinesResponse>(ipc.IPC_CHANNELS_SUP_PAY.SUPPLIER_STATEMENT_LINES, req),
 
     // --- Reports / dashboard ---
     reportsOverview: (req: ipc.ReportsOverviewRequest = {}) =>
       invoke<ipc.ReportsOverviewResponse>(ipc.IPC_CHANNELS_REPORTS.REPORTS_OVERVIEW, req),
     reportsSales: (req: ipc.ReportsSalesRequest) =>
       invoke<ipc.ReportsSalesResponse>(ipc.IPC_CHANNELS_REPORTS.REPORTS_SALES, req),
+    reportsGraphs: (req: ipc.ReportsGraphsRequest) =>
+      invoke<ipc.ReportsGraphsResponse>(ipc.IPC_CHANNELS_REPORTS.REPORTS_GRAPHS, req),
     reportsMargin: (req: ipc.ReportsMarginRequest) =>
       invoke<ipc.ReportsMarginResponse>(ipc.IPC_CHANNELS_REPORTS.REPORTS_MARGIN, req),
     reportsInventory: (req: ipc.ReportsInventoryRequest = {}) =>
       invoke<ipc.ReportsInventoryResponse>(ipc.IPC_CHANNELS_REPORTS.REPORTS_INVENTORY, req),
+    reportsPriceIntelligence: () =>
+      invoke<ipc.ReportsPriceIntelligenceResponse>(ipc.IPC_CHANNELS_REPORTS.REPORTS_PRICE_INTELLIGENCE, {}),
+    reportsPriceHistory: (req: ipc.ReportsPriceHistoryRequest = {}) =>
+      invoke<ipc.ReportsPriceHistoryResponse>(ipc.IPC_CHANNELS_REPORTS.REPORTS_PRICE_HISTORY, req),
+    reportsLandedCosts: (req: ipc.ReportsLandedCostsRequest = {}) =>
+      invoke<ipc.ReportsLandedCostsResponse>(ipc.IPC_CHANNELS_REPORTS.REPORTS_LANDED_COSTS, req),
+    reportsCustomerIntelligence: (req: ipc.ReportsCustomerIntelligenceRequest = {}) =>
+      invoke<ipc.ReportsCustomerIntelligenceResponse>(ipc.IPC_CHANNELS_REPORTS.REPORTS_CUSTOMER_INTELLIGENCE, req),
+    reportsTaxes: (req: ipc.ReportsTaxesRequest) =>
+      invoke<ipc.ReportsTaxesResponse>(ipc.IPC_CHANNELS_REPORTS.REPORTS_TAXES, req),
+    recordTaxPayment: (req: ipc.ReportsTaxPaymentRecordRequest) =>
+      invoke<ipc.ReportsTaxPaymentRecordResponse>(ipc.IPC_CHANNELS_REPORTS.REPORTS_TAX_PAYMENT_RECORD, req),
 
     // --- Catalog data transfer ---
     catalogExport: (req: ipc.CatalogExportRequest = {}) =>
@@ -365,6 +399,8 @@ export function createCounterApi(invoke: Invoke) {
     // --- Phase 4 workstream C: WhatsApp pending orders (accept/reject) ---
     pendingOrdersList: () =>
       invoke<ipc.PendingOrdersListResponse>(ipc.IPC_CHANNELS_PENDING_ORDERS.PENDING_ORDERS_LIST, {}),
+    pendingOrdersDeliveryList: () =>
+      invoke<ipc.PendingOrdersListResponse>(ipc.IPC_CHANNELS_PENDING_ORDERS.PENDING_ORDERS_DELIVERY_LIST, {}),
     pendingOrderGet: (orderId: string) =>
       invoke<ipc.PendingOrderDetail>(ipc.IPC_CHANNELS_PENDING_ORDERS.PENDING_ORDERS_GET, { orderId }),
     pendingOrderResolveForCart: (orderId: string) =>
@@ -373,6 +409,12 @@ export function createCounterApi(invoke: Invoke) {
       invoke<void>(ipc.IPC_CHANNELS_PENDING_ORDERS.PENDING_ORDERS_REJECT, { orderId, reason }),
     pendingOrderMarkFulfilled: (orderId: string, saleId: string) =>
       invoke<void>(ipc.IPC_CHANNELS_PENDING_ORDERS.PENDING_ORDERS_MARK_FULFILLED, { orderId, saleId }),
+    pendingOrderMarkPacked: (orderId: string) =>
+      invoke<void>(ipc.IPC_CHANNELS_PENDING_ORDERS.PENDING_ORDERS_MARK_PACKED, { orderId }),
+    pendingOrderMarkDispatched: (req: ipc.PendingOrderMarkDispatchedRequest) =>
+      invoke<void>(ipc.IPC_CHANNELS_PENDING_ORDERS.PENDING_ORDERS_MARK_DISPATCHED, req),
+    pendingOrderCompleteDelivery: (req: ipc.PendingOrderCompleteDeliveryRequest) =>
+      invoke<ipc.PendingOrderCompleteDeliveryResponse>(ipc.IPC_CHANNELS_PENDING_ORDERS.PENDING_ORDERS_COMPLETE_DELIVERY, req),
   };
 }
 

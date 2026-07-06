@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { counter } from '../../lib/ipc';
 import { useSession } from '../../store/session';
 import { formatMoneyWithCurrency } from '../../../shared/lib/money';
+import { FeedbackBanner } from '../../components/FeedbackBanner';
 
 function todayIso(): string { return new Date().toISOString().slice(0, 10); }
 function daysAgoIso(n: number): string {
@@ -88,7 +89,7 @@ export function ExceptionsTab() {
           <button className="px-3 py-2 border border-border text-sm" onClick={() => { setFromDate(daysAgoIso(30)); setToDate(todayIso()); setTimeout(() => void refresh(), 0); }}>30d</button>
         </div>
       </div>
-      {error && <div className="bg-danger/10 border border-danger/40 text-danger text-sm px-3 py-2 rounded">{error}</div>}
+      {error && <FeedbackBanner>{error}</FeedbackBanner>}
 
       <Section title="Voids by cashier" subtitle="Who's voiding the most. Outliers ≠ proof, but always worth asking.">
         <Table headers={['Cashier', 'Role', 'Voids', 'Voided value']}>

@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { counter } from '../lib/ipc';
 import { useSession } from '../store/session';
+import { FeedbackBanner } from '../components/FeedbackBanner';
 
 export default function SetupScreen() {
   const setupCreateOwner = async (full: string, phone: string, pin: string) =>
@@ -182,9 +183,9 @@ export default function SetupScreen() {
         </div>
 
         {err && (
-          <div className="text-sm text-danger bg-danger/10 border border-danger/40 rounded px-3 py-2">
+          <FeedbackBanner>
             {err}
-          </div>
+          </FeedbackBanner>
         )}
 
         <button

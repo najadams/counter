@@ -70,6 +70,8 @@ async function makeCreditSale(amountPesewas: number) {
   // these tests we just want predictable balances. Override total directly:
   db.prepare('UPDATE sales SET total_pesewas = ?, subtotal_pesewas = ? WHERE id = ?')
     .run(amountPesewas, amountPesewas, r.saleId);
+  db.prepare(`UPDATE sale_payments SET amount_pesewas = ? WHERE sale_id = ? AND payment_method = 'CREDIT'`)
+    .run(amountPesewas, r.saleId);
   // Reconcile cached balance after the manual override above.
   reconcileCustomerBalance(db, custId);
   return r.saleId;
@@ -113,6 +115,28 @@ describe('listOpenSalesForCustomer', () => {
     });
     const open = listOpenSalesForCustomer(db, custId);
     expect(open[0]?.outstandingPesewas).toBe(600);
+  });
+
+  it('uses only the CREDIT tender as principal for split payments', async () => {
+    const p = star();
+    const r = await completeSale(db, {
+      shiftId, workerId: W, workerName: 'Naj', locationId: L, channel: 'WALK_IN',
+      lines: [{ productId: p.id, quantity: 1, unitPricePesewas: 800 }],
+      payments: [
+        { method: 'CASH', amountPesewas: 300, cashGivenPesewas: 300 },
+        { method: 'CREDIT', amountPesewas: 500 },
+      ],
+      customerId: custId, deviceId: D, shopName: 'T',
+    });
+    db.prepare('UPDATE customers SET current_balance_pesewas = 9999 WHERE id = ?').run(custId);
+    const open = listOpenSalesForCustomer(db, custId);
+    expect(open).toHaveLength(1);
+    expect(open[0]?.saleId).toBe(r.saleId);
+    expect(open[0]?.totalPesewas).toBe(800);
+    expect(open[0]?.creditPesewas).toBe(500);
+    expect(open[0]?.outstandingPesewas).toBe(500);
+    expect(getCustomerOverview(db, custId).trueBalancePesewas).toBe(500);
+    expect(reconcileCustomerBalance(db, custId).newCached).toBe(500);
   });
 });
 
@@ -333,6 +357,7 @@ describe('listCustomersByOutstanding + getAgingSummary', () => {
       paymentMethod: 'CREDIT', customerId: cust2, deviceId: D, shopName: 'T',
     });
     db.prepare('UPDATE sales SET total_pesewas = 1500, subtotal_pesewas = 1500 WHERE id = ?').run(r2.saleId);
+    db.prepare(`UPDATE sale_payments SET amount_pesewas = 1500 WHERE sale_id = ? AND payment_method = 'CREDIT'`).run(r2.saleId);
     reconcileCustomerBalance(db, cust2);
     const list = listCustomersByOutstanding(db);
     expect(list.length).toBe(2);
