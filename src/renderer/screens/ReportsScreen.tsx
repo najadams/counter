@@ -20,8 +20,10 @@ import { DrawingsTab } from './reports/DrawingsTab';
 import { PriceIntelligenceTab } from './reports/PriceIntelligenceTab';
 import { CustomerIntelligenceTab } from './reports/CustomerIntelligenceTab';
 import { TaxesTab } from './reports/TaxesTab';
+import { BalanceSheetTab } from './reports/BalanceSheetTab';
+import { CashflowTab } from './reports/CashflowTab';
 
-type Tab = 'overview' | 'sales' | 'graphs' | 'taxes' | 'margin' | 'inventory' | 'drawings' | 'prices' | 'customers';
+type Tab = 'overview' | 'sales' | 'graphs' | 'taxes' | 'balance' | 'cashflow' | 'margin' | 'inventory' | 'drawings' | 'prices' | 'customers';
 
 interface Props {
   onExit: () => void;
@@ -51,11 +53,13 @@ export default function ReportsScreen({
       <AppHeader subtitle={`reports — ${tab}`} onBack={onExit} />
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-8 py-6 flex flex-col gap-5">
         <div className="flex items-center justify-between">
-          <div className="flex">
+          <div className="flex flex-wrap">
             <TabBtn active={tab === 'overview'} onClick={() => setTab('overview')}>Overview</TabBtn>
             <TabBtn active={tab === 'sales'} onClick={() => setTab('sales')}>Sales</TabBtn>
             <TabBtn active={tab === 'graphs'} onClick={() => setTab('graphs')}>Graphs</TabBtn>
             <TabBtn active={tab === 'taxes'} onClick={() => setTab('taxes')}>Taxes</TabBtn>
+            <TabBtn active={tab === 'balance'} onClick={() => setTab('balance')}>Balance Sheet</TabBtn>
+            <TabBtn active={tab === 'cashflow'} onClick={() => setTab('cashflow')}>Cashflow</TabBtn>
             <TabBtn active={tab === 'margin'} onClick={() => setTab('margin')}>Margin</TabBtn>
             <TabBtn active={tab === 'inventory'} onClick={() => setTab('inventory')}>Inventory</TabBtn>
             <TabBtn active={tab === 'drawings'} onClick={() => setTab('drawings')}>Drawings</TabBtn>
@@ -80,6 +84,8 @@ export default function ReportsScreen({
         {tab === 'sales' && <SalesTab />}
         {tab === 'graphs' && <GraphsTab />}
         {tab === 'taxes' && <TaxesTab />}
+        {tab === 'balance' && <BalanceSheetTab />}
+        {tab === 'cashflow' && <CashflowTab />}
         {tab === 'margin' && <MarginTab />}
         {tab === 'inventory' && <InventoryTab />}
         {tab === 'drawings' && <DrawingsTab />}

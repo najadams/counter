@@ -17,6 +17,8 @@ import { DEFAULT_LOCATION_ID } from '../../shared/lib/constants.js';
 import { extractInclusiveVat, VAT_ENABLED } from '../../shared/lib/vat.js';
 import { listTaxPaymentsForPeriod, type TaxPaymentRow } from './taxPayments.js';
 import { creditPrincipalExpr } from './customerCredit.js';
+import { verifyPin } from './workers.js';
+import { logAudit } from '../db/audit.js';
 
 const ALLOWED_ROLES = new Set(['OWNER', 'FOUNDER', 'SUPERVISOR']);
 
@@ -1929,5 +1931,545 @@ export function getInventoryReport(db: DB, input: InventoryReportInput): Invento
     stockoutCount,
     belowReorderCount,
     rows: enriched,
+  };
+}
+
+// --- Financial statements ------------------------------------------------
+
+export interface FinancialStatementAccessInput {
+  actorWorkerId: string;
+  pin: string;
+  deviceId: string;
+}
+
+export interface BalanceSheetReportInput extends FinancialStatementAccessInput {
+  asOfDate: string;
+  locationId?: string;
+}
+
+export interface FinancialStatementLine {
+  label: string;
+  amountPesewas: number;
+  note?: string | null;
+}
+
+export interface BalanceSheetReportResult {
+  generatedAt: string;
+  asOfDate: string;
+  locationId: string;
+  assets: {
+    totalPesewas: number;
+    inventoryAtCostPesewas: number;
+    customerReceivablesPesewas: number;
+    openTillCashPesewas: number;
+    taxCreditPesewas: number;
+    lines: FinancialStatementLine[];
+  };
+  liabilities: {
+    totalPesewas: number;
+    supplierPayablesPesewas: number;
+    taxPayablePesewas: number;
+    customerCreditsPesewas: number;
+    lines: FinancialStatementLine[];
+  };
+  equity: {
+    totalPesewas: number;
+    lines: FinancialStatementLine[];
+  };
+  caveats: string[];
+}
+
+export interface CashflowReportInput extends FinancialStatementAccessInput {
+  fromDate: string;
+  toDate: string;
+  locationId?: string;
+}
+
+export interface CashflowReportResult {
+  generatedAt: string;
+  fromDate: string;
+  toDate: string;
+  locationId: string;
+  inflows: {
+    totalPesewas: number;
+    lines: FinancialStatementLine[];
+  };
+  outflows: {
+    totalPesewas: number;
+    lines: FinancialStatementLine[];
+  };
+  netCashflowPesewas: number;
+  transfers: {
+    totalPesewas: number;
+    lines: FinancialStatementLine[];
+  };
+  nonCash: {
+    totalPesewas: number;
+    lines: FinancialStatementLine[];
+  };
+  caveats: string[];
+}
+
+function requireFinancialStatementAccess(
+  db: DB,
+  input: FinancialStatementAccessInput,
+  statementType: 'BALANCE_SHEET' | 'CASHFLOW',
+  period: Record<string, string>,
+): void {
+  requireReportsActor(db, input.actorWorkerId);
+  const auth = verifyPin(db, input.actorWorkerId, input.pin, input.deviceId);
+  if (!auth.ok) {
+    throw new Error(
+      auth.reason === 'LOCKED_OUT'
+        ? `Financial statement locked out until ${auth.lockedUntil}.`
+        : `Financial statement PIN check failed (${auth.reason}).`,
+    );
+  }
+  logAudit(db, {
+    workerId: input.actorWorkerId,
+    action: 'FINANCIAL_STATEMENT_VIEWED',
+    entityType: 'reports',
+    entityId: statementType.toLowerCase(),
+    afterValue: { statementType, ...period },
+    deviceId: input.deviceId,
+  });
+}
+
+function positiveOnly(n: number): number {
+  return n > 0 ? n : 0;
+}
+
+function paymentMethodLabel(method: string): string {
+  if (method === 'CASH') return 'Cash';
+  if (method === 'BANK_TRANSFER') return 'Bank transfer';
+  if (method.startsWith('MOMO_')) return `MoMo ${method.slice(5).replace(/_/g, ' ')}`;
+  return method.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function paymentMethodRank(method: string): number {
+  if (method === 'CASH') return 1;
+  if (method.startsWith('MOMO_')) return 2;
+  if (method === 'BANK_TRANSFER') return 3;
+  return 9;
+}
+
+function datedRangeWhere(column: string): string {
+  return `${column} >= ? AND ${column} < ?`;
+}
+
+function sumLines(lines: FinancialStatementLine[]): number {
+  return lines.reduce((sum, line) => sum + line.amountPesewas, 0);
+}
+
+function getOpenTillCashAsOf(db: DB, locationId: string, toExclusiveISO: string): number {
+  const openShifts = db
+    .prepare(
+      `SELECT id, opening_cash_pesewas AS openingCashPesewas
+         FROM shifts
+        WHERE location_id = ?
+          AND opened_at < ?
+          AND (closed_at IS NULL OR closed_at >= ?)`,
+    )
+    .all(locationId, toExclusiveISO, toExclusiveISO) as Array<{ id: string; openingCashPesewas: number }>;
+
+  let total = 0;
+  for (const shift of openShifts) {
+    const cashSales = (db
+      .prepare(
+        `SELECT COALESCE(SUM(sp.amount_pesewas), 0) AS total
+           FROM sale_payments sp
+           JOIN sales s ON s.id = sp.sale_id
+          WHERE s.shift_id = ?
+            AND s.voided = 0
+            AND sp.payment_method = 'CASH'
+            AND s.created_at < ?`,
+      )
+      .get(shift.id, toExclusiveISO) as { total: number }).total;
+    const debtPaymentsCash = (db
+      .prepare(
+        `SELECT COALESCE(SUM(amount_pesewas), 0) AS total
+           FROM customer_payments
+          WHERE shift_id = ?
+            AND payment_method = 'CASH'
+            AND received_at < ?`,
+      )
+      .get(shift.id, toExclusiveISO) as { total: number }).total;
+    const drops = (db
+      .prepare(
+        `SELECT COALESCE(SUM(counted_pesewas), 0) AS total
+           FROM cash_counts
+          WHERE shift_id = ?
+            AND count_type = 'CASH_DROP'
+            AND created_at < ?`,
+      )
+      .get(shift.id, toExclusiveISO) as { total: number }).total;
+    const expenses = (db
+      .prepare(
+        `SELECT COALESCE(SUM(amount_pesewas), 0) AS total
+           FROM petty_cash_expenses
+          WHERE shift_id = ?
+            AND created_at < ?`,
+      )
+      .get(shift.id, toExclusiveISO) as { total: number }).total;
+    const taxPaymentsCash = (db
+      .prepare(
+        `SELECT COALESCE(SUM(amount_pesewas), 0) AS total
+           FROM tax_payments
+          WHERE shift_id = ?
+            AND payment_method = 'CASH'
+            AND paid_at < ?`,
+      )
+      .get(shift.id, toExclusiveISO) as { total: number }).total;
+    total += shift.openingCashPesewas + cashSales + debtPaymentsCash - drops - expenses - taxPaymentsCash;
+  }
+  return total;
+}
+
+function getTaxBalanceAsOf(db: DB, locationId: string, toExclusiveISO: string): number {
+  const output = db
+    .prepare(
+      `SELECT COALESCE(SUM(vat_pesewas + nhil_pesewas + getfund_pesewas), 0) AS total
+         FROM sales
+        WHERE location_id = ?
+          AND voided = 0
+          AND created_at < ?`,
+    )
+    .get(locationId, toExclusiveISO) as { total: number };
+  const soldGoods = db
+    .prepare(
+      `SELECT COALESCE(SUM(sl.unit_cost_pesewas * sl.quantity), 0) AS total
+         FROM sale_lines sl
+         JOIN sales s ON s.id = sl.sale_id
+        WHERE s.location_id = ?
+          AND s.voided = 0
+          AND s.created_at < ?`,
+    )
+    .get(locationId, toExclusiveISO) as { total: number };
+  const inputTax = extractInclusiveVat(Math.max(0, soldGoods.total));
+  const paid = db
+    .prepare(
+      `SELECT COALESCE(SUM(amount_pesewas), 0) AS total
+         FROM tax_payments
+        WHERE location_id = ?
+          AND paid_at < ?`,
+    )
+    .get(locationId, toExclusiveISO) as { total: number };
+  return output.total - (inputTax.vatPesewas + inputTax.nhilPesewas + inputTax.getfundPesewas) - paid.total;
+}
+
+export function getBalanceSheetReport(db: DB, input: BalanceSheetReportInput): BalanceSheetReportResult {
+  assertDateOnly('asOfDate', input.asOfDate);
+  requireFinancialStatementAccess(db, input, 'BALANCE_SHEET', { asOfDate: input.asOfDate });
+
+  const locationId = input.locationId ?? DEFAULT_LOCATION_ID;
+  const { toExclusiveISO } = dateRangeToISO(input.asOfDate, input.asOfDate);
+
+  const inventoryRows = db
+    .prepare(
+      `SELECT p.id, p.sku, p.name,
+              p.cost_price_pesewas AS costEach,
+              COALESCE(SUM(sm.quantity), 0) AS unitsOnHand
+         FROM products p
+         LEFT JOIN stock_movements sm
+           ON sm.product_id = p.id
+          AND sm.location_id = ?
+          AND sm.created_at < ?
+        WHERE p.deleted_at IS NULL
+          AND p.active = 1
+        GROUP BY p.id
+       HAVING unitsOnHand > 0
+        ORDER BY unitsOnHand * p.cost_price_pesewas DESC`,
+    )
+    .all(locationId, toExclusiveISO) as Array<{
+      id: string; sku: string; name: string; costEach: number; unitsOnHand: number;
+    }>;
+  const inventoryAtCostPesewas = inventoryRows.reduce(
+    (sum, row) => sum + row.unitsOnHand * taxableFromInclusive(row.costEach),
+    0,
+  );
+
+  const receivableRows = db
+    .prepare(
+      `WITH open_credit AS (
+         SELECT s.id AS saleId,
+                c.display_name AS customerName,
+                ${creditPrincipalExpr('s')} -
+                  COALESCE((SELECT SUM(cpa.amount_pesewas)
+                              FROM customer_payment_allocations cpa
+                             WHERE cpa.sale_id = s.id
+                               AND cpa.created_at < ?), 0) AS outstandingPesewas
+           FROM sales s
+           JOIN customers c ON c.id = s.customer_id
+          WHERE s.is_credit = 1
+            AND s.voided = 0
+            AND s.location_id = ?
+            AND s.created_at < ?
+       )
+       SELECT customerName AS label,
+              COALESCE(SUM(outstandingPesewas), 0) AS amountPesewas
+         FROM open_credit
+        WHERE outstandingPesewas > 0
+        GROUP BY customerName
+        ORDER BY amountPesewas DESC`,
+    )
+    .all(toExclusiveISO, locationId, toExclusiveISO) as Array<{ label: string; amountPesewas: number }>;
+  const customerReceivablesPesewas = receivableRows.reduce((sum, row) => sum + row.amountPesewas, 0);
+
+  const openTillCashPesewas = getOpenTillCashAsOf(db, locationId, toExclusiveISO);
+  const taxBalance = getTaxBalanceAsOf(db, locationId, toExclusiveISO);
+  const taxCreditPesewas = taxBalance < 0 ? Math.abs(taxBalance) : 0;
+
+  const supplierPayablesPesewas = positiveOnly((db
+    .prepare(
+      `SELECT COALESCE(SUM(current_balance_pesewas), 0) AS total
+         FROM suppliers
+        WHERE deleted_at IS NULL
+          AND current_balance_pesewas > 0`,
+    )
+    .get() as { total: number }).total);
+  const customerCreditsPesewas = Math.abs((db
+    .prepare(
+      `SELECT COALESCE(SUM(current_balance_pesewas), 0) AS total
+         FROM customers
+        WHERE deleted_at IS NULL
+          AND current_balance_pesewas < 0`,
+    )
+    .get() as { total: number }).total);
+  const taxPayablePesewas = positiveOnly(taxBalance);
+
+  const assetLines: FinancialStatementLine[] = [
+    { label: 'Inventory at cost', amountPesewas: inventoryAtCostPesewas, note: `${inventoryRows.length} stocked SKU(s)` },
+    { label: 'Customer receivables', amountPesewas: customerReceivablesPesewas, note: `${receivableRows.length} customer(s) with open credit` },
+    { label: 'Expected cash in open tills', amountPesewas: openTillCashPesewas, note: 'Open-shift cash only; bank and MoMo balances are not tracked by Counter.' },
+  ];
+  if (taxCreditPesewas > 0) {
+    assetLines.push({ label: 'Tax credit', amountPesewas: taxCreditPesewas, note: 'Recorded tax payments/input credits exceed recorded tax payable.' });
+  }
+
+  const liabilityLines: FinancialStatementLine[] = [
+    { label: 'Supplier payables', amountPesewas: supplierPayablesPesewas, note: 'Uses Counter supplier balance cache.' },
+    { label: 'Tax payable', amountPesewas: taxPayablePesewas, note: 'Output tax less estimated input tax on sold goods and recorded tax payments.' },
+    { label: 'Customer credits / prepayments', amountPesewas: customerCreditsPesewas, note: 'Negative customer balances currently recorded in Counter.' },
+  ];
+  const assetsTotal = sumLines(assetLines);
+  const liabilitiesTotal = sumLines(liabilityLines);
+  const equityTotal = assetsTotal - liabilitiesTotal;
+
+  return {
+    generatedAt: new Date().toISOString(),
+    asOfDate: input.asOfDate,
+    locationId,
+    assets: {
+      totalPesewas: assetsTotal,
+      inventoryAtCostPesewas,
+      customerReceivablesPesewas,
+      openTillCashPesewas,
+      taxCreditPesewas,
+      lines: assetLines,
+    },
+    liabilities: {
+      totalPesewas: liabilitiesTotal,
+      supplierPayablesPesewas,
+      taxPayablePesewas,
+      customerCreditsPesewas,
+      lines: liabilityLines,
+    },
+    equity: {
+      totalPesewas: equityTotal,
+      lines: [
+        {
+          label: 'Owner equity / retained position',
+          amountPesewas: equityTotal,
+          note: 'Derived as recorded assets minus recorded liabilities.',
+        },
+      ],
+    },
+    caveats: [
+      'Management statement derived from Counter records, not a formal general ledger.',
+      'Bank, MoMo wallet, safe cash, loans, rent deposits, and fixed assets are not tracked as balance-sheet accounts yet.',
+      'Supplier payable and customer credit/prepayment lines use current Counter balance caches.',
+    ],
+  };
+}
+
+export function getCashflowReport(db: DB, input: CashflowReportInput): CashflowReportResult {
+  requireFinancialStatementAccess(db, input, 'CASHFLOW', {
+    fromDate: input.fromDate,
+    toDate: input.toDate,
+  });
+  const locationId = input.locationId ?? DEFAULT_LOCATION_ID;
+  const { fromISO, toExclusiveISO } = dateRangeToISO(input.fromDate, input.toDate);
+
+  const salesPaidRows = db
+    .prepare(
+      `SELECT sp.payment_method AS method,
+              COALESCE(SUM(sp.amount_pesewas), 0) AS amountPesewas
+         FROM sale_payments sp
+         JOIN sales s ON s.id = sp.sale_id
+        WHERE s.location_id = ?
+          AND s.voided = 0
+          AND ${datedRangeWhere('s.created_at')}
+          AND sp.payment_method != 'CREDIT'
+        GROUP BY sp.payment_method`,
+    )
+    .all(locationId, fromISO, toExclusiveISO) as Array<{ method: string; amountPesewas: number }>;
+  const customerCollectionRows = db
+    .prepare(
+      `SELECT payment_method AS method,
+              COALESCE(SUM(amount_pesewas), 0) AS amountPesewas
+         FROM customer_payments
+        WHERE ${datedRangeWhere('received_at')}
+          AND payment_method != 'RETURN_CREDIT'
+        GROUP BY payment_method`,
+    )
+    .all(fromISO, toExclusiveISO) as Array<{ method: string; amountPesewas: number }>;
+
+  const inflowMap = new Map<string, { kind: string; method: string; amountPesewas: number }>();
+  for (const row of salesPaidRows) {
+    inflowMap.set(`Sales - ${row.method}`, { kind: 'Sales', method: row.method, amountPesewas: row.amountPesewas });
+  }
+  for (const row of customerCollectionRows) {
+    const key = `Credit collections - ${row.method}`;
+    const existing = inflowMap.get(key);
+    inflowMap.set(key, {
+      kind: 'Credit collections',
+      method: row.method,
+      amountPesewas: (existing?.amountPesewas ?? 0) + row.amountPesewas,
+    });
+  }
+  const inflowLines = Array.from(inflowMap.values())
+    .sort((a, b) => paymentMethodRank(a.method) - paymentMethodRank(b.method) || b.amountPesewas - a.amountPesewas)
+    .map((row) => ({
+      label: `${row.kind} (${paymentMethodLabel(row.method)})`,
+      amountPesewas: row.amountPesewas,
+      note: null,
+    }));
+
+  const supplierPaymentRows = db
+    .prepare(
+      `SELECT payment_method AS method,
+              COALESCE(SUM(amount_pesewas), 0) AS amountPesewas
+         FROM supplier_payments
+        WHERE ${datedRangeWhere('paid_at')}
+        GROUP BY payment_method`,
+    )
+    .all(fromISO, toExclusiveISO) as Array<{ method: string; amountPesewas: number }>;
+  const expenseRows = db
+    .prepare(
+      `SELECT category,
+              COALESCE(SUM(amount_pesewas), 0) AS amountPesewas
+         FROM petty_cash_expenses
+        WHERE location_id = ?
+          AND ${datedRangeWhere('created_at')}
+        GROUP BY category`,
+    )
+    .all(locationId, fromISO, toExclusiveISO) as Array<{ category: string; amountPesewas: number }>;
+  const taxPaymentRows = db
+    .prepare(
+      `SELECT payment_method AS method,
+              COALESCE(SUM(amount_pesewas), 0) AS amountPesewas
+         FROM tax_payments
+        WHERE location_id = ?
+          AND ${datedRangeWhere('paid_at')}
+        GROUP BY payment_method`,
+    )
+    .all(locationId, fromISO, toExclusiveISO) as Array<{ method: string; amountPesewas: number }>;
+  const drawingRows = db
+    .prepare(
+      `SELECT category,
+              COALESCE(SUM(amount_pesewas), 0) AS amountPesewas
+         FROM owner_drawings
+        WHERE location_id = ?
+          AND ${datedRangeWhere('created_at')}
+        GROUP BY category`,
+    )
+    .all(locationId, fromISO, toExclusiveISO) as Array<{ category: string; amountPesewas: number }>;
+
+  const outflowLines: FinancialStatementLine[] = [
+    ...supplierPaymentRows.map((r) => ({
+      label: `Supplier payments (${paymentMethodLabel(r.method)})`,
+      amountPesewas: r.amountPesewas,
+      note: null,
+    })),
+    ...expenseRows.map((r) => ({
+      label: `Expenses - ${paymentMethodLabel(r.category)}`,
+      amountPesewas: r.amountPesewas,
+      note: 'Petty-cash expense',
+    })),
+    ...taxPaymentRows.map((r) => ({
+      label: `Tax paid (${paymentMethodLabel(r.method)})`,
+      amountPesewas: r.amountPesewas,
+      note: null,
+    })),
+    ...drawingRows.map((r) => ({
+      label: `Owner drawings - ${paymentMethodLabel(r.category)}`,
+      amountPesewas: r.amountPesewas,
+      note: null,
+    })),
+  ].filter((r) => r.amountPesewas > 0).sort((a, b) => b.amountPesewas - a.amountPesewas);
+
+  const transferRows = db
+    .prepare(
+      `SELECT COALESCE(SUM(cc.counted_pesewas), 0) AS amountPesewas,
+              COUNT(*) AS count
+         FROM cash_counts cc
+         LEFT JOIN owner_drawings od ON od.cash_count_id = cc.id
+        WHERE cc.location_id = ?
+          AND cc.count_type = 'CASH_DROP'
+          AND od.id IS NULL
+          AND ${datedRangeWhere('cc.created_at')}`,
+    )
+    .get(locationId, fromISO, toExclusiveISO) as { amountPesewas: number; count: number };
+  const transferLines: FinancialStatementLine[] = transferRows.amountPesewas > 0
+    ? [{ label: 'Generic cash drops / transfers', amountPesewas: transferRows.amountPesewas, note: `${transferRows.count} transfer(s); not treated as business expense.` }]
+    : [];
+
+  const creditSales = (db
+    .prepare(
+      `SELECT COALESCE(SUM(sp.amount_pesewas), 0) AS total
+         FROM sale_payments sp
+         JOIN sales s ON s.id = sp.sale_id
+        WHERE s.location_id = ?
+          AND s.voided = 0
+          AND sp.payment_method = 'CREDIT'
+          AND ${datedRangeWhere('s.created_at')}`,
+    )
+    .get(locationId, fromISO, toExclusiveISO) as { total: number }).total;
+  const supplierInvoices = (db
+    .prepare(
+      `SELECT COALESCE(SUM(total_pesewas), 0) AS total,
+              COUNT(*) AS count
+         FROM supplier_invoices
+        WHERE status != 'VOID'
+          AND invoice_date >= ?
+          AND invoice_date <= ?`,
+    )
+    .get(input.fromDate, input.toDate) as { total: number; count: number });
+  const nonCashLines: FinancialStatementLine[] = [];
+  if (creditSales > 0) {
+    nonCashLines.push({ label: 'Credit sales added to receivables', amountPesewas: creditSales, note: 'Not cash until collected.' });
+  }
+  if (supplierInvoices.total > 0) {
+    nonCashLines.push({ label: 'Supplier invoices added to payables/inventory', amountPesewas: supplierInvoices.total, note: `${supplierInvoices.count} invoice(s); not cash until paid.` });
+  }
+
+  const inflowTotal = sumLines(inflowLines);
+  const outflowTotal = sumLines(outflowLines);
+
+  return {
+    generatedAt: new Date().toISOString(),
+    fromDate: input.fromDate,
+    toDate: input.toDate,
+    locationId,
+    inflows: { totalPesewas: inflowTotal, lines: inflowLines },
+    outflows: { totalPesewas: outflowTotal, lines: outflowLines },
+    netCashflowPesewas: inflowTotal - outflowTotal,
+    transfers: { totalPesewas: sumLines(transferLines), lines: transferLines },
+    nonCash: { totalPesewas: sumLines(nonCashLines), lines: nonCashLines },
+    caveats: [
+      'Direct-method management cashflow from recorded Counter activity.',
+      'Generic cash drops are shown as transfers because Counter does not know whether they went to a safe, bank, or owner.',
+      'Bank and MoMo wallet balances are not tracked as accounts yet.',
+    ],
   };
 }

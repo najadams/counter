@@ -2234,9 +2234,12 @@ import {
   type ReportsCustomerIntelligenceRequest, type ReportsCustomerIntelligenceResponse,
   type ReportsTaxesRequest, type ReportsTaxesResponse,
   type ReportsTaxPaymentRecordRequest, type ReportsTaxPaymentRecordResponse,
+  type ReportsBalanceSheetRequest, type ReportsBalanceSheetResponse,
+  type ReportsCashflowRequest, type ReportsCashflowResponse,
 } from '../../shared/types/ipc.js';
 import {
   getReportsOverview, getSalesReport, getGraphsReport, getMarginReport, getInventoryReport, getTaxesReport,
+  getBalanceSheetReport, getCashflowReport,
 } from '../services/reports.js';
 import {
   getLandedCostAllocations, getPriceHistory, getPriceIntelligence,
@@ -2409,6 +2412,39 @@ export function registerReportsHandlers(
         });
       },
       IPC_CHANNELS_REPORTS.REPORTS_TAX_PAYMENT_RECORD,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.REPORTS_BALANCE_SHEET,
+    wrap<ReportsBalanceSheetRequest, ReportsBalanceSheetResponse>(
+      (req) => {
+        const w = requireWorker();
+        return getBalanceSheetReport(db, {
+          actorWorkerId: w.workerId,
+          asOfDate: req.asOfDate,
+          pin: req.pin,
+          locationId: req.locationId,
+          deviceId: _deviceId,
+        });
+      },
+      IPC_CHANNELS_REPORTS.REPORTS_BALANCE_SHEET,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.REPORTS_CASHFLOW,
+    wrap<ReportsCashflowRequest, ReportsCashflowResponse>(
+      (req) => {
+        const w = requireWorker();
+        return getCashflowReport(db, {
+          actorWorkerId: w.workerId,
+          fromDate: req.fromDate,
+          toDate: req.toDate,
+          pin: req.pin,
+          locationId: req.locationId,
+          deviceId: _deviceId,
+        });
+      },
+      IPC_CHANNELS_REPORTS.REPORTS_CASHFLOW,
     ),
   );
 }

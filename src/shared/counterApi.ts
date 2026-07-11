@@ -381,6 +381,10 @@ export function createCounterApi(invoke: Invoke) {
       invoke<ipc.ReportsTaxesResponse>(ipc.IPC_CHANNELS_REPORTS.REPORTS_TAXES, req),
     recordTaxPayment: (req: ipc.ReportsTaxPaymentRecordRequest) =>
       invoke<ipc.ReportsTaxPaymentRecordResponse>(ipc.IPC_CHANNELS_REPORTS.REPORTS_TAX_PAYMENT_RECORD, req),
+    reportsBalanceSheet: (req: ipc.ReportsBalanceSheetRequest) =>
+      invoke<ipc.ReportsBalanceSheetResponse>(ipc.IPC_CHANNELS_REPORTS.REPORTS_BALANCE_SHEET, req),
+    reportsCashflow: (req: ipc.ReportsCashflowRequest) =>
+      invoke<ipc.ReportsCashflowResponse>(ipc.IPC_CHANNELS_REPORTS.REPORTS_CASHFLOW, req),
 
     // --- Catalog data transfer ---
     catalogExport: (req: ipc.CatalogExportRequest = {}) =>

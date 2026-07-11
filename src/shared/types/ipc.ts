@@ -1823,6 +1823,8 @@ export const IPC_CHANNELS_REPORTS = {
   REPORTS_CUSTOMER_INTELLIGENCE: 'reports:customer-intelligence',
   REPORTS_TAXES: 'reports:taxes',
   REPORTS_TAX_PAYMENT_RECORD: 'reports:tax-payment-record',
+  REPORTS_BALANCE_SHEET: 'reports:balance-sheet',
+  REPORTS_CASHFLOW: 'reports:cashflow',
 } as const;
 
 export interface ReportsOverviewRequest {
@@ -2187,6 +2189,74 @@ export interface ReportsTaxPaymentRecordRequest {
   notes?: string | null;
 }
 export interface ReportsTaxPaymentRecordResponse { paymentId: string }
+
+export interface ReportsFinancialStatementLine {
+  label: string;
+  amountPesewas: number;
+  note?: string | null;
+}
+
+export interface ReportsBalanceSheetRequest {
+  asOfDate: string;
+  pin: string;
+  locationId?: string;
+}
+export interface ReportsBalanceSheetResponse {
+  generatedAt: string;
+  asOfDate: string;
+  locationId: string;
+  assets: {
+    totalPesewas: number;
+    inventoryAtCostPesewas: number;
+    customerReceivablesPesewas: number;
+    openTillCashPesewas: number;
+    taxCreditPesewas: number;
+    lines: ReportsFinancialStatementLine[];
+  };
+  liabilities: {
+    totalPesewas: number;
+    supplierPayablesPesewas: number;
+    taxPayablePesewas: number;
+    customerCreditsPesewas: number;
+    lines: ReportsFinancialStatementLine[];
+  };
+  equity: {
+    totalPesewas: number;
+    lines: ReportsFinancialStatementLine[];
+  };
+  caveats: string[];
+}
+
+export interface ReportsCashflowRequest {
+  fromDate: string;
+  toDate: string;
+  pin: string;
+  locationId?: string;
+}
+export interface ReportsCashflowResponse {
+  generatedAt: string;
+  fromDate: string;
+  toDate: string;
+  locationId: string;
+  inflows: {
+    totalPesewas: number;
+    lines: ReportsFinancialStatementLine[];
+  };
+  outflows: {
+    totalPesewas: number;
+    lines: ReportsFinancialStatementLine[];
+  };
+  netCashflowPesewas: number;
+  transfers: {
+    totalPesewas: number;
+    lines: ReportsFinancialStatementLine[];
+  };
+  nonCash: {
+    totalPesewas: number;
+    lines: ReportsFinancialStatementLine[];
+  };
+  caveats: string[];
+}
 
 export interface ReportsPriceIntelligenceResponse {
   rows: Array<{
