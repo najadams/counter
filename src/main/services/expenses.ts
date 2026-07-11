@@ -22,7 +22,8 @@ import { assertNotSealed } from './periods.js';
 
 export const EXPENSE_CATEGORIES = [
   'RENT', 'UTILITIES', 'TRANSPORT', 'SUPPLIES', 'COMMS',
-  'REPAIRS', 'BANK_FEES', 'OTHER',
+  'REPAIRS', 'BANK_FEES', 'STAFF_WAGES', 'STAFF_ADVANCE',
+  'COMMISSION', 'STAFF_WELFARE', 'OTHER',
 ] as const;
 export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
 

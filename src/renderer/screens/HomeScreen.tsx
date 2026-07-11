@@ -15,8 +15,6 @@ import { QRCodeSVG } from 'qrcode.react';
 import { counter, isDesktopHost } from '../lib/ipc';
 import { useSession } from '../store/session';
 import { AppHeader } from '../components/AppHeader';
-import { CashDropModal } from '../components/CashDropModal';
-import { ExpenseModal } from '../components/ExpenseModal';
 import { BackupHealthBanner } from '../components/BackupHealthBanner';
 import { SyncHealthBanner } from '../components/SyncHealthBanner';
 import { formatMoney, formatMoneyWithCurrency, parseCedisToPesewas } from '../../shared/lib/money';
@@ -32,9 +30,10 @@ import StocktakeScreen from './StocktakeScreen';
 import DailySummaryScreen from './DailySummaryScreen';
 import CustomersScreen from './CustomersScreen';
 import ReportsScreen from './ReportsScreen';
+import MoneyOutScreen from './MoneyOutScreen';
 import { FeedbackBanner } from '../components/FeedbackBanner';
 
-type View = 'home' | 'sale' | 'void' | 'breakage' | 'consumption' | 'stock' | 'settings' | 'stocktake' | 'summary' | 'customers' | 'reports' | 'pendingOrders';
+type View = 'home' | 'sale' | 'void' | 'breakage' | 'consumption' | 'stock' | 'settings' | 'stocktake' | 'summary' | 'customers' | 'reports' | 'pendingOrders' | 'moneyOut';
 
 export default function HomeScreen() {
   const shiftId = useSession((s) => s.shiftId);
@@ -43,8 +42,6 @@ export default function HomeScreen() {
   const logout = useSession((s) => s.logout);
 
   const [view, setView] = useState<View>('home');
-  const [showCashDrop, setShowCashDrop] = useState(false);
-  const [showExpense, setShowExpense] = useState(false);
   const [closing, setClosing] = useState(false);
   const [step, setStep] = useState<'idle' | 'count' | 'reconciled'>('idle');
   const [pendingReprints, setPendingReprints] = useState<Array<{ id: string; saleId: string; saleTotalPesewas: number; reason: string }>>([]);
@@ -101,7 +98,6 @@ export default function HomeScreen() {
   }
   const [counted, setCounted] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
   const [reconciled, setReconciled] = useState<{
     countedPesewas: number; expectedPesewas: number; variancePesewas: number;
     totalSalesPesewas: number; totalBreakageValuePesewas: number;
@@ -112,10 +108,10 @@ export default function HomeScreen() {
   const [backupAcked, setBackupAcked] = useState(false);
 
   useEffect(() => {
-    if (view !== 'home' || step !== 'idle' || showCashDrop) return;
+    if (view !== 'home' || step !== 'idle') return;
     function onKey(e: KeyboardEvent) {
       if (e.key === 'F1') { e.preventDefault(); setView('sale'); }
-      else if (e.key === 'F2') { e.preventDefault(); setShowCashDrop(true); }
+      else if (e.key === 'F2') { e.preventDefault(); setView('moneyOut'); }
       else if (e.key === 'F3') { e.preventDefault(); setView('consumption'); }
       else if (e.key === 'F4') { e.preventDefault(); setView('stocktake'); }
       else if (e.key === 'F5') { e.preventDefault(); setView('summary'); }
@@ -132,7 +128,7 @@ export default function HomeScreen() {
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [view, step, showCashDrop]);
+  }, [view, step]);
 
   if (view === 'sale') return <SaleScreen onExit={() => setView('home')} />;
   if (view === 'void') return <VoidSaleScreen onExit={() => setView('home')} onDuplicate={() => setView('sale')} />;
@@ -143,6 +139,7 @@ export default function HomeScreen() {
   if (view === 'stocktake') return <StocktakeScreen onExit={() => setView('home')} />;
   if (view === 'summary') return <DailySummaryScreen onExit={() => setView('home')} />;
   if (view === 'customers') return <CustomersScreen onExit={() => setView('home')} />;
+  if (view === 'moneyOut' && shiftId) return <MoneyOutScreen shiftId={shiftId} onExit={() => setView('home')} />;
   if (view === 'pendingOrders') {
     return (
       <PendingOrdersScreen
@@ -184,7 +181,6 @@ export default function HomeScreen() {
       <main className="flex-1 max-w-4xl w-full mx-auto px-4 py-6 sm:px-12 sm:py-10 flex flex-col gap-4">
         {step === 'idle' && (
           <>
-            {info && <div className="bg-bg-surface border border-success px-5 py-3 text-success text-sm">{info}</div>}
             <BackupHealthBanner />
             <SyncHealthBanner />
             <LanJoinCard />
@@ -199,8 +195,7 @@ export default function HomeScreen() {
                   : 'Accept or decline orders the agent confirmed with customers.'}
                 onClick={() => setView('pendingOrders')}
               />
-              <ActionRow label="Cash drop" hot="F2" caption="Hand cash to owner, safe, or supplier." onClick={() => setShowCashDrop(true)} />
-              <ActionRow label="Expense" caption="Pay a bill or runner from the till (water, transport, etc.)." onClick={() => setShowExpense(true)} />
+              <ActionRow label="Money out" hot="F2" caption="Expenses, drawings, supplier payments, tax payments." onClick={() => setView('moneyOut')} />
               <ActionRow label="Drink" hot="F3" caption="Log worker consumption." onClick={() => setView('consumption')} />
               <ActionRow label="Stocktake" hot="F4" caption="Physical count + shrinkage measure." onClick={() => setView('stocktake')} />
               <ActionRow label="Reports" caption="Overview dashboard: revenue, margin, cash, who owes you." onClick={() => setView('reports')} />
@@ -305,19 +300,6 @@ export default function HomeScreen() {
         )}
       </main>
 
-      {showCashDrop && shiftId && (
-        <CashDropModal
-          shiftId={shiftId}
-          onClose={() => setShowCashDrop(false)}
-          onDone={() => { setShowCashDrop(false); setInfo('Cash drop recorded.'); setTimeout(() => setInfo(null), 4000); }}
-        />
-      )}
-      {showExpense && shiftId && (
-        <ExpenseModal
-          onCancel={() => setShowExpense(false)}
-          onDone={() => { setShowExpense(false); setInfo('Expense recorded.'); setTimeout(() => setInfo(null), 4000); }}
-        />
-      )}
     </div>
   );
 }

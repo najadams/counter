@@ -8,6 +8,10 @@ import { formatMoney, parseCedisToPesewas } from '../../shared/lib/money';
 import { FeedbackBanner } from './FeedbackBanner';
 
 const CATEGORIES: Array<{ value: string; label: string }> = [
+  { value: 'STAFF_WAGES', label: 'Staff wages' },
+  { value: 'STAFF_ADVANCE', label: 'Staff advance' },
+  { value: 'COMMISSION', label: 'Commission / bonus' },
+  { value: 'STAFF_WELFARE', label: 'Staff welfare' },
   { value: 'UTILITIES', label: 'Utilities (water, light, phone)' },
   { value: 'TRANSPORT', label: 'Transport (taxi, fuel, runner)' },
   { value: 'SUPPLIES',  label: 'Supplies (cleaning, packaging)' },

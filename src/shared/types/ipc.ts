@@ -1343,7 +1343,9 @@ export const IPC_CHANNELS_S17_EXPENSES = {
 
 export type ExpenseCategory =
   | 'RENT' | 'UTILITIES' | 'TRANSPORT' | 'SUPPLIES'
-  | 'COMMS' | 'REPAIRS' | 'BANK_FEES' | 'OTHER';
+  | 'COMMS' | 'REPAIRS' | 'BANK_FEES'
+  | 'STAFF_WAGES' | 'STAFF_ADVANCE' | 'COMMISSION' | 'STAFF_WELFARE'
+  | 'OTHER';
 
 export interface ExpenseRecordRequest {
   amountPesewas: number;
