@@ -38,6 +38,7 @@
     "provision:agent": "tsx scripts/provision-agent.ts"
   },
   "dependencies": {
+    "@zxing/browser": "^0.1.5",
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "^11.3.0",
     "bonjour-service": "^1.2.1",

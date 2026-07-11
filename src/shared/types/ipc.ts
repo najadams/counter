@@ -163,7 +163,7 @@ export interface ProductSearchRequest { query: string; channel: SaleChannel; lim
 // stock_movements quantities correctly. See SaleScreen.tsx addHitToCart.
 export interface ProductSearchResponse {
   products: Array<{
-    id: string; sku: string; name: string; brand: string | null; category: string;
+    id: string; sku: string; barcode: string | null; name: string; brand: string | null; category: string;
     unitPricePesewas: number; costPricePesewas: number; unitsOnHand: number; isReturnable: boolean;
     defaultUnitId: string | null;
     defaultUnitName: string;

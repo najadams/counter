@@ -13,6 +13,10 @@
 //   F9              go back to home
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  BrowserMultiFormatOneDReader,
+  type IScannerControls,
+} from '@zxing/browser';
 import { CustomerCreateModal } from '../components/CustomerCreateModal';
 import { ReceiptPrintModal } from '../components/ReceiptPrintModal';
 import { SplitPaymentModal, type SplitPaymentResult } from '../components/SplitPaymentModal';
@@ -63,7 +67,7 @@ async function writeBackOrderFulfilment(saleId: string): Promise<void> {
 }
 
 interface ProductHit {
-  id: string; sku: string; name: string; brand: string | null;
+  id: string; sku: string; barcode: string | null; name: string; brand: string | null;
   category: string; unitPricePesewas: number; costPricePesewas: number;
   unitsOnHand: number; isReturnable: boolean;
   defaultUnitId: string | null; defaultUnitName: string; defaultUnitFactor: number;
@@ -149,6 +153,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
   const [showPaymentModal, setShowPaymentModal] = useState<PaymentMethod | null>(null);
   const isTouch = useIsTouch();
   const [showTouchSheet, setShowTouchSheet] = useState(false);
+  const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
 
   // Close the touch sheet when the cart empties — i.e. a sale completed (any
   // path, including the supervisor-PIN re-submit) cleared it. Keeps the sheet
@@ -193,9 +198,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
     return () => { cancelled = true; clearTimeout(t); };
   }, [query, channel]);
 
-  function addHitToCart(idx: number) {
-    const hit = hits[idx];
-    if (!hit) return;
+  function addProductHitToCart(hit: ProductHit) {
     addLine({
       productId: hit.id,
       sku: hit.sku,
@@ -210,6 +213,43 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
       unitsOnHand: hit.unitsOnHand,
     });
     // Keep query so user can keep adding or clear with backspace.
+  }
+
+  function addHitToCart(idx: number) {
+    const hit = hits[idx];
+    if (!hit) return;
+    addProductHitToCart(hit);
+  }
+
+  async function addBarcodeToCart(raw: string): Promise<boolean> {
+    const code = raw.trim();
+    if (!code) return false;
+    const candidates = code.length === 13 && code.startsWith('0')
+      ? [code, code.slice(1)]
+      : [code];
+
+    for (const candidate of candidates) {
+      const r = await counter.searchProducts(candidate, channel, 8);
+      if (!r.success) {
+        setError(r.error);
+        return false;
+      }
+      const exact = r.data.products.find((p) => p.barcode === candidate);
+      if (exact) {
+        setQuery(candidate);
+        setHits([exact]);
+        setHitIdx(0);
+        addProductHitToCart(exact);
+        setError(null);
+        return true;
+      }
+    }
+
+    setQuery(code);
+    setHits([]);
+    setHitIdx(0);
+    setError(`No product has barcode ${code}. Add it in Settings -> Products, then scan again.`);
+    return false;
   }
 
   // Tier auto-application: when a cart line's quantity changes, fetch the
@@ -435,16 +475,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
     const text = query.trim();
     if (text.length < 6) return false;
     if (!/^\d+$/.test(text)) return false;
-    const r = await counter.searchProducts(text, channel, 5);
-    if (!r.success || r.data.products.length === 0) return false;
-    // Prefer exact barcode match if any returned product has matching barcode field.
-    // searchProducts returns name/sku/etc but barcode wasn't selected; the search itself
-    // does the equality check, so the first hit is the right one if there is exactly one.
-    const exact = r.data.products[0]!;
-    setHits([exact]);
-    setHitIdx(0);
-    addHitToCart(0);
-    return true;
+    return addBarcodeToCart(text);
   }
 
   function searchKey(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -493,15 +524,28 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
         {/* Left: search + results */}
         <section className="border-b lg:border-b-0 lg:border-r border-border flex flex-col">
           <div className="px-6 py-4 border-b border-border bg-bg-surface">
-            <input
-              ref={searchRef}
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={searchKey}
-              placeholder="Search by SKU or name…"
-              className="w-full bg-bg-input border border-border-strong px-4 py-3 text-lg focus:outline-none focus:border-accent"
-            />
+            <div className="flex gap-2">
+              <input
+                ref={searchRef}
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={searchKey}
+                placeholder="Search by SKU, name, or barcode..."
+                className="min-w-0 flex-1 bg-bg-input border border-border-strong px-4 py-3 text-lg focus:outline-none focus:border-accent"
+              />
+              {isTouch && (
+                <button
+                  type="button"
+                  onClick={() => setShowBarcodeScanner(true)}
+                  className="shrink-0 border border-border-strong bg-bg-deep px-4 py-3 text-text-primary hover:bg-bg-elevated"
+                  aria-label="Scan barcode with camera"
+                  title="Scan barcode"
+                >
+                  Scan
+                </button>
+              )}
+            </div>
             <div className={`${isTouch ? 'hidden' : 'hidden sm:block'} text-text-tertiary text-xs mt-2`}>
               <span className="kbd">↑</span><span className="kbd">↓</span> move ·
               <span className="kbd">Enter</span> add ·
@@ -824,6 +868,18 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
           onOpenSplit={() => { setShowTouchSheet(false); if (lines.length > 0) setShowSplit(true); }}
         />
       )}
+      {isTouch && showBarcodeScanner && (
+        <BarcodeScannerModal
+          onCancel={() => setShowBarcodeScanner(false)}
+          onDetected={(code) => {
+            void (async () => {
+              await addBarcodeToCart(code);
+              setShowBarcodeScanner(false);
+              searchRef.current?.focus();
+            })();
+          }}
+        />
+      )}
       {needsDiscountSupervisor && (
         <SupervisorPinModal
           title={`Approve discount of ${formatMoneyWithCurrency(discount)}`}
@@ -860,6 +916,211 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
           }}
         />
       )}
+    </div>
+  );
+}
+
+function barcodeCameraErrorMessage(err: unknown): string {
+  const name = err instanceof DOMException ? err.name : '';
+  if (name === 'NotAllowedError' || name === 'SecurityError') {
+    return 'Camera permission was blocked. On phones, barcode scanning needs HTTPS phone access, then allow camera permission.';
+  }
+  if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+    return 'No camera was found on this device.';
+  }
+  if (name === 'NotReadableError' || name === 'TrackStartError') {
+    return 'The camera is already in use by another app.';
+  }
+  if (name === 'OverconstrainedError' || name === 'ConstraintNotSatisfiedError') {
+    return 'This camera could not satisfy the requested scan settings.';
+  }
+  return err instanceof Error ? err.message : 'Could not start the camera.';
+}
+
+function BarcodeScannerModal({
+  onCancel, onDetected,
+}: {
+  onCancel: () => void;
+  onDetected: (code: string) => void;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const controlsRef = useRef<IScannerControls | null>(null);
+  const onDetectedRef = useRef(onDetected);
+  const detectedRef = useRef(false);
+  const [status, setStatus] = useState('Starting camera...');
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [manualCode, setManualCode] = useState('');
+  const [hasTorch, setHasTorch] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
+
+  useEffect(() => {
+    onDetectedRef.current = onDetected;
+  }, [onDetected]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function startScanner(): Promise<void> {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setCameraError('This browser does not allow camera scanning here. Type the barcode below instead.');
+        setStatus('Camera unavailable');
+        return;
+      }
+
+      try {
+        const reader = new BrowserMultiFormatOneDReader(undefined, {
+          delayBetweenScanAttempts: 80,
+          delayBetweenScanSuccess: 500,
+          tryPlayVideoTimeout: 5000,
+        });
+        const controls = await reader.decodeFromConstraints(
+          {
+            audio: false,
+            video: {
+              facingMode: { ideal: 'environment' },
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
+          },
+          videoRef.current ?? undefined,
+          (result, _error, controlsFromCallback) => {
+            if (cancelled || detectedRef.current || !result) return;
+            const text = result.getText().trim();
+            if (!text) return;
+            detectedRef.current = true;
+            controlsFromCallback.stop();
+            onDetectedRef.current(text);
+          },
+        );
+        if (cancelled || detectedRef.current) {
+          controls.stop();
+          return;
+        }
+        controlsRef.current = controls;
+        setHasTorch(typeof controls.switchTorch === 'function');
+        setStatus('Point camera at a product barcode.');
+      } catch (err) {
+        if (cancelled) return;
+        setCameraError(barcodeCameraErrorMessage(err));
+        setStatus('Camera unavailable');
+      }
+    }
+
+    void startScanner();
+
+    return () => {
+      cancelled = true;
+      controlsRef.current?.stop();
+      controlsRef.current = null;
+    };
+  }, []);
+
+  async function toggleTorch(): Promise<void> {
+    const controls = controlsRef.current;
+    if (!controls?.switchTorch) return;
+    const next = !torchOn;
+    try {
+      await controls.switchTorch(next);
+      setTorchOn(next);
+    } catch {
+      setHasTorch(false);
+      setTorchOn(false);
+    }
+  }
+
+  function submitManual(): void {
+    const code = manualCode.trim();
+    if (!code) return;
+    detectedRef.current = true;
+    controlsRef.current?.stop();
+    onDetectedRef.current(code);
+  }
+
+  return (
+    <div className="fixed inset-0 bg-scrim/90 flex items-center justify-center z-[70] p-4" onClick={onCancel}>
+      <div
+        className="bg-bg-surface border border-border w-full max-w-lg max-h-[92vh] flex flex-col shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-text-secondary uppercase tracking-wider text-xs">Barcode scanner</h3>
+            <div className="text-text-tertiary text-xs mt-1">{status}</div>
+          </div>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="text-text-tertiary hover:text-text-primary text-xl leading-none"
+            aria-label="Close scanner"
+          >
+            x
+          </button>
+        </div>
+
+        <div className="p-4 flex flex-col gap-3 overflow-y-auto">
+          <div className="relative bg-black border border-border aspect-video overflow-hidden">
+            <video
+              ref={videoRef}
+              className="w-full h-full object-cover"
+              muted
+              playsInline
+            />
+            <div className="absolute inset-x-8 top-1/2 -translate-y-1/2 border-y-2 border-accent h-20 pointer-events-none" />
+          </div>
+
+          {cameraError && (
+            <FeedbackBanner>{cameraError}</FeedbackBanner>
+          )}
+
+          <div className="flex gap-2">
+            <input
+              value={manualCode}
+              onChange={(e) => setManualCode(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  submitManual();
+                }
+              }}
+              placeholder="Type barcode if camera cannot read it"
+              inputMode="numeric"
+              className="min-w-0 flex-1 bg-bg-input border border-border-strong px-3 py-3 font-mono"
+            />
+            <button
+              type="button"
+              onClick={submitManual}
+              disabled={!manualCode.trim()}
+              className="border border-border-strong bg-bg-deep px-4 py-3 text-text-primary hover:bg-bg-elevated disabled:opacity-40"
+            >
+              Add
+            </button>
+          </div>
+
+          <div className="flex justify-between gap-2">
+            {hasTorch ? (
+              <button
+                type="button"
+                onClick={() => void toggleTorch()}
+                className={[
+                  'px-4 py-2 border text-sm',
+                  torchOn
+                    ? 'border-accent bg-accent text-ink'
+                    : 'border-border text-text-primary hover:bg-bg-elevated',
+                ].join(' ')}
+              >
+                Torch
+              </button>
+            ) : <span />}
+            <button
+              type="button"
+              onClick={onCancel}
+              className="px-4 py-2 border border-border text-text-primary hover:bg-bg-elevated text-sm"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

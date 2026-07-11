@@ -29,6 +29,7 @@ export type SaleChannel = 'WALK_IN' | 'WHOLESALE' | 'ROUTE';
 export interface ProductSearchResult {
   id: string;
   sku: string;
+  barcode: string | null;
   name: string;
   brand: string | null;
   category: string;
@@ -69,7 +70,7 @@ export function searchProducts(
 
   if (trimmed === '') {
     sql = `
-      SELECT id, sku, name, brand, category,
+      SELECT id, sku, barcode, name, brand, category,
              ${priceCol} AS unit_price_pesewas,
              cost_price_pesewas,
              is_returnable
@@ -86,7 +87,7 @@ export function searchProducts(
     // so an exact SKU prefix still surfaces first. Name + barcode kept
     // the same.
     sql = `
-      SELECT id, sku, name, brand, category,
+      SELECT id, sku, barcode, name, brand, category,
              ${priceCol} AS unit_price_pesewas,
              cost_price_pesewas,
              is_returnable
@@ -103,6 +104,7 @@ export function searchProducts(
   const rows = db.prepare(sql).all(...params) as Array<{
     id: string;
     sku: string;
+    barcode: string | null;
     name: string;
     brand: string | null;
     category: string;
@@ -120,6 +122,7 @@ export function searchProducts(
     return {
       id: r.id,
       sku: r.sku,
+      barcode: r.barcode,
       name: r.name,
       brand: r.brand,
       category: r.category,

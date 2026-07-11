@@ -94,6 +94,13 @@ describe('searchProducts', () => {
     expect(searchProducts(db, '1L', 'WALK_IN', L).map((h) => h.sku)).toContain('VOLTIC-1L');
   });
 
+  it('returns barcode on exact barcode matches', () => {
+    db.prepare("UPDATE products SET barcode = '012345678905' WHERE sku = 'STAR-330'").run();
+    const hits = searchProducts(db, '012345678905', 'WALK_IN', L);
+    const star = hits.find((h) => h.sku === 'STAR-330');
+    expect(star?.barcode).toBe('012345678905');
+  });
+
   it('excludes inactive and deleted products', () => {
     const cl = db.prepare('SELECT id FROM products WHERE sku = ?').get('CLUB-330') as { id: string };
     db.prepare('UPDATE products SET active = 0 WHERE id = ?').run(cl.id);

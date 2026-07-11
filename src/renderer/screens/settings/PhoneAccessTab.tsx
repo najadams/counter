@@ -87,6 +87,8 @@ export function PhoneAccessTab() {
         <p><span className="text-text-secondary">Same network:</span> the phone must be on the same wi-fi as this PC.</p>
         <p><span className="text-text-secondary">Security:</span> use a trusted private network. Without TLS, PINs travel
           unencrypted over wi-fi (supply COUNTER_HTTPS_KEY/CERT to encrypt).</p>
+        <p><span className="text-text-secondary">Barcode camera:</span> most phone browsers require HTTPS before
+          they allow camera access, so enable TLS if cashiers will scan products with the phone camera.</p>
       </div>
     </div>
   );
