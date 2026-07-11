@@ -48,6 +48,8 @@ async function makeCreditSale(amountPesewas: number) {
   });
   db.prepare('UPDATE sales SET total_pesewas = ?, subtotal_pesewas = ? WHERE id = ?')
     .run(amountPesewas, amountPesewas, r.saleId);
+  db.prepare("UPDATE sale_payments SET amount_pesewas = ? WHERE sale_id = ? AND payment_method = 'CREDIT'")
+    .run(amountPesewas, r.saleId);
   reconcileCustomerBalance(db, custId);
   return r.saleId;
 }

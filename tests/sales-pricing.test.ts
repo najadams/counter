@@ -116,7 +116,7 @@ describe('volume tier auto-applies in completeSale', () => {
       shiftId, workerId: W, workerName: 'Naj', locationId: L, channel: 'WALK_IN',
       lines: [{ productId: p.id, quantity: 12, unitPricePesewas: 700 }],
       paymentMethod: 'CASH', cashGivenPesewas: 8400, deviceId: D, shopName: 'T',
-    })).rejects.toThrow(/below the lowest allowed price/);
+    })).rejects.toThrow(/below the active catalog price/);
     // No sale row leaked out of the failed attempt.
     expect((db.prepare('SELECT COUNT(*) AS n FROM sales').get() as { n: number }).n).toBe(salesBefore);
   });

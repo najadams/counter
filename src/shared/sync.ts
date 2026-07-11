@@ -14,7 +14,7 @@ export const SYNCED_EVENT_TABLES = [
   'supplier_invoices', 'supplier_invoice_lines', 'supplier_invoice_payment_allocations',
   'cash_counts', 'shifts', 'stocktake_events', 'stocktake_lines', 'period_closes',
   'petty_cash_expenses', 'container_movements', 'customer_returns', 'customer_return_lines',
-  'owner_drawings', 'drawing_policies', 'price_history',
+  'owner_drawings', 'drawing_policies', 'price_history', 'tax_payments',
   'route_runs', 'route_stops', 'daily_summaries',
   // Phase 4: WhatsApp order accept/reject/fulfil. Unlike every other table in
   // this list, pending_orders rows are MUTATED in place (CONFIRMED ->
