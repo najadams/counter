@@ -32,7 +32,11 @@ const STATION_ENV: Record<Station, string> = {
   door: 'COUNTER_PRINTER_INTERFACE_DOOR',
 };
 
+const configuredInterfaces: Partial<Record<Station, string | null>> = {};
+
 function interfaceSpecFor(station: Station): string | undefined {
+  const configured = configuredInterfaces[station];
+  if (configured) return configured;
   return process.env[STATION_ENV[station]];
 }
 
@@ -158,4 +162,19 @@ export function _resetPrinter(station?: Station): void {
 
 export function isPrinterConfigured(station: Station = 'counter'): boolean {
   return Boolean(interfaceSpecFor(station));
+}
+
+export function setPrinterInterfaceSpecs(input: {
+  counterPrinterInterface?: string | null;
+  doorPrinterInterface?: string | null;
+}): void {
+  configuredInterfaces.counter = normalizeSpec(input.counterPrinterInterface);
+  configuredInterfaces.door = normalizeSpec(input.doorPrinterInterface);
+  cache.clear();
+}
+
+function normalizeSpec(value: string | null | undefined): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }

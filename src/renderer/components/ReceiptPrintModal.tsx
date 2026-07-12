@@ -21,6 +21,8 @@ const FALLBACK_CONFIG: ReceiptConfigResponse = {
   headerLine3: null,
   headerLine4: null,
   footerText: 'Thank you. Come again.',
+  counterPrinterInterface: null,
+  doorPrinterInterface: null,
   paperWidthMm: 80,
   sideMarginMm: 2,
   density: 'normal',
@@ -28,6 +30,7 @@ const FALLBACK_CONFIG: ReceiptConfigResponse = {
   showCashier: true,
   showChannel: true,
   showCustomer: true,
+  showVatBreakdown: true,
   vatRegistrationNumber: null,
 };
 
@@ -196,7 +199,7 @@ export function ReceiptBody({
         />
         {/* VAT breakdown (Ghana, Act 1151). Inclusive prices — informational.
             Rendered only when there is VAT to show (VAT build). */}
-        {((receipt.vatPesewas ?? 0) > 0 ||
+        {config.showVatBreakdown && ((receipt.vatPesewas ?? 0) > 0 ||
           (receipt.nhilPesewas ?? 0) > 0 ||
           (receipt.getfundPesewas ?? 0) > 0) && (
           <>

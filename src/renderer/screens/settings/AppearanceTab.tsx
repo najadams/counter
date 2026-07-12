@@ -87,6 +87,7 @@ const SAMPLE_RECEIPT: SaleReceipt = {
   subtotalPesewas: 15300,
   discountPesewas: 0,
   totalPesewas: 15300,
+  showVatBreakdown: true,
   payment: {
     method: 'CASH',
     cashGivenPesewas: 15300,
@@ -225,9 +226,36 @@ function ReceiptSection(): JSX.Element {
             />
           </FormGroup>
 
+          {/* Printers */}
+          <FormGroup label="Printers">
+            <TextField
+              label="Counter printer"
+              value={draft.counterPrinterInterface ?? ''}
+              onChange={(v) => patch('counterPrinterInterface', v || null)}
+              placeholder="printer:Counter"
+              hint="Desktop sales print here."
+            />
+            <TextField
+              label="Door printer"
+              value={draft.doorPrinterInterface ?? ''}
+              onChange={(v) => patch('doorPrinterInterface', v || null)}
+              placeholder="tcp://192.168.1.50:9100"
+              hint="Phone sales print here."
+            />
+          </FormGroup>
+
           {/* VAT — only in the VAT build. */}
           {VAT_ENABLED && (
             <FormGroup label="VAT">
+              <RadioRow
+                label="Receipt VAT breakdown"
+                options={[
+                  { value: true, label: 'Show', hint: 'Print VAT/NHIL/GETFund lines' },
+                  { value: false, label: 'Hide', hint: 'Keep receipts as simple totals' },
+                ]}
+                value={draft.showVatBreakdown}
+                onChange={(v) => patch('showVatBreakdown', v)}
+              />
               <TextField
                 label="VAT registration number"
                 value={draft.vatRegistrationNumber ?? ''}
@@ -341,7 +369,8 @@ function ReceiptSection(): JSX.Element {
                 ...(VAT_ENABLED
                   ? {
                       ...extractInclusiveVat(SAMPLE_RECEIPT.totalPesewas),
-                      vatRegistrationNumber: draft.vatRegistrationNumber,
+                      showVatBreakdown: draft.showVatBreakdown,
+                      vatRegistrationNumber: draft.showVatBreakdown ? draft.vatRegistrationNumber : null,
                     }
                   : {}),
               }}
@@ -370,8 +399,8 @@ function FormGroup({ label, children }: { label: string; children: ReactNode }):
 }
 
 function TextField({
-  label, value, onChange, placeholder,
-}: { label: string; value: string; onChange: (v: string) => void; placeholder?: string }): JSX.Element {
+  label, value, onChange, placeholder, hint,
+}: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; hint?: string }): JSX.Element {
   return (
     <label className="block text-sm">
       <span className="text-text-secondary">{label}</span>
@@ -382,6 +411,7 @@ function TextField({
         placeholder={placeholder}
         className="mt-1 w-full bg-bg-surface border border-border px-3 py-2 text-text-primary disabled:opacity-60"
       />
+      {hint && <span className="block text-xs text-text-tertiary mt-1">{hint}</span>}
     </label>
   );
 }
@@ -430,7 +460,7 @@ function Checkbox({
   );
 }
 
-function RadioRow<T extends string | number>({
+function RadioRow<T extends string | number | boolean>({
   label, value, onChange, options,
 }: {
   label: string;

@@ -11,7 +11,8 @@ import { getDeviceId } from './db/deviceId.js';
 import { reconcileAllCustomersOnBoot } from './services/boot.js';
 import { HandlerRegistry } from './ipc/registry.js';
 import { initTokenStore } from './ipc/session.js';
-import { setPrinterDevMode } from './printer/printer.js';
+import { setPrinterDevMode, setPrinterInterfaceSpecs } from './printer/printer.js';
+import { getReceiptConfig } from './services/receiptConfig.js';
 import { startSyncWorker } from './sync/push.js';
 import { startPullWorker } from './sync/pull.js';
 import { startOrdersPullWorker } from './sync/pullOrders.js';
@@ -106,6 +107,8 @@ app.whenReady().then(() => {
 
   const deviceId = getDeviceId(db);
   log.info(`[main] deviceId: ${deviceId}`);
+
+  setPrinterInterfaceSpecs(getReceiptConfig(db));
 
   // Rehydrate persisted HTTP sessions so a reboot (e.g. load-shedding)
   // doesn't sign every LAN device out mid-shift. No-op for desktop IPC.

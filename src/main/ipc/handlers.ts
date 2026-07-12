@@ -2630,6 +2630,7 @@ import {
   type ReceiptConfigResponse, type ReceiptSetConfigRequest,
 } from '../../shared/types/ipc.js';
 import { getReceiptConfig, setReceiptConfig } from '../services/receiptConfig.js';
+import { setPrinterInterfaceSpecs } from '../printer/printer.js';
 
 export function registerReceiptConfigHandlers(
   ipcMain: IpcRegistrar,
@@ -2658,6 +2659,7 @@ export function registerReceiptConfigHandlers(
         }
         const before = getReceiptConfig(db);
         const after = setReceiptConfig(db, req);
+        setPrinterInterfaceSpecs(after);
         logAudit(db, {
           workerId: w.workerId,
           action: 'RECEIPT_CONFIG_CHANGED',

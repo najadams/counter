@@ -50,6 +50,8 @@ export interface SaleReceipt {
   vatPesewas?: number;
   nhilPesewas?: number;
   getfundPesewas?: number;
+  /** False hides the VAT receipt block even when VAT is recorded on the sale. */
+  showVatBreakdown?: boolean;
   /** Shop's VAT/TIN registration number, printed under the VAT block. */
   vatRegistrationNumber?: string | null;
   /** Legacy single-tender summary (always set; mirrors payments[0] for one-tender sales). */
@@ -168,7 +170,7 @@ export function formatReceipt(r: SaleReceipt): string[] {
   const vatPesewas = r.vatPesewas ?? 0;
   const nhilPesewas = r.nhilPesewas ?? 0;
   const getfundPesewas = r.getfundPesewas ?? 0;
-  if (vatPesewas > 0 || nhilPesewas > 0 || getfundPesewas > 0) {
+  if (r.showVatBreakdown !== false && (vatPesewas > 0 || nhilPesewas > 0 || getfundPesewas > 0)) {
     lines.push(center('TOTAL includes VAT'));
     lines.push(leftRight('Taxable (excl)', formatMoney(r.taxablePesewas ?? 0)));
     lines.push(leftRight('VAT 15%', formatMoney(vatPesewas)));

@@ -15,6 +15,8 @@ export interface ReceiptConfig {
   headerLine3: string | null;
   headerLine4: string | null;
   footerText: string;
+  counterPrinterInterface: string | null;
+  doorPrinterInterface: string | null;
   paperWidthMm: ReceiptPaperWidth;
   sideMarginMm: number;
   density: ReceiptDensity;
@@ -22,6 +24,7 @@ export interface ReceiptConfig {
   showCashier: boolean;
   showChannel: boolean;
   showCustomer: boolean;
+  showVatBreakdown: boolean;
   /** Shop's VAT/TIN registration number, printed on the receipt in the VAT
    *  build. Ignored by the no-VAT build. */
   vatRegistrationNumber: string | null;
@@ -31,6 +34,8 @@ export const DEFAULT_RECEIPT_CONFIG: Omit<ReceiptConfig, 'shopName' | 'shopSubti
   headerLine3: null,
   headerLine4: null,
   footerText: 'Thank you. Come again.',
+  counterPrinterInterface: null,
+  doorPrinterInterface: null,
   paperWidthMm: 80,
   sideMarginMm: 2,
   density: 'normal',
@@ -38,6 +43,7 @@ export const DEFAULT_RECEIPT_CONFIG: Omit<ReceiptConfig, 'shopName' | 'shopSubti
   showCashier: true,
   showChannel: true,
   showCustomer: true,
+  showVatBreakdown: true,
   vatRegistrationNumber: null,
 };
 
@@ -68,6 +74,8 @@ export function getReceiptConfig(db: DB): ReceiptConfig {
     footerText: typeof stored.footerText === 'string' && stored.footerText.length > 0
       ? stored.footerText
       : DEFAULT_RECEIPT_CONFIG.footerText,
+    counterPrinterInterface: normalizeOptional(stored.counterPrinterInterface) ?? DEFAULT_RECEIPT_CONFIG.counterPrinterInterface,
+    doorPrinterInterface: normalizeOptional(stored.doorPrinterInterface) ?? DEFAULT_RECEIPT_CONFIG.doorPrinterInterface,
     paperWidthMm: stored.paperWidthMm === 58 || stored.paperWidthMm === 80
       ? stored.paperWidthMm
       : DEFAULT_RECEIPT_CONFIG.paperWidthMm,
@@ -77,6 +85,7 @@ export function getReceiptConfig(db: DB): ReceiptConfig {
     showCashier: typeof stored.showCashier === 'boolean' ? stored.showCashier : DEFAULT_RECEIPT_CONFIG.showCashier,
     showChannel: typeof stored.showChannel === 'boolean' ? stored.showChannel : DEFAULT_RECEIPT_CONFIG.showChannel,
     showCustomer: typeof stored.showCustomer === 'boolean' ? stored.showCustomer : DEFAULT_RECEIPT_CONFIG.showCustomer,
+    showVatBreakdown: typeof stored.showVatBreakdown === 'boolean' ? stored.showVatBreakdown : DEFAULT_RECEIPT_CONFIG.showVatBreakdown,
     vatRegistrationNumber: normalizeOptional(stored.vatRegistrationNumber) ?? DEFAULT_RECEIPT_CONFIG.vatRegistrationNumber,
   };
 }
@@ -87,6 +96,8 @@ export interface ReceiptConfigInput {
   headerLine3: string | null;
   headerLine4: string | null;
   footerText: string;
+  counterPrinterInterface: string | null;
+  doorPrinterInterface: string | null;
   paperWidthMm: ReceiptPaperWidth;
   sideMarginMm: number;
   density: ReceiptDensity;
@@ -94,6 +105,7 @@ export interface ReceiptConfigInput {
   showCashier: boolean;
   showChannel: boolean;
   showCustomer: boolean;
+  showVatBreakdown: boolean;
   vatRegistrationNumber: string | null;
 }
 
@@ -110,6 +122,9 @@ export function setReceiptConfig(db: DB, input: ReceiptConfigInput): ReceiptConf
   if (!footerText) throw new Error('Footer text cannot be empty.');
   if (footerText.length > 120) throw new Error('Footer text is too long (max 120 characters).');
 
+  const counterPrinterInterface = trimOrNull(input.counterPrinterInterface, 160, 'Counter printer interface');
+  const doorPrinterInterface = trimOrNull(input.doorPrinterInterface, 160, 'Door printer interface');
+
   if (input.paperWidthMm !== 58 && input.paperWidthMm !== 80) {
     throw new Error(`Paper width must be 58 or 80mm, got '${input.paperWidthMm}'.`);
   }
@@ -124,6 +139,8 @@ export function setReceiptConfig(db: DB, input: ReceiptConfigInput): ReceiptConf
     headerLine3,
     headerLine4,
     footerText,
+    counterPrinterInterface,
+    doorPrinterInterface,
     paperWidthMm: input.paperWidthMm,
     sideMarginMm,
     density: input.density,
@@ -131,6 +148,7 @@ export function setReceiptConfig(db: DB, input: ReceiptConfigInput): ReceiptConf
     showCashier: !!input.showCashier,
     showChannel: !!input.showChannel,
     showCustomer: !!input.showCustomer,
+    showVatBreakdown: input.showVatBreakdown !== false,
     vatRegistrationNumber,
   };
 

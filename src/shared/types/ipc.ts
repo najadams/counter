@@ -1552,6 +1552,10 @@ export interface ReceiptConfigResponse {
   headerLine3: string | null;
   headerLine4: string | null;
   footerText: string;
+  /** node-thermal-printer interface used by desktop/counter sales. */
+  counterPrinterInterface: string | null;
+  /** node-thermal-printer interface used by phone/LAN sales at the door. */
+  doorPrinterInterface: string | null;
   paperWidthMm: ReceiptPaperWidth;
   sideMarginMm: number;
   density: ReceiptDensity;
@@ -1559,6 +1563,8 @@ export interface ReceiptConfigResponse {
   showCashier: boolean;
   showChannel: boolean;
   showCustomer: boolean;
+  /** VAT build only: show the informational VAT/NHIL/GETFund block on receipts. */
+  showVatBreakdown: boolean;
   /** VAT/TIN registration number printed on receipts in the VAT build. */
   vatRegistrationNumber: string | null;
 }

@@ -816,7 +816,8 @@ export function completeSaleCore(
     vatPesewas: vat.vatPesewas,
     nhilPesewas: vat.nhilPesewas,
     getfundPesewas: vat.getfundPesewas,
-    vatRegistrationNumber: VAT_ENABLED ? cfg.vatRegistrationNumber : null,
+    showVatBreakdown: cfg.showVatBreakdown,
+    vatRegistrationNumber: VAT_ENABLED && cfg.showVatBreakdown ? cfg.vatRegistrationNumber : null,
     payment: {
       method: primary.method,
       reference: primary.reference ?? null,

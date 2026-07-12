@@ -151,6 +151,10 @@ export function buildSaleReceiptForReprint(
             s.subtotal_pesewas AS subtotalPesewas,
             s.discount_pesewas AS discountPesewas,
             s.total_pesewas AS totalPesewas,
+            s.taxable_pesewas AS taxablePesewas,
+            s.vat_pesewas AS vatPesewas,
+            s.nhil_pesewas AS nhilPesewas,
+            s.getfund_pesewas AS getfundPesewas,
             s.payment_method AS paymentMethod,
             s.payment_reference AS paymentReference,
             s.customer_id AS customerId,
@@ -161,6 +165,7 @@ export function buildSaleReceiptForReprint(
   ).get(saleId) as
     | { id: string; saleAt: string; channel: 'WALK_IN' | 'WHOLESALE' | 'ROUTE';
         subtotalPesewas: number; discountPesewas: number; totalPesewas: number;
+        taxablePesewas: number; vatPesewas: number; nhilPesewas: number; getfundPesewas: number;
         paymentMethod: string; paymentReference: string | null;
         customerId: string | null; workerName: string }
     | undefined;
@@ -230,6 +235,12 @@ export function buildSaleReceiptForReprint(
     subtotalPesewas: sale.subtotalPesewas,
     discountPesewas: sale.discountPesewas,
     totalPesewas: sale.totalPesewas,
+    taxablePesewas: sale.taxablePesewas,
+    vatPesewas: sale.vatPesewas,
+    nhilPesewas: sale.nhilPesewas,
+    getfundPesewas: sale.getfundPesewas,
+    showVatBreakdown: cfg.showVatBreakdown,
+    vatRegistrationNumber: cfg.showVatBreakdown ? cfg.vatRegistrationNumber : null,
     payment: {
       method: sale.paymentMethod,
       reference: sale.paymentReference,
