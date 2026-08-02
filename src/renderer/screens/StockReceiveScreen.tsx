@@ -1,12 +1,13 @@
 // StockReceiveScreen: ad-hoc supplier delivery flow.
-// Pick supplier, build line items, supervisor PIN at the end.
+// Pick supplier, build line items, then submit an immutable approval request.
 
 import { useEffect, useState } from 'react';
 import { counter } from '../lib/ipc';
 import { AppHeader } from '../components/AppHeader';
-import { SupervisorPinModal } from '../components/SupervisorPinModal';
 import { formatMoney, formatMoneyWithCurrency, parseCedisToPesewas } from '../../shared/lib/money';
 import { FeedbackBanner } from '../components/FeedbackBanner';
+import { useSession } from '../store/session';
+import type { StockReceiptRequestSummary } from '../../shared/types/ipc';
 
 interface Supplier { id: string; name: string; paymentTermsDays: number; currentBalancePesewas: number }
 interface DraftPO { id: string; poNumber: string; supplierId: string; totalOrderedPesewas: number; lineCount: number; createdAt: string }
@@ -19,6 +20,7 @@ interface DraftLine {
 }
 
 export default function StockReceiveScreen({ onExit }: { onExit: () => void }) {
+  const workerRole = useSession((state) => state.workerRole);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [draftPOs, setDraftPOs] = useState<DraftPO[]>([]);
   const [supplierId, setSupplierId] = useState<string>('');
@@ -38,15 +40,11 @@ export default function StockReceiveScreen({ onExit }: { onExit: () => void }) {
   const [pendingQty, setPendingQty] = useState(0);
   const [pendingCost, setPendingCost] = useState('');
   const [notes, setNotes] = useState('');
-  const [askingSupervisor, setAskingSupervisor] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
-  // Backend refused the receipt with a COST_SWING error; hold the approved
-  // supervisor credentials so "Receive anyway" can retry with the override.
-  const [costSwing, setCostSwing] = useState<{
-    message: string; supervisorWorkerId: string; supervisorPin: string;
-  } | null>(null);
+  const [myRequests, setMyRequests] = useState<StockReceiptRequestSummary[]>([]);
+  const canCreateOpeningStock = workerRole === 'OWNER' || workerRole === 'FOUNDER';
 
   useEffect(() => {
     void (async () => {
@@ -61,12 +59,28 @@ export default function StockReceiveScreen({ onExit }: { onExit: () => void }) {
     function onKey(e: KeyboardEvent) {
       if (e.key === 'F9' || e.key === 'Escape') {
         e.preventDefault();
-        if (askingSupervisor) setAskingSupervisor(false); else onExit();
+        onExit();
       }
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [askingSupervisor, onExit]);
+  }, [onExit]);
+
+  async function refreshMyRequests() {
+    const result = await counter.stockReceiptRequestList({ scope: 'MY', status: 'ALL', limit: 25 });
+    if (result.success) setMyRequests(result.data.requests);
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    async function refresh() {
+      const result = await counter.stockReceiptRequestList({ scope: 'MY', status: 'ALL', limit: 25 });
+      if (!cancelled && result.success) setMyRequests(result.data.requests);
+    }
+    void refresh();
+    const interval = window.setInterval(() => void refresh(), 10_000);
+    return () => { cancelled = true; window.clearInterval(interval); };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -141,7 +155,7 @@ export default function StockReceiveScreen({ onExit }: { onExit: () => void }) {
 
   const totalValue = lines.reduce((s, l) => s + l.quantity * l.unitCostPesewas, 0);
 
-  async function approve(supervisorWorkerId: string, supervisorPin: string, allowLargeCostSwing = false) {
+  async function submitRequest() {
     if (lines.length === 0) { setError('Add at least one line.'); return; }
     if (!isOpeningStock && !supplierId) { setError('Pick a supplier.'); return; }
     const transportCostPesewas = parseCedisToPesewas(transportCost);
@@ -151,8 +165,7 @@ export default function StockReceiveScreen({ onExit }: { onExit: () => void }) {
     }
     setSubmitting(true);
     setError(null);
-    setCostSwing(null);
-    const r = await counter.receiveStock({
+    const r = await counter.stockReceiptRequestCreate({
       supplierId: isOpeningStock ? null : supplierId,
       isOpeningStock,
       purchaseOrderId: isOpeningStock ? null : purchaseOrderId || null,
@@ -161,26 +174,24 @@ export default function StockReceiveScreen({ onExit }: { onExit: () => void }) {
       supplierDueDate: isOpeningStock ? null : supplierDueDate || null,
       transportCostPesewas: isOpeningStock ? 0 : transportCostPesewas ?? 0,
       loadingCostPesewas: isOpeningStock ? 0 : loadingCostPesewas ?? 0,
-      supervisorWorkerId, supervisorPin,
       lines: lines.map((l) => ({ productId: l.productId, quantity: l.quantity, unitCostPesewas: l.unitCostPesewas, unitId: l.unitId })),
       notes: notes.trim() || null,
-      allowLargeCostSwing,
     });
     setSubmitting(false);
-    setAskingSupervisor(false);
     if (!r.success) {
-      if (r.error.includes('COST_SWING')) {
-        setCostSwing({
-          message: r.error.replace(/^.*?COST_SWING:\s*/, ''),
-          supervisorWorkerId, supervisorPin,
-        });
-        return;
-      }
       setError(r.error);
       return;
     }
-    setInfo(`Received ${r.data.movementCount} line(s) worth ${formatMoneyWithCurrency(r.data.totalValuePesewas)}. Payable ${formatMoneyWithCurrency(r.data.totalPayablePesewas)}. ${r.data.supplierInvoiceId ? `Invoice ${r.data.supplierInvoiceId.slice(-8)} created. ` : ''}${r.data.productsCostUpdated} cost(s) updated.`);
+    setInfo(`Stock request #${r.data.id.slice(-8)} submitted for approval. No stock, supplier balance, PO, cost, or ledger value changes until it is approved.`);
     setLines([]); setNotes(''); setSupplierInvoiceNumber(''); setPurchaseOrderId(''); setTransportCost('0.00'); setLoadingCost('0.00');
+    await refreshMyRequests();
+  }
+
+  async function withdraw(requestId: string) {
+    const result = await counter.stockReceiptRequestWithdraw(requestId);
+    if (!result.success) { setError(result.error); return; }
+    setInfo(`Stock request #${requestId.slice(-8)} withdrawn. No inventory was changed.`);
+    await refreshMyRequests();
   }
 
   return (
@@ -193,9 +204,24 @@ export default function StockReceiveScreen({ onExit }: { onExit: () => void }) {
         </div>
         {info && <div className="bg-bg-surface border border-success px-5 py-3 text-success text-sm">{info}</div>}
 
+        {myRequests.length > 0 && <section className="panel p-4">
+          <div className="eyebrow">My recent receipt requests</div>
+          <p className="text-xs text-text-secondary mt-1 mb-3">Pending requests have not changed inventory or the books. Approved requests are posted; declined and withdrawn requests have no operational effect.</p>
+          {myRequests.map((request) => <div key={request.id} className="flex flex-wrap items-center gap-3 py-2 border-t border-border-subtle text-sm">
+            <span className={`status-badge ${request.status === 'PENDING' ? 'status-pending' : request.status === 'APPROVED' ? 'status-approved' : request.status === 'DECLINED' ? 'status-danger' : 'status-neutral'}`}>{request.status[0] + request.status.slice(1).toLowerCase()}</span>
+            <span className="font-mono">#{request.id.slice(-8)}</span>
+            <span>{request.supplierName ?? 'Opening stock'}</span>
+            <span className="font-mono tnum">{formatMoneyWithCurrency(request.totalPayablePesewas)}</span>
+            <span className="text-xs text-text-tertiary flex-1">{request.reviewedAt && request.reviewerName
+              ? `${request.reviewerName} · ${new Date(request.reviewedAt).toLocaleString()}${request.reviewNote ? ` · ${request.reviewNote}` : ''}`
+              : new Date(request.requestedAt).toLocaleString()}</span>
+            {request.status === 'PENDING' && <button className="btn btn-quiet text-xs" onClick={() => void withdraw(request.id)}>Withdraw</button>}
+          </div>)}
+        </section>}
+
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-2 text-text-secondary text-sm">
-            <input type="checkbox" checked={isOpeningStock} onChange={(e) => setIsOpeningStock(e.target.checked)} />
+            <input type="checkbox" checked={isOpeningStock} disabled={!canCreateOpeningStock} onChange={(e) => setIsOpeningStock(e.target.checked)} />
             Opening stock entry (no supplier — OWNER/FOUNDER only)
           </label>
         </div>
@@ -283,7 +309,7 @@ export default function StockReceiveScreen({ onExit }: { onExit: () => void }) {
           <div className="bg-bg-surface border border-warning/40 text-warning text-sm px-4 py-3">
             <strong>Opening stock mode:</strong> use this to seed initial inventory on a fresh install.
             No supplier is recorded; movements get reason <code>OPENING_STOCK</code>. Requires
-            an OWNER or FOUNDER PIN to confirm.
+            an OWNER or FOUNDER to submit and approve.
           </div>
         )}
 
@@ -377,42 +403,15 @@ export default function StockReceiveScreen({ onExit }: { onExit: () => void }) {
 
         {error && <FeedbackBanner>{error}</FeedbackBanner>}
 
-        {costSwing && (
-          <div className="bg-bg-deep border border-warning px-4 py-3 text-sm flex flex-col gap-3">
-            <div className="text-warning font-semibold">Large cost change — check before receiving</div>
-            <div className="text-text-secondary">{costSwing.message}</div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setCostSwing(null)}
-                className="px-4 py-2 border border-border hover:bg-bg-elevated">
-                Go back and fix
-              </button>
-              <button
-                onClick={() => void approve(costSwing.supervisorWorkerId, costSwing.supervisorPin, true)}
-                disabled={submitting}
-                className="bg-warning text-ink px-4 py-2 font-semibold disabled:opacity-40">
-                Cost is correct — receive anyway
-              </button>
-            </div>
-          </div>
-        )}
-
         <div className="flex gap-3">
           <button onClick={onExit} className="px-5 py-3 border border-border hover:bg-bg-elevated">Cancel</button>
           <button
-            onClick={() => setAskingSupervisor(true)}
+            onClick={() => void submitRequest()}
             disabled={submitting || lines.length === 0 || (!isOpeningStock && !supplierId)}
             className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40">
-            Confirm with supervisor
+            {submitting ? 'Submitting…' : 'Submit for approval'}
           </button>
         </div>
-        {askingSupervisor && (
-          <SupervisorPinModal
-            title="Approve stock receipt"
-            onCancel={() => setAskingSupervisor(false)}
-            onApprove={approve}
-          />
-        )}
       </main>
     </div>
   );

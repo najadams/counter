@@ -9,7 +9,7 @@ import { RecordPaymentModal } from '../components/RecordPaymentModal';
 import { CustomerCreateModal } from '../components/CustomerCreateModal';
 
 interface Row {
-  id: string; displayName: string; phone: string; customerType: string;
+  id: string; displayName: string; businessName: string | null; phone: string; customerType: string;
   creditLimitPesewas: number; trueBalancePesewas: number; blocked: boolean;
   ageOfOldestUnpaidDays: number | null;
   oldestUnpaidBucket: 'bucket0_30' | 'bucket31_60' | 'bucket61_90' | 'bucket90_plus' | null;
@@ -69,6 +69,7 @@ export default function CustomersScreen({ onExit }: { onExit: () => void }) {
 
   const visible = rows.filter((r) =>
     !filter || r.displayName.toLowerCase().includes(filter.toLowerCase())
+    || (r.businessName?.toLowerCase().includes(filter.toLowerCase()) ?? false)
     || r.phone.includes(filter),
   );
 
@@ -108,7 +109,7 @@ export default function CustomersScreen({ onExit }: { onExit: () => void }) {
 
         <div className="flex items-center gap-3">
           <input value={filter} onChange={(e) => setFilter(e.target.value)}
-            placeholder="Filter by name or phone…"
+            placeholder="Filter by customer, company, or phone…"
             className="bg-bg-input border border-border-strong px-3 py-2 flex-1" />
           <label className="flex items-center gap-2 text-text-secondary text-sm">
             <input type="checkbox" checked={includeBlocked} onChange={(e) => setIncludeBlocked(e.target.checked)} />
@@ -156,7 +157,7 @@ export default function CustomersScreen({ onExit }: { onExit: () => void }) {
                         {r.displayName}
                         {r.needsReconcile && <span className="ml-2 text-warning text-xs">drift</span>}
                       </button>
-                      <div className="text-text-tertiary text-xs">{r.customerType} · click row for details</div>
+                      <div className="text-text-tertiary text-xs">{r.businessName ? `${r.businessName} · ` : ''}{r.customerType} · click row for details</div>
                     </td>
                     <td className="px-4 py-3 font-mono tnum">{r.phone}</td>
                     <td className={`px-4 py-3 text-right font-mono tnum ${tone}`}>{formatMoney(r.trueBalancePesewas)}</td>

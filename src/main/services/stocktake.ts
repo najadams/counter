@@ -13,6 +13,7 @@ import { getUnit } from './productUnits.js';
 import { assertNotSealed } from './periods.js';
 import { valueStockMovementAndPostLossIfActive } from './ledger.js';
 import { verifyPin } from './workers.js';
+import { maybeOpenStocktakeVarianceCases } from './varianceCases.js';
 
 const SUPERVISOR_ROLES = new Set(['SUPERVISOR', 'OWNER', 'FOUNDER']);
 
@@ -134,6 +135,7 @@ export function startStocktake(
       afterValue: { locationId: input.locationId, productCount: products.length, totalExpectedStockValuePesewas: totalExpectedValue },
       deviceId: input.deviceId,
     });
+
   });
 
   tx();
@@ -379,6 +381,17 @@ export function completeStocktake(
         supervisorApprovalId: input.supervisorWorkerId,
       },
       deviceId: input.deviceId,
+    });
+
+    maybeOpenStocktakeVarianceCases(db, {
+      eventId: input.eventId,
+      locationId: event.location_id,
+      expectedStockValuePesewas: event.total_expected_stock_value_pesewas,
+      lossPesewas: totalLossValue,
+      foundPesewas: totalFoundValue,
+      actorWorkerId: input.workerId,
+      deviceId: input.deviceId,
+      detectedAt: now,
     });
   });
 

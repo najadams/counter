@@ -11,6 +11,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { logAudit } from '../db/audit.js';
 import { isLedgerPostingEnabled, mappedFinancialAccount } from './ledger.js';
 import { assertNoPendingVoidRequestsForShift } from './voids.js';
+import { maybeOpenTillVarianceCase } from './varianceCases.js';
 
 export interface OpenShiftInput {
   workerId: string;
@@ -235,10 +236,10 @@ export function computeAndCloseShift(
 ): CloseShiftResult {
   const shift = db
     .prepare(
-      `SELECT id, opening_cash_pesewas, closed_at FROM shifts WHERE id = ?`,
+      `SELECT id, location_id, worker_id, opening_cash_pesewas, closed_at FROM shifts WHERE id = ?`,
     )
     .get(shiftId) as
-    | { id: string; opening_cash_pesewas: number; closed_at: string | null }
+    | { id: string; location_id: string; worker_id: string; opening_cash_pesewas: number; closed_at: string | null }
     | undefined;
   if (!shift) throw new Error(`computeAndCloseShift: shift ${shiftId} not found`);
   if (shift.closed_at) throw new Error(`computeAndCloseShift: shift already closed`);
@@ -387,6 +388,18 @@ export function computeAndCloseShift(
         totalBreakageValuePesewas: breakageRow.total,
       },
       deviceId,
+    });
+
+    maybeOpenTillVarianceCase(db, {
+      shiftId,
+      locationId: shift.location_id,
+      shiftWorkerId: shift.worker_id,
+      expectedPesewas: expected,
+      countedPesewas: closeCount.counted_pesewas,
+      variancePesewas: variance,
+      actorWorkerId: workerId,
+      deviceId,
+      detectedAt: now,
     });
   });
 

@@ -39,7 +39,10 @@ import {
   type ShiftCloseRequest, type ShiftCloseResponse,
   type ShiftGetOpenResponse, type ShiftOpenRequest, type ShiftOpenResponse,
   type ShiftSubmitCountRequest, type ShiftSubmitCountResponse,
-  type StockReceiveRequest, type StockReceiveResponse,
+  type StockReceiptRequestCreateRequest, type StockReceiptRequestDetail,
+  type StockReceiptRequestListRequest, type StockReceiptRequestListResponse,
+  type StockReceiptRequestGetRequest, type StockReceiptRequestReviewRequest,
+  type StockReceiptRequestWithdrawRequest, type StockReceiptRequestPendingCountResponse,
   type SupplierListResponse,
   type WorkerAddRequest, type WorkerAddResponse,
   type WorkerAdminListResponse,
@@ -49,6 +52,10 @@ import {
   type WorkerReactivateRequest, type WorkerResetPinRequest,
   type WorkerVerifyCurrentPinRequest, type WorkerVerifyCurrentPinResponse,
   type WorkerSimpleResponse, type WorkerTerminateRequest,
+  type VarianceCaseCreateRequest, type VarianceCaseListRequest, type VarianceCaseListResponse,
+  type VarianceCaseGetRequest, type VarianceCaseGetResponse, type VarianceCaseUpdateRequest,
+  type VarianceCaseRow, type VarianceCaseEvidenceRequest, type VarianceCasePendingCountResponse,
+  type VarianceCaseSettings, type VarianceCaseSettingsUpdateRequest,
 } from '../../shared/types/ipc.js';
 import { maybeRunShiftCloseBackup, findBackupRunner } from '../lib/shiftCloseBackup.js';
 import { listLoginCandidates, verifyPin } from '../services/workers.js';
@@ -82,13 +89,22 @@ import {
 import { correctSale } from '../services/correctSale.js';
 import { listRecentBreakage, reportBreakage } from '../services/breakage.js';
 import { getMonthlyUsage, recordConsumption } from '../services/consumption.js';
-import { listActiveSuppliers, receiveStock } from '../services/stockReceipts.js';
+import { listActiveSuppliers } from '../services/stockReceipts.js';
 import {
   addWorker, changePin, deactivateWorker, listWorkersForAdmin,
   reactivateWorker, resetPin, terminateWorker,
 } from '../services/workerAdmin.js';
 import { DEFAULT_LOCATION_ID } from '../../shared/lib/constants.js';
 import { logAudit } from '../db/audit.js';
+import {
+  createStockReceiptRequest, getStockReceiptRequest, listStockReceiptRequests,
+  reviewStockReceiptRequest, stockReceiptRequestPendingCount, withdrawStockReceiptRequest,
+} from '../services/stockReceiptRequests.js';
+import {
+  addVarianceCaseEvidence, createManualVarianceCase, getVarianceCase,
+  getVarianceCaseSettings, listVarianceCases, requireVarianceSenior,
+  updateVarianceCase, updateVarianceCaseSettings, varianceCasePendingCount,
+} from '../services/varianceCases.js';
 
 // Session state lives in ./session.ts so both transports share it. These thin
 // re-exports preserve the legacy handler/test surface; they drive the desktop
@@ -533,6 +549,42 @@ export function registerIpcHandlers(
     IPC_CHANNELS.SALE_CORRECT,
   ));
 
+  // --- variance investigations ------------------------------------------
+  ipcMain.handle(IPC_CHANNELS.VARIANCE_CASE_CREATE, wrap<VarianceCaseCreateRequest, { caseId: string; created: boolean }>(
+    (req) => {
+      const w = requireWorker();
+      return createManualVarianceCase(db, { ...req, actorWorkerId: w.workerId, deviceId: currentDeviceId(deviceId) });
+    }, IPC_CHANNELS.VARIANCE_CASE_CREATE,
+  ));
+  ipcMain.handle(IPC_CHANNELS.VARIANCE_CASE_LIST, wrap<VarianceCaseListRequest, VarianceCaseListResponse>(
+    (req) => { const w = requireWorker(); return listVarianceCases(db, { ...req, actorWorkerId: w.workerId }); },
+    IPC_CHANNELS.VARIANCE_CASE_LIST,
+  ));
+  ipcMain.handle(IPC_CHANNELS.VARIANCE_CASE_GET, wrap<VarianceCaseGetRequest, VarianceCaseGetResponse>(
+    (req) => { const w = requireWorker(); return getVarianceCase(db, req.caseId, w.workerId) as VarianceCaseGetResponse; },
+    IPC_CHANNELS.VARIANCE_CASE_GET,
+  ));
+  ipcMain.handle(IPC_CHANNELS.VARIANCE_CASE_UPDATE, wrap<VarianceCaseUpdateRequest, VarianceCaseRow>(
+    (req) => { const w = requireWorker(); return updateVarianceCase(db, { ...req, actorWorkerId: w.workerId, deviceId: currentDeviceId(deviceId) }); },
+    IPC_CHANNELS.VARIANCE_CASE_UPDATE,
+  ));
+  ipcMain.handle(IPC_CHANNELS.VARIANCE_CASE_EVIDENCE_ADD, wrap<VarianceCaseEvidenceRequest, { ok: true }>(
+    (req) => { const w = requireWorker(); addVarianceCaseEvidence(db, { ...req, actorWorkerId: w.workerId, deviceId: currentDeviceId(deviceId) }); return { ok: true }; },
+    IPC_CHANNELS.VARIANCE_CASE_EVIDENCE_ADD,
+  ));
+  ipcMain.handle(IPC_CHANNELS.VARIANCE_CASE_PENDING_COUNT, wrap<unknown, VarianceCasePendingCountResponse>(
+    () => { const w = requireWorker(); return varianceCasePendingCount(db, w.workerId); },
+    IPC_CHANNELS.VARIANCE_CASE_PENDING_COUNT,
+  ));
+  ipcMain.handle(IPC_CHANNELS.VARIANCE_CASE_SETTINGS_GET, wrap<unknown, VarianceCaseSettings>(
+    () => { const w = requireWorker(); requireVarianceSenior(db, w.workerId); return getVarianceCaseSettings(db); },
+    IPC_CHANNELS.VARIANCE_CASE_SETTINGS_GET,
+  ));
+  ipcMain.handle(IPC_CHANNELS.VARIANCE_CASE_SETTINGS_UPDATE, wrap<VarianceCaseSettingsUpdateRequest, VarianceCaseSettings>(
+    (req) => { const w = requireWorker(); return updateVarianceCaseSettings(db, { ...req, actorWorkerId: w.workerId, deviceId: currentDeviceId(deviceId) }); },
+    IPC_CHANNELS.VARIANCE_CASE_SETTINGS_UPDATE,
+  ));
+
   // --- breakage ----------------------------------------------------------
   ipcMain.handle(IPC_CHANNELS.BREAKAGE_REPORT, wrap<BreakageReportRequest, BreakageReportResponse>(
     (req) => {
@@ -589,52 +641,35 @@ export function registerIpcHandlers(
     () => { requireWorker(); return { suppliers: listActiveSuppliers(db) }; },
     IPC_CHANNELS.SUPPLIER_LIST,
   ));
-  ipcMain.handle(IPC_CHANNELS.STOCK_RECEIVE, wrap<StockReceiveRequest, StockReceiveResponse>(
+  ipcMain.handle(IPC_CHANNELS.STOCK_RECEIPT_REQUEST_CREATE, wrap<StockReceiptRequestCreateRequest, StockReceiptRequestDetail>(
     (req) => {
       const w = requireWorker();
-      // Verify supervisor before doing work.
-      const auth = verifyPin(db, req.supervisorWorkerId, req.supervisorPin, deviceId);
-      if (!auth.ok) {
-        throw new Error(
-          auth.reason === 'LOCKED_OUT'
-            ? `Supervisor locked out until ${auth.lockedUntil}.`
-            : `Supervisor PIN check failed (${auth.reason}).`,
-        );
-      }
-      const supRow = db.prepare('SELECT role FROM workers WHERE id = ?').get(req.supervisorWorkerId) as { role: string } | undefined;
-      if (!supRow || !['SUPERVISOR', 'OWNER', 'FOUNDER'].includes(supRow.role)) {
-        throw new Error('Supervisor must have role SUPERVISOR, OWNER, or FOUNDER.');
-      }
-      // Opening stock is OWNER/FOUNDER only — once the shop is operating,
-      // any "opening" entry is a back-dated forensic write.
-      if (req.isOpeningStock && !['OWNER', 'FOUNDER'].includes(supRow.role)) {
-        throw new Error('Opening stock entry requires an OWNER or FOUNDER supervisor.');
-      }
-      const r = receiveStock(db, {
-        supplierId: req.supplierId,
-        isOpeningStock: req.isOpeningStock,
-        locationId: DEFAULT_LOCATION_ID,
-        workerId: w.workerId,
-        supervisorApprovalId: req.supervisorWorkerId,
-        purchaseOrderId: req.purchaseOrderId ?? null,
-        supplierInvoiceNumber: req.supplierInvoiceNumber ?? null,
-        supplierInvoiceDate: req.supplierInvoiceDate ?? null,
-        supplierDueDate: req.supplierDueDate ?? null,
-        transportCostPesewas: req.transportCostPesewas ?? 0,
-        loadingCostPesewas: req.loadingCostPesewas ?? 0,
-        lines: req.lines, notes: req.notes,
-        allowLargeCostSwing: req.allowLargeCostSwing,
-        deviceId,
-      });
-      return {
-        movementCount: r.movementIds.length,
-        supplierInvoiceId: r.supplierInvoiceId,
-        totalValuePesewas: r.totalValuePesewas,
-        totalPayablePesewas: r.totalPayablePesewas,
-        productsCostUpdated: r.productsUpdated,
-      };
+      return createStockReceiptRequest(db, { ...req, locationId: DEFAULT_LOCATION_ID,
+        requesterWorkerId: w.workerId, deviceId: currentDeviceId(deviceId) });
     },
-    IPC_CHANNELS.STOCK_RECEIVE,
+    IPC_CHANNELS.STOCK_RECEIPT_REQUEST_CREATE,
+  ));
+  ipcMain.handle(IPC_CHANNELS.STOCK_RECEIPT_REQUEST_LIST, wrap<StockReceiptRequestListRequest, StockReceiptRequestListResponse>(
+    (req) => { const w = requireWorker(); return { requests: listStockReceiptRequests(db, { ...req, actorWorkerId: w.workerId }) }; },
+    IPC_CHANNELS.STOCK_RECEIPT_REQUEST_LIST,
+  ));
+  ipcMain.handle(IPC_CHANNELS.STOCK_RECEIPT_REQUEST_GET, wrap<StockReceiptRequestGetRequest, StockReceiptRequestDetail>(
+    (req) => { const w = requireWorker(); return getStockReceiptRequest(db, req.requestId, w.workerId); },
+    IPC_CHANNELS.STOCK_RECEIPT_REQUEST_GET,
+  ));
+  ipcMain.handle(IPC_CHANNELS.STOCK_RECEIPT_REQUEST_REVIEW, wrap<StockReceiptRequestReviewRequest, StockReceiptRequestDetail>(
+    (req) => { const w = requireWorker(); return reviewStockReceiptRequest(db, { ...req,
+      reviewerWorkerId: w.workerId, deviceId: currentDeviceId(deviceId) }); },
+    IPC_CHANNELS.STOCK_RECEIPT_REQUEST_REVIEW,
+  ));
+  ipcMain.handle(IPC_CHANNELS.STOCK_RECEIPT_REQUEST_WITHDRAW, wrap<StockReceiptRequestWithdrawRequest, StockReceiptRequestDetail>(
+    (req) => { const w = requireWorker(); return withdrawStockReceiptRequest(db, { requestId: req.requestId,
+      requesterWorkerId: w.workerId, deviceId: currentDeviceId(deviceId) }); },
+    IPC_CHANNELS.STOCK_RECEIPT_REQUEST_WITHDRAW,
+  ));
+  ipcMain.handle(IPC_CHANNELS.STOCK_RECEIPT_REQUEST_PENDING_COUNT, wrap<unknown, StockReceiptRequestPendingCountResponse>(
+    () => { const w = requireWorker(); return stockReceiptRequestPendingCount(db, w.workerId); },
+    IPC_CHANNELS.STOCK_RECEIPT_REQUEST_PENDING_COUNT,
   ));
 
   // --- worker admin ------------------------------------------------------
@@ -1092,7 +1127,13 @@ export function registerSession8Handlers(
   );
   ipcMain.handle(IPC_CHANNELS_S8.CUSTOMER_RECONCILE,
     wrap<CustomerReconcileRequest, CustomerReconcileResponse>(
-      (req) => { requireWorker(); return reconcileCustomerBalance(db, req.customerId); },
+      (req) => {
+        const w = requireWorker();
+        return reconcileCustomerBalance(db, req.customerId, {
+          actorWorkerId: w.workerId,
+          deviceId: currentDeviceId(deviceId),
+        });
+      },
       IPC_CHANNELS_S8.CUSTOMER_RECONCILE,
     ),
   );

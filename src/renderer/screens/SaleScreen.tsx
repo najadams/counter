@@ -1185,7 +1185,7 @@ function CustomerPickerModal({
           autoFocus
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search by name or phone…"
+          placeholder="Search by customer, company, or phone…"
           className="bg-bg-input border border-border-strong px-4 py-3"
         />
         <button
@@ -1207,6 +1207,7 @@ function CustomerPickerModal({
                 onClick={() => onPick({
                   id: c.id,
                   displayName: c.displayName,
+                  businessName: c.businessName,
                   phone: c.phone,
                   currentBalancePesewas: c.currentBalancePesewas,
                   cashOnly: c.cashOnly,
@@ -1217,6 +1218,7 @@ function CustomerPickerModal({
                   currentId === c.id ? 'bg-bg-elevated' : 'bg-bg-deep hover:bg-bg-elevated',
                 ].join(' ')}>
                 <div className="text-text-primary">{c.displayName}</div>
+                {c.businessName && <div className="text-text-secondary text-xs">{c.businessName}</div>}
                 <div className="text-text-tertiary text-xs">
                   {c.phone} · balance {formatMoneyWithCurrency(c.currentBalancePesewas)}
                   {c.cashOnly ? ' · cash only' : ''}
@@ -1246,6 +1248,7 @@ function CustomerPickerModal({
               onPick({
                 id: c.id,
                 displayName: c.displayName,
+                businessName: c.businessName,
                 phone: c.phone,
                 currentBalancePesewas: c.currentBalancePesewas,
                 cashOnly: c.cashOnly,
@@ -1506,7 +1509,7 @@ function PaymentModal(p: PaymentModalProps) {
               autoFocus
               value={custQuery}
               onChange={(e) => setCustQuery(e.target.value)}
-              placeholder="Search customer (name or phone)"
+              placeholder="Search customer, company, or phone"
               className="bg-bg-input border border-border-strong px-4 py-3"
             />
             <button
@@ -1522,7 +1525,7 @@ function PaymentModal(p: PaymentModalProps) {
                 <li key={c.id}>
                   <button
                     onClick={() => p.setCustomer({
-                      id: c.id, displayName: c.displayName, phone: c.phone,
+                      id: c.id, displayName: c.displayName, businessName: c.businessName, phone: c.phone,
                       currentBalancePesewas: c.currentBalancePesewas,
                       cashOnly: c.cashOnly,
                       preferredChannel: (c as { preferredChannel?: 'WALK_IN' | 'WHOLESALE' | 'ROUTE' | null }).preferredChannel ?? null,
@@ -1532,6 +1535,7 @@ function PaymentModal(p: PaymentModalProps) {
                       p.customer?.id === c.id ? 'bg-bg-elevated' : 'bg-bg-deep hover:bg-bg-elevated',
                     ].join(' ')}>
                     <div className="text-text-primary">{c.displayName}</div>
+                    {c.businessName && <div className="text-text-secondary text-xs">{c.businessName}</div>}
                     <div className="text-text-tertiary text-xs">
                       {c.phone} · balance {formatMoneyWithCurrency(c.currentBalancePesewas)}
                       {c.cashOnly ? ' · cash only' : ''}

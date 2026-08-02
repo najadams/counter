@@ -47,12 +47,27 @@ export const IPC_CHANNELS = {
   SALE_VOID_REQUEST_PENDING_COUNT: 'sale:void-request-pending-count',
   SALE_CORRECT: 'sale:correct',
 
+  // Variance investigations
+  VARIANCE_CASE_CREATE: 'variance-case:create',
+  VARIANCE_CASE_LIST: 'variance-case:list',
+  VARIANCE_CASE_GET: 'variance-case:get',
+  VARIANCE_CASE_UPDATE: 'variance-case:update',
+  VARIANCE_CASE_EVIDENCE_ADD: 'variance-case:evidence-add',
+  VARIANCE_CASE_PENDING_COUNT: 'variance-case:pending-count',
+  VARIANCE_CASE_SETTINGS_GET: 'variance-case:settings-get',
+  VARIANCE_CASE_SETTINGS_UPDATE: 'variance-case:settings-update',
+
   // Breakage / consumption / stock receipts
   BREAKAGE_REPORT: 'breakage:report',
   BREAKAGE_LIST_RECENT: 'breakage:list-recent',
   CONSUMPTION_LOG: 'consumption:log',
   CONSUMPTION_GET_USAGE: 'consumption:get-usage',
-  STOCK_RECEIVE: 'stock:receive',
+  STOCK_RECEIPT_REQUEST_CREATE: 'stock-receipt-request:create',
+  STOCK_RECEIPT_REQUEST_LIST: 'stock-receipt-request:list',
+  STOCK_RECEIPT_REQUEST_GET: 'stock-receipt-request:get',
+  STOCK_RECEIPT_REQUEST_REVIEW: 'stock-receipt-request:review',
+  STOCK_RECEIPT_REQUEST_WITHDRAW: 'stock-receipt-request:withdraw',
+  STOCK_RECEIPT_REQUEST_PENDING_COUNT: 'stock-receipt-request:pending-count',
   SUPPLIER_LIST: 'supplier:list',
 
   // Worker admin
@@ -97,6 +112,45 @@ export interface HttpStatusResponse {
 }
 /** Toggle phone access. `lan` exposes on the LAN (0.0.0.0); default true. */
 export interface HttpSetRequest { enabled: boolean; lan?: boolean }
+
+// --- variance investigations ---------------------------------------------
+
+export type VarianceCaseType = 'TILL_CASH' | 'FINANCIAL_ACCOUNT' | 'STOCK_SHORTAGE' | 'STOCK_FOUND' | 'CUSTOMER_BALANCE' | 'MANUAL';
+export type VarianceCaseStatus = 'OPEN' | 'INVESTIGATING' | 'AWAITING_EVIDENCE' | 'RESOLVED' | 'WRITTEN_OFF';
+export type VarianceCauseCode = 'WRONG_CHANGE' | 'MISSED_SALE' | 'WRONG_PAYMENT_RAIL' | 'UNRECORDED_EXPENSE' | 'UNRECORDED_CASH_DROP' | 'COUNTING_ERROR' | 'BREAKAGE' | 'EXPIRY' | 'THEFT' | 'BANK_MOMO_TIMING' | 'CUSTOMER_ALLOCATION' | 'SYSTEM_DATA_ERROR' | 'OTHER';
+export interface VarianceCaseRow {
+  id: string; locationId: string; caseType: VarianceCaseType; status: VarianceCaseStatus;
+  severity: 'WARNING' | 'DANGER'; title: string; detectedAt: string; dueAt: string;
+  amountPesewas: number; expectedPesewas: number | null; observedPesewas: number | null;
+  thresholdPesewas: number; sourceType: string; sourceId: string;
+  assignedTo: string | null; assignedToName: string | null; subjectName: string | null;
+  causeCode: VarianceCauseCode | null; rootCauseNotes: string | null;
+  resolutionNote: string | null; resolvedAt: string | null; resolvedByName: string | null;
+  adjustmentJournalEntryId: string | null; createdByName: string; overdue: boolean;
+}
+export interface VarianceCaseSettings {
+  locationId: string; tillAmountThresholdPesewas: number; tillThresholdBps: number;
+  stockAmountThresholdPesewas: number; stockThresholdBps: number; dueDays: number;
+}
+export interface VarianceCaseCreateRequest { title: string; amountPesewas: number; note: string; locationId?: string }
+export interface VarianceCaseListRequest { status?: 'OPEN' | 'HISTORY' | 'ALL'; limit?: number }
+export interface VarianceCaseListResponse {
+  cases: VarianceCaseRow[];
+  summary: { openCount: number; overdueCount: number; unresolvedPesewas: number };
+}
+export interface VarianceCaseGetRequest { caseId: string }
+export interface VarianceCaseGetResponse {
+  case: VarianceCaseRow;
+  events: Array<{ id: string; eventType: string; fromStatus: string | null; toStatus: string | null; note: string | null; causeCode: string | null; evidenceReference: string | null; evidenceUrl: string | null; occurredAt: string; actorName: string }>;
+}
+export interface VarianceCaseUpdateRequest {
+  caseId: string; status?: VarianceCaseStatus; assignedTo?: string | null;
+  causeCode?: VarianceCauseCode | null; rootCauseNotes?: string | null;
+  resolutionNote?: string | null; pin?: string | null;
+}
+export interface VarianceCaseEvidenceRequest { caseId: string; note?: string | null; evidenceReference?: string | null; evidenceUrl?: string | null }
+export interface VarianceCasePendingCountResponse { openCount: number; overdueCount: number; unresolvedPesewas: number }
+export interface VarianceCaseSettingsUpdateRequest extends Omit<VarianceCaseSettings, 'locationId'> { locationId?: string; pin: string }
 
 // --- auth ------------------------------------------------------------------
 
@@ -194,7 +248,7 @@ export interface ProductGetStockResponse { unitsOnHand: number }
 export interface CustomerSearchRequest { query: string; limit?: number }
 export interface CustomerSearchResponse {
   customers: Array<{
-    id: string; displayName: string; phone: string; customerType: string;
+    id: string; displayName: string; businessName: string | null; phone: string; customerType: string;
     currentBalancePesewas: number; creditLimitPesewas: number; blocked: boolean;
     cashOnly: boolean;
     preferredChannel: 'WALK_IN' | 'WHOLESALE' | 'ROUTE' | null;
@@ -510,12 +564,10 @@ export interface ConsumptionLogResponse {
 
 // --- stock receipts --------------------------------------------------------
 
-export interface StockReceiveRequest {
+export type StockReceiptRequestStatus = 'PENDING' | 'APPROVED' | 'DECLINED' | 'WITHDRAWN';
+export interface StockReceiptRequestCreateRequest {
   supplierId: string | null;
-  /** When true, supplierId may be null and the receipt is recorded as OPENING_STOCK. */
   isOpeningStock?: boolean;
-  supervisorWorkerId: string;
-  supervisorPin: string;
   purchaseOrderId?: string | null;
   supplierInvoiceNumber?: string | null;
   supplierInvoiceDate?: string | null;
@@ -524,18 +576,40 @@ export interface StockReceiveRequest {
   loadingCostPesewas?: number;
   lines: Array<{ productId: string; quantity: number; unitCostPesewas: number; unitId?: string | null }>;
   notes?: string | null;
-  /** Confirm a receipt the backend refused with a COST_SWING error (implied
-   *  per-canonical cost change over ±50% — usually a per-crate/per-bottle
-   *  cost mix-up). */
+}
+export interface StockReceiptRequestSummary {
+  id: string; status: StockReceiptRequestStatus; isOpeningStock: boolean;
+  supplierId: string | null; supplierName: string | null;
+  purchaseOrderId: string | null; purchaseOrderNumber: string | null;
+  supplierInvoiceNumber: string | null; supplierInvoiceDate: string | null; supplierDueDate: string | null;
+  transportCostPesewas: number; loadingCostPesewas: number;
+  goodsValuePesewas: number; totalPayablePesewas: number; lineCount: number;
+  notes: string | null; requestedBy: string; requesterName: string; requestedAt: string;
+  reviewedBy: string | null; reviewerName: string | null; reviewedAt: string | null;
+  reviewNote: string | null; costSwingApproved: boolean;
+  postedSupplierInvoiceId: string | null; movementCount: number; productsCostUpdated: number | null;
+}
+export interface StockReceiptRequestDetail extends StockReceiptRequestSummary {
+  lines: Array<{
+    id: string; productId: string; productName: string; productSku: string;
+    unitId: string | null; unitName: string; conversionFactor: number;
+    quantity: number; canonicalQuantity: number; unitCostPesewas: number;
+    lineTotalPesewas: number; currentCanonicalCostPesewas: number;
+    proposedCanonicalCostPesewas: number;
+  }>;
+  costSwingWarnings: string[];
+}
+export interface StockReceiptRequestListRequest {
+  scope?: 'MY' | 'REVIEWABLE'; status?: 'PENDING' | 'RESOLVED' | 'ALL'; limit?: number;
+}
+export interface StockReceiptRequestListResponse { requests: StockReceiptRequestSummary[] }
+export interface StockReceiptRequestGetRequest { requestId: string }
+export interface StockReceiptRequestReviewRequest {
+  requestId: string; decision: 'APPROVE' | 'DECLINE'; note?: string | null;
   allowLargeCostSwing?: boolean;
 }
-export interface StockReceiveResponse {
-  movementCount: number;
-  supplierInvoiceId: string | null;
-  totalValuePesewas: number;
-  totalPayablePesewas: number;
-  productsCostUpdated: number;
-}
+export interface StockReceiptRequestWithdrawRequest { requestId: string }
+export interface StockReceiptRequestPendingCountResponse { minePendingCount: number; reviewablePendingCount: number }
 
 export interface SupplierListResponse {
   suppliers: Array<{
@@ -816,6 +890,7 @@ export interface CustomerUpdateRequest {
   customerId: string;
   fields: Partial<{
     displayName: string;
+    phone: string;
     alternatePhone: string | null;
     customerType: 'WALK_IN_REGULAR' | 'WHOLESALE' | 'ROUTE' | 'STAFF_FAMILY';
     businessName: string | null;
@@ -931,9 +1006,14 @@ export type PaymentPromiseStatus = 'OPEN' | 'KEPT' | 'BROKEN' | 'CANCELLED';
 export interface CustomerOverviewRequest { customerId: string }
 export interface CustomerOverviewResponse {
   id: string; displayName: string; phone: string; customerType: string;
+  alternatePhone: string | null;
+  businessName: string | null;
+  locationDescription: string | null;
   cashOnly: boolean;
   creditLimitPesewas: number;
+  creditTermsDays: number;
   preferredChannel: 'WALK_IN' | 'WHOLESALE' | 'ROUTE' | null;
+  notes: string | null;
   cachedBalancePesewas: number; trueBalancePesewas: number; driftPesewas: number;
   blocked: boolean; blockedReason: string | null;
   utilizationBps: number;
@@ -978,7 +1058,7 @@ export interface CustomerListByOutstandingRequest {
 }
 export interface CustomerListByOutstandingResponse {
   customers: Array<{
-    id: string; displayName: string; phone: string; customerType: string;
+    id: string; displayName: string; businessName: string | null; phone: string; customerType: string;
     creditLimitPesewas: number; trueBalancePesewas: number; blocked: boolean;
     ageOfOldestUnpaidDays: number | null;
     oldestUnpaidBucket: 'bucket0_30' | 'bucket31_60' | 'bucket61_90' | 'bucket90_plus' | null;

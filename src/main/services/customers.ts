@@ -6,6 +6,7 @@ import { normalizePhone } from '../../shared/lib/phone.js';
 export interface CustomerSearchResult {
   id: string;
   displayName: string;
+  businessName: string | null;
   phone: string;
   customerType: string;
   currentBalancePesewas: number;
@@ -16,7 +17,9 @@ export interface CustomerSearchResult {
 }
 
 /**
- * Search customers by phone substring or name (case-insensitive).
+ * Search customers by phone substring, customer name, or business/company
+ * name (case-insensitive). This is the single search used by every till
+ * picker, so company-name matching stays consistent across desktop and touch.
  * Excludes deleted customers; blocked customers are returned but flagged
  * (the UI will surface this so the worker knows credit is suspended).
  */
@@ -36,7 +39,8 @@ export function searchCustomers(
   const normalizedPhone = normalizePhone(trimmed);
   const rows = db
     .prepare(
-      `SELECT id, display_name AS displayName, phone, customer_type AS customerType,
+      `SELECT id, display_name AS displayName, business_name AS businessName,
+              phone, customer_type AS customerType,
               current_balance_pesewas AS currentBalancePesewas,
               credit_limit_pesewas AS creditLimitPesewas,
               cash_only AS cashOnly,
@@ -45,14 +49,24 @@ export function searchCustomers(
          FROM customers
          WHERE deleted_at IS NULL
            AND (display_name LIKE ? COLLATE NOCASE
+                OR business_name LIKE ? COLLATE NOCASE
                 OR phone LIKE ?
                 OR (? IS NOT NULL AND phone = ?))
-         ORDER BY display_name ASC
+         ORDER BY
+           CASE
+             WHEN (? IS NOT NULL AND phone = ?) THEN 0
+             WHEN display_name = ? COLLATE NOCASE THEN 1
+             WHEN business_name = ? COLLATE NOCASE THEN 2
+             ELSE 3
+           END,
+           display_name ASC
          LIMIT ?`,
     )
-    .all(like, like, normalizedPhone, normalizedPhone, limit) as Array<{
+    .all(like, like, like, normalizedPhone, normalizedPhone,
+      normalizedPhone, normalizedPhone, trimmed, trimmed, limit) as Array<{
       id: string;
       displayName: string;
+      businessName: string | null;
       phone: string;
       customerType: string;
       currentBalancePesewas: number;
@@ -65,6 +79,7 @@ export function searchCustomers(
   return rows.map((r) => ({
     id: r.id,
     displayName: r.displayName,
+    businessName: r.businessName,
     phone: r.phone,
     customerType: r.customerType,
     currentBalancePesewas: r.currentBalancePesewas,

@@ -8,6 +8,8 @@ import { AppHeader } from '../components/AppHeader';
 import { formatMoney, parseCedisToPesewas } from '../../shared/lib/money';
 import { FeedbackBanner } from '../components/FeedbackBanner';
 import VoidApprovalsScreen from './VoidApprovalsScreen';
+import VarianceCasesScreen from './VarianceCasesScreen';
+import StockReceiptApprovalsScreen from './StockReceiptApprovalsScreen';
 
 export default function OpenShiftScreen() {
   const [raw, setRaw] = useState('');
@@ -15,6 +17,10 @@ export default function OpenShiftScreen() {
   const [error, setError] = useState<string | null>(null);
   const [showApprovals, setShowApprovals] = useState(false);
   const [pendingApprovals, setPendingApprovals] = useState(0);
+  const [showVarianceCases, setShowVarianceCases] = useState(false);
+  const [openVariances, setOpenVariances] = useState(0);
+  const [showStockApprovals, setShowStockApprovals] = useState(false);
+  const [pendingStockApprovals, setPendingStockApprovals] = useState(0);
   const setOpenShift = useSession((s) => s.setOpenShift);
   const role = useSession((s) => s.workerRole);
   const isSenior = role === 'SUPERVISOR' || role === 'OWNER' || role === 'FOUNDER';
@@ -30,6 +36,10 @@ export default function OpenShiftScreen() {
     async function refresh() {
       const result = await counter.saleVoidRequestPendingCount();
       if (!cancelled && result.success) setPendingApprovals(result.data.reviewablePendingCount);
+      const variances = await counter.varianceCasePendingCount();
+      if (!cancelled && variances.success) setOpenVariances(variances.data.openCount);
+      const stock = await counter.stockReceiptRequestPendingCount();
+      if (!cancelled && stock.success) setPendingStockApprovals(stock.data.reviewablePendingCount);
     }
     void refresh();
     const interval = window.setInterval(() => void refresh(), 10_000);
@@ -64,6 +74,8 @@ export default function OpenShiftScreen() {
   }
 
   if (showApprovals) return <VoidApprovalsScreen onExit={() => setShowApprovals(false)} />;
+  if (showVarianceCases) return <VarianceCasesScreen onExit={() => setShowVarianceCases(false)} />;
+  if (showStockApprovals) return <StockReceiptApprovalsScreen onExit={() => setShowStockApprovals(false)} />;
 
   return (
     <div className="min-h-screen bg-bg-deep text-text-primary flex flex-col">
@@ -115,6 +127,12 @@ export default function OpenShiftScreen() {
             <div><div className="eyebrow">Management access</div><div className="mt-1">Review void requests without opening an artificial till shift.</div></div>
             <button className={pendingApprovals > 0 ? 'btn border-warning text-warning' : 'btn btn-quiet'} onClick={() => setShowApprovals(true)}>
               Void approvals{pendingApprovals > 0 ? ` · ${pendingApprovals}` : ''}
+            </button>
+            <button className={openVariances > 0 ? 'btn border-warning text-warning' : 'btn btn-quiet'} onClick={() => setShowVarianceCases(true)}>
+              Variance cases{openVariances > 0 ? ` · ${openVariances}` : ''}
+            </button>
+            <button className={pendingStockApprovals > 0 ? 'btn border-warning text-warning' : 'btn btn-quiet'} onClick={() => setShowStockApprovals(true)}>
+              Stock approvals{pendingStockApprovals > 0 ? ` · ${pendingStockApprovals}` : ''}
             </button>
           </section>
         )}

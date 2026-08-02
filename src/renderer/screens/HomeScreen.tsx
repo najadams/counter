@@ -36,9 +36,11 @@ import ReportsScreen from './ReportsScreen';
 import MoneyOutScreen from './MoneyOutScreen';
 import PaperReceiptsScreen from './PaperReceiptsScreen';
 import VoidApprovalsScreen from './VoidApprovalsScreen';
+import VarianceCasesScreen from './VarianceCasesScreen';
+import StockReceiptApprovalsScreen from './StockReceiptApprovalsScreen';
 import { FeedbackBanner } from '../components/FeedbackBanner';
 
-type View = 'home' | 'sale' | 'void' | 'voidApprovals' | 'breakage' | 'consumption' | 'stock' | 'settings' | 'stocktake' | 'summary' | 'customers' | 'reports' | 'pendingOrders' | 'moneyOut' | 'paperReceipts';
+type View = 'home' | 'sale' | 'void' | 'voidApprovals' | 'varianceCases' | 'stockApprovals' | 'breakage' | 'consumption' | 'stock' | 'settings' | 'stocktake' | 'summary' | 'customers' | 'reports' | 'pendingOrders' | 'moneyOut' | 'paperReceipts';
 
 export default function HomeScreen() {
   const shiftId = useSession((s) => s.shiftId);
@@ -55,6 +57,8 @@ export default function HomeScreen() {
   const [pendingOrderCount, setPendingOrderCount] = useState(0);
   const [obligationWarnings, setObligationWarnings] = useState<ManagementHomeWarningsResponse | null>(null);
   const [voidCounts, setVoidCounts] = useState({ minePendingCount: 0, reviewablePendingCount: 0, currentShiftPendingCount: 0 });
+  const [varianceCounts, setVarianceCounts] = useState({ openCount: 0, overdueCount: 0, unresolvedPesewas: 0 });
+  const [stockRequestCounts, setStockRequestCounts] = useState({ minePendingCount: 0, reviewablePendingCount: 0 });
   const isSenior = workerRole === 'SUPERVISOR' || workerRole === 'OWNER' || workerRole === 'FOUNDER';
 
   useEffect(() => {
@@ -69,6 +73,22 @@ export default function HomeScreen() {
     window.addEventListener('focus', onFocus);
     return () => { cancelled = true; window.clearInterval(interval); window.removeEventListener('focus', onFocus); };
   }, [view]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function refresh() { const result = await counter.stockReceiptRequestPendingCount(); if (!cancelled && result.success) setStockRequestCounts(result.data); }
+    void refresh(); const interval = window.setInterval(() => void refresh(), 10_000);
+    const onFocus = () => void refresh(); window.addEventListener('focus', onFocus);
+    return () => { cancelled = true; window.clearInterval(interval); window.removeEventListener('focus', onFocus); };
+  }, [view]);
+
+  useEffect(() => {
+    if (!isSenior) return;
+    let cancelled = false;
+    async function refresh() { const result = await counter.varianceCasePendingCount(); if (!cancelled && result.success) setVarianceCounts(result.data); }
+    void refresh(); const interval = window.setInterval(() => void refresh(), 10_000);
+    return () => { cancelled = true; window.clearInterval(interval); };
+  }, [isSenior, view]);
 
   useEffect(() => {
     if (workerRole !== 'OWNER' && workerRole !== 'FOUNDER') return;
@@ -167,6 +187,8 @@ export default function HomeScreen() {
   if (view === 'sale') return <SaleScreen onExit={() => setView('home')} />;
   if (view === 'void') return <VoidSaleScreen onExit={() => setView('home')} onDuplicate={() => setView('sale')} />;
   if (view === 'voidApprovals') return <VoidApprovalsScreen onExit={() => setView('home')} />;
+  if (view === 'varianceCases') return <VarianceCasesScreen onExit={() => setView('home')} />;
+  if (view === 'stockApprovals') return <StockReceiptApprovalsScreen onExit={() => setView('home')} />;
   if (view === 'breakage') return <BreakageScreen onExit={() => setView('home')} />;
   if (view === 'consumption') return <ConsumptionScreen onExit={() => setView('home')} />;
   if (view === 'stock') return <StockReceiveScreen onExit={() => setView('home')} />;
@@ -256,10 +278,12 @@ export default function HomeScreen() {
               <ActionRow label="Daily summary" hot="F5" caption="Revenue, margin, shrinkage, alerts." onClick={() => setView('summary')} />
               <ActionRow label="Customers" hot="F6" caption="Debts, take payments, aging." onClick={() => setView('customers')} />
               <ActionRow label="Breakage" hot="F7" caption="Report broken/leaked stock with photo." onClick={() => setView('breakage')} />
-              <ActionRow label="Stock receipt" hot="F8" caption="Goods arrived from supplier." onClick={() => setView('stock')} />
+              <ActionRow label="Stock receipt" hot="F8" kind={stockRequestCounts.minePendingCount > 0 ? 'warn' : 'default'} caption={stockRequestCounts.minePendingCount > 0 ? `${stockRequestCounts.minePendingCount} of your receipt request(s) await approval.` : 'Record a delivery and submit it for approval.'} onClick={() => setView('stock')} />
               <ActionRow label="Paper receipts" caption="Review photographed receipts before posting sales." onClick={() => setView('paperReceipts')} />
               <ActionRow label="Recent sales" hot="F11" kind={voidCounts.minePendingCount > 0 ? 'warn' : 'default'} caption={voidCounts.minePendingCount > 0 ? `${voidCounts.minePendingCount} of your void request(s) await a decision.` : 'Review receipts and submit same-day void requests.'} onClick={() => setView('void')} />
               {isSenior && <ActionRow label="Void approvals" kind={voidCounts.reviewablePendingCount > 0 ? 'warn' : 'default'} caption={voidCounts.reviewablePendingCount > 0 ? `${voidCounts.reviewablePendingCount} request(s) waiting for your decision.` : 'Review pending requests and decision history.'} onClick={() => setView('voidApprovals')} />}
+              {isSenior && <ActionRow label="Variance cases" kind={varianceCounts.overdueCount > 0 ? 'warn' : 'default'} caption={varianceCounts.openCount > 0 ? `${varianceCounts.openCount} open · ${varianceCounts.overdueCount} overdue · ${formatMoneyWithCurrency(varianceCounts.unresolvedPesewas)} unresolved.` : 'Investigate cash, stock, account, and customer differences.'} onClick={() => setView('varianceCases')} />}
+              {isSenior && <ActionRow label="Stock approvals" kind={stockRequestCounts.reviewablePendingCount > 0 ? 'warn' : 'default'} caption={stockRequestCounts.reviewablePendingCount > 0 ? `${stockRequestCounts.reviewablePendingCount} receipt request(s) waiting for review.` : 'Approve supplier deliveries before inventory and payables change.'} onClick={() => setView('stockApprovals')} />}
               <ActionRow label="Settings" hot="F12" caption="Workers admin, change PIN." onClick={() => setView('settings')} />
             </div>
             <ActionRow kind="warn" label="Close shift" hot="F10" caption="Two-step blind cash count." onClick={() => { setStep('count'); setError(null); }} />

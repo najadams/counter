@@ -99,6 +99,18 @@ describe('createCustomer', () => {
     const hits = searchCustomers(db, 'yaw', 5);
     expect(hits.find((h) => h.displayName === 'Yaw Boateng')).toBeDefined();
   });
+
+  it('is searchable by business/company name for the till', () => {
+    const created = createCustomer(db, {
+      displayName: 'Kwame Mensah', phone: '0244999000', businessName: 'Adams Cold Store',
+      actorWorkerId: COUNTER, deviceId: D,
+    });
+    const hits = searchCustomers(db, 'cold store', 5);
+    expect(hits).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: created.customerId, displayName: 'Kwame Mensah', businessName: 'Adams Cold Store' }),
+    ]));
+    expect(searchCustomers(db, 'ADAMS', 5)[0]).toMatchObject({ id: created.customerId, businessName: 'Adams Cold Store' });
+  });
 });
 
 describe('updateCustomer', () => {
@@ -111,7 +123,7 @@ describe('updateCustomer', () => {
     updateCustomer(db, {
       customerId: r.customerId,
       fields: { displayName: 'Yaw Boateng', creditLimitPesewas: 10000 },
-      actorWorkerId: COUNTER, deviceId: D,
+      actorWorkerId: SUP, deviceId: D,
     });
     const row = db.prepare('SELECT display_name, credit_limit_pesewas FROM customers WHERE id = ?').get(r.customerId) as { display_name: string; credit_limit_pesewas: number };
     expect(row.display_name).toBe('Yaw Boateng');
@@ -131,7 +143,7 @@ describe('updateCustomer', () => {
     expect(() => updateCustomer(db, {
       customerId: r.customerId,
       fields: { customerType: 'NOPE' as 'WHOLESALE' },
-      actorWorkerId: COUNTER, deviceId: D,
+      actorWorkerId: SUP, deviceId: D,
     })).toThrow(/invalid customerType/);
   });
 
@@ -147,6 +159,70 @@ describe('updateCustomer', () => {
     });
     const row = db.prepare('SELECT alternate_phone FROM customers WHERE id = ?').get(r.customerId) as { alternate_phone: string };
     expect(row.alternate_phone).toBe('+233555111222');
+  });
+
+  it('allows counter staff to edit basic contact and operating notes', () => {
+    const r = createCustomer(db, {
+      displayName: 'Y', phone: '0244999000',
+      actorWorkerId: COUNTER, deviceId: D,
+    });
+    updateCustomer(db, {
+      customerId: r.customerId,
+      fields: {
+        displayName: 'Yaw Boateng', businessName: 'Yaw Ventures',
+        locationDescription: 'Behind the market', preferredChannel: 'WHOLESALE', notes: 'Call before delivery',
+      },
+      actorWorkerId: COUNTER, deviceId: D,
+    });
+    expect(db.prepare(`SELECT display_name, business_name, location_description,
+      preferred_channel, notes FROM customers WHERE id = ?`).get(r.customerId)).toEqual({
+      display_name: 'Yaw Boateng', business_name: 'Yaw Ventures', location_description: 'Behind the market',
+      preferred_channel: 'WHOLESALE', notes: 'Call before delivery',
+    });
+  });
+
+  it('requires supervisor or above for primary phone and credit-policy changes', () => {
+    const r = createCustomer(db, {
+      displayName: 'Y', phone: '0244999000',
+      actorWorkerId: COUNTER, deviceId: D,
+    });
+    for (const fields of [
+      { phone: '0555000111' },
+      { customerType: 'WHOLESALE' as const },
+      { creditLimitPesewas: 20_000 },
+      { creditTermsDays: 30 },
+      { cashOnly: true },
+    ]) {
+      expect(() => updateCustomer(db, {
+        customerId: r.customerId, fields, actorWorkerId: COUNTER, deviceId: D,
+      })).toThrow(/requires SUPERVISOR/);
+    }
+  });
+
+  it('normalizes a supervisor-edited primary phone and rejects duplicates', () => {
+    const first = createCustomer(db, {
+      displayName: 'First', phone: '0244999000', actorWorkerId: COUNTER, deviceId: D,
+    });
+    const second = createCustomer(db, {
+      displayName: 'Second', phone: '0202000111', actorWorkerId: COUNTER, deviceId: D,
+    });
+    updateCustomer(db, {
+      customerId: first.customerId, fields: { phone: '0555000111' }, actorWorkerId: SUP, deviceId: D,
+    });
+    expect(db.prepare('SELECT phone FROM customers WHERE id = ?').get(first.customerId)).toEqual({ phone: '+233555000111' });
+    expect(() => updateCustomer(db, {
+      customerId: first.customerId, fields: { phone: '0202000111' }, actorWorkerId: SUP, deviceId: D,
+    })).toThrow(/already uses this phone/);
+    expect(db.prepare('SELECT phone FROM customers WHERE id = ?').get(second.customerId)).toEqual({ phone: '+233202000111' });
+  });
+
+  it('rejects an empty edited display name', () => {
+    const r = createCustomer(db, {
+      displayName: 'Y', phone: '0244999000', actorWorkerId: COUNTER, deviceId: D,
+    });
+    expect(() => updateCustomer(db, {
+      customerId: r.customerId, fields: { displayName: '   ' }, actorWorkerId: COUNTER, deviceId: D,
+    })).toThrow(/displayName required/);
   });
 });
 

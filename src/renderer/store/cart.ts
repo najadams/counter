@@ -33,6 +33,7 @@ export interface CartLine {
 export interface CartCustomer {
   id: string;
   displayName: string;
+  businessName?: string | null;
   phone: string;
   currentBalancePesewas: number;
   cashOnly?: boolean;

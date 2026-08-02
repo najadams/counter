@@ -46,7 +46,11 @@ export function reconcileAllCustomersOnBoot(
 
   const tx = db.transaction(() => {
     for (const c of customers) {
-      const r = reconcileCustomerBalance(db, c.id);
+      const r = reconcileCustomerBalance(db, c.id, {
+        actorWorkerId: SYSTEM_ID,
+        deviceId,
+        sourceId: `boot:${c.id}:${new Date().toISOString()}`,
+      });
       if (r.driftPesewas !== 0) {
         healed++;
         totalDrift += Math.abs(r.driftPesewas);

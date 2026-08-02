@@ -17,6 +17,7 @@ const TYPES = [
 export interface NewCustomer {
   id: string;
   displayName: string;
+  businessName: string | null;
   phone: string;
   currentBalancePesewas: number;
   cashOnly: boolean;
@@ -71,6 +72,7 @@ export function CustomerCreateModal({
       onCreated({
         id: c.id,
         displayName: c.displayName,
+        businessName: c.businessName,
         phone: c.phone,
         currentBalancePesewas: c.currentBalancePesewas,
         cashOnly: c.cashOnly,
@@ -79,6 +81,7 @@ export function CustomerCreateModal({
       onCreated({
         id: r.data.customerId,
         displayName: displayName.trim(),
+        businessName: businessName.trim() || null,
         phone: phone.trim(),
         currentBalancePesewas: 0,
         cashOnly,

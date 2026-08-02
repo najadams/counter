@@ -96,6 +96,24 @@ export function createCounterApi(invoke: Invoke) {
     correctSale: (req: ipc.SaleCorrectRequest) =>
       invoke<ipc.SaleCorrectResponse>(ipc.IPC_CHANNELS.SALE_CORRECT, req),
 
+    // variance investigations
+    varianceCaseCreate: (req: ipc.VarianceCaseCreateRequest) =>
+      invoke<{ caseId: string; created: boolean }>(ipc.IPC_CHANNELS.VARIANCE_CASE_CREATE, req),
+    varianceCaseList: (req: ipc.VarianceCaseListRequest = {}) =>
+      invoke<ipc.VarianceCaseListResponse>(ipc.IPC_CHANNELS.VARIANCE_CASE_LIST, req),
+    varianceCaseGet: (caseId: string) =>
+      invoke<ipc.VarianceCaseGetResponse>(ipc.IPC_CHANNELS.VARIANCE_CASE_GET, { caseId }),
+    varianceCaseUpdate: (req: ipc.VarianceCaseUpdateRequest) =>
+      invoke<ipc.VarianceCaseRow>(ipc.IPC_CHANNELS.VARIANCE_CASE_UPDATE, req),
+    varianceCaseAddEvidence: (req: ipc.VarianceCaseEvidenceRequest) =>
+      invoke<{ ok: true }>(ipc.IPC_CHANNELS.VARIANCE_CASE_EVIDENCE_ADD, req),
+    varianceCasePendingCount: () =>
+      invoke<ipc.VarianceCasePendingCountResponse>(ipc.IPC_CHANNELS.VARIANCE_CASE_PENDING_COUNT, {}),
+    varianceCaseSettingsGet: () =>
+      invoke<ipc.VarianceCaseSettings>(ipc.IPC_CHANNELS.VARIANCE_CASE_SETTINGS_GET, {}),
+    varianceCaseSettingsUpdate: (req: ipc.VarianceCaseSettingsUpdateRequest) =>
+      invoke<ipc.VarianceCaseSettings>(ipc.IPC_CHANNELS.VARIANCE_CASE_SETTINGS_UPDATE, req),
+
     // breakage
     reportBreakage: (req: ipc.BreakageReportRequest) =>
       invoke<ipc.BreakageReportResponse>(ipc.IPC_CHANNELS.BREAKAGE_REPORT, req),
@@ -110,8 +128,18 @@ export function createCounterApi(invoke: Invoke) {
 
     // stock receipts
     listSuppliers: () => invoke<ipc.SupplierListResponse>(ipc.IPC_CHANNELS.SUPPLIER_LIST, {}),
-    receiveStock: (req: ipc.StockReceiveRequest) =>
-      invoke<ipc.StockReceiveResponse>(ipc.IPC_CHANNELS.STOCK_RECEIVE, req),
+    stockReceiptRequestCreate: (req: ipc.StockReceiptRequestCreateRequest) =>
+      invoke<ipc.StockReceiptRequestDetail>(ipc.IPC_CHANNELS.STOCK_RECEIPT_REQUEST_CREATE, req),
+    stockReceiptRequestList: (req: ipc.StockReceiptRequestListRequest) =>
+      invoke<ipc.StockReceiptRequestListResponse>(ipc.IPC_CHANNELS.STOCK_RECEIPT_REQUEST_LIST, req),
+    stockReceiptRequestGet: (requestId: string) =>
+      invoke<ipc.StockReceiptRequestDetail>(ipc.IPC_CHANNELS.STOCK_RECEIPT_REQUEST_GET, { requestId }),
+    stockReceiptRequestReview: (req: ipc.StockReceiptRequestReviewRequest) =>
+      invoke<ipc.StockReceiptRequestDetail>(ipc.IPC_CHANNELS.STOCK_RECEIPT_REQUEST_REVIEW, req),
+    stockReceiptRequestWithdraw: (requestId: string) =>
+      invoke<ipc.StockReceiptRequestDetail>(ipc.IPC_CHANNELS.STOCK_RECEIPT_REQUEST_WITHDRAW, { requestId }),
+    stockReceiptRequestPendingCount: () =>
+      invoke<ipc.StockReceiptRequestPendingCountResponse>(ipc.IPC_CHANNELS.STOCK_RECEIPT_REQUEST_PENDING_COUNT, {}),
 
     // worker admin
     adminListWorkers: () => invoke<ipc.WorkerAdminListResponse>(ipc.IPC_CHANNELS.WORKER_ADMIN_LIST, {}),

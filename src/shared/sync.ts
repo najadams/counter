@@ -26,6 +26,8 @@ export const SYNCED_EVENT_TABLES = [
   'risk_thresholds', 'risk_assumptions', 'saved_scenarios',
   'management_ledger_settings',
   'sale_void_requests',
+  'variance_case_settings', 'variance_cases', 'variance_case_events',
+  'stock_receipt_requests', 'stock_receipt_request_lines',
   // Phase 4: WhatsApp order accept/reject/fulfil. Unlike every other table in
   // this list, pending_orders rows are MUTATED in place (CONFIRMED ->
   // FULFILLED|REJECTED|CANCELLED), not append-only — migration 0039 captures
@@ -47,6 +49,8 @@ export const MUTABLE_EVENT_TABLES: readonly SyncedEventTable[] = [
   'liability_agreements', 'obligations', 'fixed_assets',
   'risk_thresholds', 'risk_assumptions', 'saved_scenarios',
   'management_ledger_settings',
+  'variance_case_settings', 'variance_cases',
+  'stock_receipt_requests',
 ];
 
 export interface PushRow {

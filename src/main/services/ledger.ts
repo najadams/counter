@@ -12,6 +12,7 @@ import { logAudit } from '../db/audit.js';
 import { assertNotSealed, isDateSealed } from './periods.js';
 import { verifyPin } from './workers.js';
 import { vatForSale } from '../../shared/lib/vat.js';
+import { maybeOpenFinancialAccountVarianceCase } from './varianceCases.js';
 
 export type LedgerAccountClass = 'ASSET' | 'LIABILITY' | 'EQUITY' | 'REVENUE' | 'COGS' | 'EXPENSE';
 export type FinancialAccountKind = 'TILL' | 'SAFE' | 'BANK' | 'MOMO' | 'OTHER_CASH';
@@ -966,6 +967,19 @@ export function reconcileFinancialAccount(
           SET last_reconciled_at = ?, updated_at = ?, updated_by = ?
         WHERE id = ?`,
     ).run(reconciledAt, new Date().toISOString(), input.actorWorkerId, account.id);
+    maybeOpenFinancialAccountVarianceCase(db, {
+      reconciliationId,
+      locationId: account.locationId,
+      financialAccountId: account.id,
+      accountName: account.name,
+      expectedPesewas: expected,
+      observedPesewas: input.observedPesewas,
+      variancePesewas: variance,
+      adjustmentJournalEntryId,
+      actorWorkerId: input.actorWorkerId,
+      deviceId: input.deviceId,
+      detectedAt: reconciledAt,
+    });
   })();
   return { reconciliationId, variancePesewas: variance, adjustmentJournalEntryId };
 }

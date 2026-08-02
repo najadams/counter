@@ -24,6 +24,16 @@ function requireSupervisor(db: DB, actorId: string): void {
   }
 }
 
+function activeWorkerRole(db: DB, actorId: string): string {
+  const worker = db.prepare(
+    `SELECT role, active, deleted_at, terminated_at FROM workers WHERE id = ?`,
+  ).get(actorId) as { role: string; active: number; deleted_at: string | null; terminated_at: string | null } | undefined;
+  if (!worker || worker.active !== 1 || worker.deleted_at || worker.terminated_at) {
+    throw new Error('actor not active');
+  }
+  return worker.role;
+}
+
 export interface CreateCustomerInput {
   displayName: string;
   phone: string;
@@ -130,6 +140,7 @@ export interface UpdateCustomerInput {
   customerId: string;
   fields: Partial<{
     displayName: string;
+    phone: string;
     alternatePhone: string | null;
     customerType: 'WALK_IN_REGULAR' | 'WHOLESALE' | 'ROUTE' | 'STAFF_FAMILY';
     businessName: string | null;
@@ -147,9 +158,15 @@ export interface UpdateCustomerInput {
 }
 
 export function updateCustomer(db: DB, input: UpdateCustomerInput): void {
+  const actorRole = activeWorkerRole(db, input.actorWorkerId);
+  const sensitiveFields = ['phone', 'customerType', 'creditLimitPesewas', 'creditTermsDays', 'cashOnly'] as const;
+  const attemptedSensitive = sensitiveFields.filter((field) => Object.prototype.hasOwnProperty.call(input.fields, field));
+  if (attemptedSensitive.length > 0 && !SUPERVISOR_ROLES.has(actorRole)) {
+    throw new Error(`Updating ${attemptedSensitive.join(', ')} requires SUPERVISOR, OWNER, or FOUNDER`);
+  }
   const existing = db
     .prepare(
-      `SELECT id, display_name, alternate_phone, customer_type, business_name,
+      `SELECT id, display_name, phone, alternate_phone, customer_type, business_name,
               location_description, geo_lat, geo_lng, credit_limit_pesewas,
               credit_terms_days, cash_only, preferred_channel, notes
          FROM customers WHERE id = ? AND deleted_at IS NULL`,
@@ -162,7 +179,7 @@ export function updateCustomer(db: DB, input: UpdateCustomerInput): void {
   }
 
   const colMap: Record<string, string> = {
-    displayName: 'display_name', alternatePhone: 'alternate_phone',
+    displayName: 'display_name', phone: 'phone', alternatePhone: 'alternate_phone',
     customerType: 'customer_type', businessName: 'business_name',
     locationDescription: 'location_description',
     geoLat: 'geo_lat', geoLng: 'geo_lng',
@@ -181,6 +198,20 @@ export function updateCustomer(db: DB, input: UpdateCustomerInput): void {
     const col = colMap[key];
     if (!col) continue;
     let value: unknown = raw;
+    if (key === 'displayName') {
+      if (typeof value !== 'string' || !value.trim()) throw new Error('displayName required');
+      value = value.trim();
+    }
+    if (key === 'phone') {
+      if (typeof value !== 'string') throw new Error('phone required');
+      const normalized = normalizePhone(value);
+      if (!normalized) throw new Error(`invalid phone '${value}'`);
+      const duplicate = db.prepare(
+        `SELECT id FROM customers WHERE phone = ? AND id <> ? AND deleted_at IS NULL`,
+      ).get(normalized, input.customerId) as { id: string } | undefined;
+      if (duplicate) throw new Error('another customer already uses this phone number');
+      value = normalized;
+    }
     if (key === 'alternatePhone' && typeof value === 'string') {
       const norm = normalizePhone(value);
       if (!norm) throw new Error(`invalid alternatePhone '${value}'`);

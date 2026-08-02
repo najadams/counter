@@ -5,21 +5,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import log from 'electron-log/main';
-import { connect, defaultDbPath, defaultMigrationsDir } from './db/connection.js';
-import { runMigrations } from './db/migrations.js';
-import { getDeviceId } from './db/deviceId.js';
-import { reconcileAllCustomersOnBoot } from './services/boot.js';
-import { HandlerRegistry } from './ipc/registry.js';
-import { initTokenStore } from './ipc/session.js';
-import { setPrinterDevMode, setPrinterInterfaceSpecs } from './printer/printer.js';
-import { getReceiptConfig } from './services/receiptConfig.js';
-import { startSyncWorker } from './sync/push.js';
-import { startPullWorker } from './sync/pull.js';
-import { startOrdersPullWorker } from './sync/pullOrders.js';
-import { createHttpTransport } from './sync/httpTransport.js';
-import { readSyncConfig } from './sync/config.js';
-import { initHttpManager, autostartHttp } from './http/manager.js';
-import { registerIpcHandlers, registerSession5Handlers, registerSession6Handlers, registerSession7Handlers, registerSession8Handlers, registerSession9Handlers, registerSession11Handlers, registerSession11SuppliersHandlers, registerSession12AuditHandlers, registerSession12BreakageHandlers, registerSession12ReprintHandlers, registerSession12StockHandlers, registerSession14ReprintHandlers, registerSession15PeriodHandlers, registerSession15ExcHandlers, registerSession16ReorderHandlers, registerSession17ExpenseHandlers, registerSession18RecoveryHandlers, registerBackupHandlers, registerStatementHandlers, registerCpoHandlers, registerReturnsHandlers, registerSupplierPaymentsHandlers, registerReportsHandlers, registerCatalogTransferHandlers, registerReceiptConfigHandlers, registerSyncHandlers, registerPendingOrdersHandlers } from './ipc/handlers.js';
+import { COUNTERS_DECOY_ENABLED } from '../shared/lib/buildFlags.js';
 
 log.initialize();
 log.transports.file.level = 'info';
@@ -29,8 +15,13 @@ const isDev = !app.isPackaged;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let mainWindow: BrowserWindow | null = null;
+let countersDecoyRefreshTimer: ReturnType<typeof setInterval> | null = null;
 
-function resolveMigrationsDir(): string {
+if (COUNTERS_DECOY_ENABLED) {
+  app.setName('Counters');
+}
+
+function resolveMigrationsDir(defaultMigrationsDir: () => string): string {
   if (app.isPackaged) {
     // electron-builder extraResources puts migrations/ next to the asar
     // archive at process.resourcesPath/migrations.
@@ -91,33 +82,81 @@ function createMainWindow(): void {
   mainWindow.on('closed', () => { mainWindow = null; });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  const [
+    connection,
+    migrations,
+    device,
+    boot,
+    registryModule,
+    sessionModule,
+    printerModule,
+    receiptConfigModule,
+    syncPush,
+    syncPull,
+    syncPullOrders,
+    syncTransport,
+    syncConfig,
+    httpManager,
+    handlers,
+  ] = await Promise.all([
+    import('./db/connection.js'),
+    import('./db/migrations.js'),
+    import('./db/deviceId.js'),
+    import('./services/boot.js'),
+    import('./ipc/registry.js'),
+    import('./ipc/session.js'),
+    import('./printer/printer.js'),
+    import('./services/receiptConfig.js'),
+    import('./sync/push.js'),
+    import('./sync/pull.js'),
+    import('./sync/pullOrders.js'),
+    import('./sync/httpTransport.js'),
+    import('./sync/config.js'),
+    import('./http/manager.js'),
+    import('./ipc/handlers.js'),
+  ]);
+
   // Console-print fallback is a dev convenience only. In the packaged app an
   // unconfigured/unreachable station must fail loud, never silently "succeed".
-  setPrinterDevMode(isDev);
+  printerModule.setPrinterDevMode(isDev);
   const userData = app.getPath('userData');
-  const dbPath = defaultDbPath(userData);
+  const dbPath = connection.defaultDbPath(userData);
   log.info(`[main] DB path: ${dbPath}`);
 
-  const db = connect({ filePath: dbPath, verbose: isDev });
-  const migrationsDir = resolveMigrationsDir();
+  const db = connection.connect({ filePath: dbPath, verbose: isDev });
+  const migrationsDir = resolveMigrationsDir(connection.defaultMigrationsDir);
   log.info(`[main] migrations dir: ${migrationsDir}`);
-  const result = runMigrations(db, migrationsDir);
+  const result = migrations.runMigrations(db, migrationsDir);
   log.info(`[main] migrations applied: ${result.applied.length}, already applied: ${result.alreadyApplied.length}`);
 
-  const deviceId = getDeviceId(db);
+  const deviceId = device.getDeviceId(db);
   log.info(`[main] deviceId: ${deviceId}`);
 
-  setPrinterInterfaceSpecs(getReceiptConfig(db));
+  if (COUNTERS_DECOY_ENABLED) {
+    log.info('[counters] decoy build enabled; using isolated Counters DB with synthetic low-volume data');
+    const decoySeed = await import('./services/decoySeed.js');
+    decoySeed.ensureCountersDecoySeed(db, deviceId, userData);
+    countersDecoyRefreshTimer = setInterval(() => {
+      try {
+        decoySeed.refreshCountersDecoyData(db, deviceId);
+      } catch (err) {
+        log.error('[counters] decoy refresh failed:', err);
+      }
+    }, 10 * 60 * 1000);
+    countersDecoyRefreshTimer.unref?.();
+  }
+
+  printerModule.setPrinterInterfaceSpecs(receiptConfigModule.getReceiptConfig(db));
 
   // Rehydrate persisted HTTP sessions so a reboot (e.g. load-shedding)
   // doesn't sign every LAN device out mid-shift. No-op for desktop IPC.
-  initTokenStore(db);
+  sessionModule.initTokenStore(db);
 
   // Boot-time reconciliation: heal cached customer balances against truth.
   // Silent unless drift was found.
   try {
-    const reconcile = reconcileAllCustomersOnBoot(db, deviceId);
+    const reconcile = boot.reconcileAllCustomersOnBoot(db, deviceId);
     if (reconcile.customersHealed > 0) {
       log.warn(
         `[main] reconcile: healed ${reconcile.customersHealed} of ${reconcile.customersScanned} customers ` +
@@ -136,35 +175,35 @@ app.whenReady().then(() => {
 
   // One registry tees every handler to the live ipcMain (desktop IPC) and
   // into a channel map the Phase 1 HTTP server can dispatch against.
-  const registry = new HandlerRegistry(ipcMain);
-  registerIpcHandlers(registry, db, deviceId, app);
-  registerSession5Handlers(registry, db, deviceId);
-  registerSession6Handlers(registry, db, deviceId);
-  registerSession7Handlers(registry, db, deviceId);
-  registerSession8Handlers(registry, db, deviceId);
-  registerSession9Handlers(registry, db, deviceId);
-  registerSession11Handlers(registry, db, deviceId);
-  registerSession11SuppliersHandlers(registry, db, deviceId);
-  registerSession12AuditHandlers(registry, db, deviceId);
-  registerSession12BreakageHandlers(registry, db, deviceId, app);
-  registerSession12ReprintHandlers(registry, db, deviceId);
-  registerSession12StockHandlers(registry, db, deviceId);
-  registerSession14ReprintHandlers(registry, db, deviceId);
-  registerSession15PeriodHandlers(registry, db, deviceId);
-  registerSession15ExcHandlers(registry, db, deviceId);
-  registerSession16ReorderHandlers(registry, db, deviceId);
-  registerSession17ExpenseHandlers(registry, db, deviceId, app);
-  registerSession18RecoveryHandlers(registry, db, deviceId);
-  registerBackupHandlers(registry, app, db, deviceId);
-  registerStatementHandlers(registry, db);
-  registerCpoHandlers(registry, db, deviceId);
-  registerReturnsHandlers(registry, db, deviceId);
-  registerSupplierPaymentsHandlers(registry, db, deviceId);
-  registerReportsHandlers(registry, db, deviceId);
-  registerCatalogTransferHandlers(registry, db, app, deviceId);
-  registerReceiptConfigHandlers(registry, db, deviceId);
-  registerSyncHandlers(registry, db, deviceId);
-  registerPendingOrdersHandlers(registry, db, deviceId);
+  const registry = new registryModule.HandlerRegistry(ipcMain);
+  handlers.registerIpcHandlers(registry, db, deviceId, app);
+  handlers.registerSession5Handlers(registry, db, deviceId);
+  handlers.registerSession6Handlers(registry, db, deviceId);
+  handlers.registerSession7Handlers(registry, db, deviceId);
+  handlers.registerSession8Handlers(registry, db, deviceId);
+  handlers.registerSession9Handlers(registry, db, deviceId);
+  handlers.registerSession11Handlers(registry, db, deviceId);
+  handlers.registerSession11SuppliersHandlers(registry, db, deviceId);
+  handlers.registerSession12AuditHandlers(registry, db, deviceId);
+  handlers.registerSession12BreakageHandlers(registry, db, deviceId, app);
+  handlers.registerSession12ReprintHandlers(registry, db, deviceId);
+  handlers.registerSession12StockHandlers(registry, db, deviceId);
+  handlers.registerSession14ReprintHandlers(registry, db, deviceId);
+  handlers.registerSession15PeriodHandlers(registry, db, deviceId);
+  handlers.registerSession15ExcHandlers(registry, db, deviceId);
+  handlers.registerSession16ReorderHandlers(registry, db, deviceId);
+  handlers.registerSession17ExpenseHandlers(registry, db, deviceId, app);
+  handlers.registerSession18RecoveryHandlers(registry, db, deviceId);
+  handlers.registerBackupHandlers(registry, app, db, deviceId);
+  handlers.registerStatementHandlers(registry, db);
+  handlers.registerCpoHandlers(registry, db, deviceId);
+  handlers.registerReturnsHandlers(registry, db, deviceId);
+  handlers.registerSupplierPaymentsHandlers(registry, db, deviceId);
+  handlers.registerReportsHandlers(registry, db, deviceId);
+  handlers.registerCatalogTransferHandlers(registry, db, app, deviceId);
+  handlers.registerReceiptConfigHandlers(registry, db, deviceId);
+  handlers.registerSyncHandlers(registry, db, deviceId);
+  handlers.registerPendingOrdersHandlers(registry, db, deviceId);
   log.info(`[main] IPC handlers registered: ${registry.handlers.size} channels`);
 
   // Embedded HTTP transport. Opt-in via COUNTER_HTTP=1 so production desktop
@@ -185,7 +224,7 @@ app.whenReady().then(() => {
       log.error('[http] failed to read TLS key/cert; starting without TLS:', err);
     }
   }
-  initHttpManager({
+  httpManager.initHttpManager({
     db,
     deviceId,
     registry,
@@ -194,20 +233,20 @@ app.whenReady().then(() => {
     proxyTarget: isDev ? process.env['VITE_DEV_SERVER_URL'] : undefined,
     tls,
   }, db);
-  autostartHttp();
+  httpManager.autostartHttp();
 
   // Background push sync to the central store (Phase 3b). Opt-in: only runs
   // once the shop is provisioned (shop_id + central_url + central_token in
   // device_config, set via Settings -> Sync). Off by default, so a
   // single-shop install opens no outbound connection.
-  const syncCfg = readSyncConfig(db);
+  const syncCfg = syncConfig.readSyncConfig(db);
   if (syncCfg) {
-    const transport = createHttpTransport(syncCfg.centralUrl, syncCfg.token);
-    startSyncWorker(db, syncCfg.shopId, transport);
-    if (syncCfg.role !== 'HQ') startPullWorker(db, transport); // shops pull catalog; HQ is the source
+    const transport = syncTransport.createHttpTransport(syncCfg.centralUrl, syncCfg.token);
+    syncPush.startSyncWorker(db, syncCfg.shopId, transport);
+    if (syncCfg.role !== 'HQ') syncPull.startPullWorker(db, transport); // shops pull catalog; HQ is the source
     // Orders pull runs on EVERY shop (including HQ) — unlike catalog, HQ has
     // no special role here; any branch can fulfil a WhatsApp order.
-    startOrdersPullWorker(db, transport);
+    syncPullOrders.startOrdersPullWorker(db, transport);
     log.info(`[sync] workers started for ${syncCfg.role} ${syncCfg.shopId} -> ${syncCfg.centralUrl}`);
   }
 
@@ -220,4 +259,11 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
+});
+
+app.on('before-quit', () => {
+  if (countersDecoyRefreshTimer) {
+    clearInterval(countersDecoyRefreshTimer);
+    countersDecoyRefreshTimer = null;
+  }
 });

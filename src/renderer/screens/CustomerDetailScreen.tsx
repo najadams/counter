@@ -10,11 +10,15 @@ import { ReceiptPrintModal } from '../components/ReceiptPrintModal';
 import type { SaleReceipt } from '../../shared/lib/receipt';
 import { formatMoney, formatMoneyWithCurrency, parseCedisToPesewas } from '../../shared/lib/money';
 import { FeedbackBanner } from '../components/FeedbackBanner';
+import { CustomerEditModal } from '../components/CustomerEditModal';
+import { useSession } from '../store/session';
 
 interface Overview {
   id: string; displayName: string; phone: string; customerType: string;
+  alternatePhone: string | null; businessName: string | null; locationDescription: string | null;
   cashOnly: boolean;
-  creditLimitPesewas: number;
+  creditLimitPesewas: number; creditTermsDays: number;
+  preferredChannel: 'WALK_IN' | 'WHOLESALE' | 'ROUTE' | null; notes: string | null;
   cachedBalancePesewas: number; trueBalancePesewas: number; driftPesewas: number;
   blocked: boolean; blockedReason: string | null;
   utilizationBps: number;
@@ -63,8 +67,11 @@ export default function CustomerDetailScreen({
   const [showStatement, setShowStatement] = useState(false);
   const [showOverrides, setShowOverrides] = useState(false);
   const [showReturn, setShowReturn] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
   const [receiptDetail, setReceiptDetail] = useState<{ receipt: SaleReceipt; amountOutstandingPesewas: number | null; amountPaidPesewas: number } | null>(null);
   const [loadingReceiptId, setLoadingReceiptId] = useState<string | null>(null);
+  const workerRole = useSession((state) => state.workerRole);
+  const canEditCreditPolicy = workerRole === 'SUPERVISOR' || workerRole === 'OWNER' || workerRole === 'FOUNDER';
 
   async function openReceipt(saleId: string) {
     setLoadingReceiptId(saleId);
@@ -133,7 +140,10 @@ export default function CustomerDetailScreen({
               {overview.phone} · {overview.customerType}{overview.cashOnly ? ' · cash-only' : ''}
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <button onClick={() => setShowEdit(true)} className="px-4 py-2 border border-border hover:bg-bg-elevated text-sm">
+              Edit customer
+            </button>
             <button onClick={() => onRecordPayment({ customerId: overview.id, displayName: overview.displayName })}
               className="bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light">
               Record payment
@@ -446,6 +456,19 @@ export default function CustomerDetailScreen({
             setShowReturn(false);
             setInfo(`Return recorded — refund ${formatMoney(s.totalRefundPesewas)}.`);
             setTimeout(() => setInfo(null), 4000);
+            void refresh();
+          }}
+        />
+      )}
+      {showEdit && (
+        <CustomerEditModal
+          customer={overview}
+          canEditCreditPolicy={canEditCreditPolicy}
+          onCancel={() => setShowEdit(false)}
+          onSaved={() => {
+            setShowEdit(false);
+            setInfo('Customer information updated.');
+            setTimeout(() => setInfo(null), 3500);
             void refresh();
           }}
         />

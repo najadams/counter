@@ -12,8 +12,9 @@ import path from 'node:path';
 // is written, so the define MUST be applied to all three sub-builds explicitly —
 // otherwise the packaged VAT build would leave `__COUNTER_VAT__` undefined in main
 // and silently fall back to VAT-off at runtime.
-const vatDefine = {
+const buildFlagDefine = {
   __COUNTER_VAT__: JSON.stringify(process.env.COUNTER_VAT === '1'),
+  __COUNTERS_DECOY__: JSON.stringify(process.env.COUNTERS_DECOY === '1'),
 };
 
 // Vite + Electron + React. Single config drives main, preload, and renderer.
@@ -32,7 +33,7 @@ export default defineConfig({
       main: {
         entry: 'src/main/index.ts',
         vite: {
-          define: vatDefine,
+          define: buildFlagDefine,
           build: {
             outDir: 'dist-electron/main',
             rollupOptions: {
@@ -44,7 +45,7 @@ export default defineConfig({
       preload: {
         input: 'src/main/preload.ts',
         vite: {
-          define: vatDefine,
+          define: buildFlagDefine,
           build: {
             outDir: 'dist-electron/preload',
           },
@@ -54,11 +55,11 @@ export default defineConfig({
     }),
   ],
   server: {
-    port: 5173,
+    port: process.env.COUNTERS_DECOY === '1' ? 5174 : 5173,
     strictPort: true,
   },
   // Applies to the renderer build.
-  define: vatDefine,
+  define: buildFlagDefine,
   build: {
     outDir: 'dist',
     emptyOutDir: true,

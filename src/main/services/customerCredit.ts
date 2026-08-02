@@ -14,15 +14,21 @@ import { logAudit } from '../db/audit.js';
 import { DEFAULT_LOCATION_ID } from '../../shared/lib/constants.js';
 import { assertNotSealed } from './periods.js';
 import { postCustomerPaymentIfActive } from './ledger.js';
+import { maybeOpenCustomerBalanceVarianceCase } from './varianceCases.js';
 
 export interface CustomerOverview {
   id: string;
   displayName: string;
   phone: string;
+  alternatePhone: string | null;
   customerType: string;
+  businessName: string | null;
+  locationDescription: string | null;
   cashOnly: boolean;
   creditLimitPesewas: number;
+  creditTermsDays: number;
   preferredChannel: 'WALK_IN' | 'WHOLESALE' | 'ROUTE' | null;
+  notes: string | null;
   cachedBalancePesewas: number;
   trueBalancePesewas: number;
   /** Cache vs truth difference. 0 means in sync. Non-zero means call reconcile. */
@@ -154,7 +160,11 @@ export function listOpenSalesForCustomer(db: DB, customerId: string, now = new D
 }
 
 /** Recompute customer.current_balance_pesewas from truth and update the cache. */
-export function reconcileCustomerBalance(db: DB, customerId: string): { previousCached: number; newCached: number; driftPesewas: number } {
+export function reconcileCustomerBalance(
+  db: DB,
+  customerId: string,
+  context?: { actorWorkerId: string; deviceId: string; sourceId?: string },
+): { previousCached: number; newCached: number; driftPesewas: number } {
   const trueBalance = computeTrueBalance(db, customerId);
   const cust = db
     .prepare('SELECT current_balance_pesewas FROM customers WHERE id = ?')
@@ -166,6 +176,17 @@ export function reconcileCustomerBalance(db: DB, customerId: string): { previous
     db.prepare(
       'UPDATE customers SET current_balance_pesewas = ?, updated_at = ? WHERE id = ?',
     ).run(trueBalance, new Date().toISOString(), customerId);
+    if (context) {
+      maybeOpenCustomerBalanceVarianceCase(db, {
+        customerId,
+        previousPesewas: previousCached,
+        correctedPesewas: trueBalance,
+        driftPesewas: previousCached - trueBalance,
+        actorWorkerId: context.actorWorkerId,
+        deviceId: context.deviceId,
+        sourceId: context.sourceId,
+      });
+    }
   }
   return {
     previousCached,
@@ -177,20 +198,24 @@ export function reconcileCustomerBalance(db: DB, customerId: string): { previous
 export function getCustomerOverview(db: DB, customerId: string, now = new Date()): CustomerOverview {
   const cust = db
     .prepare(
-      `SELECT id, display_name AS displayName, phone, customer_type AS customerType,
+      `SELECT id, display_name AS displayName, phone, alternate_phone AS alternatePhone,
+              customer_type AS customerType, business_name AS businessName,
+              location_description AS locationDescription,
               credit_limit_pesewas AS creditLimitPesewas,
+              credit_terms_days AS creditTermsDays,
               cash_only AS cashOnly,
               current_balance_pesewas AS cachedBalancePesewas,
               blocked, blocked_reason AS blockedReason,
-              preferred_channel AS preferredChannel
+              preferred_channel AS preferredChannel, notes
          FROM customers WHERE id = ? AND deleted_at IS NULL`,
     )
     .get(customerId) as
-    | { id: string; displayName: string; phone: string; customerType: string;
-        creditLimitPesewas: number; cachedBalancePesewas: number;
+    | { id: string; displayName: string; phone: string; alternatePhone: string | null;
+        customerType: string; businessName: string | null; locationDescription: string | null;
+        creditLimitPesewas: number; creditTermsDays: number; cachedBalancePesewas: number;
         cashOnly: number;
         blocked: number; blockedReason: string | null;
-        preferredChannel: 'WALK_IN' | 'WHOLESALE' | 'ROUTE' | null }
+        preferredChannel: 'WALK_IN' | 'WHOLESALE' | 'ROUTE' | null; notes: string | null }
     | undefined;
   if (!cust) throw new Error(`getCustomerOverview: customer ${customerId} not found`);
 
@@ -232,10 +257,15 @@ export function getCustomerOverview(db: DB, customerId: string, now = new Date()
     id: cust.id,
     displayName: cust.displayName,
     phone: cust.phone,
+    alternatePhone: cust.alternatePhone,
     customerType: cust.customerType,
+    businessName: cust.businessName,
+    locationDescription: cust.locationDescription,
     cashOnly: cust.cashOnly === 1,
     creditLimitPesewas: cust.creditLimitPesewas,
+    creditTermsDays: cust.creditTermsDays,
     preferredChannel: cust.preferredChannel,
+    notes: cust.notes,
     cachedBalancePesewas: cust.cachedBalancePesewas,
     trueBalancePesewas: trueBalance,
     driftPesewas: cust.cachedBalancePesewas - trueBalance,
@@ -421,6 +451,7 @@ export function recordCustomerPayment(
 export interface CustomerWithOutstanding {
   id: string;
   displayName: string;
+  businessName: string | null;
   phone: string;
   customerType: string;
   creditLimitPesewas: number;
@@ -444,13 +475,14 @@ export function listCustomersByOutstanding(
 ): CustomerWithOutstanding[] {
   const rows = db
     .prepare(
-      `SELECT id, display_name AS displayName, phone, customer_type AS customerType,
+      `SELECT id, display_name AS displayName, business_name AS businessName,
+              phone, customer_type AS customerType,
               credit_limit_pesewas AS creditLimitPesewas,
               current_balance_pesewas AS cachedBalancePesewas,
               blocked
          FROM customers WHERE deleted_at IS NULL`,
     )
-    .all() as Array<{ id: string; displayName: string; phone: string; customerType: string;
+    .all() as Array<{ id: string; displayName: string; businessName: string | null; phone: string; customerType: string;
                        creditLimitPesewas: number; cachedBalancePesewas: number; blocked: number }>;
 
   const enriched: CustomerWithOutstanding[] = rows.map((r) => {
@@ -460,6 +492,7 @@ export function listCustomersByOutstanding(
     return {
       id: r.id,
       displayName: r.displayName,
+      businessName: r.businessName,
       phone: r.phone,
       customerType: r.customerType,
       creditLimitPesewas: r.creditLimitPesewas,
