@@ -29,9 +29,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Two variants per OS from the SAME commit: the no-VAT build (default
-        # dist:* scripts) and the VAT build (dist:*:vat, COUNTER_VAT=1 baked in
-        # with a distinct appId/name). Six jobs total.
+        # Two production variants per OS from the SAME commit, plus the
+        # isolated Windows Counters camouflage build. Seven jobs total.
         include:
           # --- no-VAT (default) ---
           - os: windows-latest
@@ -59,6 +58,11 @@ jobs:
             dist_script: dist:linux:vat
             artifact_glob: 'release/*/Counter-VAT-*.AppImage'
             artifact_name: counter-linux-vat
+          # --- isolated camouflage application ---
+          - os: windows-latest
+            dist_script: dist:win:counters
+            artifact_glob: 'release/*/Counters-Setup-*.exe'
+            artifact_name: counters-windows
 
     steps:
       - name: Checkout
@@ -196,6 +200,7 @@ jobs:
             dist/**/Counter-*.dmg
             dist/**/Counter-*.AppImage
             dist/**/Counter-VAT-Setup-*.exe
+            dist/**/Counters-Setup-*.exe
           body: |
             ## Counter ${{ github.ref_name }}
 
@@ -204,6 +209,7 @@ jobs:
             ### Installation
 
             - **Windows**: download `Counter-Setup-*-x64.exe`, run it. Windows SmartScreen may warn that the publisher is unverified — click "More info" → "Run anyway" (the build is unsigned for v0.x).
+            - **Windows camouflage app**: download `Counters-Setup-*-x64.exe`. It installs beside Counter and uses an isolated synthetic database.
             - **macOS**: download the `.dmg`, drag Counter to Applications. Right-click → Open the first time to bypass Gatekeeper (unsigned).
             - **Linux**: download `Counter-*.AppImage`, `chmod +x`, run.
 

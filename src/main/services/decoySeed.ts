@@ -17,7 +17,9 @@ import { computeAndCloseShift, openShift, submitClosingCount } from './shifts.js
 import { completeSaleCore, type CompleteSaleLine } from './sales.js';
 import { generateDailySummary } from './dailySummaries.js';
 
-const SEED_VERSION = '6';
+// Bump whenever the generated history contract changes. Version 7 rebuilds
+// existing decoy databases so legacy Saturday/Sunday activity is removed.
+const SEED_VERSION = '7';
 const CASHIER_ID = 'w-counters-cashier';
 const DAILY_SALES_CAP_PESEWAS = 500_000;
 const DAILY_TARGETS_PESEWAS = [285_000, 340_000, 245_000, 395_000, 310_000, 430_000, 265_000];
@@ -143,6 +145,10 @@ export function ensureCountersDecoySeed(db: DB, deviceId: string, countersUserDa
 }
 
 export function refreshCountersDecoyData(db: DB, deviceId: string): void {
+  // The camouflage shop presents itself as a weekday-only operation. Do not
+  // create shifts, sales, or summaries on Saturday/Sunday when the timer runs.
+  if (!isWeekday(new Date())) return;
+
   const ownerId = ensureWorkers(db, deviceId);
   const products = loadSeededProductsFromDb(db);
   if (products.length === 0) return;
@@ -273,6 +279,8 @@ function ensureSales(
   if (saleProducts.length === 0) return;
 
   for (let day = 6; day >= 0; day--) {
+    if (!isWeekday(daysAgoDate(day))) continue;
+
     const openedAt = isoAtDaysAgo(day, 8, 10 + (day % 4) * 5);
     const closedAt = isoAtDaysAgo(day, 18, 5 + (day % 5) * 7);
     const shiftId = openShift(db, {
@@ -426,7 +434,8 @@ function backdateSale(db: DB, saleId: string, daysAgo: number, hour: number, min
 }
 
 function backdateOpeningStock(db: DB): void {
-  const iso = isoAtDaysAgo(7, 7, 30);
+  // Opening inventory is also an operational record, so keep it off weekends.
+  const iso = isoAtDate(previousWeekday(daysAgoDate(7)), 7, 30);
   db.prepare(
     `UPDATE stock_movements
         SET created_at = ?, updated_at = ?
@@ -461,10 +470,30 @@ function backdateShiftClose(db: DB, shiftId: string, closedAt: string): void {
 }
 
 function isoAtDaysAgo(daysAgo: number, hour: number, minute: number): string {
+  return isoAtDate(daysAgoDate(daysAgo), hour, minute);
+}
+
+function daysAgoDate(daysAgo: number): Date {
   const d = new Date();
   d.setDate(d.getDate() - daysAgo);
+  return d;
+}
+
+function isoAtDate(date: Date, hour: number, minute: number): string {
+  const d = new Date(date);
   d.setHours(hour, minute, 0, 0);
   return d.toISOString();
+}
+
+function isWeekday(date: Date): boolean {
+  const day = date.getDay();
+  return day !== 0 && day !== 6;
+}
+
+function previousWeekday(date: Date): Date {
+  const d = new Date(date);
+  while (!isWeekday(d)) d.setDate(d.getDate() - 1);
+  return d;
 }
 
 function salePatternForCatalog(productCount: number, day: number, idx: number): Array<{ productIndex: number; quantity: number }> {
@@ -519,14 +548,17 @@ function dailySalesCount(db: DB, date: string): number {
 }
 
 function shouldRebuildRollingWeek(db: DB): boolean {
-  const today = localDateString(new Date());
+  // On weekends Friday remains the latest expected business date. This avoids
+  // repeatedly rebuilding the decoy DB merely because it was opened Saturday
+  // or Sunday, while Monday still rolls the fixture forward normally.
+  const latestExpectedDate = localDateString(previousWeekday(new Date()));
   const row = db.prepare(
     `SELECT COUNT(*) AS summaryCount,
             MAX(summary_date) AS latestSummaryDate
        FROM daily_summaries`,
   ).get() as { summaryCount: number; latestSummaryDate: string | null };
   if (row.summaryCount === 0) return true;
-  return row.latestSummaryDate !== today;
+  return row.latestSummaryDate !== latestExpectedDate;
 }
 
 function localDateString(d: Date): string {
@@ -673,6 +705,8 @@ function shiftTotals(db: DB, shiftId: string): { totalSalesPesewas: number; expe
 
 function ensureDailySummaries(db: DB, ownerId: string, deviceId: string): void {
   for (let day = 6; day >= 0; day--) {
+    if (!isWeekday(daysAgoDate(day))) continue;
+
     generateDailySummary(db, {
       date: isoAtDaysAgo(day, 12, 0).slice(0, 10),
       locationId: DEFAULT_LOCATION_ID,
