@@ -14,6 +14,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { logAudit } from '../db/audit.js';
 import { insertStockMovement } from './stockMovements.js';
 import { assertNotSealed } from './periods.js';
+import { valueStockMovementAndPostLossIfActive } from './ledger.js';
 
 export interface ConsumptionUsage {
   workerId: string;
@@ -136,6 +137,11 @@ export function recordConsumption(
         unitCostPesewas: product.cost_price_pesewas,
         deviceId: input.deviceId,
       });
+      valueStockMovementAndPostLossIfActive(db, {
+        stockMovementId: sm.id,
+        actorWorkerId: input.workerId,
+        deviceId: input.deviceId,
+      });
       const id = `wc-${uuidv4()}`;
       db.prepare(
         `INSERT INTO worker_consumption_log (
@@ -159,6 +165,11 @@ export function recordConsumption(
         workerId: input.workerId,
         unitCostPesewas: product.cost_price_pesewas,
         supervisorApprovalId: input.supervisorApprovalId ?? null,
+        deviceId: input.deviceId,
+      });
+      valueStockMovementAndPostLossIfActive(db, {
+        stockMovementId: sm.id,
+        actorWorkerId: input.workerId,
         deviceId: input.deviceId,
       });
       const id = `wc-${uuidv4()}`;

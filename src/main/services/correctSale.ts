@@ -88,6 +88,10 @@ export async function correctSale(db: DB, input: CorrectSaleInput): Promise<Corr
   if (!orig) throw new Error(`correctSale: sale ${input.originalSaleId} not found`);
   if (orig.voided === 1) throw new Error('correctSale: sale is already voided');
   if (orig.supersededBy) throw new Error('correctSale: sale was already corrected');
+  const pendingVoid = db.prepare(
+    "SELECT 1 FROM sale_void_requests WHERE sale_id = ? AND status = 'PENDING' LIMIT 1",
+  ).get(orig.id);
+  if (pendingVoid) throw new Error('correctSale: sale has a pending void request; resolve or withdraw it first');
 
   // Refuse if the sale has been (partly) returned — voiding it would
   // double-restore stock. Those use the existing void + re-ring path.

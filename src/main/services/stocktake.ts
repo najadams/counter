@@ -11,6 +11,7 @@ import { logAudit } from '../db/audit.js';
 import { insertStockMovement, unitsOnHand } from './stockMovements.js';
 import { getUnit } from './productUnits.js';
 import { assertNotSealed } from './periods.js';
+import { valueStockMovementAndPostLossIfActive } from './ledger.js';
 import { verifyPin } from './workers.js';
 
 const SUPERVISOR_ROLES = new Set(['SUPERVISOR', 'OWNER', 'FOUNDER']);
@@ -316,6 +317,12 @@ export function completeStocktake(
         unitCostPesewas: line.unit_cost_pesewas,
         supervisorApprovalId: input.supervisorWorkerId,
         notes: input.notes ?? null,
+        deviceId: input.deviceId,
+      });
+      valueStockMovementAndPostLossIfActive(db, {
+        stockMovementId: sm.id,
+        exactInboundValuePesewas: isLoss ? undefined : Math.abs(line.variance_value_pesewas ?? 0),
+        actorWorkerId: input.workerId,
         deviceId: input.deviceId,
       });
       db.prepare(

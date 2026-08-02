@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { counter } from '../../lib/ipc';
 import { formatMoneyWithCurrency } from '../../../shared/lib/money';
 import type { ReportsBalanceSheetResponse, ReportsFinancialStatementLine } from '../../../shared/types/ipc';
@@ -10,21 +10,18 @@ function today(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-export function BalanceSheetTab() {
+export function BalanceSheetTab({ reportAccessToken }: { reportAccessToken: string }) {
   const [asOfDate, setAsOfDate] = useState(today);
-  const [pin, setPin] = useState('');
   const [data, setData] = useState<ReportsBalanceSheetResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
-    if (pin.length < 4) return;
     setLoading(true);
-    const r = await counter.reportsBalanceSheet({ asOfDate, pin });
+    const r = await counter.reportsBalanceSheet({ asOfDate, reportAccessToken });
     setLoading(false);
     if (!r.success) {
       setData(null);
-      setPin('');
       setError(r.error);
       return;
     }
@@ -35,11 +32,14 @@ export function BalanceSheetTab() {
   function changeDate(value: string) {
     setAsOfDate(value);
     setData(null);
-    setPin('');
   }
 
-  function exportCsv() {
+  useEffect(() => { void load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [asOfDate, reportAccessToken]);
+
+  async function exportCsv() {
     if (!data) return;
+    const audited = await counter.reportsAuditAction({ reportAccessToken, action: 'EXPORT', report: 'BALANCE_SHEET' });
+    if (!audited.success) { setError(audited.error); return; }
     const rows = [
       ...data.assets.lines.map((line) => ({ section: 'Assets', ...line })),
       ...data.liabilities.lines.map((line) => ({ section: 'Liabilities', ...line })),
@@ -65,24 +65,12 @@ export function BalanceSheetTab() {
           <input type="date" value={asOfDate} onChange={(e) => changeDate(e.target.value)}
             className="bg-bg-input border border-border-strong px-3 py-2 font-mono" />
         </label>
-        <label>
-          <span className="block text-text-secondary text-xs uppercase tracking-wider mb-1">Your PIN</span>
-          <input
-            type="password"
-            inputMode="numeric"
-            value={pin}
-            maxLength={6}
-            onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
-            onKeyDown={(e) => { if (e.key === 'Enter') void load(); }}
-            className="bg-bg-input border border-border-strong px-3 py-2 font-mono tnum tracking-[0.35em] w-36"
-          />
-        </label>
-        <button onClick={() => void load()} disabled={loading || pin.length < 4}
+        <button onClick={() => void load()} disabled={loading}
           className="px-4 py-2 border border-border hover:bg-bg-elevated text-sm disabled:opacity-40">
-          {loading ? 'Loading...' : data ? 'Refresh' : 'Unlock'}
+          {loading ? 'Loading...' : 'Refresh'}
         </button>
         {data && (
-          <button onClick={exportCsv} className="px-4 py-2 border border-border hover:bg-bg-elevated text-sm">
+          <button onClick={() => void exportCsv()} className="px-4 py-2 border border-border hover:bg-bg-elevated text-sm">
             Export CSV
           </button>
         )}
@@ -90,11 +78,7 @@ export function BalanceSheetTab() {
 
       {error && <FeedbackBanner>{error}</FeedbackBanner>}
 
-      {!data && !loading && (
-        <div className="bg-bg-surface border border-border p-6 text-text-tertiary text-sm">
-          Re-enter your own PIN to view the balance sheet.
-        </div>
-      )}
+      {!data && !loading && !error && <div className="panel p-6 text-text-tertiary text-sm">No position data is available.</div>}
 
       {data && (
         <>

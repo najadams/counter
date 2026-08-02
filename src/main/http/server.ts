@@ -19,6 +19,7 @@ import path from 'node:path';
 import log from 'electron-log/main';
 import type { Database as DB } from 'better-sqlite3';
 import { IPC_CHANNELS, type IpcResponse, type AccessInfoResponse } from '../../shared/types/ipc.js';
+import { revokeReportAccessForSession } from '../services/reportAccess.js';
 import { verifyPin } from '../services/workers.js';
 import {
   mintToken, resolveToken, revokeToken, requestSession, type Session,
@@ -187,6 +188,8 @@ async function dispatchApi(
     return;
   }
   if (channel === IPC_CHANNELS.WORKER_LOGOUT) {
+    const active = resolveToken(token);
+    if (active) revokeReportAccessForSession(db, active.workerId, deviceId);
     revokeToken(token);
     sendJson(res, 200, { success: true, data: { ok: true } });
     return;

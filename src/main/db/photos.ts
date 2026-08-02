@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { v4 as uuidv4 } from 'uuid';
 
-export type PhotoKind = 'breakage' | 'void' | 'stocktake' | 'misc';
+export type PhotoKind = 'breakage' | 'void' | 'stocktake' | 'paper_receipts' | 'misc';
 
 export interface SavePhotoInput {
   /** raw bytes (e.g. JPEG, PNG) */

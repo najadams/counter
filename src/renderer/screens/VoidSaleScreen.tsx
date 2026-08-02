@@ -1,28 +1,33 @@
-// VoidSaleScreen: list recent sales, click Void → SupervisorPinModal → confirm.
+// Recent sales and the asynchronous same-day void-request workflow.
 
 import { useEffect, useState } from 'react';
 import { useCart } from '../store/cart';
 import { counter } from '../lib/ipc';
 import { AppHeader } from '../components/AppHeader';
-import { SupervisorPinModal } from '../components/SupervisorPinModal';
 import { CorrectSaleModal } from '../components/CorrectSaleModal';
 import { ReceiptPrintModal } from '../components/ReceiptPrintModal';
 import type { SaleReceipt } from '../../shared/lib/receipt';
 import { formatMoney, formatMoneyWithCurrency } from '../../shared/lib/money';
 import { FeedbackBanner } from '../components/FeedbackBanner';
+import { useSession } from '../store/session';
 
 interface RecentSale {
   id: string; createdAt: string; channel: string; totalPesewas: number;
   paymentMethod: string; workerName: string; customerName: string | null;
   voided: boolean; lineCount: number;
+  voidRequest: {
+    id: string; status: 'PENDING' | 'APPROVED' | 'DECLINED' | 'WITHDRAWN';
+    reason: string; requestedAt: string; requesterId: string; requesterName: string;
+    reviewedAt: string | null; reviewerName: string | null; reviewNote: string | null;
+  } | null;
 }
 
 export default function VoidSaleScreen({ onExit, onDuplicate }: { onExit: () => void; onDuplicate?: () => void }) {
   const loadLines = useCart((s) => s.loadLines);
+  const workerId = useSession((s) => s.workerId);
   const [sales, setSales] = useState<RecentSale[]>([]);
   const [selected, setSelected] = useState<RecentSale | null>(null);
   const [reason, setReason] = useState('');
-  const [askingSupervisor, setAskingSupervisor] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [receiptDetail, setReceiptDetail] = useState<{
@@ -38,11 +43,14 @@ export default function VoidSaleScreen({ onExit, onDuplicate }: { onExit: () => 
   useEffect(() => {
     void refresh();
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'F9' || e.key === 'Escape') { e.preventDefault(); if (askingSupervisor) setAskingSupervisor(false); else onExit(); }
+      if (e.key === 'F9' || e.key === 'Escape') { e.preventDefault(); if (selected) setSelected(null); else onExit(); }
     }
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [askingSupervisor, onExit]);
+    const poll = window.setInterval(() => void refresh(), 10_000);
+    const onFocus = () => void refresh();
+    window.addEventListener('focus', onFocus);
+    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('focus', onFocus); window.clearInterval(poll); };
+  }, [selected, onExit]);
 
   async function reprint(saleId: string) {
     // Open the on-screen receipt preview; the user prints via the OS dialog
@@ -96,15 +104,22 @@ export default function VoidSaleScreen({ onExit, onDuplicate }: { onExit: () => 
     onDuplicate?.();
   }
 
-  async function approve(supervisorWorkerId: string, supervisorPin: string) {
+  async function submitRequest() {
     if (!selected) return;
     setError(null);
-    const res = await counter.voidSale(selected.id, reason.trim(), supervisorWorkerId, supervisorPin);
-    setAskingSupervisor(false);
+    const res = await counter.saleVoidRequestCreate({ saleId: selected.id, reason: reason.trim() });
     if (!res.success) { setError(res.error); return; }
-    setInfo(`Voided ${selected.id.slice(-8)}. Reversed ${res.data.reversalMovementCount} stock movement(s).`);
+    setInfo(`Void request submitted for receipt #${selected.id.slice(-8)}. The sale remains valid until a senior worker approves it.`);
     setSelected(null);
     setReason('');
+    await refresh();
+  }
+
+  async function withdraw(requestId: string) {
+    setError(null);
+    const result = await counter.saleVoidRequestWithdraw(requestId);
+    if (!result.success) { setError(result.error); return; }
+    setInfo(`Void request for receipt #${result.data.saleId.slice(-8)} was withdrawn. The sale remains valid.`);
     await refresh();
   }
 
@@ -130,10 +145,11 @@ export default function VoidSaleScreen({ onExit, onDuplicate }: { onExit: () => 
             </thead>
             <tbody className="text-sm">
               {sales.map((s) => (
-                <tr key={s.id} className={`border-t border-border ${s.voided ? 'text-text-tertiary line-through' : ''}`}>
+                <tr key={s.id} className={`border-t border-border ${s.voided ? 'text-text-tertiary' : ''} ${s.voidRequest?.status === 'PENDING' ? 'bg-warning/10' : ''}`}>
                   <td className="px-4 py-3 font-mono tnum">
                     {new Date(s.createdAt).toLocaleTimeString()}
                     <span className="text-text-tertiary ml-2">#{s.id.slice(-6)}</span>
+                    {s.voidRequest && <div className="mt-1"><span className={`status-badge status-${s.voidRequest.status.toLowerCase()}`}>{s.voidRequest.status.toLowerCase()}</span></div>}
                   </td>
                   <td className="px-4 py-3">{s.workerName}</td>
                   <td className="px-4 py-3">{s.channel} · {s.paymentMethod}{s.customerName ? ` · ${s.customerName}` : ''}</td>
@@ -152,7 +168,14 @@ export default function VoidSaleScreen({ onExit, onDuplicate }: { onExit: () => 
                         Duplicate
                       </button>
                       {s.voided
-                        ? <span className="text-danger text-xs self-center">VOIDED</span>
+                        ? <span className="status-badge status-voided">Voided</span>
+                        : s.voidRequest?.status === 'PENDING'
+                        ? <>
+                            <span className="status-badge status-pending">Pending approval</span>
+                            {s.voidRequest.requesterId === workerId && (
+                              <button onClick={() => void withdraw(s.voidRequest!.id)} className="btn btn-quiet text-xs">Withdraw</button>
+                            )}
+                          </>
                         : <>
                             <button
                               onClick={() => { setCorrecting(s); setError(null); setInfo(null); }}
@@ -162,13 +185,18 @@ export default function VoidSaleScreen({ onExit, onDuplicate }: { onExit: () => 
                             <button
                               onClick={() => { setSelected(s); setReason(''); setError(null); setInfo(null); }}
                               className="px-3 py-1 border border-danger text-danger hover:bg-danger hover:text-ink text-xs">
-                              Void
+                              Submit void request
                             </button>
                           </>}
                     </div>
                   </td>
                 </tr>
-              ))}
+              )).flatMap((row, index) => {
+                const sale = sales[index];
+                return sale?.voidRequest && sale.voidRequest.status !== 'PENDING'
+                  ? [row, <tr key={`${sale.id}-decision`} className="bg-bg-elevated/35 border-t border-border-subtle"><td colSpan={5} className="px-4 py-2 text-xs text-text-secondary">{sale.voidRequest.status === 'WITHDRAWN' ? `Withdrawn by ${sale.voidRequest.requesterName}.` : `${sale.voidRequest.status === 'APPROVED' ? 'Approved' : 'Declined'} by ${sale.voidRequest.reviewerName ?? 'senior worker'}${sale.voidRequest.reviewedAt ? ` on ${new Date(sale.voidRequest.reviewedAt).toLocaleString()}` : ''}.`}{sale.voidRequest.reviewNote ? ` ${sale.voidRequest.reviewNote}` : ''}</td></tr>]
+                  : [row];
+              })}
               {sales.length === 0 && (
                 <tr><td colSpan={5} className="px-4 py-6 text-text-tertiary text-center">No sales yet.</td></tr>
               )}
@@ -176,9 +204,12 @@ export default function VoidSaleScreen({ onExit, onDuplicate }: { onExit: () => 
           </table>
         </div>
 
-        {selected && !askingSupervisor && (
+        {selected && (
           <div className="bg-bg-surface border border-border p-6 flex flex-col gap-4">
-            <h3 className="text-text-secondary uppercase tracking-wider text-xs">Void sale {selected.id.slice(-8)}</h3>
+            <div>
+              <div className="eyebrow">Same-day review</div>
+              <h3 className="text-lg font-semibold mt-1">Request void for receipt #{selected.id.slice(-8)}</h3>
+            </div>
             <div className="text-text-tertiary text-sm">
               {selected.workerName} · {selected.channel} · {selected.paymentMethod} ·
               <span className="ml-2 font-mono tnum text-text-primary">{formatMoneyWithCurrency(selected.totalPesewas)}</span>
@@ -193,21 +224,14 @@ export default function VoidSaleScreen({ onExit, onDuplicate }: { onExit: () => 
             <div className="flex gap-3">
               <button onClick={() => setSelected(null)} className="px-5 py-3 border border-border hover:bg-bg-elevated">Cancel</button>
               <button
-                onClick={() => setAskingSupervisor(true)}
-                disabled={reason.trim().length < 3}
-                className="bg-danger text-ink px-5 py-3 font-semibold hover:opacity-90 disabled:opacity-40">
-                Get supervisor approval
+                onClick={() => void submitRequest()}
+                disabled={reason.trim().length < 3 || reason.trim().length > 200}
+                className="btn btn-primary disabled:opacity-40">
+                Submit void request
               </button>
             </div>
+            <p className="text-xs text-warning">Do not refund cash or return stock yet. The original sale remains valid until approval.</p>
           </div>
-        )}
-
-        {askingSupervisor && (
-          <SupervisorPinModal
-            title="Approve void"
-            onCancel={() => setAskingSupervisor(false)}
-            onApprove={approve}
-          />
         )}
       </main>
 

@@ -16,6 +16,16 @@ export const SYNCED_EVENT_TABLES = [
   'petty_cash_expenses', 'container_movements', 'customer_returns', 'customer_return_lines',
   'owner_drawings', 'drawing_policies', 'price_history', 'tax_payments',
   'route_runs', 'route_stops', 'daily_summaries',
+  // Owner Management Pack: stable per-shop accounting codes plus immutable
+  // journals and the structured records that make them explainable.
+  'ledger_accounts', 'financial_accounts', 'payment_account_mappings',
+  'journal_entries', 'journal_lines', 'financial_cutovers',
+  'account_transfers', 'account_reconciliations', 'inventory_valuation_movements',
+  'business_expenses', 'expense_payments', 'liability_agreements',
+  'obligations', 'obligation_allocations', 'fixed_assets',
+  'risk_thresholds', 'risk_assumptions', 'saved_scenarios',
+  'management_ledger_settings',
+  'sale_void_requests',
   // Phase 4: WhatsApp order accept/reject/fulfil. Unlike every other table in
   // this list, pending_orders rows are MUTATED in place (CONFIRMED ->
   // FULFILLED|REJECTED|CANCELLED), not append-only — migration 0039 captures
@@ -30,7 +40,14 @@ export type SyncedEventTable = (typeof SYNCED_EVENT_TABLES)[number];
  *  unlike every other event table here which is genuinely append-only and
  *  only ever needs INSERT capture. Single source of truth for the "no drift"
  *  trigger-count test in tests/syncOutbox.test.ts. */
-export const MUTABLE_EVENT_TABLES: readonly SyncedEventTable[] = ['pending_orders', 'supplier_invoices', 'drawing_policies'];
+export const MUTABLE_EVENT_TABLES: readonly SyncedEventTable[] = [
+  'sales', 'sale_void_requests', 'pending_orders', 'supplier_invoices', 'drawing_policies',
+  'ledger_accounts', 'financial_accounts', 'payment_account_mappings',
+  'journal_entries', 'financial_cutovers', 'business_expenses',
+  'liability_agreements', 'obligations', 'fixed_assets',
+  'risk_thresholds', 'risk_assumptions', 'saved_scenarios',
+  'management_ledger_settings',
+];
 
 export interface PushRow {
   seq: number;

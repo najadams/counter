@@ -53,6 +53,9 @@ export interface CartState {
    *  fulfilment (pendingOrderMarkFulfilled), then it's cleared. Null for an
    *  ordinary cart or a duplicated-from-past-sale cart. */
   fulfillingOrderId: string | null;
+  /** Set when a reviewed paper receipt is opened at the till. SaleScreen uses
+   *  it after completeSale succeeds to mark that receipt as POSTED. */
+  sourcePaperReceiptId: string | null;
 
   setChannel: (channel: SaleChannel) => void;
   addLine: (line: Partial<CartLine> & { productId: string; sku: string; name: string; unitPricePesewas: number; unitsOnHand: number; unitId?: string | null; unitName?: string; factor?: number }) => void;
@@ -76,6 +79,7 @@ export interface CartState {
   repriceLines: (entries: Array<{ productId: string; unitId: string | null; unitPricePesewas: number }>) => void;
   loadLines: (lines: CartLine[], channel?: SaleChannel, customer?: CartCustomer | null) => void;
   setFulfillingOrderId: (orderId: string | null) => void;
+  setSourcePaperReceiptId: (draftId: string | null) => void;
   clear: () => void;
 
   subtotalPesewas: () => number;
@@ -95,6 +99,7 @@ export const useCart = create<CartState>((set, get) => ({
   discountPesewas: 0,
   discountReason: '',
   fulfillingOrderId: null,
+  sourcePaperReceiptId: null,
 
   setChannel: (channel) => set({ channel }),
 
@@ -211,14 +216,16 @@ export const useCart = create<CartState>((set, get) => ({
     // itself an accepted WhatsApp order — PendingOrdersScreen sets this
     // explicitly, right after calling loadLines, as a deliberate follow-up.
     fulfillingOrderId: null,
+    sourcePaperReceiptId: null,
   })),
 
   setFulfillingOrderId: (orderId) => set({ fulfillingOrderId: orderId }),
+  setSourcePaperReceiptId: (draftId) => set({ sourcePaperReceiptId: draftId }),
 
   clear: () => set({
     lines: [], paymentMethod: null, paymentReference: '',
     cashGivenPesewas: null, customer: null,
-    discountPesewas: 0, discountReason: '', fulfillingOrderId: null,
+    discountPesewas: 0, discountReason: '', fulfillingOrderId: null, sourcePaperReceiptId: null,
   }),
 
   subtotalPesewas: () =>

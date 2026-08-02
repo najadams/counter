@@ -9,7 +9,7 @@ import { buildCsvFilename, exportRowsAsCsv, pesewasToCsvNumber } from '../../lib
 import type { ReportsSalesResponse, ReportGroupBy } from '../../../shared/types/ipc';
 import { FeedbackBanner } from '../../components/FeedbackBanner';
 
-export function SalesTab() {
+export function SalesTab({ reportAccessToken }: { reportAccessToken: string }) {
   const [range, setRange] = useState<DateRange>(defaultDateRange());
   const [groupBy, setGroupBy] = useState<ReportGroupBy>('day');
   const [data, setData] = useState<ReportsSalesResponse | null>(null);
@@ -19,13 +19,13 @@ export function SalesTab() {
   async function load() {
     setLoading(true);
     const r = await counter.reportsSales({
-      fromDate: range.fromDate, toDate: range.toDate, groupBy,
+      fromDate: range.fromDate, toDate: range.toDate, groupBy, reportAccessToken,
     });
     setLoading(false);
     if (!r.success) { setError(r.error); return; }
     setData(r.data); setError(null);
   }
-  useEffect(() => { void load(); /* eslint-disable-next-line */ }, [range.fromDate, range.toDate, groupBy]);
+  useEffect(() => { void load(); /* eslint-disable-next-line */ }, [range.fromDate, range.toDate, groupBy, reportAccessToken]);
 
   const peakBucket = useMemo(
     () => Math.max(0, ...(data?.buckets ?? []).map((b) => b.revenuePesewas)),

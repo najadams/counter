@@ -9,6 +9,7 @@ import { logAudit } from '../db/audit.js';
 import { insertStockMovement } from './stockMovements.js';
 import { savePhoto, type PhotoKind } from '../db/photos.js';
 import { assertNotSealed } from './periods.js';
+import { valueStockMovementAndPostLossIfActive } from './ledger.js';
 
 export type BreakageCause =
   | 'DROPPED' | 'CUSTOMER_ACCIDENT' | 'TRANSPORT' | 'EXPIRED_LEAK' | 'UNKNOWN' | 'OTHER';
@@ -99,6 +100,11 @@ export function reportBreakage(
       deviceId: input.deviceId,
     });
     stockMovementId = sm.id;
+    valueStockMovementAndPostLossIfActive(db, {
+      stockMovementId: sm.id,
+      actorWorkerId: input.workerId,
+      deviceId: input.deviceId,
+    });
 
     db.prepare(
       `INSERT INTO breakage_log (

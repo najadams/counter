@@ -17,6 +17,7 @@ import type { Database } from 'better-sqlite3';
 import { verifyPin } from './workers.js';
 import { reconcileCustomerBalance } from './customerCredit.js';
 import { assertNotSealed } from './periods.js';
+import { postCustomerReturnIfActive } from './ledger.js';
 
 type DB = Database;
 
@@ -78,6 +79,15 @@ export function recordCustomerReturn(
   if (input.refundMethod === 'STORE') {
     // Until the store-credit ledger lands, treat STORE as CREDIT explicitly.
     throw new Error('recordCustomerReturn: STORE refund method not yet supported; use CREDIT or CASH');
+  }
+
+  if (input.originalSaleId) {
+    const pendingVoid = db.prepare(
+      "SELECT 1 FROM sale_void_requests WHERE sale_id = ? AND status = 'PENDING' LIMIT 1",
+    ).get(input.originalSaleId);
+    if (pendingVoid) {
+      throw new Error('recordCustomerReturn: sale has a pending void request; resolve or withdraw it first');
+    }
   }
 
   // Supervisor PIN check.
@@ -301,6 +311,8 @@ export function recordCustomerReturn(
       );
       negativeCashDropId = dropId;
     }
+
+    postCustomerReturnIfActive(db, returnId, input.workerId, input.deviceId);
 
     return {
       returnId,

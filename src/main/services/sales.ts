@@ -13,6 +13,11 @@ import { bestTierFor } from './pricingTiers.js';
 import { findBestOverride } from './customerPriceOverrides.js';
 import { defaultSaleUnit, getUnit, priceForUnit } from './productUnits.js';
 import { assertNotSealed } from './periods.js';
+import {
+  isLedgerPostingEnabled,
+  postSaleIfActive,
+  recordInventoryValuationMovement,
+} from './ledger.js';
 import { verifyPin } from './workers.js';
 import {
   DISCOUNT_ABS_THRESHOLD_PESEWAS,
@@ -678,9 +683,10 @@ export function completeSaleCore(
         `INSERT INTO sale_lines (
           id, sale_id, product_id, quantity,
           unit_price_pesewas, unit_cost_pesewas, list_price_pesewas,
-          line_total_pesewas, margin_pesewas, applied_tier_id, applied_unit_id,
+          line_total_pesewas, margin_pesewas, line_cogs_pesewas,
+          applied_tier_id, applied_unit_id,
           created_by, updated_by, device_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         lineId,
         saleId,
@@ -693,6 +699,7 @@ export function completeSaleCore(
         line.listPricePesewas,
         lineTotal,
         margin,
+        totalCogsForLine,
         tierId,
         line.unitId || null,
         input.workerId,
@@ -719,6 +726,20 @@ export function completeSaleCore(
           .run(line.unitId, new Date().toISOString(), sm.id);
       }
       if (!sm.id) throw new Error(`completeSale: stock movement insert returned no id`);
+      if (isLedgerPostingEnabled(db, input.locationId)) {
+        const valuation = recordInventoryValuationMovement(db, {
+          stockMovementId: sm.id,
+          actorWorkerId: input.workerId,
+          deviceId: input.deviceId,
+        });
+        const exactCogs = Math.abs(valuation.valueDeltaPesewas);
+        db.prepare(
+          `UPDATE sale_lines
+              SET line_cogs_pesewas = ?, margin_pesewas = ?,
+                  updated_at = ?, updated_by = ?
+            WHERE id = ?`,
+        ).run(exactCogs, lineTotal - exactCogs, now, input.workerId, lineId);
+      }
     }
 
     // Bump customer balance by the CREDIT-tender portion only, not the
@@ -769,6 +790,8 @@ export function completeSaleCore(
       },
       deviceId: input.deviceId,
     });
+
+    postSaleIfActive(db, saleId, input.workerId, input.deviceId);
   });
 
   tx();

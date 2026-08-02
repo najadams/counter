@@ -17,7 +17,6 @@ import { DEFAULT_LOCATION_ID } from '../../shared/lib/constants.js';
 import { extractInclusiveVat, VAT_ENABLED } from '../../shared/lib/vat.js';
 import { listTaxPaymentsForPeriod, type TaxPaymentRow } from './taxPayments.js';
 import { creditPrincipalExpr } from './customerCredit.js';
-import { verifyPin } from './workers.js';
 import { logAudit } from '../db/audit.js';
 
 const ALLOWED_ROLES = new Set(['OWNER', 'FOUNDER', 'SUPERVISOR']);
@@ -1938,7 +1937,6 @@ export function getInventoryReport(db: DB, input: InventoryReportInput): Invento
 
 export interface FinancialStatementAccessInput {
   actorWorkerId: string;
-  pin: string;
   deviceId: string;
 }
 
@@ -2017,13 +2015,11 @@ function requireFinancialStatementAccess(
   period: Record<string, string>,
 ): void {
   requireReportsActor(db, input.actorWorkerId);
-  const auth = verifyPin(db, input.actorWorkerId, input.pin, input.deviceId);
-  if (!auth.ok) {
-    throw new Error(
-      auth.reason === 'LOCKED_OUT'
-        ? `Financial statement locked out until ${auth.lockedUntil}.`
-        : `Financial statement PIN check failed (${auth.reason}).`,
-    );
+  const actor = db.prepare(
+    'SELECT role FROM workers WHERE id = ?',
+  ).get(input.actorWorkerId) as { role: string };
+  if (actor.role !== 'OWNER' && actor.role !== 'FOUNDER') {
+    throw new Error('Financial statements require OWNER or FOUNDER.');
   }
   logAudit(db, {
     workerId: input.actorWorkerId,

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { counter } from '../../lib/ipc';
 import { formatMoneyWithCurrency } from '../../../shared/lib/money';
 import type { ReportsCashflowResponse, ReportsFinancialStatementLine } from '../../../shared/types/ipc';
@@ -6,9 +6,8 @@ import { DateRangePicker, defaultDateRange, type DateRange } from '../../compone
 import { FeedbackBanner } from '../../components/FeedbackBanner';
 import { buildCsvFilename, exportRowsAsCsv, pesewasToCsvNumber } from '../../lib/csv';
 
-export function CashflowTab() {
+export function CashflowTab({ reportAccessToken }: { reportAccessToken: string }) {
   const [range, setRangeState] = useState<DateRange>(defaultDateRange());
-  const [pin, setPin] = useState('');
   const [data, setData] = useState<ReportsCashflowResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -16,17 +15,14 @@ export function CashflowTab() {
   function setRange(next: DateRange) {
     setRangeState(next);
     setData(null);
-    setPin('');
   }
 
   async function load() {
-    if (pin.length < 4) return;
     setLoading(true);
-    const r = await counter.reportsCashflow({ fromDate: range.fromDate, toDate: range.toDate, pin });
+    const r = await counter.reportsCashflow({ fromDate: range.fromDate, toDate: range.toDate, reportAccessToken });
     setLoading(false);
     if (!r.success) {
       setData(null);
-      setPin('');
       setError(r.error);
       return;
     }
@@ -34,8 +30,12 @@ export function CashflowTab() {
     setError(null);
   }
 
-  function exportCsv() {
+  useEffect(() => { void load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [range.fromDate, range.toDate, reportAccessToken]);
+
+  async function exportCsv() {
     if (!data) return;
+    const audited = await counter.reportsAuditAction({ reportAccessToken, action: 'EXPORT', report: 'CASHFLOW' });
+    if (!audited.success) { setError(audited.error); return; }
     const rows = [
       ...data.inflows.lines.map((line) => ({ section: 'Inflows', ...line })),
       ...data.outflows.lines.map((line) => ({ section: 'Outflows', ...line })),
@@ -59,24 +59,12 @@ export function CashflowTab() {
       <div className="bg-bg-surface border border-border p-4 flex items-end justify-between gap-3 flex-wrap">
         <DateRangePicker value={range} onChange={setRange} />
         <div className="flex items-end gap-3">
-          <label>
-            <span className="block text-text-secondary text-xs uppercase tracking-wider mb-1">Your PIN</span>
-            <input
-              type="password"
-              inputMode="numeric"
-              value={pin}
-              maxLength={6}
-              onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
-              onKeyDown={(e) => { if (e.key === 'Enter') void load(); }}
-              className="bg-bg-input border border-border-strong px-3 py-2 font-mono tnum tracking-[0.35em] w-36"
-            />
-          </label>
-          <button onClick={() => void load()} disabled={loading || pin.length < 4}
+          <button onClick={() => void load()} disabled={loading}
             className="px-4 py-2 border border-border hover:bg-bg-elevated text-sm disabled:opacity-40">
-            {loading ? 'Loading...' : data ? 'Refresh' : 'Unlock'}
+            {loading ? 'Loading...' : 'Refresh'}
           </button>
           {data && (
-            <button onClick={exportCsv} className="px-4 py-2 border border-border hover:bg-bg-elevated text-sm">
+            <button onClick={() => void exportCsv()} className="px-4 py-2 border border-border hover:bg-bg-elevated text-sm">
               Export CSV
             </button>
           )}
@@ -85,11 +73,7 @@ export function CashflowTab() {
 
       {error && <FeedbackBanner>{error}</FeedbackBanner>}
 
-      {!data && !loading && (
-        <div className="bg-bg-surface border border-border p-6 text-text-tertiary text-sm">
-          Re-enter your own PIN to view cashflow for this date range.
-        </div>
-      )}
+      {!data && !loading && !error && <div className="panel p-6 text-text-tertiary text-sm">No cashflow data is available for this range.</div>}
 
       {data && (
         <>

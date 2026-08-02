@@ -9,6 +9,8 @@
 import type { Database as DB } from 'better-sqlite3';
 import { v4 as uuidv4 } from 'uuid';
 import { logAudit } from '../db/audit.js';
+import { isLedgerPostingEnabled, mappedFinancialAccount } from './ledger.js';
+import { assertNoPendingVoidRequestsForShift } from './voids.js';
 
 export interface OpenShiftInput {
   workerId: string;
@@ -66,14 +68,26 @@ export function openShift(db: DB, input: OpenShiftInput): OpenShiftResult {
   const shiftId = `sh-${uuidv4()}`;
   const cashCountId = `cc-${uuidv4()}`;
   const now = new Date().toISOString();
+  const tillAccountId = isLedgerPostingEnabled(db, input.locationId)
+    ? mappedFinancialAccount(db, input.locationId, 'CASH', 'IN').financialAccountId
+    : null;
+  if (tillAccountId) {
+    const busy = db.prepare(
+      `SELECT id FROM shifts
+        WHERE financial_account_id = ? AND closed_at IS NULL LIMIT 1`,
+    ).get(tillAccountId) as { id: string } | undefined;
+    if (busy) {
+      throw new Error(`openShift: the selected physical till is already used by shift ${busy.id}`);
+    }
+  }
 
   const tx = db.transaction(() => {
     db.prepare(
       `INSERT INTO shifts (
          id, worker_id, location_id, opened_at, shift_type,
-         opening_cash_pesewas,
+         opening_cash_pesewas, financial_account_id,
          created_by, updated_by, device_id
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       shiftId,
       input.workerId,
@@ -81,6 +95,7 @@ export function openShift(db: DB, input: OpenShiftInput): OpenShiftResult {
       now,
       input.shiftType,
       input.openingCashPesewas,
+      tillAccountId,
       input.workerId,
       input.workerId,
       input.deviceId,
@@ -169,6 +184,7 @@ export function submitClosingCount(
     | undefined;
   if (!shift) throw new Error(`submitClosingCount: shift ${shiftId} not found`);
   if (shift.closed_at) throw new Error(`submitClosingCount: shift already closed`);
+  assertNoPendingVoidRequestsForShift(db, shiftId);
 
   const existing = db
     .prepare(
@@ -226,6 +242,7 @@ export function computeAndCloseShift(
     | undefined;
   if (!shift) throw new Error(`computeAndCloseShift: shift ${shiftId} not found`);
   if (shift.closed_at) throw new Error(`computeAndCloseShift: shift already closed`);
+  assertNoPendingVoidRequestsForShift(db, shiftId);
 
   const closeCount = db
     .prepare(

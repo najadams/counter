@@ -6,6 +6,7 @@
 //   F5   Daily summary
 //   F7   Breakage
 //   F8   Stock receipt
+//        Paper receipts
 //   F10  Close shift
 //   F11  Recent sales / void
 //   F12  Settings
@@ -18,7 +19,9 @@ import { AppHeader } from '../components/AppHeader';
 import { BackupHealthBanner } from '../components/BackupHealthBanner';
 import { SyncHealthBanner } from '../components/SyncHealthBanner';
 import { formatMoney, formatMoneyWithCurrency, parseCedisToPesewas } from '../../shared/lib/money';
-import type { ShiftCloseBackupResult, AccessInfoResponse } from '../../shared/types/ipc';
+import type {
+  ShiftCloseBackupResult, AccessInfoResponse, ManagementHomeWarningsResponse,
+} from '../../shared/types/ipc';
 import SaleScreen from './SaleScreen';
 import VoidSaleScreen from './VoidSaleScreen';
 import PendingOrdersScreen from './PendingOrdersScreen';
@@ -31,15 +34,18 @@ import DailySummaryScreen from './DailySummaryScreen';
 import CustomersScreen from './CustomersScreen';
 import ReportsScreen from './ReportsScreen';
 import MoneyOutScreen from './MoneyOutScreen';
+import PaperReceiptsScreen from './PaperReceiptsScreen';
+import VoidApprovalsScreen from './VoidApprovalsScreen';
 import { FeedbackBanner } from '../components/FeedbackBanner';
 
-type View = 'home' | 'sale' | 'void' | 'breakage' | 'consumption' | 'stock' | 'settings' | 'stocktake' | 'summary' | 'customers' | 'reports' | 'pendingOrders' | 'moneyOut';
+type View = 'home' | 'sale' | 'void' | 'voidApprovals' | 'breakage' | 'consumption' | 'stock' | 'settings' | 'stocktake' | 'summary' | 'customers' | 'reports' | 'pendingOrders' | 'moneyOut' | 'paperReceipts';
 
 export default function HomeScreen() {
   const shiftId = useSession((s) => s.shiftId);
   const opening = useSession((s) => s.shiftOpeningCashPesewas);
   const clearShift = useSession((s) => s.clearShift);
   const logout = useSession((s) => s.logout);
+  const workerRole = useSession((s) => s.workerRole);
 
   const [view, setView] = useState<View>('home');
   const [closing, setClosing] = useState(false);
@@ -47,6 +53,34 @@ export default function HomeScreen() {
   const [pendingReprints, setPendingReprints] = useState<Array<{ id: string; saleId: string; saleTotalPesewas: number; reason: string }>>([]);
   const [reprintAck, setReprintAck] = useState(false);
   const [pendingOrderCount, setPendingOrderCount] = useState(0);
+  const [obligationWarnings, setObligationWarnings] = useState<ManagementHomeWarningsResponse | null>(null);
+  const [voidCounts, setVoidCounts] = useState({ minePendingCount: 0, reviewablePendingCount: 0, currentShiftPendingCount: 0 });
+  const isSenior = workerRole === 'SUPERVISOR' || workerRole === 'OWNER' || workerRole === 'FOUNDER';
+
+  useEffect(() => {
+    let cancelled = false;
+    async function refreshVoidCounts() {
+      const result = await counter.saleVoidRequestPendingCount();
+      if (!cancelled && result.success) setVoidCounts(result.data);
+    }
+    void refreshVoidCounts();
+    const interval = window.setInterval(() => void refreshVoidCounts(), 10_000);
+    const onFocus = () => void refreshVoidCounts();
+    window.addEventListener('focus', onFocus);
+    return () => { cancelled = true; window.clearInterval(interval); window.removeEventListener('focus', onFocus); };
+  }, [view]);
+
+  useEffect(() => {
+    if (workerRole !== 'OWNER' && workerRole !== 'FOUNDER') return;
+    let cancelled = false;
+    async function refresh() {
+      const result = await counter.managementHomeWarnings();
+      if (!cancelled && result.success) setObligationWarnings(result.data);
+    }
+    void refresh();
+    const interval = window.setInterval(() => void refresh(), 60_000);
+    return () => { cancelled = true; window.clearInterval(interval); };
+  }, [workerRole, view]);
 
   // Polled rather than pushed — the pull worker writes pending_orders in the
   // background on its own interval; this just reflects whatever landed since
@@ -132,6 +166,7 @@ export default function HomeScreen() {
 
   if (view === 'sale') return <SaleScreen onExit={() => setView('home')} />;
   if (view === 'void') return <VoidSaleScreen onExit={() => setView('home')} onDuplicate={() => setView('sale')} />;
+  if (view === 'voidApprovals') return <VoidApprovalsScreen onExit={() => setView('home')} />;
   if (view === 'breakage') return <BreakageScreen onExit={() => setView('home')} />;
   if (view === 'consumption') return <ConsumptionScreen onExit={() => setView('home')} />;
   if (view === 'stock') return <StockReceiveScreen onExit={() => setView('home')} />;
@@ -140,6 +175,9 @@ export default function HomeScreen() {
   if (view === 'summary') return <DailySummaryScreen onExit={() => setView('home')} />;
   if (view === 'customers') return <CustomersScreen onExit={() => setView('home')} />;
   if (view === 'moneyOut' && shiftId) return <MoneyOutScreen shiftId={shiftId} onExit={() => setView('home')} />;
+  if (view === 'paperReceipts') {
+    return <PaperReceiptsScreen onExit={() => setView('home')} onOpenAtTill={() => setView('sale')} />;
+  }
   if (view === 'pendingOrders') {
     return (
       <PendingOrdersScreen
@@ -183,6 +221,22 @@ export default function HomeScreen() {
           <>
             <BackupHealthBanner />
             <SyncHealthBanner />
+            {obligationWarnings
+              && (obligationWarnings.overdueCount > 0
+                || obligationWarnings.dueNext7DaysCount > 0
+                || obligationWarnings.missingDueDateCount > 0) && (
+              <FeedbackBanner>
+                {obligationWarnings.overdueCount > 0
+                  ? `${obligationWarnings.overdueCount} overdue obligation(s), ${formatMoneyWithCurrency(obligationWarnings.overduePesewas)} outstanding. `
+                  : ''}
+                {obligationWarnings.dueNext7DaysCount > 0
+                  ? `${obligationWarnings.dueNext7DaysCount} due within seven days (${formatMoneyWithCurrency(obligationWarnings.dueNext7DaysPesewas)}). `
+                  : ''}
+                {obligationWarnings.missingDueDateCount > 0
+                  ? `${obligationWarnings.missingDueDateCount} open obligation(s) have no due date.`
+                  : ''}
+              </FeedbackBanner>
+            )}
             <LanJoinCard />
 
             <ActionRow kind="primary" label="Sale" hot="F1" caption="Search SKUs, build cart, take payment." onClick={() => setView('sale')} />
@@ -203,7 +257,9 @@ export default function HomeScreen() {
               <ActionRow label="Customers" hot="F6" caption="Debts, take payments, aging." onClick={() => setView('customers')} />
               <ActionRow label="Breakage" hot="F7" caption="Report broken/leaked stock with photo." onClick={() => setView('breakage')} />
               <ActionRow label="Stock receipt" hot="F8" caption="Goods arrived from supplier." onClick={() => setView('stock')} />
-              <ActionRow label="Recent sales" hot="F11" caption="Review and void if needed." onClick={() => setView('void')} />
+              <ActionRow label="Paper receipts" caption="Review photographed receipts before posting sales." onClick={() => setView('paperReceipts')} />
+              <ActionRow label="Recent sales" hot="F11" kind={voidCounts.minePendingCount > 0 ? 'warn' : 'default'} caption={voidCounts.minePendingCount > 0 ? `${voidCounts.minePendingCount} of your void request(s) await a decision.` : 'Review receipts and submit same-day void requests.'} onClick={() => setView('void')} />
+              {isSenior && <ActionRow label="Void approvals" kind={voidCounts.reviewablePendingCount > 0 ? 'warn' : 'default'} caption={voidCounts.reviewablePendingCount > 0 ? `${voidCounts.reviewablePendingCount} request(s) waiting for your decision.` : 'Review pending requests and decision history.'} onClick={() => setView('voidApprovals')} />}
               <ActionRow label="Settings" hot="F12" caption="Workers admin, change PIN." onClick={() => setView('settings')} />
             </div>
             <ActionRow kind="warn" label="Close shift" hot="F10" caption="Two-step blind cash count." onClick={() => { setStep('count'); setError(null); }} />
@@ -219,6 +275,13 @@ export default function HomeScreen() {
 
         {step === 'count' && (
           <div className="flex flex-col gap-4">
+            {voidCounts.currentShiftPendingCount > 0 && (
+              <div className="notice notice-warning">
+                <div className="font-semibold">Unresolved void requests block this shift from closing</div>
+                <p className="text-xs mt-1">Resolve or withdraw every request first. Sales and expected cash remain unchanged while requests are pending.</p>
+                <button className="btn btn-quiet mt-3" onClick={() => setView(isSenior ? 'voidApprovals' : 'void')}>{isSenior ? 'Review requests' : 'View my requests'}</button>
+              </div>
+            )}
             {pendingReprints.length > 0 && (
               <div className="bg-warning/10 border border-warning rounded p-4 space-y-2">
                 <div className="text-warning font-semibold">
@@ -268,7 +331,7 @@ export default function HomeScreen() {
               <button onClick={() => { setStep('idle'); setCounted(''); setError(null); }}
                 className="px-5 py-3 border border-border hover:bg-bg-elevated">Cancel</button>
               <button onClick={() => void submitCountAndClose()}
-                disabled={closing || (pendingReprints.length > 0 && !reprintAck)}
+                disabled={closing || voidCounts.currentShiftPendingCount > 0 || (pendingReprints.length > 0 && !reprintAck)}
                 title={pendingReprints.length > 0 && !reprintAck ? 'Resolve pending receipts or acknowledge first' : ''}
                 className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed">
                 {closing ? 'Reconciling…' : 'Confirm count'}
@@ -418,14 +481,14 @@ function ActionRow({ kind = 'default', label, hot, caption, onClick }: {
   kind?: 'default' | 'primary' | 'warn'; label: string; hot?: string; caption: string; onClick: () => void;
 }) {
   const cls =
-    kind === 'primary' ? 'bg-accent text-ink hover:bg-accent-light'
-    : kind === 'warn'  ? 'bg-bg-deep border border-warning text-warning hover:bg-bg-elevated'
-    : 'bg-bg-surface border border-border text-text-primary hover:bg-bg-elevated';
+    kind === 'primary' ? 'bg-accent text-ink border border-accent hover:bg-accent-light shadow-sm'
+    : kind === 'warn'  ? 'panel border-warning text-warning hover:bg-bg-elevated'
+    : 'panel text-text-primary hover:bg-bg-elevated hover:border-border-strong';
   return (
     <button onClick={onClick}
-      className={`flex items-center justify-between px-6 py-5 text-left ${cls}`}>
+      className={`flex items-center justify-between px-6 py-5 text-left rounded-xl min-h-24 transition-colors ${cls}`}>
       <div>
-        <div className={`uppercase tracking-wider text-xs ${kind === 'primary' ? 'opacity-80' : 'text-text-secondary'}`}>{label}</div>
+        <div className={`text-sm font-semibold ${kind === 'primary' ? 'opacity-90' : 'text-text-primary'}`}>{label}</div>
         <div className={`mt-1 text-base ${kind === 'primary' ? '' : 'text-text-primary'}`}>{caption}</div>
       </div>
       {hot && <span className={`kbd ${kind === 'primary' ? 'bg-bg-deep text-accent border-accent' : ''}`}>{hot}</span>}

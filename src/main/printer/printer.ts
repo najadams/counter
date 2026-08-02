@@ -101,15 +101,14 @@ class ThermalPrinter implements PrinterAdapter {
     // node-thermal-printer exports ThermalPrinter and PrinterTypes at the
     // top level (see its .d.ts). Aliased here because the local class above
     // is also called ThermalPrinter.
-    const { ThermalPrinter: LibThermalPrinter, PrinterTypes } = mod;
-    const printer = new LibThermalPrinter({
-      type: PrinterTypes.EPSON,
-      interface: this.interfaceSpec,
-      // Bounded socket timeout so a dead tcp:// door printer fails fast.
-      options: { timeout: this.timeoutMs },
-    });
-
     try {
+      const { ThermalPrinter: LibThermalPrinter, PrinterTypes } = mod;
+      const printer = new LibThermalPrinter({
+        type: PrinterTypes.EPSON,
+        interface: this.interfaceSpec,
+        // Bounded socket timeout so a dead tcp:// door printer fails fast.
+        options: { timeout: this.timeoutMs },
+      });
       const isConnected = await printer.isPrinterConnected();
       if (!isConnected) return { ok: false, reason: 'OFFLINE', message: 'printer offline' };
 

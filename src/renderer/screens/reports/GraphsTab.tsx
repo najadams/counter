@@ -43,6 +43,8 @@ type GraphRow = ReportsGraphsResponse['series'][number] & {
   revenue: number;
   profit: number;
   tax: number;
+  taxDue: number;
+  taxCredit: number;
   expenses: number;
   drawings: number;
 };
@@ -62,6 +64,14 @@ function cedisTooltip(value: unknown, name: unknown): [string, string] {
   return [formatMoneyWithCurrency(Math.round(n * 100)), String(name)];
 }
 
+function netTaxTooltip(value: unknown, name: unknown): [string, string] {
+  const n = typeof value === 'number' ? value : Number(value ?? 0);
+  if (String(name) === 'Net tax' && n < 0) {
+    return [formatMoneyWithCurrency(Math.round(Math.abs(n) * 100)), 'Tax credit'];
+  }
+  return [formatMoneyWithCurrency(Math.round(Math.abs(n) * 100)), String(name)];
+}
+
 function shortDate(date: string): string {
   const [, month, day] = date.split('-');
   return `${month}/${day}`;
@@ -71,7 +81,7 @@ function labelize(value: string): string {
   return value.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export function GraphsTab() {
+export function GraphsTab({ reportAccessToken }: { reportAccessToken: string }) {
   const [range, setRange] = useState<DateRange>(defaultDateRange());
   const [data, setData] = useState<ReportsGraphsResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -79,14 +89,14 @@ export function GraphsTab() {
 
   async function load() {
     setLoading(true);
-    const r = await counter.reportsGraphs({ fromDate: range.fromDate, toDate: range.toDate });
+    const r = await counter.reportsGraphs({ fromDate: range.fromDate, toDate: range.toDate, reportAccessToken });
     setLoading(false);
     if (!r.success) { setError(r.error); return; }
     setData(r.data);
     setError(null);
   }
 
-  useEffect(() => { void load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [range.fromDate, range.toDate]);
+  useEffect(() => { void load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [range.fromDate, range.toDate, reportAccessToken]);
 
   const rows: GraphRow[] = useMemo(() => (data?.series ?? []).map((r) => ({
     ...r,
@@ -94,6 +104,8 @@ export function GraphsTab() {
     revenue: toCedis(r.revenuePesewas),
     profit: toCedis(r.netProfitPesewas),
     tax: toCedis(r.taxPayablePesewas),
+    taxDue: toCedis(Math.max(0, r.taxPayablePesewas)),
+    taxCredit: toCedis(Math.max(0, -r.taxPayablePesewas)),
     expenses: toCedis(r.expensesPesewas),
     drawings: toCedis(r.drawingsPesewas),
   })), [data]);
@@ -182,9 +194,13 @@ export function GraphsTab() {
         <>
           <section className="grid grid-cols-2 lg:grid-cols-6 gap-3">
             <Stat label="Revenue" value={formatMoneyWithCurrency(data.totals.revenuePesewas)} />
-            <Stat label="Net profit" value={formatMoneyWithCurrency(data.totals.netProfitPesewas)}
+            <Stat label="Gross profit" value={formatMoneyWithCurrency(data.totals.netProfitPesewas)}
               tone={data.totals.netProfitPesewas < 0 ? 'danger' : 'success'} />
-            <Stat label="Tax to pay" value={formatMoneyWithCurrency(data.totals.taxPayablePesewas)} tone="warning" />
+            <Stat
+              label={data.totals.taxPayablePesewas < 0 ? 'Tax credit' : 'Tax to pay'}
+              value={formatMoneyWithCurrency(Math.abs(data.totals.taxPayablePesewas))}
+              tone={data.totals.taxPayablePesewas < 0 ? 'success' : 'warning'}
+            />
             <Stat label="Credit open" value={formatMoneyWithCurrency(data.totals.creditOutstandingPesewas)} tone={data.totals.creditOutstandingPesewas > 0 ? 'danger' : undefined} />
             <Stat label="Stock at cost" value={formatMoneyWithCurrency(data.totals.stockAtCostPesewas)} />
             <Stat label="Supplier paid" value={formatMoneyWithCurrency(data.totals.supplierPaymentsPesewas)} />
@@ -198,7 +214,7 @@ export function GraphsTab() {
           </section>
 
           <section className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-            <ChartCard title="Revenue vs net profit">
+            <ChartCard title="Revenue vs gross profit">
               <ResponsiveContainer width="100%" height={320}>
                 <AreaChart data={rows} margin={{ top: 16, right: 20, bottom: 8, left: 8 }}>
                   <defs>
@@ -214,10 +230,10 @@ export function GraphsTab() {
                   <CartesianGrid stroke="#d9dce6" strokeDasharray="4 4" vertical={false} />
                   <XAxis dataKey="label" tick={{ fill: '#8b8f9f', fontSize: 12 }} tickLine={false} axisLine={{ stroke: '#d9dce6' }} />
                   <YAxis tickFormatter={cedisAxis} tick={{ fill: '#8b8f9f', fontSize: 12 }} tickLine={false} axisLine={false} width={74} />
-                  <Tooltip formatter={cedisTooltip} labelFormatter={(_, payload) => payload?.[0]?.payload?.date ?? ''} contentStyle={tooltipStyle} />
+                  <Tooltip formatter={netTaxTooltip} labelFormatter={(_, payload) => payload?.[0]?.payload?.date ?? ''} contentStyle={tooltipStyle} />
                   <Legend iconType="circle" wrapperStyle={{ color: '#6b7280', fontSize: 12 }} />
                   <Area type="monotone" dataKey="revenue" name="Revenue" stroke={COLORS.revenue} fill="url(#revenueFill)" strokeWidth={3} dot={false} activeDot={{ r: 5 }} />
-                  <Area type="monotone" dataKey="profit" name="Net profit" stroke={COLORS.profit} fill="url(#profitFill)" strokeWidth={3} dot={false} activeDot={{ r: 5 }} />
+                  <Area type="monotone" dataKey="profit" name="Gross profit" stroke={COLORS.profit} fill="url(#profitFill)" strokeWidth={3} dot={false} activeDot={{ r: 5 }} />
                   <ReferenceLine y={0} stroke="#9ca3af" />
                 </AreaChart>
               </ResponsiveContainer>
@@ -231,7 +247,7 @@ export function GraphsTab() {
                   <YAxis tickFormatter={cedisAxis} tick={{ fill: '#8b8f9f', fontSize: 12 }} tickLine={false} axisLine={false} width={74} />
                   <Tooltip formatter={cedisTooltip} labelFormatter={(_, payload) => payload?.[0]?.payload?.date ?? ''} contentStyle={tooltipStyle} />
                   <Legend iconType="circle" wrapperStyle={{ color: '#6b7280', fontSize: 12 }} />
-                  <Line type="monotone" dataKey="tax" name="Tax to pay" stroke={COLORS.tax} strokeWidth={3} dot={false} activeDot={{ r: 5 }} />
+                  <Line type="monotone" dataKey="tax" name="Net tax" stroke={COLORS.tax} strokeWidth={3} dot={false} activeDot={{ r: 5 }} />
                   <Line type="monotone" dataKey="expenses" name="Expenses" stroke={COLORS.expenses} strokeWidth={3} dot={false} activeDot={{ r: 5 }} />
                   <Line type="monotone" dataKey="drawings" name="Drawings" stroke={COLORS.drawings} strokeWidth={3} dot={false} activeDot={{ r: 5 }} />
                   <ReferenceLine y={0} stroke="#9ca3af" />
@@ -407,15 +423,16 @@ export function GraphsTab() {
           </section>
 
           <section className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-            <ChartCard title="Daily tax payable">
+            <ChartCard title="Daily net tax">
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={rows} margin={{ top: 16, right: 20, bottom: 8, left: 8 }}>
                   <CartesianGrid stroke="#d9dce6" strokeDasharray="4 4" vertical={false} />
                   <XAxis dataKey="label" tick={{ fill: '#8b8f9f', fontSize: 12 }} tickLine={false} axisLine={{ stroke: '#d9dce6' }} />
                   <YAxis tickFormatter={cedisAxis} tick={{ fill: '#8b8f9f', fontSize: 12 }} tickLine={false} axisLine={false} width={74} />
                   <Tooltip formatter={cedisTooltip} labelFormatter={(_, payload) => payload?.[0]?.payload?.date ?? ''} contentStyle={tooltipStyle} />
-                  <Bar dataKey="tax" name="Tax to pay" fill={COLORS.tax} radius={[4, 4, 0, 0]} maxBarSize={42} />
-                  <ReferenceLine y={0} stroke="#9ca3af" />
+                  <Legend iconType="circle" wrapperStyle={{ color: '#6b7280', fontSize: 12 }} />
+                  <Bar dataKey="taxDue" name="Tax to pay" fill={COLORS.tax} radius={[4, 4, 0, 0]} maxBarSize={42} />
+                  <Bar dataKey="taxCredit" name="Tax credit" fill={COLORS.profit} radius={[4, 4, 0, 0]} maxBarSize={42} />
                 </BarChart>
               </ResponsiveContainer>
             </ChartCard>

@@ -211,6 +211,15 @@ export function buildSaleReceiptForReprint(
 
   const shop = getShopHeader(db);
   const cfg = getReceiptConfig(db);
+  const voidRequest = db.prepare(
+    `SELECT status FROM sale_void_requests WHERE sale_id = ?
+      ORDER BY requested_at DESC, id DESC LIMIT 1`,
+  ).get(saleId) as { status: 'PENDING' | 'APPROVED' | 'DECLINED' | 'WITHDRAWN' } | undefined;
+  const statusNotice = voidRequest?.status === 'PENDING'
+    ? 'VOID REQUEST PENDING — SALE STILL VALID'
+    : voidRequest?.status === 'APPROVED'
+      ? 'VOIDED — SALE CANCELLED'
+      : null;
 
   return {
     shopName: cfg.shopName || shop.shopName,
@@ -222,6 +231,7 @@ export function buildSaleReceiptForReprint(
     showChannel: cfg.showChannel,
     showCustomer: cfg.showCustomer,
     receiptId: sale.id,
+    statusNotice,
     workerName: sale.workerName,
     saleAt: sale.saleAt,
     channel: sale.channel,

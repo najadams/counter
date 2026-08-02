@@ -11,6 +11,7 @@ export const IPC_CHANNELS = {
   // Auth / session
   WORKER_LIST_FOR_LOGIN: 'worker:list-for-login',
   WORKER_LOGIN: 'worker:login',
+  WORKER_VERIFY_CURRENT_PIN: 'worker:verify-current-pin',
   WORKER_LOGOUT: 'worker:logout',
   WORKER_GET_CURRENT: 'worker:get-current',
 
@@ -26,10 +27,24 @@ export const IPC_CHANNELS = {
   CUSTOMER_SEARCH: 'customer:search',
   SALE_COMPLETE: 'sale:complete',
   SALE_REPRICE_LINES: 'sale:reprice-lines',
+  PAPER_RECEIPT_CREATE: 'paper-receipt:create',
+  PAPER_RECEIPT_LIST: 'paper-receipt:list',
+  PAPER_RECEIPT_GET: 'paper-receipt:get',
+  PAPER_RECEIPT_UPDATE: 'paper-receipt:update',
+  PAPER_RECEIPT_REPARSE: 'paper-receipt:reparse',
+  PAPER_RECEIPT_RESOLVE_FOR_CART: 'paper-receipt:resolve-for-cart',
+  PAPER_RECEIPT_MARK_POSTED_FROM_TILL: 'paper-receipt:mark-posted-from-till',
+  PAPER_RECEIPT_POST: 'paper-receipt:post',
+  PAPER_RECEIPT_DISCARD: 'paper-receipt:discard',
 
   // Voids
   SALE_LIST_RECENT: 'sale:list-recent',
-  SALE_VOID: 'sale:void',
+  SALE_VOID_REQUEST_CREATE: 'sale:void-request-create',
+  SALE_VOID_REQUEST_LIST: 'sale:void-request-list',
+  SALE_VOID_REQUEST_GET: 'sale:void-request-get',
+  SALE_VOID_REQUEST_REVIEW: 'sale:void-request-review',
+  SALE_VOID_REQUEST_WITHDRAW: 'sale:void-request-withdraw',
+  SALE_VOID_REQUEST_PENDING_COUNT: 'sale:void-request-pending-count',
   SALE_CORRECT: 'sale:correct',
 
   // Breakage / consumption / stock receipts
@@ -89,12 +104,14 @@ export interface ListLoginCandidatesResponse {
   workers: Array<{ id: string; fullName: string; role: string }>;
 }
 export interface WorkerLoginRequest { workerId: string; pin: string }
+export interface WorkerVerifyCurrentPinRequest { pin: string }
 export type WorkerLoginResponse =
   | { ok: true; workerId: string; fullName: string; role: string }
   | { ok: false; reason: 'INVALID_PIN'; attemptsRemaining: number }
   | { ok: false; reason: 'LOCKED_OUT'; lockedUntil: string }
   | { ok: false; reason: 'UNKNOWN_WORKER' }
   | { ok: false; reason: 'SYSTEM_ROLE_REJECTED' };
+export type WorkerVerifyCurrentPinResponse = WorkerLoginResponse;
 export interface WorkerLogoutResponse { ok: true }
 export type WorkerGetCurrentResponse =
   | { workerId: string; fullName: string; role: string }
@@ -241,6 +258,106 @@ export interface SaleRepriceLinesResponse {
   }>;
 }
 
+// --- paper receipt import --------------------------------------------------
+
+export type PaperReceiptStatus = 'REVIEW' | 'POSTED' | 'DISCARDED';
+
+export interface PaperReceiptLineDraft {
+  id: string;
+  lineNo: number;
+  rawText: string;
+  productId: string | null;
+  productSku: string | null;
+  productName: string | null;
+  unitId: string | null;
+  unitName: string | null;
+  quantity: number | null;
+  unitPricePesewas: number | null;
+  confidence: number;
+  reviewNote: string | null;
+}
+
+export interface PaperReceiptSummary {
+  id: string;
+  status: PaperReceiptStatus;
+  createdAt: string;
+  workerName: string;
+  channel: SaleChannel;
+  paymentMethod: string;
+  lineCount: number;
+  matchedLineCount: number;
+  totalPesewas: number;
+  postedSaleId: string | null;
+  tillOpenedAt: string | null;
+  tillOpenedByName: string | null;
+}
+
+export interface PaperReceiptDetail extends PaperReceiptSummary {
+  ocrText: string;
+  photoDataUri: string | null;
+  photoBytes: number | null;
+  paymentReference: string | null;
+  cashGivenPesewas: number | null;
+  customerId: string | null;
+  customerName: string | null;
+  lines: PaperReceiptLineDraft[];
+}
+
+export interface PaperReceiptCreateRequest {
+  photoBase64: string;
+  photoExtension: string;
+  ocrText: string;
+  channel: SaleChannel;
+  paymentMethod: string;
+  paymentReference?: string | null;
+  cashGivenPesewas?: number | null;
+  customerId?: string | null;
+}
+export interface PaperReceiptCreateResponse { draftId: string }
+export interface PaperReceiptListRequest { limit?: number }
+export interface PaperReceiptListResponse { drafts: PaperReceiptSummary[] }
+export interface PaperReceiptGetRequest { draftId: string }
+export interface PaperReceiptGetResponse extends PaperReceiptDetail {}
+export interface PaperReceiptUpdateRequest {
+  draftId: string;
+  ocrText: string;
+  channel: SaleChannel;
+  paymentMethod: string;
+  paymentReference?: string | null;
+  cashGivenPesewas?: number | null;
+  customerId?: string | null;
+  lines: Array<{
+    rawText: string;
+    productId: string | null;
+    unitId?: string | null;
+    quantity: number | null;
+    unitPricePesewas: number | null;
+    confidence?: number;
+    reviewNote?: string | null;
+  }>;
+}
+export interface PaperReceiptSimpleResponse { ok: true }
+export interface PaperReceiptResolveForCartRequest { draftId: string }
+export interface PaperReceiptResolveForCartResponse {
+  draftId: string;
+  channel: SaleChannel;
+  lines: Array<{
+    productId: string;
+    sku: string;
+    name: string;
+    unitId: string | null;
+    unitName: string;
+    factor: number;
+    unitPricePesewas: number;
+    quantity: number;
+    unitsOnHand: number;
+  }>;
+}
+export interface PaperReceiptMarkPostedFromTillRequest { draftId: string; saleId: string }
+export interface PaperReceiptPostRequest { draftId: string }
+export interface PaperReceiptPostResponse extends SaleCompleteResponse { draftId: string }
+export interface PaperReceiptDiscardRequest { draftId: string; reason: string }
+
 // --- voids -----------------------------------------------------------------
 
 export interface SaleListRecentRequest { limit?: number }
@@ -249,18 +366,83 @@ export interface SaleListRecentResponse {
     id: string; createdAt: string; channel: string; totalPesewas: number;
     paymentMethod: string; workerName: string; customerName: string | null;
     voided: boolean; lineCount: number;
+    voidRequest: {
+      id: string;
+      status: SaleVoidRequestStatus;
+      reason: string;
+      requestedAt: string;
+      requesterId: string;
+      requesterName: string;
+      reviewedAt: string | null;
+      reviewerName: string | null;
+      reviewNote: string | null;
+    } | null;
   }>;
 }
-export interface SaleVoidRequest {
+export type SaleVoidRequestStatus = 'PENDING' | 'APPROVED' | 'DECLINED' | 'WITHDRAWN';
+export type SaleVoidRequestScope = 'MINE' | 'REVIEWABLE' | 'ALL';
+export interface SaleVoidRequestSummary {
+  id: string;
   saleId: string;
+  locationId: string;
+  shiftId: string;
+  status: SaleVoidRequestStatus;
   reason: string;
-  supervisorWorkerId: string;
-  supervisorPin: string;
+  requestedAt: string;
+  requesterId: string;
+  requesterName: string;
+  reviewerId: string | null;
+  reviewerName: string | null;
+  reviewedAt: string | null;
+  reviewNote: string | null;
+  withdrawnAt: string | null;
+  saleCreatedAt: string;
+  saleWorkerName: string;
+  customerName: string | null;
+  channel: string;
+  totalPesewas: number;
+  paymentMethod: string;
+  lineCount: number;
 }
-export interface SaleVoidResponse {
-  saleId: string;
-  reversalMovementCount: number;
-  customerBalanceDelta: number;
+export interface SaleVoidRequestDetail extends SaleVoidRequestSummary {
+  lines: Array<{
+    productId: string;
+    productName: string;
+    quantity: number;
+    unitName: string | null;
+    unitPricePesewas: number;
+    lineTotalPesewas: number;
+    canonicalQuantity: number;
+    inventoryValuePesewas: number;
+  }>;
+  payments: Array<{ method: string; amountPesewas: number }>;
+  creditBalanceDeltaPesewas: number;
+  accountingEffect: {
+    netSalesPesewas: number;
+    cogsPesewas: number;
+    vatPesewas: number;
+    nhilPesewas: number;
+    getfundPesewas: number;
+  };
+}
+export interface SaleVoidRequestCreateRequest { saleId: string; reason: string }
+export interface SaleVoidRequestListRequest {
+  scope: SaleVoidRequestScope;
+  status?: SaleVoidRequestStatus | 'RESOLVED';
+  limit?: number;
+}
+export interface SaleVoidRequestListResponse { requests: SaleVoidRequestSummary[] }
+export interface SaleVoidRequestGetRequest { requestId: string }
+export interface SaleVoidRequestReviewRequest {
+  requestId: string;
+  decision: 'APPROVE' | 'DECLINE';
+  note?: string | null;
+}
+export interface SaleVoidRequestWithdrawRequest { requestId: string }
+export interface SaleVoidRequestPendingCountResponse {
+  minePendingCount: number;
+  reviewablePendingCount: number;
+  currentShiftPendingCount: number;
 }
 export interface SaleCorrectRequest {
   originalSaleId: string;
@@ -481,6 +663,7 @@ export interface DrawingPolicyUpsertResponse { policyId: string }
 export interface DrawingReportRequest {
   period: 'DAILY' | 'WEEKLY' | 'MONTHLY';
   fromDate: string; toDate: string; locationId?: string | null;
+  reportAccessToken: string;
 }
 export interface DrawingReportResponse {
   rows: Array<{ periodKey: string; category: DrawingCategory; beneficiaryName: string; totalPesewas: number; count: number }>;
@@ -1204,6 +1387,15 @@ export interface SaleReprintResponse {
 export interface SaleGetReceiptRequest { saleId: string }
 export interface SaleGetReceiptResponse {
   receipt: import('../lib/receipt.js').SaleReceipt;
+  voidRequest: {
+    status: SaleVoidRequestStatus;
+    reason: string;
+    requesterName: string;
+    requestedAt: string;
+    reviewerName: string | null;
+    reviewedAt: string | null;
+    reviewNote: string | null;
+  } | null;
   /**
    * Outstanding balance on this sale (pesewas), 0 for fully-paid credit
    * sales. NULL for non-credit (cash/MoMo) sales — there's no "outstanding"
@@ -1541,6 +1733,7 @@ export interface BackupHeartbeat {
 export const IPC_CHANNELS_RECEIPT = {
   RECEIPT_GET_CONFIG: 'receipt:get-config',
   RECEIPT_SET_CONFIG: 'receipt:set-config',
+  RECEIPT_TEST_PRINTER: 'receipt:test-printer',
 } as const;
 
 export type ReceiptPaperWidth = 58 | 80;
@@ -1570,6 +1763,16 @@ export interface ReceiptConfigResponse {
 }
 
 export type ReceiptSetConfigRequest = ReceiptConfigResponse;
+
+export interface ReceiptTestPrinterRequest {
+  station: 'counter' | 'door';
+}
+
+export interface ReceiptTestPrinterResponse {
+  ok: boolean;
+  printed: boolean;
+  error?: string;
+}
 
 // --- Wave C.1: Printable customer statement ------------------------------
 
@@ -1818,6 +2021,11 @@ export interface SupplierStatementLinesResponse { rows: SupplierStatementLineRow
 // --- Reports / overview dashboard ----------------------------------------
 
 export const IPC_CHANNELS_REPORTS = {
+  REPORTS_ACCESS_UNLOCK: 'reports:access-unlock',
+  REPORTS_ACCESS_TOUCH: 'reports:access-touch',
+  REPORTS_ACCESS_LOCK: 'reports:access-lock',
+  REPORTS_ACCESS_STATUS: 'reports:access-status',
+  REPORTS_ACCESS_ACTION: 'reports:access-action',
   REPORTS_OVERVIEW: 'reports:overview',
   REPORTS_SALES: 'reports:sales',
   REPORTS_GRAPHS: 'reports:graphs',
@@ -1831,9 +2039,64 @@ export const IPC_CHANNELS_REPORTS = {
   REPORTS_TAX_PAYMENT_RECORD: 'reports:tax-payment-record',
   REPORTS_BALANCE_SHEET: 'reports:balance-sheet',
   REPORTS_CASHFLOW: 'reports:cashflow',
+  MANAGEMENT_ACCOUNTS_LIST: 'management:accounts-list',
+  MANAGEMENT_ACCOUNT_CREATE: 'management:account-create',
+  MANAGEMENT_ACCOUNT_UPDATE: 'management:account-update',
+  MANAGEMENT_ACCOUNT_MAP: 'management:account-map',
+  MANAGEMENT_ACCOUNT_RECONCILE: 'management:account-reconcile',
+  MANAGEMENT_ACCOUNT_TRANSFER: 'management:account-transfer',
+  MANAGEMENT_CUTOVER_PREVIEW: 'management:cutover-preview',
+  MANAGEMENT_CUTOVER_ACTIVATE: 'management:cutover-activate',
+  MANAGEMENT_SHADOW_STATUS: 'management:shadow-status',
+  MANAGEMENT_SHADOW_SET: 'management:shadow-set',
+  MANAGEMENT_DATA_QUALITY: 'management:data-quality',
+  MANAGEMENT_INCOME_STATEMENT: 'management:income-statement',
+  MANAGEMENT_POSITION: 'management:position',
+  MANAGEMENT_CASHFLOW: 'management:cashflow',
+  MANAGEMENT_OBLIGATIONS: 'management:obligations',
+  MANAGEMENT_CONCENTRATION: 'management:concentration',
+  MANAGEMENT_DOWNSIDE: 'management:downside',
+  MANAGEMENT_EXPENSE_CREATE: 'management:expense-create',
+  MANAGEMENT_LOAN_CREATE: 'management:loan-create',
+  MANAGEMENT_OBLIGATION_PAY: 'management:obligation-pay',
+  MANAGEMENT_OBLIGATION_UPDATE: 'management:obligation-update',
+  MANAGEMENT_FIXED_ASSET_CREATE: 'management:fixed-asset-create',
+  MANAGEMENT_FIXED_ASSETS_LIST: 'management:fixed-assets-list',
+  MANAGEMENT_FIXED_ASSET_DEPRECIATE: 'management:fixed-asset-depreciate',
+  MANAGEMENT_FIXED_ASSET_DISPOSE: 'management:fixed-asset-dispose',
+  MANAGEMENT_THRESHOLD_UPDATE: 'management:threshold-update',
+  MANAGEMENT_RISK_CONFIG: 'management:risk-config',
+  MANAGEMENT_RISK_ASSUMPTION_SAVE: 'management:risk-assumption-save',
+  MANAGEMENT_SCENARIO_SAVE: 'management:scenario-save',
+  MANAGEMENT_DRILLDOWN: 'management:drilldown',
+  MANAGEMENT_OWNER_CONTRIBUTION: 'management:owner-contribution',
+  MANAGEMENT_HOME_WARNINGS: 'management:home-warnings',
 } as const;
 
-export interface ReportsOverviewRequest {
+export type ReportAccessScope = 'OPERATIONAL' | 'OWNER';
+export interface ReportsAccessUnlockRequest { pin: string }
+export interface ReportsAccessUnlockResponse {
+  accessToken: string;
+  scopes: ReportAccessScope[];
+  idleExpiresAt: string;
+}
+export interface ReportsAccessTokenRequest { accessToken: string }
+export interface ReportsAccessLockRequest extends ReportsAccessTokenRequest {
+  reason?: 'MANUAL' | 'IDLE';
+}
+export interface ReportsAccessTouchResponse { idleExpiresAt: string }
+export interface ReportsAccessStatusResponse {
+  unlocked: boolean;
+  scopes: ReportAccessScope[];
+  idleExpiresAt: string | null;
+}
+export interface ReportsAccessActionRequest extends ReportReadAccess {
+  action: 'EXPORT' | 'PRINT';
+  report: 'OWNER_MANAGEMENT_PACK' | 'BALANCE_SHEET' | 'CASHFLOW';
+}
+export interface ReportReadAccess { reportAccessToken: string }
+
+export interface ReportsOverviewRequest extends ReportReadAccess {
   locationId?: string;
   /** Test/replay hook: override the "today" date. */
   asOfDateISO?: string;
@@ -1894,7 +2157,7 @@ export interface ReportsOverviewResponse {
 
 export type ReportGroupBy = 'day' | 'week' | 'month';
 
-export interface ReportsSalesRequest {
+export interface ReportsSalesRequest extends ReportReadAccess {
   fromDate: string;          // YYYY-MM-DD inclusive
   toDate: string;            // YYYY-MM-DD inclusive
   groupBy: ReportGroupBy;
@@ -1929,7 +2192,7 @@ export interface ReportsSalesResponse {
 
 // --- Reports: Graphs -----------------------------------------------------
 
-export interface ReportsGraphsRequest {
+export interface ReportsGraphsRequest extends ReportReadAccess {
   fromDate: string;
   toDate: string;
 }
@@ -2043,7 +2306,7 @@ export interface ReportsGraphsResponse {
 
 // --- Reports: Margin -----------------------------------------------------
 
-export interface ReportsMarginRequest {
+export interface ReportsMarginRequest extends ReportReadAccess {
   fromDate: string;
   toDate: string;
 }
@@ -2081,7 +2344,7 @@ export interface ReportsMarginResponse {
 
 // --- Reports: Inventory --------------------------------------------------
 
-export interface ReportsInventoryRequest {
+export interface ReportsInventoryRequest extends ReportReadAccess {
   locationId?: string;
   velocityWindowDays?: number;
 }
@@ -2113,7 +2376,7 @@ export interface ReportsInventoryResponse {
   }>;
 }
 
-export interface ReportsTaxesRequest {
+export interface ReportsTaxesRequest extends ReportReadAccess {
   fromDate: string;
   toDate: string;
 }
@@ -2186,6 +2449,7 @@ export interface ReportsTaxesResponse {
 }
 
 export interface ReportsTaxPaymentRecordRequest {
+  pin: string;
   taxPeriodFrom: string;
   taxPeriodTo: string;
   amountPesewas: number;
@@ -2202,9 +2466,8 @@ export interface ReportsFinancialStatementLine {
   note?: string | null;
 }
 
-export interface ReportsBalanceSheetRequest {
+export interface ReportsBalanceSheetRequest extends ReportReadAccess {
   asOfDate: string;
-  pin: string;
   locationId?: string;
 }
 export interface ReportsBalanceSheetResponse {
@@ -2233,10 +2496,9 @@ export interface ReportsBalanceSheetResponse {
   caveats: string[];
 }
 
-export interface ReportsCashflowRequest {
+export interface ReportsCashflowRequest extends ReportReadAccess {
   fromDate: string;
   toDate: string;
-  pin: string;
   locationId?: string;
 }
 export interface ReportsCashflowResponse {
@@ -2264,6 +2526,487 @@ export interface ReportsCashflowResponse {
   caveats: string[];
 }
 
+export interface ManagementDataQuality {
+  status: 'COMPLETE' | 'PROVISIONAL' | 'INCOMPLETE';
+  cutoverDate: string | null;
+  issues: Array<{
+    code: string;
+    severity: 'WARNING' | 'BLOCKING';
+    message: string;
+    amountPesewas?: number;
+  }>;
+}
+
+export interface ManagementLine {
+  code: string;
+  label: string;
+  amountPesewas: number;
+  comparisonPesewas?: number;
+  note?: string | null;
+}
+
+export interface ManagementFinancialAccount {
+  id: string;
+  locationId: string;
+  ledgerAccountId: string;
+  ledgerAccountCode: string;
+  name: string;
+  kind: 'TILL' | 'SAFE' | 'BANK' | 'MOMO' | 'OTHER_CASH';
+  provider: string | null;
+  maskedIdentifier: string | null;
+  allowNegative: boolean;
+  active: boolean;
+  balancePesewas: number;
+  lastReconciledAt: string | null;
+}
+
+export interface ManagementAccountsListRequest extends ReportReadAccess { locationId?: string }
+export interface ManagementAccountsListResponse {
+  accounts: ManagementFinancialAccount[];
+  ledgerAccounts: Array<{
+    id: string; code: string; name: string; accountClass: string;
+    accountSubtype: string; normalBalance: 'DEBIT' | 'CREDIT';
+  }>;
+  dataQuality: ManagementDataQuality;
+}
+export interface ManagementAccountCreateRequest {
+  locationId?: string;
+  name: string;
+  kind: ManagementFinancialAccount['kind'];
+  provider?: string | null;
+  maskedIdentifier?: string | null;
+  allowNegative?: boolean;
+  pin: string;
+}
+export interface ManagementAccountUpdateRequest {
+  financialAccountId: string;
+  name: string;
+  provider?: string | null;
+  maskedIdentifier?: string | null;
+  allowNegative?: boolean;
+  active?: boolean;
+  pin: string;
+}
+export interface ManagementAccountMapRequest {
+  locationId?: string;
+  paymentMethod: string;
+  direction: 'IN' | 'OUT';
+  financialAccountId: string;
+  pin: string;
+}
+export interface ManagementAccountReconcileRequest {
+  financialAccountId: string;
+  observedPesewas: number;
+  reconciledAt?: string;
+  reference?: string | null;
+  evidenceUrl?: string | null;
+  notes?: string | null;
+  pin: string;
+}
+export interface ManagementAccountTransferRequest {
+  fromFinancialAccountId: string;
+  toFinancialAccountId: string;
+  amountPesewas: number;
+  occurredAt?: string;
+  reference?: string | null;
+  notes?: string | null;
+  pin: string;
+}
+export interface ManagementAccountReconcileResponse {
+  reconciliationId: string;
+  variancePesewas: number;
+  adjustmentJournalEntryId: string | null;
+}
+export interface ManagementAccountTransferResponse {
+  transferId: string;
+  journalEntryId: string;
+}
+export interface ManagementExpenseCreateRequest {
+  locationId?: string;
+  category: string;
+  payee?: string | null;
+  incurredDate: string;
+  dueDate?: string | null;
+  amountPesewas: number;
+  fixedOrVariable?: 'FIXED' | 'VARIABLE';
+  financialAccountId?: string | null;
+  paidAt?: string | null;
+  paymentReference?: string | null;
+  notes?: string | null;
+  pin: string;
+}
+export interface ManagementExpenseCreateResponse {
+  businessExpenseId: string;
+  paymentId: string | null;
+}
+export interface ManagementLoanCreateRequest {
+  locationId?: string;
+  kind: 'BANK_LOAN' | 'OWNER_LOAN' | 'LEASE' | 'OTHER';
+  creditorName: string;
+  originalPrincipalPesewas: number;
+  receivedFinancialAccountId?: string | null;
+  startDate: string;
+  endDate?: string | null;
+  schedule: Array<{ dueDate: string; principalPesewas: number; interestPesewas?: number }>;
+  notes?: string | null;
+  pin: string;
+}
+export interface ManagementLoanCreateResponse {
+  liabilityAgreementId: string;
+  obligationIds: string[];
+}
+export interface ManagementObligationPayRequest {
+  obligationId: string;
+  financialAccountId: string;
+  amountPesewas: number;
+  paidAt?: string;
+  reference?: string | null;
+  notes?: string | null;
+  pin: string;
+}
+export interface ManagementObligationPayResponse {
+  allocationId: string;
+  journalEntryId: string | null;
+  principalPesewas: number;
+  interestPesewas: number;
+  outstandingPesewas: number;
+}
+export interface ManagementObligationUpdateRequest {
+  obligationId: string;
+  dueDate: string;
+  disputed: boolean;
+  notes?: string | null;
+  pin: string;
+}
+export interface ManagementFixedAssetCreateRequest {
+  locationId?: string;
+  name: string;
+  assetClass: string;
+  acquiredDate: string;
+  costPesewas: number;
+  residualValuePesewas?: number;
+  usefulLifeMonths?: number | null;
+  sourceFinancialAccountId?: string | null;
+  vendorName?: string | null;
+  dueDate?: string | null;
+  notes?: string | null;
+  pin: string;
+}
+export interface ManagementFixedAssetCreateResponse {
+  fixedAssetId: string;
+  journalEntryId: string | null;
+}
+export interface ManagementFixedAsset {
+  id: string;
+  locationId: string;
+  name: string;
+  assetClass: string;
+  acquiredDate: string;
+  costPesewas: number;
+  residualValuePesewas: number;
+  usefulLifeMonths: number | null;
+  accumulatedDepreciationPesewas: number;
+  carryingValuePesewas: number;
+  disposedAt: string | null;
+  disposalProceedsPesewas: number | null;
+  notes: string | null;
+}
+export interface ManagementFixedAssetsListRequest extends ReportReadAccess { locationId?: string }
+export interface ManagementFixedAssetsListResponse { assets: ManagementFixedAsset[] }
+export interface ManagementFixedAssetDepreciateRequest {
+  fixedAssetId: string;
+  throughDate: string;
+  pin: string;
+}
+export interface ManagementFixedAssetDepreciateResponse {
+  journalEntryId: string;
+  depreciationPesewas: number;
+  accumulatedDepreciationPesewas: number;
+}
+export interface ManagementFixedAssetDisposeRequest {
+  fixedAssetId: string;
+  disposedDate: string;
+  proceedsPesewas: number;
+  receivingFinancialAccountId?: string | null;
+  notes?: string | null;
+  pin: string;
+}
+export interface ManagementFixedAssetDisposeResponse {
+  journalEntryId: string;
+  gainLossPesewas: number;
+}
+export interface ManagementThresholdUpdateRequest {
+  locationId?: string;
+  dimension: 'CUSTOMER' | 'PRODUCT' | 'SUPPLIER' | 'CATEGORY' | 'PAYMENT_RAIL';
+  warningBps: number;
+  dangerBps: number;
+  pin: string;
+}
+export interface ManagementRiskAssumption {
+  id: string;
+  locationId: string;
+  driver: string;
+  baselineBps: number;
+  downsideBps: number;
+  rationale: string | null;
+  ownerWorkerId: string | null;
+  ownerName: string | null;
+  reviewDate: string | null;
+  active: boolean;
+}
+export interface ManagementScenarioDrivers {
+  salesVolumeChangeBps: number;
+  sellingPriceChangeBps: number;
+  cogsChangeBps: number;
+  fixedExpenseChangeBps: number;
+  variableExpenseChangeBps: number;
+  collectionChangeBps: number;
+  badDebtBps: number;
+  additionalInventoryLossBps: number;
+  removeTopCustomer: boolean;
+  removeTopProduct: boolean;
+}
+export interface ManagementSavedScenario {
+  id: string;
+  locationId: string;
+  name: string;
+  horizonDays: 30 | 90 | 180;
+  drivers: Record<string, number | boolean>;
+  active: boolean;
+}
+export interface ManagementRiskConfigRequest extends ReportReadAccess { locationId?: string }
+export interface ManagementRiskConfigResponse {
+  assumptions: ManagementRiskAssumption[];
+  scenarios: ManagementSavedScenario[];
+}
+export interface ManagementRiskAssumptionSaveRequest {
+  id?: string;
+  locationId?: string;
+  driver: string;
+  baselineBps: number;
+  downsideBps: number;
+  rationale?: string | null;
+  reviewDate?: string | null;
+  active?: boolean;
+  pin: string;
+}
+export interface ManagementScenarioSaveRequest {
+  id?: string;
+  locationId?: string;
+  name: string;
+  horizonDays: 30 | 90 | 180;
+  drivers: ManagementScenarioDrivers;
+  active?: boolean;
+  pin: string;
+}
+export interface ManagementOwnerContributionRequest {
+  financialAccountId: string;
+  amountPesewas: number;
+  receivedAt?: string;
+  notes?: string | null;
+  pin: string;
+}
+export interface ManagementOwnerContributionResponse {
+  contributionId: string;
+  journalEntryId: string;
+}
+export interface ManagementHomeWarningsResponse {
+  overdueCount: number;
+  overduePesewas: number;
+  dueNext7DaysCount: number;
+  dueNext7DaysPesewas: number;
+  missingDueDateCount: number;
+}
+export interface ManagementCutoverBalance {
+  ledgerAccountId: string;
+  amountPesewas: number;
+}
+export interface ManagementCutoverRequest extends ReportReadAccess {
+  locationId?: string;
+  cutoverDate: string;
+  balances: ManagementCutoverBalance[];
+}
+export interface ManagementCutoverActivateRequest {
+  locationId?: string;
+  cutoverDate: string;
+  balances: ManagementCutoverBalance[];
+  notes?: string | null;
+  pin: string;
+}
+export interface ManagementCutoverPreviewResponse {
+  locationId: string;
+  cutoverDate: string;
+  debitPesewas: number;
+  creditPesewas: number;
+  openingEquityPesewas: number;
+  balances: Array<ManagementCutoverBalance & {
+    code: string; name: string; accountClass: string; normalBalance: 'DEBIT' | 'CREDIT';
+  }>;
+  issues: ManagementDataQuality['issues'];
+}
+export interface ManagementCutoverActivateResponse {
+  cutoverId: string;
+  openingJournalEntryId: string;
+  openingEquityPesewas: number;
+}
+export interface ManagementShadowRequest extends ReportReadAccess { locationId?: string }
+export interface ManagementShadowSetRequest { locationId?: string; enabled: boolean; pin: string }
+export interface ManagementShadowResponse {
+  enabled: boolean;
+  startedAt: string | null;
+  status: 'NOT_RUNNING' | 'PASS' | 'FAIL';
+  issues: Array<{ code: string; message: string; differencePesewas?: number }>;
+  salesChecked: number;
+  stockMovementsChecked: number;
+}
+export interface ManagementReportRangeRequest extends ReportReadAccess {
+  fromDate: string;
+  toDate: string;
+  locationId?: string;
+}
+export interface ManagementAsOfRequest extends ReportReadAccess {
+  asOfDate: string;
+  locationId?: string;
+}
+export interface ManagementIncomeStatementResponse {
+  generatedAt: string; fromDate: string; toDate: string; locationId: string;
+  basis: 'ACCRUAL' | 'CASH'; legacyEstimate: boolean; dataQuality: ManagementDataQuality;
+  accrual: {
+    netSalesPesewas: number; cogsPesewas: number; grossProfitPesewas: number;
+    grossMarginBps: number; otherOperatingIncomePesewas: number;
+    operatingExpensesPesewas: number; inventoryLossesPesewas: number;
+    operatingProfitPesewas: number; depreciationPesewas: number;
+    financeCostsPesewas: number; profitBeforeIncomeTaxPesewas: number;
+    incomeTaxExpensePesewas: number; netManagementProfitPesewas: number;
+    comparisonNetManagementProfitPesewas: number; changePct: number | null;
+    operatingExpenseLines: ManagementLine[]; inventoryLossLines: ManagementLine[];
+  };
+  cash: {
+    customerCashReceivedPesewas: number; inventoryCashPaidPesewas: number;
+    operatingExpensesPaidPesewas: number; taxPaidPesewas: number;
+    cashOperatingSurplusPesewas: number; accrualToCashDifferencePesewas: number;
+    reconciliationLines: ManagementLine[];
+  };
+}
+export interface ManagementPositionResponse {
+  generatedAt: string; asOfDate: string; locationId: string; legacyEstimate: boolean;
+  dataQuality: ManagementDataQuality;
+  assets: { totalPesewas: number; currentPesewas: number; lines: ManagementLine[] };
+  liabilities: {
+    totalPesewas: number; currentPesewas: number; nonCurrentPesewas: number;
+    lines: ManagementLine[];
+  };
+  equity: { totalPesewas: number; lines: ManagementLine[] };
+  workingCapitalPesewas: number; currentRatioBps: number | null;
+  equationDifferencePesewas: number; integrityOk: boolean;
+}
+export interface ManagementCashflowResponse {
+  generatedAt: string; fromDate: string; toDate: string; locationId: string;
+  dataQuality: ManagementDataQuality;
+  openingCashPesewas: number; operatingPesewas: number; investingPesewas: number;
+  financingPesewas: number; netExternalCashflowPesewas: number;
+  endingCashPesewas: number; expectedEndingCashPesewas: number;
+  reconciliationDifferencePesewas: number; integrityOk: boolean;
+  operatingLines: ManagementLine[]; investingLines: ManagementLine[];
+  financingLines: ManagementLine[]; transferLines: ManagementLine[];
+  accounts: ManagementFinancialAccount[];
+}
+export interface ManagementObligationsResponse {
+  generatedAt: string; asOfDate: string; locationId: string;
+  dataQuality: ManagementDataQuality;
+  rows: Array<{
+    id: string; obligationType: string; creditorName: string; sourceType: string;
+    sourceId: string; issueDate: string; dueDate: string | null;
+    principalPesewas: number; interestPesewas: number; paidPesewas: number;
+    outstandingPesewas: number; status: string; disputed: boolean;
+    bucket: string; daysUntilDue: number | null;
+  }>;
+  buckets: Array<{ bucket: string; amountPesewas: number; count: number }>;
+  totalOutstandingPesewas: number; overduePesewas: number;
+  dueNext7DaysPesewas: number; dueNext30DaysPesewas: number;
+  availableReconciledCashPesewas: number; cashCoverageBps: number | null;
+  projectedCoverageBps: number | null;
+}
+export interface ManagementConcentrationResponse {
+  generatedAt: string; fromDate: string; toDate: string; locationId: string;
+  dataQuality: ManagementDataQuality; identifiedCustomerRevenueBps: number;
+  anonymousWalkInRevenuePesewas: number;
+  dimensions: Array<{
+    dimension: string; metric: string; totalPesewas: number;
+    topOneBps: number; topThreeBps: number; topFiveBps: number;
+    previousTopOneBps: number; changeBps: number; hhi: number;
+    hhiLabel: string; risk: 'OK' | 'WARNING' | 'DANGER';
+    warningBps: number; dangerBps: number;
+    exposures: Array<{ id: string; name: string; amountPesewas: number; shareBps: number }>;
+  }>;
+}
+export interface ManagementDownsideRequest extends ManagementAsOfRequest {
+  horizonDays: 30 | 90 | 180;
+  preset: 'BASELINE' | 'MILD' | 'SEVERE' | 'TOP_DEPENDENCY' | 'CUSTOM';
+  drivers?: Partial<ManagementScenarioDrivers>;
+}
+export interface ManagementDownsideResponse {
+  generatedAt: string; locationId: string;
+  preset: ManagementDownsideRequest['preset']; horizonDays: 30 | 90 | 180;
+  baselineFromDate: string; baselineToDate: string;
+  dataQuality: ManagementDataQuality;
+  drivers: ManagementScenarioDrivers;
+  baseline: {
+    revenuePesewas: number; grossProfitPesewas: number;
+    operatingProfitPesewas: number; endingCashPesewas: number;
+  };
+  projected: {
+    revenuePesewas: number; cogsPesewas: number; grossProfitPesewas: number;
+    operatingExpensesPesewas: number; inventoryLossPesewas: number;
+    badDebtPesewas: number; operatingProfitPesewas: number;
+    cashOperatingSurplusPesewas: number; endingCashPesewas: number;
+    minimumCashPesewas: number; cashRunwayDays: number | null;
+    breakEvenRevenuePesewas: number | null; obligationsDuePesewas: number;
+    obligationsCoverageBps: number | null; firstNegativeCashDate: string | null;
+  };
+  difference: {
+    revenuePesewas: number; operatingProfitPesewas: number; endingCashPesewas: number;
+  };
+  monthly: Array<{
+    month: number; revenuePesewas: number;
+    operatingProfitPesewas: number; endingCashPesewas: number;
+  }>;
+  disclaimer: string;
+}
+
+export interface ManagementDrilldownRequest extends ReportReadAccess {
+  locationId?: string;
+  accountCode?: string;
+  financialAccountId?: string;
+  sourceType?: string;
+  sourceId?: string;
+  fromDate?: string;
+  toDate?: string;
+  asOfDate?: string;
+}
+export interface ManagementDrilldownResponse {
+  generatedAt: string;
+  locationId: string;
+  rows: Array<{
+    journalEntryId: string;
+    businessDate: string;
+    occurredAt: string;
+    sourceType: string;
+    sourceId: string;
+    postingType: string;
+    description: string;
+    accountCode: string;
+    accountName: string;
+    debitPesewas: number;
+    creditPesewas: number;
+    amountPesewas: number;
+    counterpartyType: string | null;
+    counterpartyId: string | null;
+  }>;
+  truncated: boolean;
+  legacyUnavailable: boolean;
+}
+
 export interface ReportsPriceIntelligenceResponse {
   rows: Array<{
     productId: string; sku: string; productName: string;
@@ -2273,7 +3016,7 @@ export interface ReportsPriceIntelligenceResponse {
     walkInVsMinimumPesewas: number; walkInVsCompetitorPesewas: number | null;
   }>;
 }
-export interface ReportsPriceHistoryRequest {
+export interface ReportsPriceHistoryRequest extends ReportReadAccess {
   fromDate?: string; toDate?: string; productId?: string | null; limit?: number;
 }
 export interface ReportsPriceHistoryResponse {
@@ -2283,7 +3026,7 @@ export interface ReportsPriceHistoryResponse {
     competitorName: string | null; reason: string | null; changedAt: string; changedBy: string;
   }>;
 }
-export interface ReportsLandedCostsRequest {
+export interface ReportsLandedCostsRequest extends ReportReadAccess {
   fromDate?: string; toDate?: string; supplierId?: string | null;
 }
 export interface ReportsLandedCostsResponse {
@@ -2296,7 +3039,7 @@ export interface ReportsLandedCostsResponse {
     landedLineTotalPesewas: number;
   }>;
 }
-export interface ReportsCustomerIntelligenceRequest {
+export interface ReportsCustomerIntelligenceRequest extends ReportReadAccess {
   asOfDateISO?: string; inactiveDays?: number;
 }
 export interface ReportsCustomerIntelligenceResponse {

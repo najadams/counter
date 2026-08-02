@@ -15,7 +15,7 @@ const PAYMENT_METHODS: Array<{ code: TaxPaymentMethod; label: string }> = [
   { code: 'CASH', label: 'Cash' },
 ];
 
-export function TaxesTab() {
+export function TaxesTab({ reportAccessToken }: { reportAccessToken: string }) {
   const [range, setRange] = useState<DateRange>(defaultDateRange());
   const [data, setData] = useState<ReportsTaxesResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -26,18 +26,19 @@ export function TaxesTab() {
   const [paymentReference, setPaymentReference] = useState('');
   const [paymentDate, setPaymentDate] = useState(todayInputDate());
   const [paymentNotes, setPaymentNotes] = useState('');
+  const [paymentPin, setPaymentPin] = useState('');
   const [savingPayment, setSavingPayment] = useState(false);
 
   async function load() {
     setLoading(true);
-    const r = await counter.reportsTaxes({ fromDate: range.fromDate, toDate: range.toDate });
+    const r = await counter.reportsTaxes({ fromDate: range.fromDate, toDate: range.toDate, reportAccessToken });
     setLoading(false);
     if (!r.success) { setError(r.error); return; }
     setData(r.data);
     setError(null);
   }
 
-  useEffect(() => { void load(); /* eslint-disable-next-line */ }, [range.fromDate, range.toDate]);
+  useEffect(() => { void load(); /* eslint-disable-next-line */ }, [range.fromDate, range.toDate, reportAccessToken]);
 
   function openPaymentForm() {
     const balance = Math.max(0, data?.taxBalancePesewas ?? data?.netVatPayablePesewas ?? 0);
@@ -46,6 +47,7 @@ export function TaxesTab() {
     setPaymentReference('');
     setPaymentDate(todayInputDate());
     setPaymentNotes('');
+    setPaymentPin('');
     setShowPaymentForm(true);
     setError(null);
   }
@@ -70,7 +72,9 @@ export function TaxesTab() {
       paymentReference: paymentReference.trim() || null,
       paidAt: `${paymentDate}T12:00:00.000Z`,
       notes: paymentNotes.trim() || null,
+      pin: paymentPin,
     });
+    setPaymentPin('');
     setSavingPayment(false);
     if (!r.success) {
       setError(r.error);
@@ -177,11 +181,17 @@ export function TaxesTab() {
                   className="bg-bg-input border border-border px-3 py-2 min-h-20"
                 />
               </label>
+              <label className="flex flex-col gap-1 mt-3 max-w-xs">
+                <span className="text-text-tertiary text-xs">Fresh PIN to record this payment</span>
+                <input type="password" inputMode="numeric" maxLength={6} value={paymentPin}
+                  onChange={(e) => setPaymentPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  className="bg-bg-input border border-border px-3 py-2 font-mono" />
+              </label>
               <div className="mt-4 flex justify-end">
                 <button
                   type="button"
                   onClick={() => void submitTaxPayment()}
-                  disabled={savingPayment}
+                  disabled={savingPayment || paymentPin.length < 4}
                   className="bg-accent text-white px-5 py-2 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {savingPayment ? 'Saving…' : 'Save tax payment'}

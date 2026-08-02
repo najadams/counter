@@ -143,6 +143,12 @@ export function ReceiptBody({
 
       <Hr />
 
+      {receipt.statusNotice && (
+        <div style={{ margin: `${tokens.sectionGap} 0`, padding: '6px 2px', textAlign: 'center', border: '2px solid #000', fontWeight: 900 }}>
+          {receipt.statusNotice}
+        </div>
+      )}
+
       {/* Meta block */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: tokens.rowGap, marginTop: tokens.rowGap, marginBottom: tokens.sectionGap }}>
         <Row left="Date" right={fmtDateTime(receipt.saleAt)} weight={baseWeight} />

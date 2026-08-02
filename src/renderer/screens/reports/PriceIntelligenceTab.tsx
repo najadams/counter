@@ -8,7 +8,7 @@ import type {
 } from '../../../shared/types/ipc';
 import { FeedbackBanner } from '../../components/FeedbackBanner';
 
-export function PriceIntelligenceTab() {
+export function PriceIntelligenceTab({ reportAccessToken }: { reportAccessToken: string }) {
   const [prices, setPrices] = useState<ReportsPriceIntelligenceResponse | null>(null);
   const [history, setHistory] = useState<ReportsPriceHistoryResponse | null>(null);
   const [landed, setLanded] = useState<ReportsLandedCostsResponse | null>(null);
@@ -17,16 +17,16 @@ export function PriceIntelligenceTab() {
   useEffect(() => {
     void (async () => {
       const [p, h, l] = await Promise.all([
-        counter.reportsPriceIntelligence(),
-        counter.reportsPriceHistory({ limit: 50 }),
-        counter.reportsLandedCosts({}),
+        counter.reportsPriceIntelligence({ reportAccessToken }),
+        counter.reportsPriceHistory({ limit: 50, reportAccessToken }),
+        counter.reportsLandedCosts({ reportAccessToken }),
       ]);
       if (!p.success) { setError(p.error); return; }
       if (!h.success) { setError(h.error); return; }
       if (!l.success) { setError(l.error); return; }
       setPrices(p.data); setHistory(h.data); setLanded(l.data); setError(null);
     })();
-  }, []);
+  }, [reportAccessToken]);
 
   if (error) return <FeedbackBanner>{error}</FeedbackBanner>;
   if (!prices || !history || !landed) return <div className="text-text-tertiary text-sm">Loading…</div>;

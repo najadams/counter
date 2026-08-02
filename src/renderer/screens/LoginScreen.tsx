@@ -71,13 +71,13 @@ export default function LoginScreen() {
     <div className="min-h-screen bg-bg-deep text-text-primary flex flex-col">
       <AppHeader subtitle="sign in" />
       <main className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 px-5 py-6 sm:px-12 sm:py-10 max-w-5xl mx-auto w-full">
-        <section>
-          <h2 className="text-text-secondary uppercase tracking-wider text-xs mb-4">Workers</h2>
+        <section className="panel p-5 sm:p-6">
+          <div className="eyebrow mb-4">Choose your worker profile</div>
           {loading && <div className="text-text-tertiary">Loading…</div>}
           {!loading && candidates.length === 0 && (
             <div className="text-text-tertiary">No active workers. Run <span className="kbd">npm run db:reset</span> to seed dev fixtures.</div>
           )}
-          <ul className="flex flex-col">
+          <ul className="flex flex-col gap-2">
             {candidates.map((c, i) => {
               const active = i === selectedIdx;
               return (
@@ -86,7 +86,7 @@ export default function LoginScreen() {
                     type="button"
                     onClick={() => { setSelectedIdx(i); setPin(''); }}
                     className={[
-                      'w-full text-left px-5 py-4 border flex items-center justify-between',
+                      'w-full text-left px-5 py-4 border rounded-lg flex items-center justify-between min-h-14',
                       active
                         ? 'border-accent bg-bg-elevated text-text-primary'
                         : 'border-border bg-bg-surface text-text-primary hover:bg-bg-elevated',
@@ -104,8 +104,8 @@ export default function LoginScreen() {
           </div>
         </section>
 
-        <section className="flex flex-col gap-4">
-          <h2 className="text-text-secondary uppercase tracking-wider text-xs">PIN</h2>
+        <section className="panel p-5 sm:p-6 flex flex-col gap-4">
+          <div><div className="eyebrow">Secure sign in</div><h2 className="text-xl font-semibold mt-1">Enter your PIN</h2></div>
           <input
             ref={pinInputRef}
             type="password"
@@ -126,7 +126,7 @@ export default function LoginScreen() {
             type="button"
             onClick={() => void submit()}
             disabled={submitting || pin.length < 4 || lockedUntil !== null}
-            className="bg-accent text-ink px-5 py-3 font-semibold tracking-wide hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed"
+            className="btn btn-primary w-full disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {submitting ? 'Signing in…' : 'Sign in'}
           </button>

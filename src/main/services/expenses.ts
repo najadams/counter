@@ -19,6 +19,7 @@ import type { Database as DB } from 'better-sqlite3';
 import { v4 as uuidv4 } from 'uuid';
 import { logAudit } from '../db/audit.js';
 import { assertNotSealed } from './periods.js';
+import { postLegacyExpenseIfActive } from './ledger.js';
 
 export const EXPENSE_CATEGORIES = [
   'RENT', 'UTILITIES', 'TRANSPORT', 'SUPPLIES', 'COMMS',
@@ -81,35 +82,38 @@ export function recordExpense(db: DB, input: RecordExpenseInput): RecordExpenseR
   }
 
   const expenseId = `exp-${uuidv4()}`;
-  db.prepare(
-    `INSERT INTO petty_cash_expenses (
-      id, shift_id, location_id, worker_id, amount_pesewas, category,
-      payee, photo_url, notes, supervisor_approval_id,
-      created_by, updated_by, device_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(
-    expenseId,
-    input.shiftId, input.locationId, input.workerId, input.amountPesewas, input.category,
-    input.payee?.trim() || null, input.photoUrl ?? null,
-    input.notes?.trim() || null,
-    input.supervisorApprovalId ?? null,
-    input.workerId, input.workerId, input.deviceId,
-  );
+  db.transaction(() => {
+    db.prepare(
+      `INSERT INTO petty_cash_expenses (
+        id, shift_id, location_id, worker_id, amount_pesewas, category,
+        payee, photo_url, notes, supervisor_approval_id,
+        created_by, updated_by, device_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      expenseId,
+      input.shiftId, input.locationId, input.workerId, input.amountPesewas, input.category,
+      input.payee?.trim() || null, input.photoUrl ?? null,
+      input.notes?.trim() || null,
+      input.supervisorApprovalId ?? null,
+      input.workerId, input.workerId, input.deviceId,
+    );
 
-  logAudit(db, {
-    workerId: input.workerId,
-    action: 'EXPENSE_RECORDED',
-    entityType: 'petty_cash_expenses',
-    entityId: expenseId,
-    afterValue: {
-      amountPesewas: input.amountPesewas,
-      category: input.category,
-      payee: input.payee?.trim() || null,
-      shiftId: input.shiftId,
-      supervisorApprovalId: input.supervisorApprovalId ?? null,
-    },
-    deviceId: input.deviceId,
-  });
+    logAudit(db, {
+      workerId: input.workerId,
+      action: 'EXPENSE_RECORDED',
+      entityType: 'petty_cash_expenses',
+      entityId: expenseId,
+      afterValue: {
+        amountPesewas: input.amountPesewas,
+        category: input.category,
+        payee: input.payee?.trim() || null,
+        shiftId: input.shiftId,
+        supervisorApprovalId: input.supervisorApprovalId ?? null,
+      },
+      deviceId: input.deviceId,
+    });
+    postLegacyExpenseIfActive(db, expenseId, input.workerId, input.deviceId);
+  })();
 
   return { expenseId };
 }

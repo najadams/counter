@@ -36,6 +36,7 @@ export function createCounterApi(invoke: Invoke) {
     // auth
     listLoginCandidates: () => invoke<ipc.ListLoginCandidatesResponse>(ipc.IPC_CHANNELS.WORKER_LIST_FOR_LOGIN, {}),
     login: (workerId: string, pin: string) => invoke<ipc.WorkerLoginResponse>(ipc.IPC_CHANNELS.WORKER_LOGIN, { workerId, pin }),
+    verifyCurrentPin: (pin: string) => invoke<ipc.WorkerVerifyCurrentPinResponse>(ipc.IPC_CHANNELS.WORKER_VERIFY_CURRENT_PIN, { pin }),
     logout: () => invoke<ipc.WorkerLogoutResponse>(ipc.IPC_CHANNELS.WORKER_LOGOUT, {}),
     getCurrentWorker: () => invoke<ipc.WorkerGetCurrentResponse>(ipc.IPC_CHANNELS.WORKER_GET_CURRENT, {}),
 
@@ -58,12 +59,40 @@ export function createCounterApi(invoke: Invoke) {
       invoke<ipc.SaleCompleteResponse>(ipc.IPC_CHANNELS.SALE_COMPLETE, req),
     repriceLines: (req: ipc.SaleRepriceLinesRequest) =>
       invoke<ipc.SaleRepriceLinesResponse>(ipc.IPC_CHANNELS.SALE_REPRICE_LINES, req),
+    paperReceiptCreate: (req: ipc.PaperReceiptCreateRequest) =>
+      invoke<ipc.PaperReceiptCreateResponse>(ipc.IPC_CHANNELS.PAPER_RECEIPT_CREATE, req),
+    paperReceiptList: (limit?: number) =>
+      invoke<ipc.PaperReceiptListResponse>(ipc.IPC_CHANNELS.PAPER_RECEIPT_LIST, { limit }),
+    paperReceiptGet: (draftId: string) =>
+      invoke<ipc.PaperReceiptGetResponse>(ipc.IPC_CHANNELS.PAPER_RECEIPT_GET, { draftId }),
+    paperReceiptUpdate: (req: ipc.PaperReceiptUpdateRequest) =>
+      invoke<ipc.PaperReceiptSimpleResponse>(ipc.IPC_CHANNELS.PAPER_RECEIPT_UPDATE, req),
+    paperReceiptReparse: (req: Omit<ipc.PaperReceiptUpdateRequest, 'lines'>) =>
+      invoke<ipc.PaperReceiptSimpleResponse>(ipc.IPC_CHANNELS.PAPER_RECEIPT_REPARSE, req),
+    paperReceiptResolveForCart: (draftId: string) =>
+      invoke<ipc.PaperReceiptResolveForCartResponse>(ipc.IPC_CHANNELS.PAPER_RECEIPT_RESOLVE_FOR_CART, { draftId }),
+    paperReceiptMarkPostedFromTill: (draftId: string, saleId: string) =>
+      invoke<ipc.PaperReceiptSimpleResponse>(ipc.IPC_CHANNELS.PAPER_RECEIPT_MARK_POSTED_FROM_TILL, { draftId, saleId }),
+    paperReceiptPost: (draftId: string) =>
+      invoke<ipc.PaperReceiptPostResponse>(ipc.IPC_CHANNELS.PAPER_RECEIPT_POST, { draftId }),
+    paperReceiptDiscard: (draftId: string, reason: string) =>
+      invoke<ipc.PaperReceiptSimpleResponse>(ipc.IPC_CHANNELS.PAPER_RECEIPT_DISCARD, { draftId, reason }),
 
     // voids
     listRecentSales: (limit?: number) =>
       invoke<ipc.SaleListRecentResponse>(ipc.IPC_CHANNELS.SALE_LIST_RECENT, { limit }),
-    voidSale: (saleId: string, reason: string, supervisorWorkerId: string, supervisorPin: string) =>
-      invoke<ipc.SaleVoidResponse>(ipc.IPC_CHANNELS.SALE_VOID, { saleId, reason, supervisorWorkerId, supervisorPin }),
+    saleVoidRequestCreate: (req: ipc.SaleVoidRequestCreateRequest) =>
+      invoke<ipc.SaleVoidRequestDetail>(ipc.IPC_CHANNELS.SALE_VOID_REQUEST_CREATE, req),
+    saleVoidRequestList: (req: ipc.SaleVoidRequestListRequest) =>
+      invoke<ipc.SaleVoidRequestListResponse>(ipc.IPC_CHANNELS.SALE_VOID_REQUEST_LIST, req),
+    saleVoidRequestGet: (requestId: string) =>
+      invoke<ipc.SaleVoidRequestDetail>(ipc.IPC_CHANNELS.SALE_VOID_REQUEST_GET, { requestId }),
+    saleVoidRequestReview: (req: ipc.SaleVoidRequestReviewRequest) =>
+      invoke<ipc.SaleVoidRequestDetail>(ipc.IPC_CHANNELS.SALE_VOID_REQUEST_REVIEW, req),
+    saleVoidRequestWithdraw: (requestId: string) =>
+      invoke<ipc.SaleVoidRequestDetail>(ipc.IPC_CHANNELS.SALE_VOID_REQUEST_WITHDRAW, { requestId }),
+    saleVoidRequestPendingCount: () =>
+      invoke<ipc.SaleVoidRequestPendingCountResponse>(ipc.IPC_CHANNELS.SALE_VOID_REQUEST_PENDING_COUNT, {}),
     correctSale: (req: ipc.SaleCorrectRequest) =>
       invoke<ipc.SaleCorrectResponse>(ipc.IPC_CHANNELS.SALE_CORRECT, req),
 
@@ -359,7 +388,17 @@ export function createCounterApi(invoke: Invoke) {
       invoke<ipc.SupplierStatementLinesResponse>(ipc.IPC_CHANNELS_SUP_PAY.SUPPLIER_STATEMENT_LINES, req),
 
     // --- Reports / dashboard ---
-    reportsOverview: (req: ipc.ReportsOverviewRequest = {}) =>
+    reportsUnlock: (pin: string) =>
+      invoke<ipc.ReportsAccessUnlockResponse>(ipc.IPC_CHANNELS_REPORTS.REPORTS_ACCESS_UNLOCK, { pin }),
+    reportsTouch: (accessToken: string) =>
+      invoke<ipc.ReportsAccessTouchResponse>(ipc.IPC_CHANNELS_REPORTS.REPORTS_ACCESS_TOUCH, { accessToken }),
+    reportsLock: (accessToken: string, reason: 'MANUAL' | 'IDLE' = 'MANUAL') =>
+      invoke<{ ok: true }>(ipc.IPC_CHANNELS_REPORTS.REPORTS_ACCESS_LOCK, { accessToken, reason }),
+    reportsAccessStatus: (accessToken: string) =>
+      invoke<ipc.ReportsAccessStatusResponse>(ipc.IPC_CHANNELS_REPORTS.REPORTS_ACCESS_STATUS, { accessToken }),
+    reportsAuditAction: (req: ipc.ReportsAccessActionRequest) =>
+      invoke<{ ok: true }>(ipc.IPC_CHANNELS_REPORTS.REPORTS_ACCESS_ACTION, req),
+    reportsOverview: (req: ipc.ReportsOverviewRequest) =>
       invoke<ipc.ReportsOverviewResponse>(ipc.IPC_CHANNELS_REPORTS.REPORTS_OVERVIEW, req),
     reportsSales: (req: ipc.ReportsSalesRequest) =>
       invoke<ipc.ReportsSalesResponse>(ipc.IPC_CHANNELS_REPORTS.REPORTS_SALES, req),
@@ -367,15 +406,15 @@ export function createCounterApi(invoke: Invoke) {
       invoke<ipc.ReportsGraphsResponse>(ipc.IPC_CHANNELS_REPORTS.REPORTS_GRAPHS, req),
     reportsMargin: (req: ipc.ReportsMarginRequest) =>
       invoke<ipc.ReportsMarginResponse>(ipc.IPC_CHANNELS_REPORTS.REPORTS_MARGIN, req),
-    reportsInventory: (req: ipc.ReportsInventoryRequest = {}) =>
+    reportsInventory: (req: ipc.ReportsInventoryRequest) =>
       invoke<ipc.ReportsInventoryResponse>(ipc.IPC_CHANNELS_REPORTS.REPORTS_INVENTORY, req),
-    reportsPriceIntelligence: () =>
-      invoke<ipc.ReportsPriceIntelligenceResponse>(ipc.IPC_CHANNELS_REPORTS.REPORTS_PRICE_INTELLIGENCE, {}),
-    reportsPriceHistory: (req: ipc.ReportsPriceHistoryRequest = {}) =>
+    reportsPriceIntelligence: (req: ipc.ReportReadAccess) =>
+      invoke<ipc.ReportsPriceIntelligenceResponse>(ipc.IPC_CHANNELS_REPORTS.REPORTS_PRICE_INTELLIGENCE, req),
+    reportsPriceHistory: (req: ipc.ReportsPriceHistoryRequest) =>
       invoke<ipc.ReportsPriceHistoryResponse>(ipc.IPC_CHANNELS_REPORTS.REPORTS_PRICE_HISTORY, req),
-    reportsLandedCosts: (req: ipc.ReportsLandedCostsRequest = {}) =>
+    reportsLandedCosts: (req: ipc.ReportsLandedCostsRequest) =>
       invoke<ipc.ReportsLandedCostsResponse>(ipc.IPC_CHANNELS_REPORTS.REPORTS_LANDED_COSTS, req),
-    reportsCustomerIntelligence: (req: ipc.ReportsCustomerIntelligenceRequest = {}) =>
+    reportsCustomerIntelligence: (req: ipc.ReportsCustomerIntelligenceRequest) =>
       invoke<ipc.ReportsCustomerIntelligenceResponse>(ipc.IPC_CHANNELS_REPORTS.REPORTS_CUSTOMER_INTELLIGENCE, req),
     reportsTaxes: (req: ipc.ReportsTaxesRequest) =>
       invoke<ipc.ReportsTaxesResponse>(ipc.IPC_CHANNELS_REPORTS.REPORTS_TAXES, req),
@@ -385,6 +424,70 @@ export function createCounterApi(invoke: Invoke) {
       invoke<ipc.ReportsBalanceSheetResponse>(ipc.IPC_CHANNELS_REPORTS.REPORTS_BALANCE_SHEET, req),
     reportsCashflow: (req: ipc.ReportsCashflowRequest) =>
       invoke<ipc.ReportsCashflowResponse>(ipc.IPC_CHANNELS_REPORTS.REPORTS_CASHFLOW, req),
+    managementAccounts: (req: ipc.ManagementAccountsListRequest) =>
+      invoke<ipc.ManagementAccountsListResponse>(ipc.IPC_CHANNELS_REPORTS.MANAGEMENT_ACCOUNTS_LIST, req),
+    managementCreateAccount: (req: ipc.ManagementAccountCreateRequest) =>
+      invoke<ipc.ManagementFinancialAccount>(ipc.IPC_CHANNELS_REPORTS.MANAGEMENT_ACCOUNT_CREATE, req),
+    managementUpdateAccount: (req: ipc.ManagementAccountUpdateRequest) =>
+      invoke<ipc.ManagementFinancialAccount>(ipc.IPC_CHANNELS_REPORTS.MANAGEMENT_ACCOUNT_UPDATE, req),
+    managementMapAccount: (req: ipc.ManagementAccountMapRequest) =>
+      invoke<{ ok: boolean }>(ipc.IPC_CHANNELS_REPORTS.MANAGEMENT_ACCOUNT_MAP, req),
+    managementReconcileAccount: (req: ipc.ManagementAccountReconcileRequest) =>
+      invoke<ipc.ManagementAccountReconcileResponse>(ipc.IPC_CHANNELS_REPORTS.MANAGEMENT_ACCOUNT_RECONCILE, req),
+    managementTransfer: (req: ipc.ManagementAccountTransferRequest) =>
+      invoke<ipc.ManagementAccountTransferResponse>(ipc.IPC_CHANNELS_REPORTS.MANAGEMENT_ACCOUNT_TRANSFER, req),
+    managementCutoverPreview: (req: ipc.ManagementCutoverRequest) =>
+      invoke<ipc.ManagementCutoverPreviewResponse>(ipc.IPC_CHANNELS_REPORTS.MANAGEMENT_CUTOVER_PREVIEW, req),
+    managementCutoverActivate: (req: ipc.ManagementCutoverActivateRequest) =>
+      invoke<ipc.ManagementCutoverActivateResponse>(ipc.IPC_CHANNELS_REPORTS.MANAGEMENT_CUTOVER_ACTIVATE, req),
+    managementShadowStatus: (req: ipc.ManagementShadowRequest) =>
+      invoke<ipc.ManagementShadowResponse>(ipc.IPC_CHANNELS_REPORTS.MANAGEMENT_SHADOW_STATUS, req),
+    managementSetShadow: (req: ipc.ManagementShadowSetRequest) =>
+      invoke<ipc.ManagementShadowResponse>(ipc.IPC_CHANNELS_REPORTS.MANAGEMENT_SHADOW_SET, req),
+    managementDataQuality: (req: ipc.ManagementAccountsListRequest) =>
+      invoke<ipc.ManagementDataQuality>(ipc.IPC_CHANNELS_REPORTS.MANAGEMENT_DATA_QUALITY, req),
+    managementIncomeStatement: (req: ipc.ManagementReportRangeRequest) =>
+      invoke<ipc.ManagementIncomeStatementResponse>(ipc.IPC_CHANNELS_REPORTS.MANAGEMENT_INCOME_STATEMENT, req),
+    managementPosition: (req: ipc.ManagementAsOfRequest) =>
+      invoke<ipc.ManagementPositionResponse>(ipc.IPC_CHANNELS_REPORTS.MANAGEMENT_POSITION, req),
+    managementCashflow: (req: ipc.ManagementReportRangeRequest) =>
+      invoke<ipc.ManagementCashflowResponse>(ipc.IPC_CHANNELS_REPORTS.MANAGEMENT_CASHFLOW, req),
+    managementObligations: (req: ipc.ManagementAsOfRequest) =>
+      invoke<ipc.ManagementObligationsResponse>(ipc.IPC_CHANNELS_REPORTS.MANAGEMENT_OBLIGATIONS, req),
+    managementConcentration: (req: ipc.ManagementReportRangeRequest) =>
+      invoke<ipc.ManagementConcentrationResponse>(ipc.IPC_CHANNELS_REPORTS.MANAGEMENT_CONCENTRATION, req),
+    managementDownside: (req: ipc.ManagementDownsideRequest) =>
+      invoke<ipc.ManagementDownsideResponse>(ipc.IPC_CHANNELS_REPORTS.MANAGEMENT_DOWNSIDE, req),
+    managementCreateExpense: (req: ipc.ManagementExpenseCreateRequest) =>
+      invoke<ipc.ManagementExpenseCreateResponse>(ipc.IPC_CHANNELS_REPORTS.MANAGEMENT_EXPENSE_CREATE, req),
+    managementCreateLoan: (req: ipc.ManagementLoanCreateRequest) =>
+      invoke<ipc.ManagementLoanCreateResponse>(ipc.IPC_CHANNELS_REPORTS.MANAGEMENT_LOAN_CREATE, req),
+    managementPayObligation: (req: ipc.ManagementObligationPayRequest) =>
+      invoke<ipc.ManagementObligationPayResponse>(ipc.IPC_CHANNELS_REPORTS.MANAGEMENT_OBLIGATION_PAY, req),
+    managementUpdateObligation: (req: ipc.ManagementObligationUpdateRequest) =>
+      invoke<{ ok: boolean }>(ipc.IPC_CHANNELS_REPORTS.MANAGEMENT_OBLIGATION_UPDATE, req),
+    managementCreateFixedAsset: (req: ipc.ManagementFixedAssetCreateRequest) =>
+      invoke<ipc.ManagementFixedAssetCreateResponse>(ipc.IPC_CHANNELS_REPORTS.MANAGEMENT_FIXED_ASSET_CREATE, req),
+    managementFixedAssets: (req: ipc.ManagementFixedAssetsListRequest) =>
+      invoke<ipc.ManagementFixedAssetsListResponse>(ipc.IPC_CHANNELS_REPORTS.MANAGEMENT_FIXED_ASSETS_LIST, req),
+    managementDepreciateFixedAsset: (req: ipc.ManagementFixedAssetDepreciateRequest) =>
+      invoke<ipc.ManagementFixedAssetDepreciateResponse>(ipc.IPC_CHANNELS_REPORTS.MANAGEMENT_FIXED_ASSET_DEPRECIATE, req),
+    managementDisposeFixedAsset: (req: ipc.ManagementFixedAssetDisposeRequest) =>
+      invoke<ipc.ManagementFixedAssetDisposeResponse>(ipc.IPC_CHANNELS_REPORTS.MANAGEMENT_FIXED_ASSET_DISPOSE, req),
+    managementUpdateThreshold: (req: ipc.ManagementThresholdUpdateRequest) =>
+      invoke<{ ok: boolean }>(ipc.IPC_CHANNELS_REPORTS.MANAGEMENT_THRESHOLD_UPDATE, req),
+    managementRiskConfig: (req: ipc.ManagementRiskConfigRequest) =>
+      invoke<ipc.ManagementRiskConfigResponse>(ipc.IPC_CHANNELS_REPORTS.MANAGEMENT_RISK_CONFIG, req),
+    managementSaveRiskAssumption: (req: ipc.ManagementRiskAssumptionSaveRequest) =>
+      invoke<ipc.ManagementRiskAssumption>(ipc.IPC_CHANNELS_REPORTS.MANAGEMENT_RISK_ASSUMPTION_SAVE, req),
+    managementSaveScenario: (req: ipc.ManagementScenarioSaveRequest) =>
+      invoke<ipc.ManagementSavedScenario>(ipc.IPC_CHANNELS_REPORTS.MANAGEMENT_SCENARIO_SAVE, req),
+    managementDrilldown: (req: ipc.ManagementDrilldownRequest) =>
+      invoke<ipc.ManagementDrilldownResponse>(ipc.IPC_CHANNELS_REPORTS.MANAGEMENT_DRILLDOWN, req),
+    managementOwnerContribution: (req: ipc.ManagementOwnerContributionRequest) =>
+      invoke<ipc.ManagementOwnerContributionResponse>(ipc.IPC_CHANNELS_REPORTS.MANAGEMENT_OWNER_CONTRIBUTION, req),
+    managementHomeWarnings: () =>
+      invoke<ipc.ManagementHomeWarningsResponse>(ipc.IPC_CHANNELS_REPORTS.MANAGEMENT_HOME_WARNINGS, {}),
 
     // --- Catalog data transfer ---
     catalogExport: (req: ipc.CatalogExportRequest = {}) =>
@@ -399,6 +502,8 @@ export function createCounterApi(invoke: Invoke) {
       invoke<ipc.ReceiptConfigResponse>(ipc.IPC_CHANNELS_RECEIPT.RECEIPT_GET_CONFIG, {}),
     receiptSetConfig: (req: ipc.ReceiptSetConfigRequest) =>
       invoke<ipc.ReceiptConfigResponse>(ipc.IPC_CHANNELS_RECEIPT.RECEIPT_SET_CONFIG, req),
+    receiptTestPrinter: (req: ipc.ReceiptTestPrinterRequest) =>
+      invoke<ipc.ReceiptTestPrinterResponse>(ipc.IPC_CHANNELS_RECEIPT.RECEIPT_TEST_PRINTER, req),
 
     // --- Phase 4 workstream C: WhatsApp pending orders (accept/reject) ---
     pendingOrdersList: () =>

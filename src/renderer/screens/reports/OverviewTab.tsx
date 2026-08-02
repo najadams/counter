@@ -8,6 +8,7 @@ import type { ReportsOverviewResponse } from '../../../shared/types/ipc';
 import { FeedbackBanner } from '../../components/FeedbackBanner';
 
 interface Props {
+  reportAccessToken: string;
   onOpenCustomers?: () => void;
   onOpenSummary?: () => void;
   onOpenStocktake?: () => void;
@@ -18,6 +19,7 @@ interface Props {
 }
 
 export function OverviewTab({
+  reportAccessToken,
   onOpenCustomers, onOpenSummary, onOpenStocktake,
   onOpenSupplierPayments, onOpenReorder, registerRefresh,
 }: Props) {
@@ -27,13 +29,13 @@ export function OverviewTab({
 
   async function refresh() {
     setLoading(true);
-    const r = await counter.reportsOverview({});
+    const r = await counter.reportsOverview({ reportAccessToken });
     setLoading(false);
     if (!r.success) { setError(r.error); return; }
     setData(r.data);
     setError(null);
   }
-  useEffect(() => { void refresh(); /* eslint-disable-next-line */ }, []);
+  useEffect(() => { void refresh(); /* eslint-disable-next-line */ }, [reportAccessToken]);
   useEffect(() => { registerRefresh?.(refresh, loading); /* eslint-disable-next-line */ }, [loading]);
 
   if (error) return <FeedbackBanner>{error}</FeedbackBanner>;

@@ -15,7 +15,7 @@ function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-export function DrawingsTab() {
+export function DrawingsTab({ reportAccessToken }: { reportAccessToken: string }) {
   const [period, setPeriod] = useState<Period>('DAILY');
   const [fromDate, setFromDate] = useState(monthStart);
   const [toDate, setToDate] = useState(today);
@@ -25,14 +25,14 @@ export function DrawingsTab() {
 
   async function refresh() {
     setLoading(true);
-    const r = await counter.drawingReport({ period, fromDate, toDate });
+    const r = await counter.drawingReport({ period, fromDate, toDate, reportAccessToken });
     setLoading(false);
     if (!r.success) { setError(r.error); return; }
     setRows(r.data.rows);
     setError(null);
   }
 
-  useEffect(() => { void refresh(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [period, fromDate, toDate]);
+  useEffect(() => { void refresh(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [period, fromDate, toDate, reportAccessToken]);
 
   const total = rows.reduce((sum, r) => sum + r.totalPesewas, 0);
 

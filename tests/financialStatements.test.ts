@@ -32,6 +32,7 @@ beforeEach(() => {
   db.pragma('foreign_keys = ON');
   runMigrations(db, migrationsDir);
   runSeed(db, { includeDevFixtures: true });
+  db.prepare("UPDATE workers SET role = 'OWNER' WHERE id = ?").run(SUP);
   shiftId = openShift(db, {
     workerId: W,
     locationId: L,
@@ -150,31 +151,17 @@ async function seedStatementActivity() {
   ).run(L, shiftId, todayISO(), todayISO(), new Date().toISOString(), SUP, SUP, D);
 }
 
-describe('financial statement PIN gate', () => {
-  it('requires a reporting role and the signed-in user PIN', () => {
+describe('financial statement service authorization', () => {
+  it('requires an owner reporting role and records the sensitive view', () => {
     expect(() => getBalanceSheetReport(db, {
       actorWorkerId: W,
       asOfDate: todayISO(),
-      pin: '1234',
       deviceId: D,
     })).toThrow(/role COUNTER/);
-
-    expect(() => getBalanceSheetReport(db, {
-      actorWorkerId: SUP,
-      asOfDate: todayISO(),
-      pin: '0000',
-      deviceId: D,
-    })).toThrow(/PIN check failed/);
-
-    const attempts = db.prepare(
-      'SELECT attempt_count FROM pin_attempts WHERE worker_id = ? AND device_id = ?',
-    ).get(SUP, D) as { attempt_count: number };
-    expect(attempts.attempt_count).toBe(1);
 
     const report = getBalanceSheetReport(db, {
       actorWorkerId: SUP,
       asOfDate: todayISO(),
-      pin: '9999',
       deviceId: D,
     });
     expect(report.assets.totalPesewas).toBeGreaterThanOrEqual(0);

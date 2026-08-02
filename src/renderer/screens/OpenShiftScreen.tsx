@@ -7,17 +7,34 @@ import { useSession } from '../store/session';
 import { AppHeader } from '../components/AppHeader';
 import { formatMoney, parseCedisToPesewas } from '../../shared/lib/money';
 import { FeedbackBanner } from '../components/FeedbackBanner';
+import VoidApprovalsScreen from './VoidApprovalsScreen';
 
 export default function OpenShiftScreen() {
   const [raw, setRaw] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showApprovals, setShowApprovals] = useState(false);
+  const [pendingApprovals, setPendingApprovals] = useState(0);
   const setOpenShift = useSession((s) => s.setOpenShift);
+  const role = useSession((s) => s.workerRole);
+  const isSenior = role === 'SUPERVISOR' || role === 'OWNER' || role === 'FOUNDER';
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
+
+  useEffect(() => {
+    if (!isSenior) return;
+    let cancelled = false;
+    async function refresh() {
+      const result = await counter.saleVoidRequestPendingCount();
+      if (!cancelled && result.success) setPendingApprovals(result.data.reviewablePendingCount);
+    }
+    void refresh();
+    const interval = window.setInterval(() => void refresh(), 10_000);
+    return () => { cancelled = true; window.clearInterval(interval); };
+  }, [isSenior, showApprovals]);
 
   const pesewas = parseCedisToPesewas(raw);
   const valid = pesewas !== null;
@@ -46,11 +63,14 @@ export default function OpenShiftScreen() {
     }
   }
 
+  if (showApprovals) return <VoidApprovalsScreen onExit={() => setShowApprovals(false)} />;
+
   return (
     <div className="min-h-screen bg-bg-deep text-text-primary flex flex-col">
       <AppHeader subtitle="open shift" />
       <main className="flex-1 max-w-2xl w-full mx-auto px-4 sm:px-12 py-12 flex flex-col gap-6">
-        <h2 className="text-text-secondary uppercase tracking-wider text-xs">Opening cash in till</h2>
+        <section className="panel p-6 sm:p-8 flex flex-col gap-5">
+        <div><div className="eyebrow">Start of shift</div><h2 className="text-2xl font-semibold mt-1">Opening cash in till</h2></div>
         <p className="text-text-tertiary text-sm">
           Count the cash in the till before any sale. Type the amount in cedis (e.g. 250.00). The shift is auditable from this number — if you fudge it, you'll wear the variance at close.
         </p>
@@ -78,7 +98,7 @@ export default function OpenShiftScreen() {
             type="button"
             onClick={() => void submit()}
             disabled={!valid || submitting}
-            className="bg-accent text-ink px-6 py-3 font-semibold tracking-wide hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed"
+            className="btn btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {submitting ? 'Opening shift…' : 'Open shift'} <span className="kbd">F2</span>
           </button>
@@ -88,6 +108,15 @@ export default function OpenShiftScreen() {
         </div>
         {error && (
           <FeedbackBanner>{error}</FeedbackBanner>
+        )}
+        </section>
+        {isSenior && (
+          <section className="panel p-5 mt-4 flex flex-wrap items-center justify-between gap-3">
+            <div><div className="eyebrow">Management access</div><div className="mt-1">Review void requests without opening an artificial till shift.</div></div>
+            <button className={pendingApprovals > 0 ? 'btn border-warning text-warning' : 'btn btn-quiet'} onClick={() => setShowApprovals(true)}>
+              Void approvals{pendingApprovals > 0 ? ` · ${pendingApprovals}` : ''}
+            </button>
+          </section>
         )}
       </main>
     </div>

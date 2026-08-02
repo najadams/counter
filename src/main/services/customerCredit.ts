@@ -13,6 +13,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { logAudit } from '../db/audit.js';
 import { DEFAULT_LOCATION_ID } from '../../shared/lib/constants.js';
 import { assertNotSealed } from './periods.js';
+import { postCustomerPaymentIfActive } from './ledger.js';
 
 export interface CustomerOverview {
   id: string;
@@ -401,6 +402,8 @@ export function recordCustomerPayment(
       },
       deviceId: input.deviceId,
     });
+
+    postCustomerPaymentIfActive(db, paymentId, input.workerId, input.deviceId);
   });
 
   tx();

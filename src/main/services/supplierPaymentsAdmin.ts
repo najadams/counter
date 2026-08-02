@@ -14,6 +14,7 @@
 import type { Database as DB } from 'better-sqlite3';
 import { v4 as uuidv4 } from 'uuid';
 import { logAudit } from '../db/audit.js';
+import { postSupplierPaymentIfActive } from './ledger.js';
 
 const ADMIN_ROLES = new Set(['OWNER', 'FOUNDER']);
 
@@ -419,6 +420,8 @@ export function recordSupplierPayment(
       },
       deviceId: input.deviceId,
     });
+
+    postSupplierPaymentIfActive(db, paymentId, input.actorWorkerId, input.deviceId);
   });
 
   tx();

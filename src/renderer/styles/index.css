@@ -10,14 +10,13 @@
  * theme swap will leave holes.
  *
  * The runtime swap is driven by a `data-theme` attribute on <html>:
- *   - no attribute / "dark"   -> dark theme (default)
- *   - "light"                  -> light theme
+ *   - no attribute / "light"  -> warm light theme (default)
+ *   - "dark"                   -> financial dark theme
  *   - "system"                 -> dark or light based on prefers-color-scheme,
  *                                  resolved synchronously by the script in
  *                                  index.html before React mounts.
  * --------------------------------------------------------------------- */
 
-:root,
 :root[data-theme='dark'] {
   /* Dark theme — preserves the original financial/gold aesthetic. */
   --c-bg-deep:       10 12 16;       /* #0A0C10 */
@@ -49,6 +48,7 @@
   color-scheme: dark;
 }
 
+:root,
 :root[data-theme='light'] {
   /* Light theme — warm parchment background, darker gold for legibility.
    * Keeps the "financial document" feel: never SaaS pastel. */
@@ -128,10 +128,79 @@
     -moz-osx-font-smoothing: grayscale;
     font-feature-settings: 'cv11', 'ss03';
   }
-  /* Sharp aesthetic: kill default radii on form controls. */
   button, input, select, textarea {
-    border-radius: 0;
+    border-radius: 0.45rem;
   }
+  button, [role='button'], input, select, textarea, a {
+    outline-offset: 3px;
+  }
+  :focus-visible {
+    outline: 3px solid rgb(var(--c-accent) / 0.65);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .panel {
+    background: rgb(var(--c-bg-surface));
+    border: 1px solid rgb(var(--c-border));
+    border-radius: 0.85rem;
+    box-shadow: 0 10px 30px rgb(31 26 18 / 0.07), 0 1px 2px rgb(31 26 18 / 0.08);
+  }
+  :root[data-theme='dark'] .panel { box-shadow: 0 12px 34px rgb(0 0 0 / 0.22); }
+  .subpanel {
+    background: rgb(var(--c-bg-elevated) / 0.68);
+    border: 1px solid rgb(var(--c-border-subtle));
+    border-radius: 0.65rem;
+    padding: 0.9rem;
+  }
+  .subpanel > h3 { color: rgb(var(--c-text-secondary)); font-size: 0.82rem; font-weight: 650; margin-bottom: 0.55rem; }
+  .eyebrow { color: rgb(var(--c-text-tertiary)); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+  .btn {
+    min-height: 2.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    padding: 0.55rem 0.9rem;
+    border: 1px solid rgb(var(--c-border));
+    border-radius: 0.55rem;
+    font-size: 0.875rem;
+    font-weight: 650;
+    transition: background-color 120ms ease, border-color 120ms ease, transform 120ms ease;
+  }
+  .btn:hover:not(:disabled) { background: rgb(var(--c-bg-elevated)); border-color: rgb(var(--c-border-strong)); }
+  .btn:active:not(:disabled) { transform: translateY(1px); }
+  .btn:disabled { cursor: not-allowed; opacity: 0.45; }
+  .btn-primary { background: rgb(var(--c-accent)); border-color: rgb(var(--c-accent)); color: rgb(var(--c-text-ink)); }
+  .btn-primary:hover:not(:disabled) { background: rgb(var(--c-accent-light)); border-color: rgb(var(--c-accent-light)); }
+  .btn-quiet { color: rgb(var(--c-text-secondary)); background: transparent; }
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.65rem;
+    padding: 0.18rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 750;
+    letter-spacing: 0.025em;
+    text-transform: capitalize;
+    white-space: nowrap;
+  }
+  .status-pending { color: rgb(var(--c-warning)); background: rgb(var(--c-warning) / 0.13); border: 1px solid rgb(var(--c-warning) / 0.35); }
+  .status-approved { color: rgb(var(--c-success)); background: rgb(var(--c-success) / 0.12); border: 1px solid rgb(var(--c-success) / 0.32); }
+  .status-declined, .status-voided { color: rgb(var(--c-danger)); background: rgb(var(--c-danger) / 0.11); border: 1px solid rgb(var(--c-danger) / 0.32); }
+  .status-withdrawn { color: rgb(var(--c-text-secondary)); background: rgb(var(--c-bg-elevated)); border: 1px solid rgb(var(--c-border)); }
+  .notice { border: 1px solid rgb(var(--c-border)); border-radius: 0.65rem; background: rgb(var(--c-bg-elevated) / 0.55); padding: 0.9rem 1rem; font-size: 0.875rem; }
+  .notice-warning { border-color: rgb(var(--c-warning) / 0.45); background: rgb(var(--c-warning) / 0.09); color: rgb(var(--c-warning)); }
+  .empty-state { padding: 2.5rem 1rem; text-align: center; color: rgb(var(--c-text-tertiary)); font-size: 0.875rem; }
+  .data-table thead { background: rgb(var(--c-bg-deep) / 0.65); color: rgb(var(--c-text-secondary)); font-size: 0.72rem; }
+  .data-table th { padding: 0.7rem 0.9rem; text-align: left; font-weight: 700; white-space: nowrap; }
+  .data-table td { padding: 0.75rem 0.9rem; border-top: 1px solid rgb(var(--c-border-subtle)); font-size: 0.82rem; vertical-align: top; }
+  .data-table tbody tr:hover { background: rgb(var(--c-bg-elevated) / 0.45); }
+  .segmented-control { display: inline-flex; padding: 0.2rem; gap: 0.2rem; border-radius: 0.65rem; background: rgb(var(--c-bg-surface)); border: 1px solid rgb(var(--c-border)); }
+  .segmented-control button { min-height: 2.35rem; padding: 0.4rem 0.9rem; color: rgb(var(--c-text-secondary)); font-size: 0.82rem; }
+  .segmented-control button.active { color: rgb(var(--c-text-primary)); background: rgb(var(--c-bg-elevated)); box-shadow: 0 1px 3px rgb(0 0 0 / 0.12); }
 }
 
 @layer utilities {
@@ -155,6 +224,22 @@
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 0.75rem;
     line-height: 1.3;
+  }
+
+  .input {
+    background: rgb(var(--c-bg-input));
+    border: 1px solid rgb(var(--c-border-strong));
+    color: rgb(var(--c-text-primary));
+    padding: 0.5rem 0.75rem;
+    width: 100%;
+    min-width: 0;
+  }
+  .input:focus {
+    outline: none;
+    border-color: rgb(var(--c-accent));
+  }
+  .input:disabled {
+    opacity: 0.65;
   }
 
   /* Scrim used by modals — pulls from the themed --c-scrim and applies
@@ -203,4 +288,13 @@ body.flash-warning::after { background: rgb(var(--c-warning) / 0.45); }
 }
 ::-webkit-scrollbar-thumb:hover {
   background: rgb(var(--c-text-tertiary));
+}
+
+/* Phone/LAN use is touch-first even though the counter PC remains keyboard-
+ * first. Keep every interactive button at the 44px minimum after Tailwind's
+ * size utilities have been resolved. */
+@media (max-width: 640px) {
+  button, [role='button'] {
+    min-height: 2.75rem !important;
+  }
 }

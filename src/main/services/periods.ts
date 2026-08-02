@@ -132,6 +132,19 @@ export function sealDay(db: DB, input: SealDayInput): { closeId: string } {
     );
   }
 
+  const pendingVoids = db.prepare(
+    `SELECT COUNT(*) AS n
+       FROM sale_void_requests vr
+       JOIN sales s ON s.id = vr.sale_id
+      WHERE vr.location_id = ? AND substr(s.created_at, 1, 10) = ?
+        AND vr.status = 'PENDING'`,
+  ).get(input.locationId, input.businessDate) as { n: number };
+  if (pendingVoids.n > 0) {
+    throw new Error(
+      `cannot seal ${input.businessDate}: ${pendingVoids.n} void request(s) still await a decision`,
+    );
+  }
+
   const id = `pc-${uuidv4()}`;
   db.prepare(
     `INSERT INTO period_closes (id, location_id, business_date, sealed_by, device_id)

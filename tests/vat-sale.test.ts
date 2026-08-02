@@ -17,6 +17,7 @@ import { openShift } from '../src/main/services/shifts';
 import { completeSale } from '../src/main/services/sales';
 import { _setPrinter, _resetPrinter } from '../src/main/printer/printer';
 import { formatReceipt } from '../src/main/printer/receipt';
+import { createSaleVoidRequest, reviewSaleVoidRequest } from '../src/main/services/voids';
 
 const __filename = fileURLToPath(import.meta.url);
 const migrationsDir = path.resolve(path.dirname(__filename), '../migrations');
@@ -95,5 +96,26 @@ describe.runIf(VAT_ON)('VAT-enabled sale (Act 1151, inclusive)', () => {
     expect(text).toContain('NHIL 2.5%');
     expect(text).toContain('GETFund 2.5%');
     expect(text).toContain('Taxable (excl)');
+  });
+
+  it('queues and atomically approves a void with the exact VAT effect visible to the reviewer', async () => {
+    const star = db.prepare(`SELECT id FROM products WHERE sku = 'STAR-330'`).get() as { id: string };
+    const r = await completeSale(db, {
+      shiftId, workerId: W, workerName: 'Naj', locationId: L, channel: 'WALK_IN',
+      lines: [{ productId: star.id, quantity: 15, unitPricePesewas: 800 }],
+      paymentMethod: 'CASH', cashGivenPesewas: 12000,
+      deviceId: D, shopName: 'TEST',
+    });
+    const request = createSaleVoidRequest(db, {
+      saleId: r.saleId, reason: 'Customer order was duplicated', requesterWorkerId: W, deviceId: D,
+    });
+    expect(request.accountingEffect).toMatchObject({
+      netSalesPesewas: 10000, vatPesewas: 1500, nhilPesewas: 250, getfundPesewas: 250,
+    });
+    const approved = reviewSaleVoidRequest(db, {
+      requestId: request.id, decision: 'APPROVE', reviewerWorkerId: 'dev-supervisor-1', deviceId: D,
+    });
+    expect(approved.status).toBe('APPROVED');
+    expect(db.prepare('SELECT voided FROM sales WHERE id = ?').get(r.saleId)).toMatchObject({ voided: 1 });
   });
 });

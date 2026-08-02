@@ -66,6 +66,19 @@ async function writeBackOrderFulfilment(saleId: string): Promise<void> {
   }
 }
 
+/** Paper receipts opened at the till are only drafts until checkout succeeds.
+ *  Once completeSale returns, stamp the original receipt as POSTED so the paper
+ *  receipt queue shows that it has been processed. */
+async function writeBackPaperReceiptPosted(saleId: string): Promise<void> {
+  const draftId = useCart.getState().sourcePaperReceiptId;
+  if (!draftId) return;
+  const r = await counter.paperReceiptMarkPostedFromTill(draftId, saleId);
+  if (!r.success) {
+    // eslint-disable-next-line no-console
+    console.error(`[paper-receipt] failed to mark ${draftId} posted by sale ${saleId}:`, r.error);
+  }
+}
+
 interface ProductHit {
   id: string; sku: string; barcode: string | null; name: string; brand: string | null;
   category: string; unitPricePesewas: number; costPricePesewas: number;
@@ -83,6 +96,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
   const cashGiven = useCart((s) => s.cashGivenPesewas);
   const customer = useCart((s) => s.customer);
   const fulfillingOrderId = useCart((s) => s.fulfillingOrderId);
+  const sourcePaperReceiptId = useCart((s) => s.sourcePaperReceiptId);
   const subtotal = useCart((s) => s.subtotalPesewas)();
   const total = useCart((s) => s.totalPesewas)();
   const vat = useCart((s) => s.vatBreakdown)();
@@ -364,6 +378,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
     setCompletedToast(toast);
     setLastReceipt(receipt);
     void writeBackOrderFulfilment(saleId);
+    void writeBackPaperReceiptPosted(saleId);
     clearCart();
     setDiscountRaw('');
     setDiscountReason('');
@@ -454,6 +469,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
     setCompletedToast(toast);
     setLastReceipt(receipt);
     void writeBackOrderFulfilment(saleId);
+    void writeBackPaperReceiptPosted(saleId);
     clearCart();
     setDiscountRaw('');
     setDiscountReason('');
@@ -517,6 +533,11 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
       {fulfillingOrderId && (
         <div className="bg-accent/10 border-b border-accent px-4 py-2 text-accent text-sm text-center">
           Ringing WhatsApp order #{fulfillingOrderId.slice(-8)} — quoted prices loaded
+        </div>
+      )}
+      {sourcePaperReceiptId && (
+        <div className="bg-accent/10 border-b border-accent px-4 py-2 text-accent text-sm text-center">
+          Ringing paper receipt #{sourcePaperReceiptId.slice(-6)} — queue will update after sale is saved
         </div>
       )}
       {/* One column on phones (LAN access), two panes on desktop. */}

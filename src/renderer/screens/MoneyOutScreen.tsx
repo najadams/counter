@@ -12,7 +12,6 @@ import type {
   ExpenseTotalsForShiftResponse,
 } from '../../shared/types/ipc';
 import { SupplierPaymentsTab } from './settings/SupplierPaymentsTab';
-import { TaxesTab } from './reports/TaxesTab';
 
 type Tab = 'expenses' | 'drawings' | 'suppliers' | 'taxes';
 type CashDropCategory = CashDropListResponse['drops'][number]['category'];
@@ -78,7 +77,7 @@ export default function MoneyOutScreen({ shiftId, onExit }: { shiftId: string; o
         {tab === 'expenses' && <ExpensesPanel shiftId={shiftId} />}
         {tab === 'drawings' && <DrawingsPanel shiftId={shiftId} />}
         {tab === 'suppliers' && <SupplierPaymentsTab />}
-        {tab === 'taxes' && <TaxesTab />}
+        {tab === 'taxes' && <section className="panel p-6 text-sm text-text-secondary">Tax balances and payment recording now live in Reports → Taxes, protected by the five-minute report session. Recording a payment also requires a fresh one-time PIN.</section>}
       </main>
     </div>
   );

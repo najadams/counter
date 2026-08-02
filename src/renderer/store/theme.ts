@@ -7,8 +7,8 @@
 // the Appearance section in Settings.
 //
 // Values:
-//   'dark'   — financial dark (default, original aesthetic)
-//   'light'  — warm parchment light
+//   'dark'   — financial dark
+//   'light'  — warm parchment light (default for a new installation)
 //   'violet' — Sophon-inspired cool grey + vivid violet accent
 //   'system' — follow prefers-color-scheme; resolves to dark or light only
 //              (system follows OS dark/light, not violet)
@@ -27,7 +27,7 @@ export function readStoredChoice(): ThemeChoice {
   } catch {
     /* localStorage may be unavailable; fall through to default */
   }
-  return 'dark';
+  return 'light';
 }
 
 export function resolveChoice(choice: ThemeChoice): ResolvedTheme {
@@ -48,7 +48,7 @@ interface ThemeStore {
   setChoice: (c: ThemeChoice) => void;
 }
 
-const initialChoice = typeof window === 'undefined' ? 'dark' : readStoredChoice();
+const initialChoice = typeof window === 'undefined' ? 'light' : readStoredChoice();
 
 // Apply the initial theme synchronously at module load. The inline script in
 // index.html does this earlier (to prevent FOUC), but if it's blocked by CSP
@@ -60,7 +60,7 @@ if (typeof window !== 'undefined') {
 
 export const useTheme = create<ThemeStore>((set) => ({
   choice: initialChoice,
-  resolved: typeof window === 'undefined' ? 'dark' : resolveChoice(initialChoice),
+  resolved: typeof window === 'undefined' ? 'light' : resolveChoice(initialChoice),
   setChoice: (c: ThemeChoice) => {
     try { window.localStorage.setItem(THEME_KEY, c); } catch { /* ignore */ }
     applyChoice(c);

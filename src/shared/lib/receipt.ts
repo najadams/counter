@@ -63,6 +63,8 @@ export interface SaleReceipt {
    *  "CORRECTED — supersedes #<id>" banner so the door-check honours this slip
    *  and not the superseded original. */
   correctedFromReceiptId?: string | null;
+  /** Reprint-only operational warning, e.g. a pending void request. */
+  statusNotice?: string | null;
   /** Customization. All optional — defaults preserve the legacy output. */
   footerText?: string | null;
   showCashier?: boolean;
@@ -80,6 +82,22 @@ function center(s: string): string {
 
 function divider(ch = '-'): string {
   return ch.repeat(W);
+}
+
+function wrapWords(value: string): string[] {
+  const words = value.trim().split(/\s+/);
+  const rows: string[] = [];
+  let row = '';
+  for (const word of words) {
+    const next = row ? `${row} ${word}` : word;
+    if (next.length <= W) row = next;
+    else {
+      if (row) rows.push(row);
+      row = word;
+    }
+  }
+  if (row) rows.push(row);
+  return rows;
 }
 
 /** Place a label on the left and a value on the right, padded to width W. */
@@ -130,6 +148,18 @@ export function formatReceipt(r: SaleReceipt): string[] {
   lines.push(divider('='));
 
   lines.push(`Receipt #${r.receiptId.slice(-8)}`);
+  if (r.statusNotice) {
+    lines.push(divider('!'));
+    // Status notices deliberately use an em dash to separate the decision
+    // from its consequence. Keep those clauses on distinct thermal lines so
+    // a door checker can read the state at a glance instead of seeing an
+    // arbitrary 32-column wrap such as "PENDING — SALE".
+    const noticeClauses = r.statusNotice.split(/\s+—\s+/);
+    for (const clause of noticeClauses) {
+      for (const noticeLine of wrapWords(clause)) lines.push(center(noticeLine));
+    }
+    lines.push(divider('!'));
+  }
   if (r.correctedFromReceiptId) {
     lines.push(center('*** CORRECTED ***'));
     lines.push(center(`supersedes #${r.correctedFromReceiptId.slice(-8)}`));

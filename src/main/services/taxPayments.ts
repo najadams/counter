@@ -1,6 +1,7 @@
 import type { Database as DB } from 'better-sqlite3';
 import { v4 as uuidv4 } from 'uuid';
 import { logAudit } from '../db/audit.js';
+import { postTaxPaymentIfActive } from './ledger.js';
 
 const TAX_PAYMENT_ROLES = new Set(['OWNER', 'FOUNDER', 'SUPERVISOR']);
 
@@ -111,44 +112,47 @@ export function recordTaxPayment(db: DB, input: RecordTaxPaymentInput): { paymen
 
   const id = `taxpay-${uuidv4()}`;
   const paidAt = input.paidAt?.trim() || new Date().toISOString();
-  db.prepare(
-    `INSERT INTO tax_payments (
-       id, location_id, shift_id, tax_period_from, tax_period_to,
-       amount_pesewas, payment_method, payment_reference, paid_at, notes,
-       created_by, updated_by, device_id
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(
-    id,
-    input.locationId,
-    shiftId,
-    input.taxPeriodFrom,
-    input.taxPeriodTo,
-    input.amountPesewas,
-    input.paymentMethod,
-    reference,
-    paidAt,
-    input.notes?.trim() || null,
-    input.actorWorkerId,
-    input.actorWorkerId,
-    input.deviceId,
-  );
-
-  logAudit(db, {
-    workerId: input.actorWorkerId,
-    action: 'TAX_PAYMENT_RECORDED',
-    entityType: 'tax_payments',
-    entityId: id,
-    afterValue: {
-      taxPeriodFrom: input.taxPeriodFrom,
-      taxPeriodTo: input.taxPeriodTo,
-      amountPesewas: input.amountPesewas,
-      paymentMethod: input.paymentMethod,
-      paymentReference: reference,
-      paidAt,
+  db.transaction(() => {
+    db.prepare(
+      `INSERT INTO tax_payments (
+         id, location_id, shift_id, tax_period_from, tax_period_to,
+         amount_pesewas, payment_method, payment_reference, paid_at, notes,
+         created_by, updated_by, device_id
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      id,
+      input.locationId,
       shiftId,
-    },
-    deviceId: input.deviceId,
-  });
+      input.taxPeriodFrom,
+      input.taxPeriodTo,
+      input.amountPesewas,
+      input.paymentMethod,
+      reference,
+      paidAt,
+      input.notes?.trim() || null,
+      input.actorWorkerId,
+      input.actorWorkerId,
+      input.deviceId,
+    );
+
+    logAudit(db, {
+      workerId: input.actorWorkerId,
+      action: 'TAX_PAYMENT_RECORDED',
+      entityType: 'tax_payments',
+      entityId: id,
+      afterValue: {
+        taxPeriodFrom: input.taxPeriodFrom,
+        taxPeriodTo: input.taxPeriodTo,
+        amountPesewas: input.amountPesewas,
+        paymentMethod: input.paymentMethod,
+        paymentReference: reference,
+        paidAt,
+        shiftId,
+      },
+      deviceId: input.deviceId,
+    });
+    postTaxPaymentIfActive(db, id, input.actorWorkerId, input.deviceId);
+  })();
 
   return { paymentId: id };
 }

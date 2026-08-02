@@ -5,6 +5,7 @@
 
 import { create } from 'zustand';
 import { counter } from '../lib/ipc';
+import { clearReportAccessState } from './reportAccess';
 
 export interface SessionState {
   // Auth
@@ -120,6 +121,7 @@ export const useSession = create<SessionState>((set) => ({
 
   logout: async () => {
     await counter.logout();
+    clearReportAccessState();
     set({
       workerId: null,
       workerName: null,

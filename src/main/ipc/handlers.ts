@@ -3,7 +3,7 @@
 import type { App } from 'electron';
 import type { Database as DB } from 'better-sqlite3';
 import type { IpcRegistrar } from './registry.js';
-import { currentSession, currentStation, setGlobalSession, type Session } from './session.js';
+import { currentDeviceId, currentSession, currentStation, setGlobalSession, type Session } from './session.js';
 import { getAccessInfo } from '../http/server.js';
 import { httpStatus, setHttp } from '../http/manager.js';
 import { getSyncStatus } from '../sync/status.js';
@@ -22,8 +22,19 @@ import {
   type ProductSearchRequest, type ProductSearchResponse,
   type SaleCompleteRequest, type SaleCompleteResponse,
   type SaleRepriceLinesRequest, type SaleRepriceLinesResponse,
+  type PaperReceiptCreateRequest, type PaperReceiptCreateResponse,
+  type PaperReceiptListRequest, type PaperReceiptListResponse,
+  type PaperReceiptGetRequest, type PaperReceiptGetResponse,
+  type PaperReceiptUpdateRequest, type PaperReceiptSimpleResponse,
+  type PaperReceiptResolveForCartRequest, type PaperReceiptResolveForCartResponse,
+  type PaperReceiptMarkPostedFromTillRequest,
+  type PaperReceiptPostRequest, type PaperReceiptPostResponse,
+  type PaperReceiptDiscardRequest,
   type SaleListRecentRequest, type SaleListRecentResponse,
-  type SaleVoidRequest, type SaleVoidResponse,
+  type SaleVoidRequestCreateRequest, type SaleVoidRequestDetail,
+  type SaleVoidRequestListRequest, type SaleVoidRequestListResponse,
+  type SaleVoidRequestGetRequest, type SaleVoidRequestReviewRequest,
+  type SaleVoidRequestWithdrawRequest, type SaleVoidRequestPendingCountResponse,
   type SaleCorrectRequest, type SaleCorrectResponse,
   type ShiftCloseRequest, type ShiftCloseResponse,
   type ShiftGetOpenResponse, type ShiftOpenRequest, type ShiftOpenResponse,
@@ -36,6 +47,7 @@ import {
   type WorkerDeactivateRequest, type WorkerGetCurrentResponse,
   type WorkerLoginRequest, type WorkerLoginResponse, type WorkerLogoutResponse,
   type WorkerReactivateRequest, type WorkerResetPinRequest,
+  type WorkerVerifyCurrentPinRequest, type WorkerVerifyCurrentPinResponse,
   type WorkerSimpleResponse, type WorkerTerminateRequest,
 } from '../../shared/types/ipc.js';
 import { maybeRunShiftCloseBackup, findBackupRunner } from '../lib/shiftCloseBackup.js';
@@ -44,10 +56,29 @@ import {
   computeAndCloseShift, getOpenShift, openShift, submitClosingCount,
 } from '../services/shifts.js';
 import { completeSale, getShopHeader, searchProducts } from '../services/sales.js';
+import {
+  createPaperReceiptDraft,
+  discardPaperReceiptDraft,
+  getPaperReceiptDraft,
+  listPaperReceiptDrafts,
+  markPaperReceiptDraftPostedFromTill,
+  openPaperReceiptDraftAtTill,
+  postPaperReceiptDraft,
+  reparsePaperReceiptDraft,
+  updatePaperReceiptDraft,
+} from '../services/paperReceipts.js';
 import { priceForUnit } from '../services/productUnits.js';
 import { searchCustomers } from '../services/customers.js';
 import { unitsOnHand } from '../services/stockMovements.js';
-import { listRecentSales, voidSale } from '../services/voids.js';
+import {
+  createSaleVoidRequest,
+  getSaleVoidRequest,
+  listRecentSales,
+  listSaleVoidRequests,
+  pendingSaleVoidRequestCount,
+  reviewSaleVoidRequest,
+  withdrawSaleVoidRequest,
+} from '../services/voids.js';
 import { correctSale } from '../services/correctSale.js';
 import { listRecentBreakage, reportBreakage } from '../services/breakage.js';
 import { getMonthlyUsage, recordConsumption } from '../services/consumption.js';
@@ -143,8 +174,20 @@ export function registerIpcHandlers(
     },
     IPC_CHANNELS.WORKER_LOGIN,
   ));
+  ipcMain.handle(IPC_CHANNELS.WORKER_VERIFY_CURRENT_PIN, wrap<WorkerVerifyCurrentPinRequest, WorkerVerifyCurrentPinResponse>(
+    (req) => {
+      const w = requireWorker();
+      return verifyPin(db, w.workerId, req.pin, currentDeviceId(deviceId));
+    },
+    IPC_CHANNELS.WORKER_VERIFY_CURRENT_PIN,
+  ));
   ipcMain.handle(IPC_CHANNELS.WORKER_LOGOUT, wrap<unknown, WorkerLogoutResponse>(
-    () => { setGlobalSession(null); return { ok: true }; },
+    () => {
+      const current = currentSession();
+      if (current) revokeReportAccessForSession(db, current.workerId, currentDeviceId(deviceId));
+      setGlobalSession(null);
+      return { ok: true };
+    },
     IPC_CHANNELS.WORKER_LOGOUT,
   ));
   ipcMain.handle(IPC_CHANNELS.WORKER_GET_CURRENT, wrap<unknown, WorkerGetCurrentResponse>(
@@ -285,21 +328,186 @@ export function registerIpcHandlers(
     ),
   );
 
+  ipcMain.handle(IPC_CHANNELS.PAPER_RECEIPT_CREATE, wrap<PaperReceiptCreateRequest, PaperReceiptCreateResponse>(
+    (req) => {
+      const w = requireWorker();
+      const { shiftId, locationId } = requireOpenShift(db);
+      const userDataDir = app?.getPath('userData') ?? process.cwd();
+      return createPaperReceiptDraft(db, {
+        shiftId,
+        workerId: w.workerId,
+        locationId,
+        photoBytes: Buffer.from(req.photoBase64, 'base64'),
+        photoExtension: req.photoExtension,
+        userDataDir,
+        ocrText: req.ocrText,
+        channel: req.channel,
+        paymentMethod: req.paymentMethod as never,
+        paymentReference: req.paymentReference ?? null,
+        cashGivenPesewas: req.cashGivenPesewas ?? null,
+        customerId: req.customerId ?? null,
+        deviceId,
+      });
+    },
+    IPC_CHANNELS.PAPER_RECEIPT_CREATE,
+  ));
+  ipcMain.handle(IPC_CHANNELS.PAPER_RECEIPT_LIST, wrap<PaperReceiptListRequest, PaperReceiptListResponse>(
+    (req) => { requireWorker(); return { drafts: listPaperReceiptDrafts(db, req?.limit ?? 50) }; },
+    IPC_CHANNELS.PAPER_RECEIPT_LIST,
+  ));
+  ipcMain.handle(IPC_CHANNELS.PAPER_RECEIPT_GET, wrap<PaperReceiptGetRequest, PaperReceiptGetResponse>(
+    (req) => {
+      requireWorker();
+      const userDataDir = app?.getPath('userData') ?? process.cwd();
+      return getPaperReceiptDraft(db, req.draftId, userDataDir);
+    },
+    IPC_CHANNELS.PAPER_RECEIPT_GET,
+  ));
+  ipcMain.handle(IPC_CHANNELS.PAPER_RECEIPT_UPDATE, wrap<PaperReceiptUpdateRequest, PaperReceiptSimpleResponse>(
+    (req) => {
+      const w = requireWorker();
+      updatePaperReceiptDraft(db, {
+        draftId: req.draftId,
+        workerId: w.workerId,
+        ocrText: req.ocrText,
+        channel: req.channel,
+        paymentMethod: req.paymentMethod as never,
+        paymentReference: req.paymentReference ?? null,
+        cashGivenPesewas: req.cashGivenPesewas ?? null,
+        customerId: req.customerId ?? null,
+        lines: req.lines,
+        deviceId,
+      });
+      return { ok: true };
+    },
+    IPC_CHANNELS.PAPER_RECEIPT_UPDATE,
+  ));
+  ipcMain.handle(IPC_CHANNELS.PAPER_RECEIPT_REPARSE, wrap<Omit<PaperReceiptUpdateRequest, 'lines'>, PaperReceiptSimpleResponse>(
+    (req) => {
+      const w = requireWorker();
+      reparsePaperReceiptDraft(db, {
+        draftId: req.draftId,
+        workerId: w.workerId,
+        ocrText: req.ocrText,
+        channel: req.channel,
+        paymentMethod: req.paymentMethod as never,
+        paymentReference: req.paymentReference ?? null,
+        cashGivenPesewas: req.cashGivenPesewas ?? null,
+        customerId: req.customerId ?? null,
+        deviceId,
+      });
+      return { ok: true };
+    },
+    IPC_CHANNELS.PAPER_RECEIPT_REPARSE,
+  ));
+  ipcMain.handle(IPC_CHANNELS.PAPER_RECEIPT_RESOLVE_FOR_CART, wrap<PaperReceiptResolveForCartRequest, PaperReceiptResolveForCartResponse>(
+    (req) => {
+      const w = requireWorker();
+      const { locationId } = requireOpenShift(db);
+      return openPaperReceiptDraftAtTill(db, req.draftId, locationId, w.workerId, deviceId);
+    },
+    IPC_CHANNELS.PAPER_RECEIPT_RESOLVE_FOR_CART,
+  ));
+  ipcMain.handle(IPC_CHANNELS.PAPER_RECEIPT_MARK_POSTED_FROM_TILL, wrap<PaperReceiptMarkPostedFromTillRequest, PaperReceiptSimpleResponse>(
+    (req) => {
+      const w = requireWorker();
+      markPaperReceiptDraftPostedFromTill(db, req.draftId, req.saleId, w.workerId, deviceId);
+      return { ok: true };
+    },
+    IPC_CHANNELS.PAPER_RECEIPT_MARK_POSTED_FROM_TILL,
+  ));
+  ipcMain.handle(IPC_CHANNELS.PAPER_RECEIPT_POST, wrap<PaperReceiptPostRequest, PaperReceiptPostResponse>(
+    async (req) => {
+      const w = requireWorker();
+      const header = getShopHeader(db);
+      return await postPaperReceiptDraft(db, {
+        draftId: req.draftId,
+        workerId: w.workerId,
+        workerName: w.fullName,
+        shopName: header.shopName,
+        shopSubtitle: header.shopSubtitle,
+        deviceId,
+        station: currentStation(),
+      });
+    },
+    IPC_CHANNELS.PAPER_RECEIPT_POST,
+  ));
+  ipcMain.handle(IPC_CHANNELS.PAPER_RECEIPT_DISCARD, wrap<PaperReceiptDiscardRequest, PaperReceiptSimpleResponse>(
+    (req) => {
+      const w = requireWorker();
+      discardPaperReceiptDraft(db, req.draftId, req.reason, w.workerId, deviceId);
+      return { ok: true };
+    },
+    IPC_CHANNELS.PAPER_RECEIPT_DISCARD,
+  ));
+
   // --- voids -------------------------------------------------------------
   ipcMain.handle(IPC_CHANNELS.SALE_LIST_RECENT, wrap<SaleListRecentRequest, SaleListRecentResponse>(
     (req) => { requireWorker(); return { sales: listRecentSales(db, req?.limit ?? 25) }; },
     IPC_CHANNELS.SALE_LIST_RECENT,
   ));
-  ipcMain.handle(IPC_CHANNELS.SALE_VOID, wrap<SaleVoidRequest, SaleVoidResponse>(
+  ipcMain.handle(IPC_CHANNELS.SALE_VOID_REQUEST_CREATE, wrap<SaleVoidRequestCreateRequest, SaleVoidRequestDetail>(
     (req) => {
       const w = requireWorker();
-      return voidSale(db, {
-        saleId: req.saleId, reason: req.reason,
-        supervisorWorkerId: req.supervisorWorkerId, supervisorPin: req.supervisorPin,
-        workerId: w.workerId, deviceId,
+      return createSaleVoidRequest(db, {
+        saleId: req.saleId,
+        reason: req.reason,
+        requesterWorkerId: w.workerId,
+        deviceId: currentDeviceId(deviceId),
       });
     },
-    IPC_CHANNELS.SALE_VOID,
+    IPC_CHANNELS.SALE_VOID_REQUEST_CREATE,
+  ));
+  ipcMain.handle(IPC_CHANNELS.SALE_VOID_REQUEST_LIST, wrap<SaleVoidRequestListRequest, SaleVoidRequestListResponse>(
+    (req) => {
+      const w = requireWorker();
+      return { requests: listSaleVoidRequests(db, { ...req, actorWorkerId: w.workerId }) };
+    },
+    IPC_CHANNELS.SALE_VOID_REQUEST_LIST,
+  ));
+  ipcMain.handle(IPC_CHANNELS.SALE_VOID_REQUEST_GET, wrap<SaleVoidRequestGetRequest, SaleVoidRequestDetail>(
+    (req) => {
+      const w = requireWorker();
+      return getSaleVoidRequest(db, req.requestId, w.workerId);
+    },
+    IPC_CHANNELS.SALE_VOID_REQUEST_GET,
+  ));
+  ipcMain.handle(IPC_CHANNELS.SALE_VOID_REQUEST_REVIEW, wrap<SaleVoidRequestReviewRequest, SaleVoidRequestDetail>(
+    (req) => {
+      const w = requireWorker();
+      return reviewSaleVoidRequest(db, {
+        ...req,
+        reviewerWorkerId: w.workerId,
+        deviceId: currentDeviceId(deviceId),
+      });
+    },
+    IPC_CHANNELS.SALE_VOID_REQUEST_REVIEW,
+  ));
+  ipcMain.handle(IPC_CHANNELS.SALE_VOID_REQUEST_WITHDRAW, wrap<SaleVoidRequestWithdrawRequest, SaleVoidRequestDetail>(
+    (req) => {
+      const w = requireWorker();
+      return withdrawSaleVoidRequest(db, {
+        requestId: req.requestId,
+        requesterWorkerId: w.workerId,
+        deviceId: currentDeviceId(deviceId),
+      });
+    },
+    IPC_CHANNELS.SALE_VOID_REQUEST_WITHDRAW,
+  ));
+  ipcMain.handle(IPC_CHANNELS.SALE_VOID_REQUEST_PENDING_COUNT, wrap<unknown, SaleVoidRequestPendingCountResponse>(
+    () => {
+      const w = requireWorker();
+      const senior = w.role === 'SUPERVISOR' || w.role === 'OWNER' || w.role === 'FOUNDER';
+      const shift = getOpenShift(db, w.workerId);
+      return {
+        minePendingCount: pendingSaleVoidRequestCount(db, w.workerId),
+        reviewablePendingCount: senior ? pendingSaleVoidRequestCount(db) : 0,
+        currentShiftPendingCount: shift
+          ? (db.prepare("SELECT COUNT(*) AS n FROM sale_void_requests WHERE shift_id = ? AND status = 'PENDING'").get(shift.id) as { n: number }).n
+          : 0,
+      };
+    },
+    IPC_CHANNELS.SALE_VOID_REQUEST_PENDING_COUNT,
   ));
   ipcMain.handle(IPC_CHANNELS.SALE_CORRECT, wrap<SaleCorrectRequest, SaleCorrectResponse>(
     async (req) => {
@@ -605,7 +813,14 @@ export function registerSession5Handlers(
   ));
   ipcMain.handle(IPC_CHANNELS_S5.DRAWING_REPORT, wrap<DrawingReportRequest, DrawingReportResponse>(
     (req) => {
-      requireWorker();
+      const w = requireWorker();
+      requireReportAccess({
+        accessToken: req.reportAccessToken,
+        workerId: w.workerId,
+        deviceId: currentDeviceId(deviceId),
+        scope: 'OWNER',
+        db,
+      });
       return { rows: getDrawingReport(db, req) };
     },
     IPC_CHANNELS_S5.DRAWING_REPORT,
@@ -1350,6 +1565,17 @@ export function registerSession14ReprintHandlers(
         requireWorker();
         const receipt = buildSaleReceiptForReprint(db, req.saleId);
         if (!receipt) throw new Error(`sale ${req.saleId} not found`);
+        const voidRequest = db.prepare(
+          `SELECT vr.status, vr.reason, vr.requested_at AS requestedAt,
+                  requester.full_name AS requesterName,
+                  reviewer.full_name AS reviewerName,
+                  vr.reviewed_at AS reviewedAt, vr.review_note AS reviewNote
+             FROM sale_void_requests vr
+             JOIN workers requester ON requester.id = vr.requested_by
+             LEFT JOIN workers reviewer ON reviewer.id = vr.reviewed_by
+            WHERE vr.sale_id = ?
+            ORDER BY vr.requested_at DESC, vr.id DESC LIMIT 1`,
+        ).get(req.saleId) as SaleGetReceiptResponse['voidRequest'];
 
         // Was the sale on credit at all? If not, there's no "outstanding"
         // concept — the till took payment at sale time and that's the end
@@ -1362,6 +1588,7 @@ export function registerSession14ReprintHandlers(
         if (!flags || flags.is_credit === 0) {
           return {
             receipt,
+            voidRequest: voidRequest ?? null,
             amountOutstandingPesewas: null,
             amountPaidPesewas: receipt.totalPesewas,
           };
@@ -1381,7 +1608,7 @@ export function registerSession14ReprintHandlers(
         ).get(req.saleId) as { paid: number };
         const amountPaidPesewas = tenderRow.paid + allocRow.paid;
         const amountOutstandingPesewas = Math.max(0, receipt.totalPesewas - amountPaidPesewas);
-        return { receipt, amountOutstandingPesewas, amountPaidPesewas };
+        return { receipt, voidRequest: voidRequest ?? null, amountOutstandingPesewas, amountPaidPesewas };
       },
       IPC_CHANNELS_S14_REPRINT.SALE_GET_RECEIPT,
     ),
@@ -2223,6 +2450,11 @@ export function registerSupplierPaymentsHandlers(
 
 import {
   IPC_CHANNELS_REPORTS,
+  type ReportsAccessUnlockRequest, type ReportsAccessUnlockResponse,
+  type ReportsAccessTokenRequest, type ReportsAccessLockRequest, type ReportsAccessTouchResponse,
+  type ReportsAccessStatusResponse,
+  type ReportsAccessActionRequest,
+  type ReportReadAccess,
   type ReportsOverviewRequest, type ReportsOverviewResponse,
   type ReportsSalesRequest, type ReportsSalesResponse,
   type ReportsGraphsRequest, type ReportsGraphsResponse,
@@ -2236,6 +2468,36 @@ import {
   type ReportsTaxPaymentRecordRequest, type ReportsTaxPaymentRecordResponse,
   type ReportsBalanceSheetRequest, type ReportsBalanceSheetResponse,
   type ReportsCashflowRequest, type ReportsCashflowResponse,
+  type ManagementAccountsListRequest, type ManagementAccountsListResponse,
+  type ManagementAccountCreateRequest, type ManagementFinancialAccount,
+  type ManagementAccountUpdateRequest,
+  type ManagementAccountMapRequest,
+  type ManagementAccountReconcileRequest, type ManagementAccountReconcileResponse,
+  type ManagementAccountTransferRequest, type ManagementAccountTransferResponse,
+  type ManagementCutoverRequest, type ManagementCutoverPreviewResponse,
+  type ManagementCutoverActivateRequest, type ManagementCutoverActivateResponse,
+  type ManagementShadowRequest, type ManagementShadowSetRequest, type ManagementShadowResponse,
+  type ManagementReportRangeRequest, type ManagementAsOfRequest,
+  type ManagementIncomeStatementResponse, type ManagementPositionResponse,
+  type ManagementCashflowResponse, type ManagementObligationsResponse,
+  type ManagementConcentrationResponse,
+  type ManagementDownsideRequest, type ManagementDownsideResponse,
+  type ManagementDataQuality,
+  type ManagementExpenseCreateRequest, type ManagementExpenseCreateResponse,
+  type ManagementLoanCreateRequest, type ManagementLoanCreateResponse,
+  type ManagementObligationPayRequest, type ManagementObligationPayResponse,
+  type ManagementObligationUpdateRequest,
+  type ManagementFixedAssetCreateRequest, type ManagementFixedAssetCreateResponse,
+  type ManagementFixedAssetsListRequest, type ManagementFixedAssetsListResponse,
+  type ManagementFixedAssetDepreciateRequest, type ManagementFixedAssetDepreciateResponse,
+  type ManagementFixedAssetDisposeRequest, type ManagementFixedAssetDisposeResponse,
+  type ManagementThresholdUpdateRequest,
+  type ManagementRiskConfigRequest, type ManagementRiskConfigResponse,
+  type ManagementRiskAssumptionSaveRequest, type ManagementRiskAssumption,
+  type ManagementScenarioSaveRequest, type ManagementSavedScenario,
+  type ManagementDrilldownRequest, type ManagementDrilldownResponse,
+  type ManagementOwnerContributionRequest, type ManagementOwnerContributionResponse,
+  type ManagementHomeWarningsResponse,
 } from '../../shared/types/ipc.js';
 import {
   getReportsOverview, getSalesReport, getGraphsReport, getMarginReport, getInventoryReport, getTaxesReport,
@@ -2246,16 +2508,143 @@ import {
 } from '../services/priceIntelligence.js';
 import { getCustomerIntelligence } from '../services/customerIntelligence.js';
 import { recordTaxPayment } from '../services/taxPayments.js';
+import {
+  activateFinancialCutover,
+  authorizeFinancialAccess,
+  createAccountTransfer,
+  createBusinessExpense,
+  createFinancialAccount,
+  updateFinancialAccount,
+  createLiabilityAgreement,
+  getFinancialDataQuality,
+  listFinancialAccounts,
+  listLedgerAccounts,
+  previewFinancialCutover,
+  payObligation,
+  updateObligation,
+  reconcileFinancialAccount,
+  registerFixedAsset,
+  listFixedAssets,
+  depreciateFixedAsset,
+  disposeFixedAsset,
+  recordOwnerContribution,
+  setPaymentAccountMapping,
+  setLedgerShadowMode,
+  verifyLedgerShadow,
+  updateRiskThreshold,
+  listRiskConfiguration,
+  upsertRiskAssumption,
+  saveScenario,
+} from '../services/ledger.js';
+import {
+  getConcentrationReport,
+  getDebtMaturity,
+  getIncomeStatement,
+  getManagementBalanceSheet,
+  getManagementCashflow,
+  getManagementDrilldown,
+  runDownsideScenario,
+} from '../services/managementReports.js';
+import {
+  lockReportAccess,
+  reportAccessStatus,
+  requireReportAccess,
+  revokeReportAccessForSession,
+  touchReportAccess,
+  unlockReportAccess,
+} from '../services/reportAccess.js';
 
 export function registerReportsHandlers(
   ipcMain: IpcRegistrar,
   db: import('better-sqlite3').Database,
   _deviceId: string,
 ): void {
+  const authorizeRead = (
+    workerId: string,
+    accessToken: string,
+    scope: 'OPERATIONAL' | 'OWNER' = 'OPERATIONAL',
+  ) => requireReportAccess({
+    accessToken,
+    workerId,
+    deviceId: currentDeviceId(_deviceId),
+    scope,
+    db,
+  });
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.REPORTS_ACCESS_UNLOCK,
+    wrap<ReportsAccessUnlockRequest, ReportsAccessUnlockResponse>(
+      (req) => {
+        const w = requireWorker();
+        return unlockReportAccess(db, {
+          workerId: w.workerId, pin: req.pin, deviceId: currentDeviceId(_deviceId),
+        });
+      },
+      IPC_CHANNELS_REPORTS.REPORTS_ACCESS_UNLOCK,
+    ),
+  );
+  ipcMain.handle(IPC_CHANNELS_REPORTS.REPORTS_ACCESS_TOUCH,
+    wrap<ReportsAccessTokenRequest, ReportsAccessTouchResponse>(
+      (req) => {
+        const w = requireWorker();
+        return touchReportAccess({
+          accessToken: req.accessToken, workerId: w.workerId,
+          deviceId: currentDeviceId(_deviceId),
+          db,
+        });
+      },
+      IPC_CHANNELS_REPORTS.REPORTS_ACCESS_TOUCH,
+    ),
+  );
+  ipcMain.handle(IPC_CHANNELS_REPORTS.REPORTS_ACCESS_STATUS,
+    wrap<ReportsAccessTokenRequest, ReportsAccessStatusResponse>(
+      (req) => {
+        const w = requireWorker();
+        return reportAccessStatus({
+          accessToken: req.accessToken, workerId: w.workerId,
+          deviceId: currentDeviceId(_deviceId),
+          db,
+        });
+      },
+      IPC_CHANNELS_REPORTS.REPORTS_ACCESS_STATUS,
+    ),
+  );
+  ipcMain.handle(IPC_CHANNELS_REPORTS.REPORTS_ACCESS_LOCK,
+    wrap<ReportsAccessLockRequest, { ok: true }>(
+      (req) => {
+        const w = requireWorker();
+        lockReportAccess(db, {
+          accessToken: req.accessToken, workerId: w.workerId,
+          deviceId: currentDeviceId(_deviceId), reason: req.reason ?? 'MANUAL',
+        });
+        return { ok: true };
+      },
+      IPC_CHANNELS_REPORTS.REPORTS_ACCESS_LOCK,
+    ),
+  );
+  ipcMain.handle(IPC_CHANNELS_REPORTS.REPORTS_ACCESS_ACTION,
+    wrap<ReportsAccessActionRequest, { ok: true }>(
+      (req) => {
+        const w = requireWorker();
+        authorizeRead(w.workerId, req.reportAccessToken, 'OWNER');
+        logAudit(db, {
+          workerId: w.workerId,
+          action: `REPORT_${req.action}`,
+          entityType: 'reports',
+          entityId: req.report,
+          afterValue: { report: req.report },
+          deviceId: currentDeviceId(_deviceId),
+        });
+        return { ok: true };
+      },
+      IPC_CHANNELS_REPORTS.REPORTS_ACCESS_ACTION,
+    ),
+  );
+
   ipcMain.handle(IPC_CHANNELS_REPORTS.REPORTS_OVERVIEW,
     wrap<ReportsOverviewRequest, ReportsOverviewResponse>(
       (req) => {
         const w = requireWorker();
+        authorizeRead(w.workerId, req.reportAccessToken);
         return getReportsOverview(db, {
           actorWorkerId: w.workerId,
           locationId: req?.locationId,
@@ -2270,6 +2659,7 @@ export function registerReportsHandlers(
     wrap<ReportsSalesRequest, ReportsSalesResponse>(
       (req) => {
         const w = requireWorker();
+        authorizeRead(w.workerId, req.reportAccessToken);
         return getSalesReport(db, {
           actorWorkerId: w.workerId,
           fromDate: req.fromDate,
@@ -2285,6 +2675,7 @@ export function registerReportsHandlers(
     wrap<ReportsGraphsRequest, ReportsGraphsResponse>(
       (req) => {
         const w = requireWorker();
+        authorizeRead(w.workerId, req.reportAccessToken);
         return getGraphsReport(db, {
           actorWorkerId: w.workerId,
           fromDate: req.fromDate,
@@ -2299,6 +2690,7 @@ export function registerReportsHandlers(
     wrap<ReportsMarginRequest, ReportsMarginResponse>(
       (req) => {
         const w = requireWorker();
+        authorizeRead(w.workerId, req.reportAccessToken);
         return getMarginReport(db, {
           actorWorkerId: w.workerId,
           fromDate: req.fromDate,
@@ -2313,6 +2705,7 @@ export function registerReportsHandlers(
     wrap<ReportsInventoryRequest, ReportsInventoryResponse>(
       (req) => {
         const w = requireWorker();
+        authorizeRead(w.workerId, req.reportAccessToken);
         return getInventoryReport(db, {
           actorWorkerId: w.workerId,
           locationId: req?.locationId,
@@ -2324,9 +2717,10 @@ export function registerReportsHandlers(
   );
 
   ipcMain.handle(IPC_CHANNELS_REPORTS.REPORTS_PRICE_INTELLIGENCE,
-    wrap<unknown, ReportsPriceIntelligenceResponse>(
-      () => {
+    wrap<ReportReadAccess, ReportsPriceIntelligenceResponse>(
+      (req) => {
         const w = requireWorker();
+        authorizeRead(w.workerId, req.reportAccessToken);
         return getPriceIntelligence(db, { actorWorkerId: w.workerId });
       },
       IPC_CHANNELS_REPORTS.REPORTS_PRICE_INTELLIGENCE,
@@ -2337,6 +2731,7 @@ export function registerReportsHandlers(
     wrap<ReportsPriceHistoryRequest, ReportsPriceHistoryResponse>(
       (req) => {
         const w = requireWorker();
+        authorizeRead(w.workerId, req.reportAccessToken);
         return getPriceHistory(db, {
           actorWorkerId: w.workerId,
           fromDate: req?.fromDate,
@@ -2353,6 +2748,7 @@ export function registerReportsHandlers(
     wrap<ReportsLandedCostsRequest, ReportsLandedCostsResponse>(
       (req) => {
         const w = requireWorker();
+        authorizeRead(w.workerId, req.reportAccessToken);
         return getLandedCostAllocations(db, {
           actorWorkerId: w.workerId,
           fromDate: req?.fromDate,
@@ -2368,6 +2764,7 @@ export function registerReportsHandlers(
     wrap<ReportsCustomerIntelligenceRequest, ReportsCustomerIntelligenceResponse>(
       (req) => {
         const w = requireWorker();
+        authorizeRead(w.workerId, req.reportAccessToken);
         return getCustomerIntelligence(db, {
           actorWorkerId: w.workerId,
           asOfDateISO: req?.asOfDateISO,
@@ -2382,6 +2779,7 @@ export function registerReportsHandlers(
     wrap<ReportsTaxesRequest, ReportsTaxesResponse>(
       (req) => {
         const w = requireWorker();
+        authorizeRead(w.workerId, req.reportAccessToken);
         return getTaxesReport(db, {
           actorWorkerId: w.workerId,
           fromDate: req.fromDate,
@@ -2396,6 +2794,10 @@ export function registerReportsHandlers(
     wrap<ReportsTaxPaymentRecordRequest, ReportsTaxPaymentRecordResponse>(
       (req) => {
         const w = requireWorker();
+        const auth = verifyPin(db, w.workerId, req.pin, currentDeviceId(_deviceId));
+        if (!auth.ok) throw new Error(auth.reason === 'LOCKED_OUT'
+          ? `tax payment PIN locked until ${auth.lockedUntil}`
+          : `tax payment PIN verification failed (${auth.reason})`);
         const openShift = req.paymentMethod === 'CASH' ? requireOpenShift(db) : null;
         return recordTaxPayment(db, {
           actorWorkerId: w.workerId,
@@ -2408,7 +2810,7 @@ export function registerReportsHandlers(
           paymentReference: req.paymentReference ?? null,
           paidAt: req.paidAt ?? null,
           notes: req.notes ?? null,
-          deviceId: _deviceId,
+          deviceId: currentDeviceId(_deviceId),
         });
       },
       IPC_CHANNELS_REPORTS.REPORTS_TAX_PAYMENT_RECORD,
@@ -2419,12 +2821,12 @@ export function registerReportsHandlers(
     wrap<ReportsBalanceSheetRequest, ReportsBalanceSheetResponse>(
       (req) => {
         const w = requireWorker();
+        authorizeRead(w.workerId, req.reportAccessToken, 'OWNER');
         return getBalanceSheetReport(db, {
           actorWorkerId: w.workerId,
           asOfDate: req.asOfDate,
-          pin: req.pin,
           locationId: req.locationId,
-          deviceId: _deviceId,
+          deviceId: currentDeviceId(_deviceId),
         });
       },
       IPC_CHANNELS_REPORTS.REPORTS_BALANCE_SHEET,
@@ -2435,16 +2837,457 @@ export function registerReportsHandlers(
     wrap<ReportsCashflowRequest, ReportsCashflowResponse>(
       (req) => {
         const w = requireWorker();
+        authorizeRead(w.workerId, req.reportAccessToken, 'OWNER');
         return getCashflowReport(db, {
           actorWorkerId: w.workerId,
           fromDate: req.fromDate,
           toDate: req.toDate,
-          pin: req.pin,
           locationId: req.locationId,
-          deviceId: _deviceId,
+          deviceId: currentDeviceId(_deviceId),
         });
       },
       IPC_CHANNELS_REPORTS.REPORTS_CASHFLOW,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.MANAGEMENT_ACCOUNTS_LIST,
+    wrap<ManagementAccountsListRequest, ManagementAccountsListResponse>(
+      (req) => {
+        const w = requireWorker();
+        authorizeRead(w.workerId, req.reportAccessToken, 'OWNER');
+        const locationId = req.locationId ?? DEFAULT_LOCATION_ID;
+        logAudit(db, {
+          workerId: w.workerId,
+          action: 'MANAGEMENT_REPORT_VIEWED',
+          entityType: 'financial_accounts',
+          entityId: locationId,
+          afterValue: { view: 'MONEY_LOCATION_ACCOUNTS' },
+          deviceId: _deviceId,
+        });
+        return {
+          accounts: listFinancialAccounts(db, locationId, true).map((account) => ({
+            ...account,
+            ledgerAccountCode: account.ledgerCode,
+          })),
+          ledgerAccounts: listLedgerAccounts(db, locationId),
+          dataQuality: getFinancialDataQuality(db, { locationId }),
+        };
+      },
+      IPC_CHANNELS_REPORTS.MANAGEMENT_ACCOUNTS_LIST,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.MANAGEMENT_ACCOUNT_CREATE,
+    wrap<ManagementAccountCreateRequest, ManagementFinancialAccount>(
+      (req) => {
+        const w = requireWorker();
+        authorizeFinancialAccess(db, w.workerId, req.pin, _deviceId);
+        const account = createFinancialAccount(db, {
+          ...req, actorWorkerId: w.workerId, deviceId: _deviceId,
+        });
+        return { ...account, ledgerAccountCode: account.ledgerCode };
+      },
+      IPC_CHANNELS_REPORTS.MANAGEMENT_ACCOUNT_CREATE,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.MANAGEMENT_ACCOUNT_UPDATE,
+    wrap<ManagementAccountUpdateRequest, ManagementFinancialAccount>(
+      (req) => {
+        const w = requireWorker();
+        authorizeFinancialAccess(db, w.workerId, req.pin, _deviceId);
+        const account = updateFinancialAccount(db, {
+          ...req, actorWorkerId: w.workerId, deviceId: _deviceId,
+        });
+        return { ...account, ledgerAccountCode: account.ledgerCode };
+      },
+      IPC_CHANNELS_REPORTS.MANAGEMENT_ACCOUNT_UPDATE,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.MANAGEMENT_ACCOUNT_MAP,
+    wrap<ManagementAccountMapRequest, { ok: boolean }>(
+      (req) => {
+        const w = requireWorker();
+        authorizeFinancialAccess(db, w.workerId, req.pin, _deviceId);
+        setPaymentAccountMapping(db, {
+          ...req, actorWorkerId: w.workerId, deviceId: _deviceId,
+        });
+        return { ok: true };
+      },
+      IPC_CHANNELS_REPORTS.MANAGEMENT_ACCOUNT_MAP,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.MANAGEMENT_ACCOUNT_RECONCILE,
+    wrap<ManagementAccountReconcileRequest, ManagementAccountReconcileResponse>(
+      (req) => {
+        const w = requireWorker();
+        return reconcileFinancialAccount(db, {
+          ...req, actorWorkerId: w.workerId, deviceId: _deviceId,
+        });
+      },
+      IPC_CHANNELS_REPORTS.MANAGEMENT_ACCOUNT_RECONCILE,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.MANAGEMENT_ACCOUNT_TRANSFER,
+    wrap<ManagementAccountTransferRequest, ManagementAccountTransferResponse>(
+      (req) => {
+        const w = requireWorker();
+        return createAccountTransfer(db, {
+          ...req, actorWorkerId: w.workerId, deviceId: _deviceId,
+        });
+      },
+      IPC_CHANNELS_REPORTS.MANAGEMENT_ACCOUNT_TRANSFER,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.MANAGEMENT_CUTOVER_PREVIEW,
+    wrap<ManagementCutoverRequest, ManagementCutoverPreviewResponse>(
+      (req) => {
+        const w = requireWorker();
+        authorizeRead(w.workerId, req.reportAccessToken, 'OWNER');
+        return previewFinancialCutover(db, {
+          locationId: req.locationId,
+          cutoverDate: req.cutoverDate,
+          balances: req.balances,
+        });
+      },
+      IPC_CHANNELS_REPORTS.MANAGEMENT_CUTOVER_PREVIEW,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.MANAGEMENT_CUTOVER_ACTIVATE,
+    wrap<ManagementCutoverActivateRequest, ManagementCutoverActivateResponse>(
+      (req) => {
+        const w = requireWorker();
+        return activateFinancialCutover(db, {
+          ...req, actorWorkerId: w.workerId, deviceId: _deviceId,
+        });
+      },
+      IPC_CHANNELS_REPORTS.MANAGEMENT_CUTOVER_ACTIVATE,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.MANAGEMENT_SHADOW_STATUS,
+    wrap<ManagementShadowRequest, ManagementShadowResponse>(
+      (req) => {
+        const w = requireWorker();
+        authorizeRead(w.workerId, req.reportAccessToken, 'OWNER');
+        return verifyLedgerShadow(db, req.locationId ?? DEFAULT_LOCATION_ID);
+      },
+      IPC_CHANNELS_REPORTS.MANAGEMENT_SHADOW_STATUS,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.MANAGEMENT_SHADOW_SET,
+    wrap<ManagementShadowSetRequest, ManagementShadowResponse>(
+      (req) => {
+        const w = requireWorker();
+        return setLedgerShadowMode(db, {
+          ...req, actorWorkerId: w.workerId, deviceId: _deviceId,
+        });
+      },
+      IPC_CHANNELS_REPORTS.MANAGEMENT_SHADOW_SET,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.MANAGEMENT_DATA_QUALITY,
+    wrap<ManagementAccountsListRequest, ManagementDataQuality>(
+      (req) => {
+        const w = requireWorker();
+        authorizeRead(w.workerId, req.reportAccessToken, 'OWNER');
+        return getFinancialDataQuality(db, { locationId: req.locationId });
+      },
+      IPC_CHANNELS_REPORTS.MANAGEMENT_DATA_QUALITY,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.MANAGEMENT_INCOME_STATEMENT,
+    wrap<ManagementReportRangeRequest, ManagementIncomeStatementResponse>(
+      (req) => {
+        const w = requireWorker();
+        authorizeRead(w.workerId, req.reportAccessToken, 'OWNER');
+        return getIncomeStatement(db, {
+          ...req, actorWorkerId: w.workerId, deviceId: _deviceId, basis: 'ACCRUAL',
+        });
+      },
+      IPC_CHANNELS_REPORTS.MANAGEMENT_INCOME_STATEMENT,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.MANAGEMENT_POSITION,
+    wrap<ManagementAsOfRequest, ManagementPositionResponse>(
+      (req) => {
+        const w = requireWorker();
+        authorizeRead(w.workerId, req.reportAccessToken, 'OWNER');
+        return getManagementBalanceSheet(db, {
+          ...req, actorWorkerId: w.workerId, deviceId: _deviceId,
+        });
+      },
+      IPC_CHANNELS_REPORTS.MANAGEMENT_POSITION,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.MANAGEMENT_CASHFLOW,
+    wrap<ManagementReportRangeRequest, ManagementCashflowResponse>(
+      (req) => {
+        const w = requireWorker();
+        authorizeRead(w.workerId, req.reportAccessToken, 'OWNER');
+        const report = getManagementCashflow(db, {
+          ...req, actorWorkerId: w.workerId, deviceId: _deviceId,
+        });
+        return {
+          ...report,
+          accounts: report.accounts.map((account) => ({
+            ...account,
+            ledgerAccountCode: account.ledgerCode,
+          })),
+        };
+      },
+      IPC_CHANNELS_REPORTS.MANAGEMENT_CASHFLOW,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.MANAGEMENT_OBLIGATIONS,
+    wrap<ManagementAsOfRequest, ManagementObligationsResponse>(
+      (req) => {
+        const w = requireWorker();
+        authorizeRead(w.workerId, req.reportAccessToken, 'OWNER');
+        return getDebtMaturity(db, {
+          ...req, actorWorkerId: w.workerId, deviceId: _deviceId,
+        });
+      },
+      IPC_CHANNELS_REPORTS.MANAGEMENT_OBLIGATIONS,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.MANAGEMENT_CONCENTRATION,
+    wrap<ManagementReportRangeRequest, ManagementConcentrationResponse>(
+      (req) => {
+        const w = requireWorker();
+        authorizeRead(w.workerId, req.reportAccessToken, 'OWNER');
+        return getConcentrationReport(db, {
+          ...req, actorWorkerId: w.workerId, deviceId: _deviceId,
+        });
+      },
+      IPC_CHANNELS_REPORTS.MANAGEMENT_CONCENTRATION,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.MANAGEMENT_DOWNSIDE,
+    wrap<ManagementDownsideRequest, ManagementDownsideResponse>(
+      (req) => {
+        const w = requireWorker();
+        authorizeRead(w.workerId, req.reportAccessToken, 'OWNER');
+        const result = runDownsideScenario(db, {
+          actorWorkerId: w.workerId,
+          deviceId: _deviceId,
+          locationId: req.locationId,
+          preset: req.preset,
+          horizonDays: req.horizonDays,
+          asOfDate: req.asOfDate,
+          drivers: req.drivers,
+        });
+        return result;
+      },
+      IPC_CHANNELS_REPORTS.MANAGEMENT_DOWNSIDE,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.MANAGEMENT_EXPENSE_CREATE,
+    wrap<ManagementExpenseCreateRequest, ManagementExpenseCreateResponse>(
+      (req) => {
+        const w = requireWorker();
+        authorizeFinancialAccess(db, w.workerId, req.pin, _deviceId);
+        return createBusinessExpense(db, {
+          ...req, actorWorkerId: w.workerId, deviceId: _deviceId,
+        });
+      },
+      IPC_CHANNELS_REPORTS.MANAGEMENT_EXPENSE_CREATE,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.MANAGEMENT_LOAN_CREATE,
+    wrap<ManagementLoanCreateRequest, ManagementLoanCreateResponse>(
+      (req) => {
+        const w = requireWorker();
+        authorizeFinancialAccess(db, w.workerId, req.pin, _deviceId);
+        return createLiabilityAgreement(db, {
+          ...req, actorWorkerId: w.workerId, deviceId: _deviceId,
+        });
+      },
+      IPC_CHANNELS_REPORTS.MANAGEMENT_LOAN_CREATE,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.MANAGEMENT_OBLIGATION_PAY,
+    wrap<ManagementObligationPayRequest, ManagementObligationPayResponse>(
+      (req) => {
+        const w = requireWorker();
+        return payObligation(db, {
+          ...req, actorWorkerId: w.workerId, deviceId: _deviceId,
+        });
+      },
+      IPC_CHANNELS_REPORTS.MANAGEMENT_OBLIGATION_PAY,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.MANAGEMENT_OBLIGATION_UPDATE,
+    wrap<ManagementObligationUpdateRequest, { ok: boolean }>(
+      (req) => {
+        const w = requireWorker();
+        updateObligation(db, { ...req, actorWorkerId: w.workerId, deviceId: _deviceId });
+        return { ok: true };
+      },
+      IPC_CHANNELS_REPORTS.MANAGEMENT_OBLIGATION_UPDATE,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.MANAGEMENT_FIXED_ASSET_CREATE,
+    wrap<ManagementFixedAssetCreateRequest, ManagementFixedAssetCreateResponse>(
+      (req) => {
+        const w = requireWorker();
+        authorizeFinancialAccess(db, w.workerId, req.pin, _deviceId);
+        return registerFixedAsset(db, {
+          ...req, actorWorkerId: w.workerId, deviceId: _deviceId,
+        });
+      },
+      IPC_CHANNELS_REPORTS.MANAGEMENT_FIXED_ASSET_CREATE,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.MANAGEMENT_FIXED_ASSETS_LIST,
+    wrap<ManagementFixedAssetsListRequest, ManagementFixedAssetsListResponse>(
+      (req) => {
+        const w = requireWorker();
+        authorizeRead(w.workerId, req.reportAccessToken, 'OWNER');
+        return { assets: listFixedAssets(db, req.locationId ?? DEFAULT_LOCATION_ID) };
+      },
+      IPC_CHANNELS_REPORTS.MANAGEMENT_FIXED_ASSETS_LIST,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.MANAGEMENT_FIXED_ASSET_DEPRECIATE,
+    wrap<ManagementFixedAssetDepreciateRequest, ManagementFixedAssetDepreciateResponse>(
+      (req) => {
+        const w = requireWorker();
+        return depreciateFixedAsset(db, { ...req, actorWorkerId: w.workerId, deviceId: _deviceId });
+      },
+      IPC_CHANNELS_REPORTS.MANAGEMENT_FIXED_ASSET_DEPRECIATE,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.MANAGEMENT_FIXED_ASSET_DISPOSE,
+    wrap<ManagementFixedAssetDisposeRequest, ManagementFixedAssetDisposeResponse>(
+      (req) => {
+        const w = requireWorker();
+        return disposeFixedAsset(db, { ...req, actorWorkerId: w.workerId, deviceId: _deviceId });
+      },
+      IPC_CHANNELS_REPORTS.MANAGEMENT_FIXED_ASSET_DISPOSE,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.MANAGEMENT_THRESHOLD_UPDATE,
+    wrap<ManagementThresholdUpdateRequest, { ok: boolean }>(
+      (req) => {
+        const w = requireWorker();
+        updateRiskThreshold(db, {
+          ...req, actorWorkerId: w.workerId, deviceId: _deviceId,
+        });
+        return { ok: true };
+      },
+      IPC_CHANNELS_REPORTS.MANAGEMENT_THRESHOLD_UPDATE,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.MANAGEMENT_RISK_CONFIG,
+    wrap<ManagementRiskConfigRequest, ManagementRiskConfigResponse>(
+      (req) => {
+        const w = requireWorker();
+        authorizeRead(w.workerId, req.reportAccessToken, 'OWNER');
+        return listRiskConfiguration(db, req.locationId ?? DEFAULT_LOCATION_ID);
+      },
+      IPC_CHANNELS_REPORTS.MANAGEMENT_RISK_CONFIG,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.MANAGEMENT_RISK_ASSUMPTION_SAVE,
+    wrap<ManagementRiskAssumptionSaveRequest, ManagementRiskAssumption>(
+      (req) => {
+        const w = requireWorker();
+        return upsertRiskAssumption(db, { ...req, actorWorkerId: w.workerId, deviceId: _deviceId });
+      },
+      IPC_CHANNELS_REPORTS.MANAGEMENT_RISK_ASSUMPTION_SAVE,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.MANAGEMENT_SCENARIO_SAVE,
+    wrap<ManagementScenarioSaveRequest, ManagementSavedScenario>(
+      (req) => {
+        const w = requireWorker();
+        return saveScenario(db, {
+          ...req, drivers: { ...req.drivers }, actorWorkerId: w.workerId, deviceId: _deviceId,
+        });
+      },
+      IPC_CHANNELS_REPORTS.MANAGEMENT_SCENARIO_SAVE,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.MANAGEMENT_DRILLDOWN,
+    wrap<ManagementDrilldownRequest, ManagementDrilldownResponse>(
+      (req) => {
+        const w = requireWorker();
+        authorizeRead(w.workerId, req.reportAccessToken, 'OWNER');
+        return getManagementDrilldown(db, {
+          ...req, actorWorkerId: w.workerId, deviceId: _deviceId,
+        });
+      },
+      IPC_CHANNELS_REPORTS.MANAGEMENT_DRILLDOWN,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.MANAGEMENT_OWNER_CONTRIBUTION,
+    wrap<ManagementOwnerContributionRequest, ManagementOwnerContributionResponse>(
+      (req) => {
+        const w = requireWorker();
+        return recordOwnerContribution(db, {
+          ...req, actorWorkerId: w.workerId, deviceId: _deviceId,
+        });
+      },
+      IPC_CHANNELS_REPORTS.MANAGEMENT_OWNER_CONTRIBUTION,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_REPORTS.MANAGEMENT_HOME_WARNINGS,
+    wrap<unknown, ManagementHomeWarningsResponse>(
+      () => {
+        const w = requireWorker();
+        if (w.role !== 'OWNER' && w.role !== 'FOUNDER') {
+          throw new Error('obligation warnings require OWNER or FOUNDER');
+        }
+        const today = new Date().toISOString().slice(0, 10);
+        return db.prepare(
+          `SELECT
+             COALESCE(SUM(CASE WHEN due_date < ? THEN 1 ELSE 0 END), 0) AS overdueCount,
+             COALESCE(SUM(CASE WHEN due_date < ?
+                               THEN principal_pesewas + interest_pesewas - total_paid_pesewas
+                               ELSE 0 END), 0) AS overduePesewas,
+             COALESCE(SUM(CASE WHEN due_date >= ? AND due_date <= date(?, '+7 days')
+                               THEN 1 ELSE 0 END), 0) AS dueNext7DaysCount,
+             COALESCE(SUM(CASE WHEN due_date >= ? AND due_date <= date(?, '+7 days')
+                               THEN principal_pesewas + interest_pesewas - total_paid_pesewas
+                               ELSE 0 END), 0) AS dueNext7DaysPesewas,
+             COALESCE(SUM(CASE WHEN due_date IS NULL THEN 1 ELSE 0 END), 0) AS missingDueDateCount
+           FROM obligations
+          WHERE location_id = ?
+            AND status IN ('OPEN','PARTIALLY_PAID','DISPUTED')`,
+        ).get(
+          today, today, today, today, today, today, DEFAULT_LOCATION_ID,
+        ) as ManagementHomeWarningsResponse;
+      },
+      IPC_CHANNELS_REPORTS.MANAGEMENT_HOME_WARNINGS,
     ),
   );
 }
@@ -2628,9 +3471,30 @@ export function registerCatalogTransferHandlers(
 import {
   IPC_CHANNELS_RECEIPT,
   type ReceiptConfigResponse, type ReceiptSetConfigRequest,
+  type ReceiptTestPrinterRequest, type ReceiptTestPrinterResponse,
 } from '../../shared/types/ipc.js';
 import { getReceiptConfig, setReceiptConfig } from '../services/receiptConfig.js';
 import { setPrinterInterfaceSpecs } from '../printer/printer.js';
+
+function receiptTestSlip(station: 'counter' | 'door'): import('../../shared/lib/receipt.js').SaleReceipt {
+  return {
+    shopName: 'COUNTER TEST PRINT',
+    shopSubtitle: station === 'door' ? 'Door printer' : 'Counter printer',
+    receiptId: `test-${station}`,
+    workerName: 'Settings',
+    saleAt: new Date().toISOString(),
+    channel: 'WALK_IN',
+    customerName: null,
+    lines: [{ quantity: 1, name: 'Printer setup test', unitPricePesewas: 0, lineTotalPesewas: 0 }],
+    subtotalPesewas: 0,
+    discountPesewas: 0,
+    totalPesewas: 0,
+    showVatBreakdown: false,
+    payment: { method: 'CASH' },
+    payments: [{ method: 'CASH', amountPesewas: 0 }],
+    footerText: 'If you can read this, setup works.',
+  };
+}
 
 export function registerReceiptConfigHandlers(
   ipcMain: IpcRegistrar,
@@ -2672,6 +3536,22 @@ export function registerReceiptConfigHandlers(
         return after;
       },
       IPC_CHANNELS_RECEIPT.RECEIPT_SET_CONFIG,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_RECEIPT.RECEIPT_TEST_PRINTER,
+    wrap<ReceiptTestPrinterRequest, ReceiptTestPrinterResponse>(
+      async (req) => {
+        const w = requireWorker();
+        if (w.role !== 'OWNER' && w.role !== 'FOUNDER') {
+          throw new Error('Only OWNER or FOUNDER can test printer settings.');
+        }
+        const station = req.station === 'door' ? 'door' : 'counter';
+        const result = await getPrinter(station).print(receiptTestSlip(station));
+        if (result.ok) return { ok: true, printed: true };
+        return { ok: false, printed: false, error: `${result.reason}: ${result.message}` };
+      },
+      IPC_CHANNELS_RECEIPT.RECEIPT_TEST_PRINTER,
     ),
   );
 }

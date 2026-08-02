@@ -112,6 +112,7 @@ function ReceiptSection(): JSX.Element {
   const [config, setConfig] = useState<ReceiptConfigResponse | null>(null);
   const [draft, setDraft] = useState<ReceiptConfigResponse | null>(null);
   const [saving, setSaving] = useState(false);
+  const [testingStation, setTestingStation] = useState<'counter' | 'door' | null>(null);
   const [message, setMessage] = useState<InlineMessage | null>(null);
 
   useEffect(() => {
@@ -146,6 +147,38 @@ function ReceiptSection(): JSX.Element {
     setConfig(r.data);
     setDraft(r.data);
     setMessage({ kind: 'success', text: 'Receipt settings saved.' });
+  }
+
+  async function testPrinter(station: 'counter' | 'door') {
+    if (!draft) return;
+    setSaving(true);
+    setTestingStation(station);
+    setMessage(null);
+
+    if (dirty) {
+      const saved = await counter.receiptSetConfig(draft);
+      if (!saved.success) {
+        setSaving(false);
+        setTestingStation(null);
+        setMessage({ kind: 'danger', text: saved.error });
+        return;
+      }
+      setConfig(saved.data);
+      setDraft(saved.data);
+    }
+
+    const r = await counter.receiptTestPrinter({ station });
+    setSaving(false);
+    setTestingStation(null);
+    if (!r.success) {
+      setMessage({ kind: 'danger', text: r.error });
+      return;
+    }
+    if (!r.data.printed) {
+      setMessage({ kind: 'danger', text: r.data.error ?? 'Printer test failed.' });
+      return;
+    }
+    setMessage({ kind: 'success', text: `${station === 'door' ? 'Door' : 'Counter'} printer test sent.` });
   }
 
   function reset() {
@@ -228,19 +261,23 @@ function ReceiptSection(): JSX.Element {
 
           {/* Printers */}
           <FormGroup label="Printers">
-            <TextField
+            <PrinterSetupField
               label="Counter printer"
+              station="counter"
               value={draft.counterPrinterInterface ?? ''}
               onChange={(v) => patch('counterPrinterInterface', v || null)}
-              placeholder="printer:Counter"
-              hint="Desktop sales print here."
+              onTest={() => void testPrinter('counter')}
+              testing={testingStation === 'counter'}
+              disabled={saving}
             />
-            <TextField
+            <PrinterSetupField
               label="Door printer"
+              station="door"
               value={draft.doorPrinterInterface ?? ''}
               onChange={(v) => patch('doorPrinterInterface', v || null)}
-              placeholder="tcp://192.168.1.50:9100"
-              hint="Phone sales print here."
+              onTest={() => void testPrinter('door')}
+              testing={testingStation === 'door'}
+              disabled={saving}
             />
           </FormGroup>
 
@@ -413,6 +450,149 @@ function TextField({
       />
       {hint && <span className="block text-xs text-text-tertiary mt-1">{hint}</span>}
     </label>
+  );
+}
+
+type PrinterMode = 'default' | 'network' | 'windows' | 'advanced';
+
+function defaultPrinterMode(station: 'counter' | 'door'): PrinterMode {
+  return station === 'door' ? 'network' : 'windows';
+}
+
+function printerModeFor(value: string, station: 'counter' | 'door'): PrinterMode {
+  if (value === 'printer:auto') return 'default';
+  if (value.startsWith('tcp://')) return 'network';
+  if (value.startsWith('printer:')) return 'windows';
+  return value ? 'advanced' : defaultPrinterMode(station);
+}
+
+function parseNetworkPrinter(value: string): { host: string; port: number } {
+  if (!value.startsWith('tcp://')) return { host: '', port: 9100 };
+  const withoutScheme = value.slice('tcp://'.length);
+  const [host = '', rawPort = '9100'] = withoutScheme.split(':');
+  const port = Number(rawPort);
+  return { host, port: Number.isFinite(port) && port > 0 ? port : 9100 };
+}
+
+function parseWindowsPrinter(value: string): string {
+  return value.startsWith('printer:') ? value.slice('printer:'.length) : '';
+}
+
+function PrinterSetupField({
+  label, station, value, onChange, onTest, testing, disabled,
+}: {
+  label: string;
+  station: 'counter' | 'door';
+  value: string;
+  onChange: (v: string) => void;
+  onTest: () => void;
+  testing: boolean;
+  disabled: boolean;
+}): JSX.Element {
+  const [mode, setMode] = useState<PrinterMode>(() => printerModeFor(value, station));
+
+  useEffect(() => {
+    setMode(printerModeFor(value, station));
+  }, [station, value]);
+
+  const net = parseNetworkPrinter(value);
+  const windowsName = parseWindowsPrinter(value);
+
+  function setNetwork(host: string, port = net.port) {
+    const cleanHost = host.trim();
+    onChange(cleanHost ? `tcp://${cleanHost}:${port || 9100}` : '');
+  }
+
+  function setPort(port: number) {
+    setNetwork(net.host, port);
+  }
+
+  function setWindowsName(name: string) {
+    const cleanName = name.trimStart();
+    onChange(cleanName ? `printer:${cleanName}` : '');
+  }
+
+  return (
+    <div className="border border-border bg-bg-surface p-3 space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="text-sm text-text-secondary">{label}</div>
+          <div className="text-xs text-text-tertiary">
+            {station === 'door' ? 'Phone sales print here.' : 'Desktop sales print here.'}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onTest}
+          disabled={disabled || testing || !value.trim()}
+          className="border border-border px-3 py-1.5 text-sm hover:bg-bg-elevated disabled:opacity-50"
+        >
+          {testing ? 'Testing…' : 'Test print'}
+        </button>
+      </div>
+
+      <RadioRow
+        label={`${label} type`}
+        value={mode}
+        onChange={(next) => {
+          setMode(next);
+          if (next === 'default') onChange('printer:auto');
+        }}
+        options={[
+          { value: 'default', label: 'Default', hint: 'Windows default printer' },
+          { value: 'network', label: 'Network IP', hint: 'Most door printers' },
+          { value: 'windows', label: 'Windows printer', hint: 'Installed driver' },
+          { value: 'advanced', label: 'Advanced', hint: 'Raw interface' },
+        ]}
+      />
+
+      {mode === 'default' && (
+        <div className="text-xs text-text-tertiary border border-border-subtle bg-bg-deep px-3 py-2">
+          Uses the printer set as default in Windows. For a door printer, install it in Windows first,
+          set it as the default printer, then use Test print.
+        </div>
+      )}
+
+      {mode === 'network' && (
+        <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_8rem] gap-3">
+          <TextField
+            label="Printer IP address"
+            value={net.host}
+            onChange={(v) => setNetwork(v)}
+            placeholder="192.168.1.50"
+            hint="Reserve this IP on the router so it does not change."
+          />
+          <NumberField
+            label="Port"
+            value={net.port}
+            min={1}
+            max={65535}
+            onChange={setPort}
+            hint="Usually 9100"
+          />
+        </div>
+      )}
+
+      {mode === 'windows' && (
+        <TextField
+          label="Windows printer name"
+          value={windowsName}
+          onChange={setWindowsName}
+          placeholder="Counter Receipt Printer"
+          hint="Use the exact printer name from Windows Printers & scanners."
+        />
+      )}
+
+      {mode === 'advanced' && (
+        <TextField
+          label="Interface"
+          value={value}
+          onChange={onChange}
+          placeholder={station === 'door' ? 'tcp://192.168.1.50:9100' : 'printer:Counter'}
+          hint="Examples: tcp://192.168.1.50:9100 or printer:Counter"
+        />
+      )}
+    </div>
   );
 }
 

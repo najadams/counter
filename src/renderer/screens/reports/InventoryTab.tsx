@@ -18,7 +18,7 @@ type Sort =
   | 'onHand' | 'atCost' | 'atRetail'
   | 'dos' | 'lastSold';
 
-export function InventoryTab() {
+export function InventoryTab({ reportAccessToken }: { reportAccessToken: string }) {
   const [velocityWindow, setVelocityWindow] = useState(30);
   const [data, setData] = useState<ReportsInventoryResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -30,12 +30,12 @@ export function InventoryTab() {
 
   async function load() {
     setLoading(true);
-    const r = await counter.reportsInventory({ velocityWindowDays: velocityWindow });
+    const r = await counter.reportsInventory({ velocityWindowDays: velocityWindow, reportAccessToken });
     setLoading(false);
     if (!r.success) { setError(r.error); return; }
     setData(r.data); setError(null);
   }
-  useEffect(() => { void load(); /* eslint-disable-next-line */ }, [velocityWindow]);
+  useEffect(() => { void load(); /* eslint-disable-next-line */ }, [velocityWindow, reportAccessToken]);
 
   const filtered = useMemo(() => {
     if (!data) return [];

@@ -10,6 +10,11 @@ import { logAudit } from '../db/audit.js';
 import { insertStockMovement } from './stockMovements.js';
 import { getUnit } from './productUnits.js';
 import { assertNotSealed } from './periods.js';
+import {
+  isLedgerPostingEnabled,
+  postSupplierInvoiceIfActive,
+  recordInventoryValuationMovement,
+} from './ledger.js';
 
 export interface StockReceiptLine {
   productId: string;
@@ -404,27 +409,41 @@ export function receiveStock(
       }
     }
 
-    // Latest-receipt-wins cost recompute. The new canonical cost is the
-    // weighted average of JUST this receipt's lines for the product —
-    // not an average across history. Rationale: cost should reflect
-    // what we most recently paid, so margin reports track current
-    // supplier pricing instead of lagging behind it indefinitely.
-    //
-    // Customer returns and other non-receipt inflows do not affect cost
-    // at all under this model (they don't go through receiveStock).
-    // Multi-line receipts for the same product get an honest weighted
-    // average across just those lines.
-    for (const [productId, acc] of receiptCost) {
-      if (acc.qty <= 0) continue;
-      const newCost = Math.round(acc.value / acc.qty);
-      const old = productMap.get(productId)!.oldCost;
-      if (old !== newCost) {
-        db.prepare(
-          `UPDATE products
-              SET cost_price_pesewas = ?, updated_at = ?, updated_by = ?
-              WHERE id = ?`,
-        ).run(newCost, now, input.workerId, productId);
-        productsUpdated++;
+    if (isLedgerPostingEnabled(db, input.locationId)) {
+      const landedByMovement = new Map<string, number>();
+      if (supplierInvoiceId) {
+        const landed = db.prepare(
+          `SELECT stock_movement_id AS stockMovementId,
+                  landed_line_total_pesewas AS landedValuePesewas
+             FROM supplier_invoice_lines
+            WHERE supplier_invoice_id = ?`,
+        ).all(supplierInvoiceId) as Array<{ stockMovementId: string; landedValuePesewas: number }>;
+        for (const row of landed) landedByMovement.set(row.stockMovementId, row.landedValuePesewas);
+      }
+      for (const movementId of movementIds) {
+        recordInventoryValuationMovement(db, {
+          stockMovementId: movementId,
+          exactInboundValuePesewas: landedByMovement.get(movementId),
+          actorWorkerId: input.workerId,
+          deviceId: input.deviceId,
+        });
+      }
+      productsUpdated = new Set(resolvedLines.map((line) => line.productId)).size;
+    } else {
+      // Legacy pre-cutover behaviour remains available for operational
+      // reports. Activation replaces it with perpetual moving average.
+      for (const [productId, acc] of receiptCost) {
+        if (acc.qty <= 0) continue;
+        const newCost = Math.round(acc.value / acc.qty);
+        const old = productMap.get(productId)!.oldCost;
+        if (old !== newCost) {
+          db.prepare(
+            `UPDATE products
+                SET cost_price_pesewas = ?, updated_at = ?, updated_by = ?
+                WHERE id = ?`,
+          ).run(newCost, now, input.workerId, productId);
+          productsUpdated++;
+        }
       }
     }
 
@@ -438,6 +457,12 @@ export function receiveStock(
                 updated_at = ?, updated_by = ?
             WHERE id = ?`,
       ).run(totalValuePesewas + transportCostPesewas + loadingCostPesewas, now, input.workerId, input.supplierId);
+    }
+
+    if (supplierInvoiceId) {
+      postSupplierInvoiceIfActive(
+        db, supplierInvoiceId, input.locationId, input.workerId, input.deviceId,
+      );
     }
 
     logAudit(db, {

@@ -7,6 +7,7 @@ import { AppHeader } from '../components/AppHeader';
 import { formatMoney, formatMoneyWithCurrency } from '../../shared/lib/money';
 import type { DailySummaryGenerateResponse } from '../../shared/types/ipc';
 import { FeedbackBanner } from '../components/FeedbackBanner';
+import { PinUnlockPanel } from '../components/PinUnlockPanel';
 
 interface SummaryRow { date: string; locationId: string; revenuePesewas: number; numSales: number;
   shrinkageRate: number | null; generatedAt: string; whatsappSentAt: string | null }
@@ -27,6 +28,7 @@ export default function DailySummaryScreen({ onExit }: { onExit: () => void }) {
   const [activeClose, setActiveClose] = useState<{ id: string; sealedAt: string; sealedByName: string } | null>(null);
   const [reopenReason, setReopenReason] = useState('');
   const [showReopen, setShowReopen] = useState(false);
+  const [varianceUnlocked, setVarianceUnlocked] = useState(false);
   const myRole = useSession((s) => s.workerRole);
   const isOwner = myRole === 'OWNER' || myRole === 'FOUNDER';
 
@@ -64,6 +66,7 @@ export default function DailySummaryScreen({ onExit }: { onExit: () => void }) {
   }
   async function loadDetail(date: string) {
     setSelectedDate(date);
+    setVarianceUnlocked(false);
     void refreshClose(date);
     const r = await counter.getDailySummary({ date });
     if (r.success) setDetail(r.data);
@@ -111,7 +114,7 @@ export default function DailySummaryScreen({ onExit }: { onExit: () => void }) {
                   </div>
                   <div className="text-text-tertiary text-xs mt-1 flex justify-between">
                     <span>{s.numSales} sales</span>
-                    <span>{s.shrinkageRate == null ? 'no stocktake' : `shrinkage ${(s.shrinkageRate * 100).toFixed(2)}%`}</span>
+                    <span>{varianceUnlocked ? (s.shrinkageRate == null ? 'no stocktake' : `shrinkage ${(s.shrinkageRate * 100).toFixed(2)}%`) : 'variance locked'}</span>
                   </div>
                 </button>
               </li>
@@ -181,32 +184,47 @@ export default function DailySummaryScreen({ onExit }: { onExit: () => void }) {
                 <KPI label="Breakage loss" value={formatMoneyWithCurrency(detail.totalBreakageValuePesewas)} tone={detail.totalBreakageValuePesewas > 0 ? 'danger' : 'ok'} />
                 <KPI label="Consumption value" value={formatMoneyWithCurrency(detail.totalConsumptionValuePesewas)} />
                 <KPI label="Expenses" value={formatMoneyWithCurrency(detail.totalExpensesValuePesewas ?? 0)} tone={(detail.totalExpensesValuePesewas ?? 0) > 0 ? 'warn' : 'ok'} subtle={(detail.expensesByCategory ?? []).slice(0, 2).map(c => `${c.category} ${formatMoneyWithCurrency(c.totalPesewas)}`).join(', ') || undefined} />
-                <KPI label="Cash variance"
-                  value={`${detail.cashCountVariancePesewas >= 0 ? '+' : ''}${formatMoney(detail.cashCountVariancePesewas)}`}
-                  tone={detail.cashCountVariancePesewas < 0 ? 'danger' : detail.cashCountVariancePesewas > 0 ? 'warn' : 'ok'} />
+                {varianceUnlocked ? (
+                  <KPI label="Cash variance"
+                    value={`${detail.cashCountVariancePesewas >= 0 ? '+' : ''}${formatMoney(detail.cashCountVariancePesewas)}`}
+                    tone={detail.cashCountVariancePesewas < 0 ? 'danger' : detail.cashCountVariancePesewas > 0 ? 'warn' : 'ok'} />
+                ) : (
+                  <KPI label="Cash variance" value="Locked" subtle="PIN required" tone="warn" />
+                )}
                 <KPI label="Credit extended" value={formatMoneyWithCurrency(detail.creditExtendedPesewas)} />
                 <KPI label="Credit collected" value={formatMoneyWithCurrency(detail.creditCollectedPesewas)} />
                 <KPI label="Outstanding credit" value={formatMoneyWithCurrency(detail.totalOutstandingCreditPesewas)} />
               </div>
 
-              <div className="bg-bg-surface border border-border p-5">
-                <div className="flex items-baseline justify-between mb-3">
-                  <span className="text-text-secondary uppercase tracking-wider text-xs">Shrinkage (stocktake-derived)</span>
-                  {detail.stocktakeShrinkageRate == null && (
-                    <span className="text-text-tertiary text-xs">No completed stocktake on this date</span>
+              {!varianceUnlocked && (
+                <PinUnlockPanel
+                  title="Unlock variance"
+                  description="Re-enter your PIN to view cash variance, shift variance, and stocktake shrinkage on the daily summary."
+                  onUnlocked={() => setVarianceUnlocked(true)}
+                  buttonLabel="Unlock variance"
+                />
+              )}
+
+              {varianceUnlocked && (
+                <div className="bg-bg-surface border border-border p-5">
+                  <div className="flex items-baseline justify-between mb-3">
+                    <span className="text-text-secondary uppercase tracking-wider text-xs">Shrinkage (stocktake-derived)</span>
+                    {detail.stocktakeShrinkageRate == null && (
+                      <span className="text-text-tertiary text-xs">No completed stocktake on this date</span>
+                    )}
+                  </div>
+                  {detail.stocktakeShrinkageRate != null && detail.stocktakeShrinkageValuePesewas != null && (
+                    <div className="flex items-baseline gap-6">
+                      <span className={`font-mono tnum text-3xl ${detail.stocktakeShrinkageRate > 0.02 ? 'text-danger' : 'text-success'}`}>
+                        {(detail.stocktakeShrinkageRate * 100).toFixed(2)}%
+                      </span>
+                      <span className="text-text-secondary">
+                        Loss value <span className="font-mono tnum text-text-primary">{formatMoneyWithCurrency(detail.stocktakeShrinkageValuePesewas)}</span>
+                      </span>
+                    </div>
                   )}
                 </div>
-                {detail.stocktakeShrinkageRate != null && detail.stocktakeShrinkageValuePesewas != null && (
-                  <div className="flex items-baseline gap-6">
-                    <span className={`font-mono tnum text-3xl ${detail.stocktakeShrinkageRate > 0.02 ? 'text-danger' : 'text-success'}`}>
-                      {(detail.stocktakeShrinkageRate * 100).toFixed(2)}%
-                    </span>
-                    <span className="text-text-secondary">
-                      Loss value <span className="font-mono tnum text-text-primary">{formatMoneyWithCurrency(detail.stocktakeShrinkageValuePesewas)}</span>
-                    </span>
-                  </div>
-                )}
-              </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-bg-surface border border-border p-4">
@@ -252,9 +270,13 @@ export default function DailySummaryScreen({ onExit }: { onExit: () => void }) {
                         <td className="py-1">{s.workerName}</td>
                         <td className="py-1 text-text-tertiary text-xs">{s.closedAt ? new Date(s.closedAt).toLocaleTimeString() : 'open'}</td>
                         <td className="py-1 text-right font-mono tnum">{formatMoney(s.totalSalesPesewas)}</td>
-                        <td className={`py-1 text-right font-mono tnum ${s.cashVariancePesewas == null ? 'text-text-tertiary' : s.cashVariancePesewas < 0 ? 'text-danger' : s.cashVariancePesewas > 0 ? 'text-warning' : 'text-success'}`}>
-                          {s.cashVariancePesewas == null ? '—' : (s.cashVariancePesewas >= 0 ? '+' : '') + formatMoney(s.cashVariancePesewas)}
-                        </td>
+                        {varianceUnlocked ? (
+                          <td className={`py-1 text-right font-mono tnum ${s.cashVariancePesewas == null ? 'text-text-tertiary' : s.cashVariancePesewas < 0 ? 'text-danger' : s.cashVariancePesewas > 0 ? 'text-warning' : 'text-success'}`}>
+                            {s.cashVariancePesewas == null ? '—' : (s.cashVariancePesewas >= 0 ? '+' : '') + formatMoney(s.cashVariancePesewas)}
+                          </td>
+                        ) : (
+                          <td className="py-1 text-right font-mono tnum text-warning">Locked</td>
+                        )}
                       </tr>
                     ))}
                   </tbody>

@@ -6,6 +6,7 @@ import type { Database as DB } from 'better-sqlite3';
 import { v4 as uuidv4 } from 'uuid';
 import { logAudit } from '../db/audit.js';
 import { verifyPin } from './workers.js';
+import { isLedgerActive, postOwnerDrawingIfActive } from './ledger.js';
 
 const SUPERVISOR_ROLES = new Set(['SUPERVISOR', 'OWNER', 'FOUNDER']);
 const DRAWING_CATEGORIES = new Set(['OWNER_DRAWING', 'FAMILY_SUPPORT', 'OWNER_SALARY', 'OTHER_DRAWING']);
@@ -132,6 +133,11 @@ export function recordCashDrop(
   if (category !== 'GENERIC_DROP' && !isDrawingCategory(category)) {
     throw new Error(`recordCashDrop: invalid category '${category}'`);
   }
+  if (category === 'GENERIC_DROP' && isLedgerActive(db, shift.location_id)) {
+    throw new Error(
+      'recordCashDrop: generic drops are disabled after ledger activation; use a transfer, expense, supplier payment, or drawing',
+    );
+  }
   const recipientNote =
     `to: ${input.recipient.trim()}` +
     (input.notes && input.notes.trim() ? ` — ${input.notes.trim()}` : '');
@@ -214,6 +220,7 @@ export function recordCashDrop(
         input.workerId,
         input.deviceId,
       );
+      postOwnerDrawingIfActive(db, cashCountId, input.workerId, input.deviceId);
     }
 
     logAudit(db, {

@@ -11,7 +11,7 @@ import { FeedbackBanner } from '../../components/FeedbackBanner';
 
 type ProductSort = 'margin' | 'revenue' | 'marginBps' | 'units';
 
-export function MarginTab() {
+export function MarginTab({ reportAccessToken }: { reportAccessToken: string }) {
   const [range, setRange] = useState<DateRange>(defaultDateRange());
   const [data, setData] = useState<ReportsMarginResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -21,12 +21,12 @@ export function MarginTab() {
 
   async function load() {
     setLoading(true);
-    const r = await counter.reportsMargin({ fromDate: range.fromDate, toDate: range.toDate });
+    const r = await counter.reportsMargin({ fromDate: range.fromDate, toDate: range.toDate, reportAccessToken });
     setLoading(false);
     if (!r.success) { setError(r.error); return; }
     setData(r.data); setError(null);
   }
-  useEffect(() => { void load(); /* eslint-disable-next-line */ }, [range.fromDate, range.toDate]);
+  useEffect(() => { void load(); /* eslint-disable-next-line */ }, [range.fromDate, range.toDate, reportAccessToken]);
 
   const sortedProducts = useMemo(() => {
     if (!data) return [];

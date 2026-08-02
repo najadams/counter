@@ -14,14 +14,7 @@
 // the inclusive total for the receipt and records. All integer pesewas.
 
 import type { Pesewas } from './money.js';
-
-declare global {
-  // Injected by Vite `define` at build time. Absent under vitest/tsx, where the
-  // `process.env` fallback below takes over. `typeof` on an undeclared global is
-  // safe in JS (returns 'undefined' rather than throwing).
-  // eslint-disable-next-line no-var
-  var __COUNTER_VAT__: boolean | undefined;
-}
+import { VAT_ENABLED } from './buildFlags.js';
 
 /** Rates in basis points (100 bps = 1%). */
 export const VAT_BPS = 1500; // standard VAT, 15%
@@ -30,11 +23,7 @@ export const GETFUND_BPS = 250; // Ghana Education Trust Fund Levy, 2.5%
 /** Combined levy load on the taxable base: 20%. */
 export const COMBINED_BPS = VAT_BPS + NHIL_BPS + GETFUND_BPS;
 
-/** True in the VAT build, false in the no-VAT build. Fixed at build time. */
-export const VAT_ENABLED: boolean =
-  typeof __COUNTER_VAT__ !== 'undefined'
-    ? __COUNTER_VAT__
-    : process.env['COUNTER_VAT'] === '1';
+export { VAT_ENABLED };
 
 export interface VatBreakdown {
   /** VAT-exclusive base. */

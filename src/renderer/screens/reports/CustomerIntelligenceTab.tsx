@@ -4,18 +4,18 @@ import { formatMoney, formatMoneyWithCurrency } from '../../../shared/lib/money'
 import type { ReportsCustomerIntelligenceResponse } from '../../../shared/types/ipc';
 import { FeedbackBanner } from '../../components/FeedbackBanner';
 
-export function CustomerIntelligenceTab() {
+export function CustomerIntelligenceTab({ reportAccessToken }: { reportAccessToken: string }) {
   const [data, setData] = useState<ReportsCustomerIntelligenceResponse | null>(null);
   const [inactiveDays, setInactiveDays] = useState(30);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
-      const r = await counter.reportsCustomerIntelligence({ inactiveDays });
+      const r = await counter.reportsCustomerIntelligence({ inactiveDays, reportAccessToken });
       if (!r.success) { setError(r.error); return; }
       setData(r.data); setError(null);
     })();
-  }, [inactiveDays]);
+  }, [inactiveDays, reportAccessToken]);
 
   if (error) return <FeedbackBanner>{error}</FeedbackBanner>;
   if (!data) return <div className="text-text-tertiary text-sm">Loading…</div>;
