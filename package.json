@@ -1,6 +1,6 @@
 {
   "name": "counter",
-  "version": "0.2.4",
+  "version": "0.3.0",
   "description": "Keyboard-first Electron POS for a Ghanaian beverage shop. Anti-shrinkage forensics on every cedi.",
   "author": {
     "name": "Counter POS",
@@ -40,7 +40,9 @@
     "predev": "rm -rf dist-electron",
     "sync:central-stub": "tsx scripts/central-stub.ts",
     "provision:company": "tsx scripts/provision-company.ts",
-    "provision:agent": "tsx scripts/provision-agent.ts"
+    "provision:agent": "tsx scripts/provision-agent.ts",
+    "license:mint": "tsx scripts/mint-license.ts",
+    "license:keygen": "tsx scripts/mint-license.ts --keygen"
   },
   "dependencies": {
     "@zxing/browser": "^0.1.5",
@@ -57,6 +59,8 @@
     "zustand": "^5.0.1"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/bcryptjs": "^2.4.6",
     "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^22.7.5",
@@ -68,6 +72,7 @@
     "cross-env": "^7.0.3",
     "electron": "^33.0.2",
     "electron-builder": "^25.1.7",
+    "jsdom": "^29.1.1",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.13",
     "tsx": "^4.19.1",

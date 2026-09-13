@@ -825,12 +825,17 @@ function maturityBucket(asOfDate: string, dueDate: string | null): {
 
 export function getDebtMaturity(
   db: DB,
-  input: ManagementAccessInput & { asOfDate: string; projectedCashPesewas?: number },
+  input: ManagementAccessInput & { asOfDate: string; projectedCashPesewas?: number; background?: boolean },
 ): DebtMaturityResult {
   assertDate('asOfDate', input.asOfDate);
-  const locationId = requireManagementAccess(db, input, 'DEBT_MATURITY', {
-    asOfDate: input.asOfDate,
-  });
+  if (input.background && input.actorWorkerId !== 'sys-system') {
+    throw new Error('background debt maturity evaluation requires the SYSTEM actor');
+  }
+  const locationId = input.background
+    ? input.locationId ?? DEFAULT_LOCATION_ID
+    : requireManagementAccess(db, input, 'DEBT_MATURITY', {
+      asOfDate: input.asOfDate,
+    });
   const unified = db.prepare(
     `SELECT o.id, o.obligation_type AS obligationType, o.creditor_name AS creditorName,
             o.source_type AS sourceType, o.source_id AS sourceId,
@@ -1072,11 +1077,16 @@ function concentrationRows(
 
 export function getConcentrationReport(
   db: DB,
-  input: ManagementAccessInput & { fromDate: string; toDate: string },
+  input: ManagementAccessInput & { fromDate: string; toDate: string; background?: boolean },
 ): ConcentrationReportResult {
-  const locationId = requireManagementAccess(db, input, 'CONCENTRATION', {
-    fromDate: input.fromDate, toDate: input.toDate,
-  });
+  if (input.background && input.actorWorkerId !== 'sys-system') {
+    throw new Error('background concentration evaluation requires the SYSTEM actor');
+  }
+  const locationId = input.background
+    ? input.locationId ?? DEFAULT_LOCATION_ID
+    : requireManagementAccess(db, input, 'CONCENTRATION', {
+      fromDate: input.fromDate, toDate: input.toDate,
+    });
   const range = dateRange(input.fromDate, input.toDate);
   const days = daysInclusive(input.fromDate, input.toDate);
   const previousTo = addDaysISO(input.fromDate, -1);
@@ -1357,14 +1367,23 @@ export function runDownsideScenario(
     horizonDays: 30 | 90 | 180;
     drivers?: Partial<ScenarioDrivers>;
     asOfDate?: string;
+    /** Trusted background evaluation only. Renderer IPC never forwards this
+     * flag; it exists so the advisory engine can reuse the exact scenario
+     * math without manufacturing an OWNER audit event. */
+    background?: boolean;
   },
 ): ScenarioResult {
   const asOfDate = input.asOfDate ?? new Date().toISOString().slice(0, 10);
   assertDate('asOfDate', asOfDate);
   if (![30, 90, 180].includes(input.horizonDays)) throw new Error('horizonDays must be 30, 90, or 180');
-  const locationId = requireManagementAccess(db, input, 'DOWNSIDE_SCENARIO', {
-    asOfDate, preset: input.preset, horizonDays: String(input.horizonDays),
-  });
+  if (input.background && input.actorWorkerId !== 'sys-system') {
+    throw new Error('background downside evaluation requires the SYSTEM actor');
+  }
+  const locationId = input.background
+    ? input.locationId ?? DEFAULT_LOCATION_ID
+    : requireManagementAccess(db, input, 'DOWNSIDE_SCENARIO', {
+      asOfDate, preset: input.preset, horizonDays: String(input.horizonDays),
+    });
   const baseDrivers = input.preset === 'CUSTOM'
     ? PRESET_DRIVERS.BASELINE
     : PRESET_DRIVERS[input.preset];

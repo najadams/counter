@@ -5,10 +5,9 @@ This is the **central / HQ side** of Phase 3 sync. The shop side is already buil
 `PushBatch` to `<central_url>/ingest`, expecting `{ ackedSeq }` back. This folder is
 the thing that receives those batches.
 
-Status: **push-only first slice.** `ingest` stores events UP; `catalog` (master
-data DOWN to shops) is a stub that returns an empty page. Nothing here is deployed
-yet — it deploys into a **dedicated Counter Supabase project** (do NOT reuse a
-project that hosts another app).
+Status: **live multi-tenant central store.** `ingest` stores events UP, `catalog`
+serves HQ master data DOWN, and `intelligence-feed` serves tenant-scoped company
+advice to authenticated HQ installs.
 
 ## What's here
 
@@ -19,19 +18,22 @@ project that hosts another app).
 - `functions/ingest/` — `POST` PushBatch → `{ ackedSeq }`. Per-shop bearer-token
   auth (sha256 of the token, matched against `shops.token_hash`); the token's
   shop must equal the batch's `shopId`. Idempotent upsert.
-- `functions/catalog/` — `GET ?since&limit` → `{ rows, cursor }`. Stub (empty)
-  until the catalog-down slice is built.
+- `functions/catalog/` — `GET ?since&limit` → `{ rows, cursor }`, sourced from
+  the tenant's HQ shop.
+- `functions/intelligence-feed/` — current branch recommendations, shop
+  freshness, and robust fresh-shop comparisons. SHOP tokens are rejected.
 - `functions/_shared/auth.ts` — token hashing + shop lookup.
 
 ## Deploy (once a dedicated project exists)
 
 1. Create a new Supabase project for Counter and point the CLI / MCP at it.
 2. Apply the migration (`supabase db push`, or the MCP `apply_migration`).
-3. Deploy both functions **with JWT verification OFF** — they do their own
+3. Deploy the functions **with JWT verification OFF** — they do their own
    per-shop token auth, they are not called with a Supabase JWT:
    ```
    supabase functions deploy ingest  --no-verify-jwt
    supabase functions deploy catalog --no-verify-jwt
+   supabase functions deploy intelligence-feed --no-verify-jwt
    ```
 4. Register each shop and hand it a token (run in the SQL editor):
    ```sql

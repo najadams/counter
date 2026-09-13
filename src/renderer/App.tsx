@@ -1,4 +1,5 @@
 // App.tsx — top-level router driven by session state.
+//   not activated           -> ActivationScreen
 //   needs owner setup       -> SetupScreen
 //   no worker               -> LoginScreen
 //   worker, no shift        -> OpenShiftScreen
@@ -14,6 +15,7 @@ import LoginScreen from './screens/LoginScreen';
 import OpenShiftScreen from './screens/OpenShiftScreen';
 import HomeScreen from './screens/HomeScreen';
 import SetupScreen from './screens/SetupScreen';
+import ActivationScreen from './screens/ActivationScreen';
 
 export default function App() {
   const workerId = useSession((s) => s.workerId);
@@ -21,6 +23,8 @@ export default function App() {
   const hydrate = useSession((s) => s.hydrateFromMain);
   const [hydrated, setHydrated] = useState(false);
   const [needsOwner, setNeedsOwner] = useState<boolean | null>(null);
+  const [activated, setActivated] = useState<boolean | null>(null);
+  const [reactivating, setReactivating] = useState(false);
   const [bootError, setBootError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -50,6 +54,16 @@ export default function App() {
               : 'No Counter transport available — the app could not reach the host server.',
           );
         }
+        // Activation gate. Fails OPEN: if the probe errors (an older host over
+        // the LAN transport, say) we let the app through rather than strand a
+        // shop behind a screen it cannot clear. Policy is warn, never block.
+        try {
+          const act = await counter.activationStatus();
+          if (!cancelled) setActivated(act.success ? act.data.activated : true);
+        } catch {
+          if (!cancelled) setActivated(true);
+        }
+
         const probe = await counter.setupNeedsOwner();
         // eslint-disable-next-line no-console
         console.log('[boot] setupNeedsOwner result:', probe);
@@ -98,7 +112,7 @@ export default function App() {
     );
   }
 
-  if (!hydrated || needsOwner === null) {
+  if (!hydrated || needsOwner === null || activated === null) {
     return (
       <div className="min-h-screen bg-bg-deep text-text-tertiary flex items-center justify-center">
         Loading…
@@ -106,8 +120,23 @@ export default function App() {
     );
   }
 
+  // Activation precedes owner setup: a brand-new install has no shift open
+  // and no data to strand, so this is the one safe place to hard-gate.
+  if (!activated) return <ActivationScreen onActivated={() => setActivated(true)} />;
+
+  // Re-activation, reached from the mismatch banner. Escapable on purpose: a
+  // read-only install must still be able to close its shift and read reports.
+  if (reactivating) {
+    return (
+      <ActivationScreen
+        mode="reactivate"
+        onActivated={() => { setReactivating(false); window.location.reload(); }}
+        onCancel={() => setReactivating(false)}
+      />
+    );
+  }
   if (needsOwner && !workerId) return <SetupScreen />;
   if (!workerId) return <LoginScreen />;
   if (!shiftId) return <OpenShiftScreen />;
-  return <HomeScreen />;
+  return <HomeScreen onReactivate={() => setReactivating(true)} />;
 }

@@ -31,3 +31,7 @@ vitest.config.ts.timestamp*.mjs
 
 # Supabase CLI local link state
 supabase/.temp/
+
+# Vendor licence signing keys — never commit
+*.pem
+license-ed25519*

@@ -95,10 +95,12 @@ app.whenReady().then(async () => {
     syncPush,
     syncPull,
     syncPullOrders,
+    syncPullIntelligence,
     syncTransport,
     syncConfig,
     httpManager,
     handlers,
+    intelligence,
   ] = await Promise.all([
     import('./db/connection.js'),
     import('./db/migrations.js'),
@@ -111,10 +113,12 @@ app.whenReady().then(async () => {
     import('./sync/push.js'),
     import('./sync/pull.js'),
     import('./sync/pullOrders.js'),
+    import('./sync/pullIntelligence.js'),
     import('./sync/httpTransport.js'),
     import('./sync/config.js'),
     import('./http/manager.js'),
     import('./ipc/handlers.js'),
+    import('./services/intelligence.js'),
   ]);
 
   // Console-print fallback is a dev convenience only. In the packaged app an
@@ -173,6 +177,19 @@ app.whenReady().then(async () => {
     log.error('[main] reconcile failed (non-fatal):', err);
   }
 
+  // Build the persisted daily brief before the renderer mounts. Failures are
+  // advisory-only and must never prevent the till from starting.
+  try {
+    const intelligenceResult = intelligence.refreshIntelligence(db, {
+      deviceId, trigger: 'BOOT',
+    });
+    log.info(`[intelligence] boot refresh ${intelligenceResult.skipped ? 'skipped' : 'complete'} ` +
+      `(${intelligenceResult.generatedCount} new, ${intelligenceResult.updatedCount} refreshed, ` +
+      `${intelligenceResult.resolvedCount} cleared, ${intelligenceResult.durationMs}ms)`);
+  } catch (err) {
+    log.error('[intelligence] boot refresh failed (non-fatal):', err);
+  }
+
   // One registry tees every handler to the live ipcMain (desktop IPC) and
   // into a channel map the Phase 1 HTTP server can dispatch against.
   const registry = new registryModule.HandlerRegistry(ipcMain);
@@ -204,7 +221,27 @@ app.whenReady().then(async () => {
   handlers.registerReceiptConfigHandlers(registry, db, deviceId);
   handlers.registerSyncHandlers(registry, db, deviceId);
   handlers.registerPendingOrdersHandlers(registry, db, deviceId);
+  handlers.registerIntelligenceHandlers(registry, db, deviceId);
+  handlers.registerActivationHandlers(registry, db, deviceId, userData);
   log.info(`[main] IPC handlers registered: ${registry.handlers.size} channels`);
+
+  // Activation: record (but never enforce) a key that has stopped matching this
+  // machine. Warn-only by policy — a shop mid-shift must still be able to sell.
+  try {
+    const activation = await import('./services/activation.js');
+    const st = activation.getActivationStatus(db, userData);
+    if (!st.activated) {
+      log.info('[activation] no key on file — first run will show the activation screen');
+    } else if (st.machineMismatch) {
+      log.warn(`[activation] key no longer valid on this machine: ${st.mismatchReason}`);
+      activation.auditMismatchOnBoot(db, deviceId, userData);
+    } else {
+      log.info(`[activation] licensed to ${st.licensee} (machine ${st.machineCode})`);
+    }
+  } catch (err) {
+    // Never let an activation problem stop the app booting.
+    log.error('[activation] status check failed:', err);
+  }
 
   // Embedded HTTP transport. Opt-in via COUNTER_HTTP=1 so production desktop
   // builds don't open a socket unless asked. Defaults to loopback; set
@@ -247,6 +284,9 @@ app.whenReady().then(async () => {
     // Orders pull runs on EVERY shop (including HQ) — unlike catalog, HQ has
     // no special role here; any branch can fulfil a WhatsApp order.
     syncPullOrders.startOrdersPullWorker(db, transport);
+    if (syncCfg.role === 'HQ' && intelligence.getIntelligenceStage(db) === 'HQ') {
+      syncPullIntelligence.startCompanyIntelligencePullWorker(db, transport, deviceId);
+    }
     log.info(`[sync] workers started for ${syncCfg.role} ${syncCfg.shopId} -> ${syncCfg.centralUrl}`);
   }
 

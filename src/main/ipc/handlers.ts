@@ -8,6 +8,7 @@ import { getAccessInfo } from '../http/server.js';
 import { httpStatus, setHttp } from '../http/manager.js';
 import { getSyncStatus } from '../sync/status.js';
 import { readSyncConfig, readSyncConfigView, writeSyncConfig } from '../sync/config.js';
+import { getState } from '../sync/state.js';
 import { addShopToCentral } from '../sync/httpTransport.js';
 import {
   IPC_CHANNELS,
@@ -56,6 +57,10 @@ import {
   type VarianceCaseGetRequest, type VarianceCaseGetResponse, type VarianceCaseUpdateRequest,
   type VarianceCaseRow, type VarianceCaseEvidenceRequest, type VarianceCasePendingCountResponse,
   type VarianceCaseSettings, type VarianceCaseSettingsUpdateRequest,
+  type IntelligenceBrief, type IntelligenceGetItemRequest, type IntelligenceGetItemResponse,
+  type IntelligenceHealth, type IntelligenceItem, type IntelligenceListRequest,
+  type IntelligenceListResponse, type IntelligenceRefreshRequest,
+  type IntelligenceRefreshResponse, type IntelligenceTransitionRequest,
 } from '../../shared/types/ipc.js';
 import { maybeRunShiftCloseBackup, findBackupRunner } from '../lib/shiftCloseBackup.js';
 import { listLoginCandidates, verifyPin } from '../services/workers.js';
@@ -105,6 +110,10 @@ import {
   getVarianceCaseSettings, listVarianceCases, requireVarianceSenior,
   updateVarianceCase, updateVarianceCaseSettings, varianceCasePendingCount,
 } from '../services/varianceCases.js';
+import {
+  getIntelligenceBrief, getIntelligenceHealth, getIntelligenceItem,
+  listIntelligenceItems, refreshIntelligence, transitionIntelligenceItem,
+} from '../services/intelligence.js';
 
 // Session state lives in ./session.ts so both transports share it. These thin
 // re-exports preserve the legacy handler/test surface; they drive the desktop
@@ -140,6 +149,16 @@ function requireOpenShift(db: DB): { shiftId: string; locationId: string } {
   const s = getOpenShift(db, w.workerId);
   if (!s) throw new Error('No open shift. Open a shift before using this action.');
   return { shiftId: s.id, locationId: s.locationId };
+}
+
+function refreshExactIntelligenceNonFatal(db: DB, workerId: string, deviceId: string): void {
+  try {
+    refreshIntelligence(db, { actorWorkerId: workerId, deviceId, trigger: 'EVENT', exactOnly: true });
+  } catch (error) {
+    // Intelligence is advisory. Never unwind the committed source action.
+    // eslint-disable-next-line no-console
+    console.error('[intelligence:event] refresh failed (non-fatal)', error);
+  }
 }
 
 export function registerIpcHandlers(
@@ -185,6 +204,20 @@ export function registerIpcHandlers(
       const result = verifyPin(db, req.workerId, req.pin, deviceId);
       if (result.ok) {
         setGlobalSession({ workerId: result.workerId, fullName: result.fullName, role: result.role });
+        if (result.role === 'SUPERVISOR' || result.role === 'OWNER' || result.role === 'FOUNDER') {
+          // First senior login is a second chance if the boot refresh failed.
+          // Defer it so authentication remains fast; daily-run gating makes a
+          // successful boot refresh a no-op here.
+          setTimeout(() => {
+            try {
+              refreshIntelligence(db, { actorWorkerId: result.workerId,
+                deviceId: currentDeviceId(deviceId), trigger: 'LOGIN' });
+            } catch (error) {
+              // eslint-disable-next-line no-console
+              console.error('[intelligence:login] refresh failed (non-fatal)', error);
+            }
+          }, 0);
+        }
       }
       return result;
     },
@@ -246,6 +279,7 @@ export function registerIpcHandlers(
     (req) => {
       const w = requireWorker();
       const closed = computeAndCloseShift(db, req.shiftId, w.workerId, deviceId);
+      refreshExactIntelligenceNonFatal(db, w.workerId, currentDeviceId(deviceId));
       // Auto-backup hook (runs on 'last close of the day'). Returns a
       // structured result; NEVER throws — a backup failure must not
       // unwind the shift close, since the close already committed.
@@ -313,8 +347,13 @@ export function registerIpcHandlers(
   ipcMain.handle(IPC_CHANNELS.SALE_COMPLETE, wrap<SaleCompleteRequest, SaleCompleteResponse>(
     async (req) => {
       const w = requireWorker();
+      // Read-only enforcement lives here rather than in the UI: LAN phones ring
+      // up sales through this same channel over HTTP, so a renderer-only check
+      // would leave the transport wide open. Narrow by design — only NEW sales
+      // are refused; shift close, reports and export are untouched.
+      assertSalesAllowed(db, app?.getPath('userData'));
       const header = getShopHeader(db);
-      return await completeSale(db, {
+      const sale = await completeSale(db, {
         shiftId: req.shiftId, workerId: w.workerId, workerName: w.fullName,
         locationId: DEFAULT_LOCATION_ID, channel: req.channel, lines: req.lines,
         discountPesewas: req.discountPesewas, discountReason: req.discountReason,
@@ -325,6 +364,8 @@ export function registerIpcHandlers(
         deviceId, shopName: header.shopName, shopSubtitle: header.shopSubtitle,
         station: currentStation(),
       });
+      refreshExactIntelligenceNonFatal(db, w.workerId, currentDeviceId(deviceId));
+      return sale;
     },
     IPC_CHANNELS.SALE_COMPLETE,
   ));
@@ -465,12 +506,14 @@ export function registerIpcHandlers(
   ipcMain.handle(IPC_CHANNELS.SALE_VOID_REQUEST_CREATE, wrap<SaleVoidRequestCreateRequest, SaleVoidRequestDetail>(
     (req) => {
       const w = requireWorker();
-      return createSaleVoidRequest(db, {
+      const created = createSaleVoidRequest(db, {
         saleId: req.saleId,
         reason: req.reason,
         requesterWorkerId: w.workerId,
         deviceId: currentDeviceId(deviceId),
       });
+      refreshExactIntelligenceNonFatal(db, w.workerId, currentDeviceId(deviceId));
+      return created;
     },
     IPC_CHANNELS.SALE_VOID_REQUEST_CREATE,
   ));
@@ -491,11 +534,13 @@ export function registerIpcHandlers(
   ipcMain.handle(IPC_CHANNELS.SALE_VOID_REQUEST_REVIEW, wrap<SaleVoidRequestReviewRequest, SaleVoidRequestDetail>(
     (req) => {
       const w = requireWorker();
-      return reviewSaleVoidRequest(db, {
+      const reviewed = reviewSaleVoidRequest(db, {
         ...req,
         reviewerWorkerId: w.workerId,
         deviceId: currentDeviceId(deviceId),
       });
+      refreshExactIntelligenceNonFatal(db, w.workerId, currentDeviceId(deviceId));
+      return reviewed;
     },
     IPC_CHANNELS.SALE_VOID_REQUEST_REVIEW,
   ));
@@ -537,6 +582,7 @@ export function registerIpcHandlers(
         deviceId, shopName: header.shopName, shopSubtitle: header.shopSubtitle,
         station: currentStation(),
       });
+      refreshExactIntelligenceNonFatal(db, w.workerId, currentDeviceId(deviceId));
       // Receipt struct stays main-side; renderer reads it back via getSaleReceipt
       // if it wants to reprint. Return the scalar result + routing.
       return {
@@ -602,6 +648,7 @@ export function registerIpcHandlers(
         supervisorApprovalId: req.supervisorApprovalId,
         deviceId,
       });
+      refreshExactIntelligenceNonFatal(db, w.workerId, currentDeviceId(deviceId));
       return {
         breakageId: r.breakageId, stockMovementId: r.stockMovementId,
         photoRelativePath: r.photoRelativePath, totalLossPesewas: r.totalLossPesewas,
@@ -627,11 +674,13 @@ export function registerIpcHandlers(
     (req) => {
       const w = requireWorker();
       const { shiftId, locationId } = requireOpenShift(db);
-      return recordConsumption(db, {
+      const recorded = recordConsumption(db, {
         shiftId, workerId: w.workerId, locationId,
         productId: req.productId, quantity: req.quantity,
         supervisorApprovalId: req.supervisorApprovalId, deviceId,
       });
+      refreshExactIntelligenceNonFatal(db, w.workerId, currentDeviceId(deviceId));
+      return recorded;
     },
     IPC_CHANNELS.CONSUMPTION_LOG,
   ));
@@ -644,8 +693,10 @@ export function registerIpcHandlers(
   ipcMain.handle(IPC_CHANNELS.STOCK_RECEIPT_REQUEST_CREATE, wrap<StockReceiptRequestCreateRequest, StockReceiptRequestDetail>(
     (req) => {
       const w = requireWorker();
-      return createStockReceiptRequest(db, { ...req, locationId: DEFAULT_LOCATION_ID,
+      const created = createStockReceiptRequest(db, { ...req, locationId: DEFAULT_LOCATION_ID,
         requesterWorkerId: w.workerId, deviceId: currentDeviceId(deviceId) });
+      refreshExactIntelligenceNonFatal(db, w.workerId, currentDeviceId(deviceId));
+      return created;
     },
     IPC_CHANNELS.STOCK_RECEIPT_REQUEST_CREATE,
   ));
@@ -658,8 +709,13 @@ export function registerIpcHandlers(
     IPC_CHANNELS.STOCK_RECEIPT_REQUEST_GET,
   ));
   ipcMain.handle(IPC_CHANNELS.STOCK_RECEIPT_REQUEST_REVIEW, wrap<StockReceiptRequestReviewRequest, StockReceiptRequestDetail>(
-    (req) => { const w = requireWorker(); return reviewStockReceiptRequest(db, { ...req,
-      reviewerWorkerId: w.workerId, deviceId: currentDeviceId(deviceId) }); },
+    (req) => {
+      const w = requireWorker();
+      const reviewed = reviewStockReceiptRequest(db, { ...req,
+        reviewerWorkerId: w.workerId, deviceId: currentDeviceId(deviceId) });
+      refreshExactIntelligenceNonFatal(db, w.workerId, currentDeviceId(deviceId));
+      return reviewed;
+    },
     IPC_CHANNELS.STOCK_RECEIPT_REQUEST_REVIEW,
   ));
   ipcMain.handle(IPC_CHANNELS.STOCK_RECEIPT_REQUEST_WITHDRAW, wrap<StockReceiptRequestWithdrawRequest, StockReceiptRequestDetail>(
@@ -726,6 +782,67 @@ export function registerIpcHandlers(
   ));
 }
 
+export function registerIntelligenceHandlers(ipcMain: IpcRegistrar, db: DB, deviceId: string): void {
+  const actor = () => {
+    const worker = requireWorker();
+    return { workerId: worker.workerId, role: worker.role };
+  };
+  ipcMain.handle(IPC_CHANNELS.INTELLIGENCE_GET_BRIEF, wrap<unknown, IntelligenceBrief>(
+    () => getIntelligenceBrief(db, actor(), currentDeviceId(deviceId)),
+    IPC_CHANNELS.INTELLIGENCE_GET_BRIEF,
+  ));
+  ipcMain.handle(IPC_CHANNELS.INTELLIGENCE_LIST, wrap<IntelligenceListRequest, IntelligenceListResponse>(
+    (req) => listIntelligenceItems(db, actor(), currentDeviceId(deviceId), req ?? {}),
+    IPC_CHANNELS.INTELLIGENCE_LIST,
+  ));
+  ipcMain.handle(IPC_CHANNELS.INTELLIGENCE_GET_ITEM, wrap<IntelligenceGetItemRequest, IntelligenceGetItemResponse>(
+    (req) => getIntelligenceItem(db, actor(), req.itemId),
+    IPC_CHANNELS.INTELLIGENCE_GET_ITEM,
+  ));
+  ipcMain.handle(IPC_CHANNELS.INTELLIGENCE_TRANSITION, wrap<IntelligenceTransitionRequest, IntelligenceItem>(
+    (req) => transitionIntelligenceItem(db, actor(), currentDeviceId(deviceId), req),
+    IPC_CHANNELS.INTELLIGENCE_TRANSITION,
+  ));
+  ipcMain.handle(IPC_CHANNELS.INTELLIGENCE_REFRESH, wrap<IntelligenceRefreshRequest, IntelligenceRefreshResponse>(
+    (req) => {
+      const worker = actor();
+      if (!['SUPERVISOR', 'OWNER', 'FOUNDER'].includes(worker.role)) {
+        throw new Error('Supervisor, owner, or founder access required');
+      }
+      return refreshIntelligence(db, { actorWorkerId: worker.workerId,
+        deviceId: currentDeviceId(deviceId), trigger: req?.trigger ?? 'MANUAL' });
+    }, IPC_CHANNELS.INTELLIGENCE_REFRESH,
+  ));
+  ipcMain.handle(IPC_CHANNELS.INTELLIGENCE_GET_HEALTH, wrap<unknown, IntelligenceHealth>(
+    () => getIntelligenceHealth(db, actor()), IPC_CHANNELS.INTELLIGENCE_GET_HEALTH,
+  ));
+  // The HQ transport replaces this local cached response when central sync is
+  // configured. Keeping the handler available makes offline fallback explicit.
+  ipcMain.handle(IPC_CHANNELS.INTELLIGENCE_GET_COMPANY_BRIEF, wrap<unknown, IntelligenceBrief>(
+    () => {
+      const worker = actor();
+      if (worker.role !== 'OWNER' && worker.role !== 'FOUNDER') throw new Error('Owner or founder access required');
+      const cfg = readSyncConfigView(db);
+      if (cfg.role !== 'HQ' || !cfg.shopId || !cfg.centralUrl || !cfg.hasToken) {
+        throw new Error('Company intelligence is only available on a provisioned HQ install');
+      }
+      const brief = getIntelligenceBrief(
+        db, worker, currentDeviceId(deviceId), DEFAULT_LOCATION_ID, 'COMPANY',
+      );
+      const lastPull = getState(db, 'company_intelligence_last_pull_at') ?? null;
+      const rawShops = getState(db, 'company_intelligence_shops_json');
+      let shops: IntelligenceBrief['companyShops'] = [];
+      try { shops = rawShops ? JSON.parse(rawShops) as IntelligenceBrief['companyShops'] : []; } catch { shops = []; }
+      return {
+        ...brief,
+        companyLastRefreshAt: lastPull,
+        companyShops: shops,
+        stale: !lastPull || Date.now() - new Date(lastPull).getTime() > 24 * 60 * 60 * 1000,
+      };
+    }, IPC_CHANNELS.INTELLIGENCE_GET_COMPANY_BRIEF,
+  ));
+}
+
 // ============================================================================
 // Session 5 channels (registered by registerSession5Handlers, called below)
 // ============================================================================
@@ -789,11 +906,13 @@ export function registerSession5Handlers(
   ipcMain.handle(IPC_CHANNELS_S5.STOCKTAKE_COMPLETE, wrap<StocktakeCompleteRequest, StocktakeCompleteResponse>(
     (req) => {
       const w = requireWorker();
-      return completeStocktake(db, {
+      const completed = completeStocktake(db, {
         eventId: req.eventId, workerId: w.workerId,
         supervisorWorkerId: req.supervisorWorkerId, supervisorPin: req.supervisorPin,
         notes: req.notes, deviceId,
       });
+      refreshExactIntelligenceNonFatal(db, w.workerId, currentDeviceId(deviceId));
+      return completed;
     },
     IPC_CHANNELS_S5.STOCKTAKE_COMPLETE,
   ));
@@ -1251,6 +1370,7 @@ export function registerSession9Handlers(
 
 // --- Session 11: first-run setup ------------------------------------------
 
+import { assertSalesAllowed } from '../services/activation.js';
 import { createFirstOwner, needsOwnerSetup } from '../services/setup.js';
 import {
   IPC_CHANNELS_S11,
@@ -2964,9 +3084,11 @@ export function registerReportsHandlers(
     wrap<ManagementAccountReconcileRequest, ManagementAccountReconcileResponse>(
       (req) => {
         const w = requireWorker();
-        return reconcileFinancialAccount(db, {
+        const reconciled = reconcileFinancialAccount(db, {
           ...req, actorWorkerId: w.workerId, deviceId: _deviceId,
         });
+        refreshExactIntelligenceNonFatal(db, w.workerId, _deviceId);
+        return reconciled;
       },
       IPC_CHANNELS_REPORTS.MANAGEMENT_ACCOUNT_RECONCILE,
     ),
@@ -3786,6 +3908,40 @@ export function registerPendingOrdersHandlers(
         });
       },
       IPC_CHANNELS_PENDING_ORDERS.PENDING_ORDERS_COMPLETE_DELIVERY,
+    ),
+  );
+}
+
+// --- Activation: machine-bound licence key ---------------------------------
+//
+// Deliberately NOT behind requireWorker(): activation happens before the
+// first-run wizard, so there is no worker to require. It is also harmless —
+// the only write it permits is storing a key the vendor signed.
+
+import { activate as activateInstall, getActivationStatus } from '../services/activation.js';
+import {
+  IPC_CHANNELS_ACTIVATION,
+  type ActivationActivateRequest, type ActivationActivateResponse,
+  type ActivationStatusResponse,
+} from '../../shared/types/ipc.js';
+
+export function registerActivationHandlers(
+  ipcMain: IpcRegistrar,
+  db: import('better-sqlite3').Database,
+  deviceId: string,
+  userDataDir: string,
+): void {
+  ipcMain.handle(IPC_CHANNELS_ACTIVATION.ACTIVATION_STATUS,
+    wrap<void, ActivationStatusResponse>(
+      () => getActivationStatus(db, userDataDir),
+      IPC_CHANNELS_ACTIVATION.ACTIVATION_STATUS,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_ACTIVATION.ACTIVATION_ACTIVATE,
+    wrap<ActivationActivateRequest, ActivationActivateResponse>(
+      (req) => activateInstall(db, req.key, deviceId, userDataDir),
+      IPC_CHANNELS_ACTIVATION.ACTIVATION_ACTIVATE,
     ),
   );
 }

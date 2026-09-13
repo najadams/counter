@@ -5,12 +5,13 @@ import http from 'node:http';
 import https from 'node:https';
 import type {
   SyncTransport, PullTransport, PushBatch, PushAck, PullResponse,
-  OrdersPullTransport, OrdersPullResponse,
+  OrdersPullTransport, OrdersPullResponse, IntelligenceFeedTransport,
+  CompanyIntelligenceFeedResponse,
 } from '../../shared/sync.js';
 
 export function createHttpTransport(
   centralUrl: string, token: string,
-): SyncTransport & PullTransport & OrdersPullTransport {
+): SyncTransport & PullTransport & OrdersPullTransport & IntelligenceFeedTransport {
   // Append endpoints RELATIVE to the central base so a base path is honoured
   // (Supabase serves functions under /functions/v1/, e.g. central_url
   // https://<project>.supabase.co/functions/v1/ → .../functions/v1/ingest).
@@ -103,6 +104,38 @@ export function createHttpTransport(
               const parsed = JSON.parse(Buffer.concat(chunks).toString('utf8')) as OrdersPullResponse;
               if (!Array.isArray(parsed.rows) || typeof parsed.cursor !== 'number') {
                 reject(new Error('central orders-feed: malformed response')); return;
+              }
+              resolve(parsed);
+            } catch (e) {
+              reject(e instanceof Error ? e : new Error(String(e)));
+            }
+          });
+        });
+        req.on('error', reject);
+        req.end();
+      });
+    },
+
+    fetchIntelligence(): Promise<CompanyIntelligenceFeedResponse> {
+      return new Promise<CompanyIntelligenceFeedResponse>((resolve, reject) => {
+        const url = new URL('intelligence-feed', base);
+        const client = url.protocol === 'https:' ? https : http;
+        const req = client.request(url, {
+          method: 'GET',
+          headers: { authorization: `Bearer ${token}` },
+        }, (res) => {
+          const chunks: Buffer[] = [];
+          res.on('data', (c: Buffer) => chunks.push(c));
+          res.on('end', () => {
+            const status = res.statusCode ?? 0;
+            if (status < 200 || status >= 300) {
+              reject(new Error(`central intelligence-feed HTTP ${status}`)); return;
+            }
+            try {
+              const parsed = JSON.parse(Buffer.concat(chunks).toString('utf8')) as CompanyIntelligenceFeedResponse;
+              if (!Array.isArray(parsed.items) || !Array.isArray(parsed.shops)
+                  || typeof parsed.generatedAt !== 'string') {
+                reject(new Error('central intelligence-feed: malformed response')); return;
               }
               resolve(parsed);
             } catch (e) {

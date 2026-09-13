@@ -28,6 +28,7 @@ export const SYNCED_EVENT_TABLES = [
   'sale_void_requests',
   'variance_case_settings', 'variance_cases', 'variance_case_events',
   'stock_receipt_requests', 'stock_receipt_request_lines',
+  'intelligence_items', 'intelligence_item_events',
   // Phase 4: WhatsApp order accept/reject/fulfil. Unlike every other table in
   // this list, pending_orders rows are MUTATED in place (CONFIRMED ->
   // FULFILLED|REJECTED|CANCELLED), not append-only — migration 0039 captures
@@ -49,8 +50,12 @@ export const MUTABLE_EVENT_TABLES: readonly SyncedEventTable[] = [
   'liability_agreements', 'obligations', 'fixed_assets',
   'risk_thresholds', 'risk_assumptions', 'saved_scenarios',
   'management_ledger_settings',
+  // Regeneration updates the same business-date summary; HQ comparisons need
+  // the latest values rather than the first snapshot produced that day.
+  'daily_summaries',
   'variance_case_settings', 'variance_cases',
   'stock_receipt_requests',
+  'intelligence_items',
 ];
 
 export interface PushRow {
@@ -156,4 +161,58 @@ export interface OrdersPullResponse {
  *  stays valid without also having to fake order-pulling. */
 export interface OrdersPullTransport {
   fetchOrders(since: number, limit?: number): Promise<OrdersPullResponse>;
+}
+
+// --- Company intelligence (central -> HQ, DOWN) ---------------------------
+
+export interface IntelligenceFeedEvidence {
+  label: string;
+  value: string;
+  detail?: string | null;
+}
+
+export interface CompanyIntelligenceFeedItem {
+  fingerprint: string;
+  sourceShopId: string;
+  sourceShopName: string;
+  modelKey: string;
+  modelVersion: string;
+  category: 'CONTROL' | 'INVENTORY' | 'CREDIT' | 'PRICING' | 'CASH' | 'CUSTOMER' | 'CONCENTRATION';
+  audience: 'OWNER';
+  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+  controlOverride: boolean;
+  title: string;
+  recommendation: string;
+  cediImpactPesewas: number | null;
+  confidenceBps: number;
+  dueAt: string | null;
+  validUntil: string | null;
+  sourceDataThrough: string;
+  evidence: IntelligenceFeedEvidence[];
+  rationale: Record<string, unknown>;
+  sourceEntityType: string | null;
+  sourceEntityId: string | null;
+}
+
+export interface IntelligenceShopFreshness {
+  shopId: string;
+  shopName: string;
+  role: 'HQ' | 'SHOP';
+  lastSeenAt: string | null;
+  stale: boolean;
+  includedInPeerBaseline: boolean;
+}
+
+export interface CompanyIntelligenceFeedResponse {
+  generatedAt: string;
+  sourceDataThrough: string | null;
+  freshShopCount: number;
+  shops: IntelligenceShopFreshness[];
+  items: CompanyIntelligenceFeedItem[];
+}
+
+/** The endpoint derives company_id from the bearer token and accepts no
+ * tenant identifier. Only a token registered to an HQ shop is authorized. */
+export interface IntelligenceFeedTransport {
+  fetchIntelligence(): Promise<CompanyIntelligenceFeedResponse>;
 }

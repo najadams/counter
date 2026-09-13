@@ -18,6 +18,7 @@ import { useSession } from '../store/session';
 import { AppHeader } from '../components/AppHeader';
 import { BackupHealthBanner } from '../components/BackupHealthBanner';
 import { SyncHealthBanner } from '../components/SyncHealthBanner';
+import { ActivationHealthBanner } from '../components/ActivationHealthBanner';
 import { formatMoney, formatMoneyWithCurrency, parseCedisToPesewas } from '../../shared/lib/money';
 import type {
   ShiftCloseBackupResult, AccessInfoResponse, ManagementHomeWarningsResponse,
@@ -39,10 +40,12 @@ import VoidApprovalsScreen from './VoidApprovalsScreen';
 import VarianceCasesScreen from './VarianceCasesScreen';
 import StockReceiptApprovalsScreen from './StockReceiptApprovalsScreen';
 import { FeedbackBanner } from '../components/FeedbackBanner';
+import { IntelligenceBriefPanel } from '../components/IntelligenceBriefPanel';
+import IntelligenceScreen from './IntelligenceScreen';
 
-type View = 'home' | 'sale' | 'void' | 'voidApprovals' | 'varianceCases' | 'stockApprovals' | 'breakage' | 'consumption' | 'stock' | 'settings' | 'stocktake' | 'summary' | 'customers' | 'reports' | 'pendingOrders' | 'moneyOut' | 'paperReceipts';
+type View = 'home' | 'sale' | 'void' | 'voidApprovals' | 'varianceCases' | 'stockApprovals' | 'breakage' | 'consumption' | 'stock' | 'settings' | 'stocktake' | 'summary' | 'customers' | 'reports' | 'intelligence' | 'pendingOrders' | 'moneyOut' | 'paperReceipts';
 
-export default function HomeScreen() {
+export default function HomeScreen({ onReactivate }: { onReactivate?: () => void } = {}) {
   const shiftId = useSession((s) => s.shiftId);
   const opening = useSession((s) => s.shiftOpeningCashPesewas);
   const clearShift = useSession((s) => s.clearShift);
@@ -196,6 +199,9 @@ export default function HomeScreen() {
   if (view === 'stocktake') return <StocktakeScreen onExit={() => setView('home')} />;
   if (view === 'summary') return <DailySummaryScreen onExit={() => setView('home')} />;
   if (view === 'customers') return <CustomersScreen onExit={() => setView('home')} />;
+  if (view === 'intelligence') return <IntelligenceScreen onExit={() => setView('home')} onNavigate={(destination) => {
+    setView(destination === 'variance' ? 'varianceCases' : destination);
+  }} />;
   if (view === 'moneyOut' && shiftId) return <MoneyOutScreen shiftId={shiftId} onExit={() => setView('home')} />;
   if (view === 'paperReceipts') {
     return <PaperReceiptsScreen onExit={() => setView('home')} onOpenAtTill={() => setView('sale')} />;
@@ -243,6 +249,8 @@ export default function HomeScreen() {
           <>
             <BackupHealthBanner />
             <SyncHealthBanner />
+            <ActivationHealthBanner onReactivate={onReactivate} />
+            {isSenior && <IntelligenceBriefPanel onOpen={() => setView('intelligence')} />}
             {obligationWarnings
               && (obligationWarnings.overdueCount > 0
                 || obligationWarnings.dueNext7DaysCount > 0

@@ -522,6 +522,57 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
     }
   }
 
+  // Read-only enforcement (activation.ts). Main refuses the sale channel
+  // regardless — this exists so the cashier gets a readable explanation and the
+  // machine code to act on, instead of a failure at the end of a rung-up cart.
+  const [salesBlocked, setSalesBlocked] = useState<{ machineCode: string; reason: string } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const r = await counter.activationStatus();
+      if (cancelled || !r.success) return; // fail open
+      if (r.data.salesBlocked) {
+        setSalesBlocked({
+          machineCode: r.data.machineCode,
+          reason:
+            r.data.state === 'UNACTIVATED'
+              ? 'This copy of Counter has not been activated.'
+              : 'The activation key no longer matches this PC, and the grace period has run out.',
+        });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  if (salesBlocked) {
+    return (
+      <div className="min-h-screen bg-bg-deep text-text-primary flex items-center justify-center p-6">
+        <div className="w-full max-w-lg bg-bg-elevated rounded-lg shadow-lg p-8 space-y-4">
+          <h1 className="text-xl font-bold text-danger">Counter is read-only</h1>
+          <p className="text-sm text-text-secondary">
+            {salesBlocked.reason} New sales are paused until a replacement key is
+            entered. Closing the shift, reports and export all still work.
+          </p>
+          <div className="bg-bg-deep border border-border-strong rounded p-4 text-center">
+            <div className="text-xs text-text-tertiary uppercase tracking-wider mb-1">
+              Machine code — send this to your supplier
+            </div>
+            <div className="font-mono text-xl font-bold tracking-widest">
+              {salesBlocked.machineCode}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onExit}
+            className="w-full bg-accent text-bg-deep font-bold rounded py-3"
+          >
+            Back
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     // The cashier (often standing, in low warehouse light) reported text was
     // too small to read at a glance. Scale the entire SaleScreen up via CSS

@@ -33,6 +33,21 @@ export function createCounterApi(invoke: Invoke) {
     syncSetConfig: (req: ipc.SyncSetConfigRequest) => invoke<ipc.SyncConfigView>(ipc.IPC_CHANNELS_SYNC.SYNC_SET_CONFIG, req),
     syncAddShop: (req: ipc.AddShopRequest) => invoke<ipc.AddShopResult>(ipc.IPC_CHANNELS_SYNC.SYNC_ADD_SHOP, req),
 
+    // explainable decision intelligence
+    intelligenceGetBrief: () => invoke<ipc.IntelligenceBrief>(ipc.IPC_CHANNELS.INTELLIGENCE_GET_BRIEF, {}),
+    intelligenceList: (req: ipc.IntelligenceListRequest = {}) =>
+      invoke<ipc.IntelligenceListResponse>(ipc.IPC_CHANNELS.INTELLIGENCE_LIST, req),
+    intelligenceGetItem: (itemId: string) =>
+      invoke<ipc.IntelligenceGetItemResponse>(ipc.IPC_CHANNELS.INTELLIGENCE_GET_ITEM, { itemId }),
+    intelligenceTransition: (req: ipc.IntelligenceTransitionRequest) =>
+      invoke<ipc.IntelligenceItem>(ipc.IPC_CHANNELS.INTELLIGENCE_TRANSITION, req),
+    intelligenceRefresh: (req: ipc.IntelligenceRefreshRequest = {}) =>
+      invoke<ipc.IntelligenceRefreshResponse>(ipc.IPC_CHANNELS.INTELLIGENCE_REFRESH, req),
+    intelligenceGetHealth: () =>
+      invoke<ipc.IntelligenceHealth>(ipc.IPC_CHANNELS.INTELLIGENCE_GET_HEALTH, {}),
+    intelligenceGetCompanyBrief: () =>
+      invoke<ipc.IntelligenceBrief>(ipc.IPC_CHANNELS.INTELLIGENCE_GET_COMPANY_BRIEF, {}),
+
     // auth
     listLoginCandidates: () => invoke<ipc.ListLoginCandidatesResponse>(ipc.IPC_CHANNELS.WORKER_LIST_FOR_LOGIN, {}),
     login: (workerId: string, pin: string) => invoke<ipc.WorkerLoginResponse>(ipc.IPC_CHANNELS.WORKER_LOGIN, { workerId, pin }),
@@ -250,6 +265,12 @@ export function createCounterApi(invoke: Invoke) {
       invoke<ipc.ProductUnitSimpleResponse>(ipc.IPC_CHANNELS_S9.PRODUCT_UNIT_DEACTIVATE, { unitId }),
     reactivateProductUnit: (unitId: string) =>
       invoke<ipc.ProductUnitSimpleResponse>(ipc.IPC_CHANNELS_S9.PRODUCT_UNIT_REACTIVATE, { unitId }),
+
+    // --- activation (machine-bound licence key) ---
+    activationStatus: () =>
+      invoke<ipc.ActivationStatusResponse>(ipc.IPC_CHANNELS_ACTIVATION.ACTIVATION_STATUS, {}),
+    activationActivate: (key: string) =>
+      invoke<ipc.ActivationActivateResponse>(ipc.IPC_CHANNELS_ACTIVATION.ACTIVATION_ACTIVATE, { key }),
 
     // --- Session 11: first-run setup ---
     setupNeedsOwner: () =>

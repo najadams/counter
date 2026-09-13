@@ -8,6 +8,15 @@ export const IPC_CHANNELS = {
   NET_HTTP_STATUS: 'system:http-status',
   NET_HTTP_SET: 'system:http-set',
 
+  // Explainable decision intelligence
+  INTELLIGENCE_GET_BRIEF: 'intelligence:get-brief',
+  INTELLIGENCE_LIST: 'intelligence:list',
+  INTELLIGENCE_GET_ITEM: 'intelligence:get-item',
+  INTELLIGENCE_TRANSITION: 'intelligence:transition',
+  INTELLIGENCE_REFRESH: 'intelligence:refresh',
+  INTELLIGENCE_GET_HEALTH: 'intelligence:get-health',
+  INTELLIGENCE_GET_COMPANY_BRIEF: 'intelligence:get-company-brief',
+
   // Auth / session
   WORKER_LIST_FOR_LOGIN: 'worker:list-for-login',
   WORKER_LOGIN: 'worker:login',
@@ -112,6 +121,115 @@ export interface HttpStatusResponse {
 }
 /** Toggle phone access. `lan` exposes on the LAN (0.0.0.0); default true. */
 export interface HttpSetRequest { enabled: boolean; lan?: boolean }
+
+// --- decision intelligence -------------------------------------------------
+
+export type IntelligenceCategory = 'CONTROL' | 'INVENTORY' | 'CREDIT' | 'PRICING' | 'CASH' | 'CUSTOMER' | 'CONCENTRATION';
+export type IntelligenceSeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+export type IntelligenceStatus = 'OPEN' | 'ACKNOWLEDGED' | 'ASSIGNED' | 'SNOOZED' | 'RESOLVED' | 'DISMISSED' | 'EXPIRED';
+export type IntelligenceScope = 'LOCAL' | 'COMPANY';
+export type IntelligenceStage = 'OFF' | 'FOUNDATION' | 'PREDICTIVE' | 'HQ';
+
+export interface IntelligenceEvidence {
+  label: string;
+  value: string;
+  detail?: string | null;
+}
+
+export interface IntelligenceItem {
+  id: string;
+  fingerprint: string;
+  episode: number;
+  locationId: string;
+  scope: IntelligenceScope;
+  sourceShopId: string | null;
+  modelKey: string;
+  modelVersion: string;
+  category: IntelligenceCategory;
+  audience: 'SUPERVISOR' | 'OWNER';
+  severity: IntelligenceSeverity;
+  status: IntelligenceStatus;
+  controlOverride: boolean;
+  title: string;
+  recommendation: string;
+  cediImpactPesewas: number | null;
+  confidenceBps: number;
+  dueAt: string | null;
+  validUntil: string | null;
+  sourceDataThrough: string;
+  evidence: IntelligenceEvidence[];
+  rationale: Record<string, unknown>;
+  sourceEntityType: string | null;
+  sourceEntityId: string | null;
+  assignedTo: string | null;
+  assignedToName: string | null;
+  snoozedUntil: string | null;
+  resolutionNote: string | null;
+  dismissalReason: string | null;
+  detectedAt: string;
+  lastEvaluatedAt: string;
+  closedAt: string | null;
+  overdue: boolean;
+}
+
+export interface IntelligenceBrief {
+  stage: IntelligenceStage;
+  generatedAt: string;
+  lastRefreshAt: string | null;
+  sourceDataThrough: string | null;
+  stale: boolean;
+  criticalCount: number;
+  highCount: number;
+  openCount: number;
+  totalExposurePesewas: number;
+  items: IntelligenceItem[];
+  companyLastRefreshAt?: string | null;
+  companyShops?: Array<{
+    shopId: string; shopName: string; role: 'HQ' | 'SHOP';
+    lastSeenAt: string | null; stale: boolean; includedInPeerBaseline: boolean;
+  }>;
+}
+
+export interface IntelligenceHealth {
+  stage: IntelligenceStage;
+  lastSuccessfulRunAt: string | null;
+  lastFailedRunAt: string | null;
+  lastError: string | null;
+  running: boolean;
+}
+
+export interface IntelligenceListRequest {
+  view?: 'ATTENTION' | 'WATCHING' | 'HISTORY';
+  category?: IntelligenceCategory;
+  severity?: IntelligenceSeverity;
+  status?: IntelligenceStatus;
+  assignee?: string;
+  scope?: IntelligenceScope;
+  shopId?: string;
+  limit?: number;
+}
+export interface IntelligenceListResponse { items: IntelligenceItem[]; total: number }
+export interface IntelligenceGetItemRequest { itemId: string }
+export interface IntelligenceGetItemResponse {
+  item: IntelligenceItem;
+  events: Array<{
+    id: string; eventType: string; fromStatus: IntelligenceStatus | null;
+    toStatus: IntelligenceStatus | null; note: string | null;
+    actorName: string; occurredAt: string;
+  }>;
+}
+export interface IntelligenceTransitionRequest {
+  itemId: string;
+  action: 'ACKNOWLEDGE' | 'ASSIGN' | 'SNOOZE' | 'DISMISS' | 'RESOLVE';
+  assignedTo?: string | null;
+  snoozeDays?: 1 | 3 | 7;
+  note?: string | null;
+}
+export interface IntelligenceRefreshRequest { trigger?: 'LOGIN' | 'MANUAL' }
+export interface IntelligenceRefreshResponse {
+  skipped: boolean; generatedCount: number; updatedCount: number;
+  resolvedCount: number; durationMs: number;
+}
 
 // --- variance investigations ---------------------------------------------
 
@@ -3432,4 +3550,43 @@ export interface ResolvedPendingOrder {
   customerName: string | null;
   customerPhone: string;
   lines: ResolvedCartLine[];
+}
+
+// --- Activation (machine-bound licence key) --------------------------------
+
+export const IPC_CHANNELS_ACTIVATION = {
+  ACTIVATION_STATUS: 'activation:status',
+  ACTIVATION_ACTIVATE: 'activation:activate',
+} as const;
+
+/** See ActivationState in src/main/services/activation.ts for the full policy. */
+export type ActivationState = 'OK' | 'UNACTIVATED' | 'INCONCLUSIVE' | 'GRACE' | 'RESTRICTED';
+
+export interface ActivationStatusResponse {
+  /** A key is on file. False only before the first successful activation. */
+  activated: boolean;
+  state: ActivationState;
+  licensee: string | null;
+  activatedAt: string | null;
+  /** Date the vendor minted the key (YYYY-MM-DD). */
+  issuedOn: string | null;
+  /** This PC's code — what the shop reads out to get a key minted. */
+  machineCode: string;
+  /** The stored key does not validate here, for any reason. */
+  machineMismatch: boolean;
+  mismatchReason: string | null;
+  /** Whole days before read-only begins. Only set while state is GRACE. */
+  graceDaysLeft: number | null;
+  /** RESTRICTED or UNACTIVATED — the sale channel will refuse. */
+  salesBlocked: boolean;
+}
+
+export interface ActivationActivateRequest {
+  key: string;
+}
+
+export interface ActivationActivateResponse {
+  ok: boolean;
+  licensee?: string;
+  message?: string;
 }
