@@ -85,9 +85,15 @@ export function generateDailySummary(
     )
     .get(locationId, dayStart, next) as { revenue: number; num: number; distinct_customers: number };
 
+  // line_cogs_pesewas is the cost authority -- the exact moving-average slice
+  // when the ledger is on, where unit_cost * quantity is only the rounded
+  // snapshot. Same per-line expression as the management P&L, so the daily
+  // summary and the income statement book the same COGS for a day.
   const cogsRow = db
     .prepare(
-      `SELECT COALESCE(SUM(${taxableSql('sl.unit_cost_pesewas * sl.quantity')}), 0) AS cogs
+      `SELECT COALESCE(SUM(${taxableSql(
+        'CASE WHEN sl.line_cogs_pesewas > 0 THEN sl.line_cogs_pesewas ELSE sl.unit_cost_pesewas * sl.quantity END',
+      )}), 0) AS cogs
          FROM sale_lines sl
          JOIN sales s ON s.id = sl.sale_id
          WHERE s.location_id = ? AND s.voided = 0

@@ -53,9 +53,9 @@ function addSale(id: string, customerId: string, date: string, qty: number) {
   db.prepare(
     `INSERT INTO sale_lines (
        id, sale_id, product_id, quantity, unit_price_pesewas, unit_cost_pesewas,
-       line_total_pesewas, margin_pesewas, created_by, updated_by, device_id
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(`${id}-line`, id, p.id, qty, p.price, p.cost, total, (p.price - p.cost) * qty, W, W, D);
+       line_total_pesewas, margin_pesewas, line_cogs_pesewas, created_by, updated_by, device_id
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(`${id}-line`, id, p.id, qty, p.price, p.cost, total, (p.price - p.cost) * qty, p.cost * qty, W, W, D);
 }
 
 describe('customer intelligence reports', () => {

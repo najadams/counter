@@ -34,14 +34,14 @@ describe('intelligence operational budgets (100,000-sale fixture)', () => {
         'dev-counter-1', 'dev-counter-1', 'perf')`);
     const line = db.prepare(`INSERT INTO sale_lines (id, sale_id, product_id, quantity,
       unit_price_pesewas, unit_cost_pesewas, line_total_pesewas, margin_pesewas,
-      list_price_pesewas, created_at, created_by, updated_by, device_id)
-      VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, 'dev-counter-1', 'dev-counter-1', 'perf')`);
+      line_cogs_pesewas, list_price_pesewas, created_at, created_by, updated_by, device_id)
+      VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, 'dev-counter-1', 'dev-counter-1', 'perf')`);
     db.transaction(() => {
       for (let index = 0; index < 100_000; index++) {
         const id = `perf-sale-${index}`;
         sale.run(id, product.price, product.price, at);
         line.run(`perf-line-${index}`, id, product.id, product.price, product.cost,
-          product.price, product.price - product.cost, product.price, at);
+          product.price, product.price - product.cost, product.cost, product.price, at);
       }
       db.prepare('DELETE FROM sync_outbox').run();
     })();

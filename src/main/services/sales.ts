@@ -693,8 +693,9 @@ export function completeSaleCore(
         line.productId,
         line.quantityInUnit,
         line.unitPricePesewas,
-        // sale_lines.unit_cost_pesewas snapshots cost-per-unit-sold (NOT canonical).
-        // We compute it as canonicalCost * factor so margin = unit_price - unit_cost.
+        // sale_lines.unit_cost_pesewas snapshots cost-per-unit-sold (NOT canonical)
+        // as canonicalCost * factor. Informational only: line_cogs_pesewas is the
+        // cost authority and the table CHECK is margin = line_total - line_cogs (0054).
         line.canonicalUnitCostPesewas * line.factor,
         line.listPricePesewas,
         lineTotal,
@@ -733,6 +734,10 @@ export function completeSaleCore(
           deviceId: input.deviceId,
         });
         const exactCogs = Math.abs(valuation.valueDeltaPesewas);
+        // unit_cost_pesewas deliberately keeps the rounded snapshot. Dividing the
+        // exact slice back into a per-unit figure would re-introduce rounding
+        // (7 bottles of a 416.67-pesewa average can't reconcile); 0054 ties
+        // margin to line_cogs instead, so no quantity can break the CHECK.
         db.prepare(
           `UPDATE sale_lines
               SET line_cogs_pesewas = ?, margin_pesewas = ?,
