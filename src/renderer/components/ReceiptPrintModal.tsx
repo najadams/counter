@@ -10,6 +10,7 @@
 // ReceiptBody is the pure renderer; the AppearanceTab preview reuses it.
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { type SaleReceipt } from '../../shared/lib/receipt';
 import { formatMoneyWithCurrency } from '../../shared/lib/money';
 import { counter } from '../lib/ipc';
@@ -344,9 +345,13 @@ export function ReceiptPrintModal({ receipt, onClose, amountPaidPesewas, amountO
     @media print {
       @page { size: ${config.paperWidthMm}mm auto; margin: 0; }
       html, body { background: white !important; margin: 0 !important; padding: 0 !important; }
-      body * { visibility: hidden; }
-      .receipt-print-overlay,
-      .receipt-print-overlay * { visibility: visible; }
+      /* The overlay is portaled to <body>, so every OTHER top-level node can be
+         removed from layout outright. This MUST be display:none, not
+         visibility:hidden — visibility hides pixels but keeps the box, so the
+         whole app's height was still being laid out and printed as a long blank
+         leader before the receipt. That was the "white space before the
+         receipt" bug. */
+      body > *:not(.receipt-print-overlay) { display: none !important; }
       .receipt-print-overlay {
         position: static !important;
         background: white !important;
@@ -375,7 +380,10 @@ export function ReceiptPrintModal({ receipt, onClose, amountPaidPesewas, amountO
   // Screen preview width — approximate the paper roll in CSS px (96dpi → ~3.78 px/mm).
   const previewPx = Math.round(config.paperWidthMm * 3.78);
 
-  return (
+  // Portaled to <body> so the print stylesheet can display:none every sibling.
+  // Nested inside the app tree there is no selector that removes the ancestors'
+  // layout without also removing the receipt.
+  return createPortal(
     <div className="fixed inset-0 bg-scrim flex items-center justify-center p-4 z-[70] receipt-print-overlay" onClick={onClose}>
       <style>{printCss}</style>
       <div
@@ -418,6 +426,7 @@ export function ReceiptPrintModal({ receipt, onClose, amountPaidPesewas, amountO
           />
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

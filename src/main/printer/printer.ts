@@ -115,7 +115,13 @@ class ThermalPrinter implements PrinterAdapter {
       for (const line of formatReceipt(receipt)) {
         printer.println(line);
       }
-      printer.cut();
+      // node-thermal-printer's cut() defaults to verticalTabAmount: 2, and for
+      // the EPSON profile CTL_VT is `1b 64 04` — "print and feed 4 lines" —
+      // so the default fed EIGHT blank lines before every cut. One is enough:
+      // 4 lines carries the footer past the cutter blade (~12mm) and no
+      // further. The remaining blank leader on the next receipt is the fixed
+      // print-head-to-blade distance, which no software can remove.
+      printer.cut({ verticalTabAmount: 1 });
       await printer.execute();
       return { ok: true };
     } catch (err) {
