@@ -515,14 +515,18 @@ export interface VoidReversalLine {
 }
 
 /** The sale's original outflow movements, sign-flipped to positives — the
- *  exact canonical quantities and cost values the reversal must restore. */
+ *  exact canonical quantities and cost values the reversal must restore.
+ *  Where the ledger valued the outflow, its value is what left the pool; sales
+ *  rung before sales.ts recorded that on the movement still carry quantity x
+ *  rounded unit cost there, so read the valuation row first. */
 export function loadSaleOutflows(db: DB, saleId: string): VoidReversalLine[] {
   return db
     .prepare(
-      `SELECT product_id, -quantity AS canonical_qty,
-              unit_cost_pesewas, -total_value_pesewas AS total_value_pesewas
-         FROM stock_movements
-         WHERE sale_id = ? AND quantity < 0`,
+      `SELECT sm.product_id, -sm.quantity AS canonical_qty, sm.unit_cost_pesewas,
+              -COALESCE(ivm.value_delta_pesewas, sm.total_value_pesewas) AS total_value_pesewas
+         FROM stock_movements sm
+         LEFT JOIN inventory_valuation_movements ivm ON ivm.stock_movement_id = sm.id
+         WHERE sm.sale_id = ? AND sm.quantity < 0`,
     )
     .all(saleId) as VoidReversalLine[];
 }

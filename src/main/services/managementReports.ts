@@ -1413,7 +1413,7 @@ export function runDownsideScenario(
   const inventoryValue = (db.prepare(
     `SELECT COALESCE(SUM(balance_value_pesewas), 0) AS total FROM (
        SELECT product_id, balance_value_pesewas,
-              ROW_NUMBER() OVER (PARTITION BY product_id ORDER BY occurred_at DESC, id DESC) AS rn
+              ROW_NUMBER() OVER (PARTITION BY product_id ORDER BY occurred_at DESC, created_at DESC, rowid DESC) AS rn
          FROM inventory_valuation_movements WHERE location_id = ?
      ) WHERE rn = 1`,
   ).get(locationId) as { total: number }).total;

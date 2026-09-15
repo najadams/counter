@@ -192,16 +192,19 @@ describe.runIf(VAT_ON)('VAT build: reclaimable input VAT on sold goods', () => {
     });
     const lines = journal('CUSTOMER_RETURN', ret.returnId);
 
-    const restored = amount(lines, 'INVENTORY', 'debit');
-    expect(restored).toBeGreaterThan(0);
-    const split = inputTaxForCost(restored);
-    expect(amount(lines, 'COGS', 'credit')).toBe(split.taxablePesewas);
+    // The return restocks exactly what the sale took out, so it mirrors the
+    // sale journal line for line.
+    expect(amount(lines, 'INVENTORY', 'debit')).toBe(CRATE_COST);
+    expect(amount(lines, 'COGS', 'credit')).toBe(inputTaxForCost(CRATE_COST).taxablePesewas);
+    expect(amount(lines, 'COGS', 'credit')).toBe(NET_COST);
     // TAX_PAYABLE is debited for the refunded output tax and credited back for
     // the input VAT the sale had claimed on these goods.
-    expect(amount(lines, 'TAX_PAYABLE', 'credit')).toBe(restored - split.taxablePesewas);
+    expect(amount(lines, 'TAX_PAYABLE', 'credit')).toBe(INPUT_TAX);
     expect(amount(lines, 'TAX_PAYABLE', 'debit')).toBe(OUTPUT_TAX);
     expect(lines.reduce((sum, line) => sum + line.debit, 0))
       .toBe(lines.reduce((sum, line) => sum + line.credit, 0));
+    // Sold and fully returned: nothing is owed to GRA for this crate.
+    expect(ledgerTaxOwed()).toBe(0);
   });
 });
 

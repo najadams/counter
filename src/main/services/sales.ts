@@ -734,6 +734,12 @@ export function completeSaleCore(
           deviceId: input.deviceId,
         });
         const exactCogs = Math.abs(valuation.valueDeltaPesewas);
+        // The movement records what actually left the valuation pool, as loss
+        // movements do (valueStockMovementAndPostLossIfActive). Voids and returns
+        // restore from this value; left at quantity x rounded unit cost, a crate
+        // that left at 10000 came back at 10008 and inflated stock value.
+        db.prepare('UPDATE stock_movements SET total_value_pesewas = ?, updated_at = ? WHERE id = ?')
+          .run(valuation.valueDeltaPesewas, now, sm.id);
         // unit_cost_pesewas deliberately keeps the rounded snapshot. Dividing the
         // exact slice back into a per-unit figure would re-introduce rounding
         // (7 bottles of a 416.67-pesewa average can't reconcile); 0054 ties

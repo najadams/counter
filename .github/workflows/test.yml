@@ -51,7 +51,7 @@ jobs:
         # files run here: the rest of the suite asserts no-VAT receipts.
         env:
           COUNTER_VAT: '1'
-        run: npx vitest --run tests/vat-sale.test.ts tests/vat-input-tax.test.ts tests/sale-lines-cogs-invariant.test.ts tests/ownerManagementPack.test.ts
+        run: npx vitest --run tests/vat-sale.test.ts tests/vat-input-tax.test.ts tests/sale-lines-cogs-invariant.test.ts tests/ledger-restock-value.test.ts tests/ownerManagementPack.test.ts
 
       - name: Typecheck
         run: npm run typecheck

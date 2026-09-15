@@ -1068,7 +1068,7 @@ export function getFinancialDataQuality(
          SELECT product_id, balance_value_pesewas,
                 ROW_NUMBER() OVER (
                   PARTITION BY product_id, location_id
-                  ORDER BY occurred_at DESC, created_at DESC, id DESC
+                  ORDER BY occurred_at DESC, created_at DESC, rowid DESC
                 ) AS rn
            FROM inventory_valuation_movements
           WHERE location_id = ?
@@ -2676,11 +2676,14 @@ export function postCustomerReturnIfActive(
   for (const line of returnLines) {
     let exactInbound: number | undefined;
     if (row.originalSaleId) {
+      // Restore what the sale actually took out of the pool: the valuation row,
+      // falling back to the movement for sales rung before ledger posting.
       const original = db.prepare(
-        `SELECT COALESCE(SUM(-quantity), 0) AS quantity,
-                COALESCE(SUM(-total_value_pesewas), 0) AS value
-           FROM stock_movements
-          WHERE sale_id = ? AND product_id = ? AND quantity < 0`,
+        `SELECT COALESCE(SUM(-sm.quantity), 0) AS quantity,
+                COALESCE(SUM(-COALESCE(ivm.value_delta_pesewas, sm.total_value_pesewas)), 0) AS value
+           FROM stock_movements sm
+           LEFT JOIN inventory_valuation_movements ivm ON ivm.stock_movement_id = sm.id
+          WHERE sm.sale_id = ? AND sm.product_id = ? AND sm.quantity < 0`,
       ).get(row.originalSaleId, line.productId) as { quantity: number; value: number };
       if (original.quantity > 0) {
         exactInbound = line.quantity >= original.quantity
@@ -2847,11 +2850,15 @@ export function recordInventoryValuationMovement(
     totalValuePesewas: number; occurredAt: string;
   } | undefined;
   if (!movement) throw new Error(`stock movement ${input.stockMovementId} not found`);
+  // Movements written in the same millisecond tie on both timestamps, and ids
+  // are random UUIDs, so an id tie-break could build on an older balance -- a
+  // receipt and a sale in one millisecond, then a void, restocked onto 240
+  // bottles instead of 216. rowid is insertion order.
   const prior = db.prepare(
     `SELECT balance_quantity AS quantity, balance_value_pesewas AS value
        FROM inventory_valuation_movements
       WHERE product_id = ? AND location_id = ?
-      ORDER BY occurred_at DESC, created_at DESC, id DESC LIMIT 1`,
+      ORDER BY occurred_at DESC, created_at DESC, rowid DESC LIMIT 1`,
   ).get(movement.productId, movement.locationId) as { quantity: number; value: number } | undefined;
   const priorQty = prior?.quantity ?? 0;
   const priorValue = prior?.value ?? 0;
