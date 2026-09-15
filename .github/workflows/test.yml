@@ -46,5 +46,12 @@ jobs:
       - name: Run tests
         run: npm test -- --run
 
+      - name: Run VAT-build tests
+        # VAT_ENABLED falls back to COUNTER_VAT under vitest. Only the VAT test
+        # files run here: the rest of the suite asserts no-VAT receipts.
+        env:
+          COUNTER_VAT: '1'
+        run: npx vitest --run tests/vat-sale.test.ts tests/vat-input-tax.test.ts tests/sale-lines-cogs-invariant.test.ts tests/ownerManagementPack.test.ts
+
       - name: Typecheck
         run: npm run typecheck

@@ -14,7 +14,7 @@
 
 import type { Database as DB } from 'better-sqlite3';
 import { DEFAULT_LOCATION_ID } from '../../shared/lib/constants.js';
-import { extractInclusiveVat, VAT_ENABLED } from '../../shared/lib/vat.js';
+import { extractInclusiveVat, inclusiveBaseSql, splitInclusiveVat, VAT_ENABLED } from '../../shared/lib/vat.js';
 import { listTaxPaymentsForPeriod, type TaxPaymentRow } from './taxPayments.js';
 import { creditPrincipalExpr } from './customerCredit.js';
 import { logAudit } from '../db/audit.js';
@@ -99,8 +99,12 @@ function lineNetRevenueSql(): string {
           END`;
 }
 
+/** A sale line's cost: the exact valuation slice, falling back to the snapshot. */
+const LINE_COST_SQL = `CASE WHEN sl.line_cogs_pesewas > 0 THEN sl.line_cogs_pesewas
+                            ELSE sl.unit_cost_pesewas * sl.quantity END`;
+
 function lineNetCogsSql(): string {
-  return taxableSql('sl.unit_cost_pesewas * sl.quantity');
+  return taxableSql(LINE_COST_SQL);
 }
 
 function salesTotalsBetween(db: DB, fromISO: string, toExclusiveISO: string): SumRow {
@@ -368,15 +372,24 @@ export function getTaxesReport(db: DB, input: ReportsTaxesInput): ReportsTaxes {
 
   const soldGoodsCost = db
     .prepare(
-      `SELECT COALESCE(SUM(sl.unit_cost_pesewas * sl.quantity), 0) AS soldGoodsInclusiveCostPesewas
+      `SELECT COALESCE(SUM(${LINE_COST_SQL}), 0) AS soldGoodsInclusiveCostPesewas,
+              COALESCE(SUM(${inclusiveBaseSql(LINE_COST_SQL)}), 0) AS soldGoodsTaxableCostPesewas
          FROM sale_lines sl
          JOIN sales s ON s.id = sl.sale_id
         WHERE s.voided = 0
           AND date(s.created_at) >= ?
           AND date(s.created_at) < ?`,
     )
-    .get(input.fromDate, toExclusiveDate) as { soldGoodsInclusiveCostPesewas: number };
-  const soldGoodsInput = extractInclusiveVat(soldGoodsCost.soldGoodsInclusiveCostPesewas);
+    .get(input.fromDate, toExclusiveDate) as {
+      soldGoodsInclusiveCostPesewas: number;
+      soldGoodsTaxableCostPesewas: number;
+    };
+  // Input tax is extracted per line and summed, the same way the sale journal
+  // posts it, so the net VAT payable here equals the ledger's tax liability.
+  const soldGoodsInput = splitInclusiveVat(
+    soldGoodsCost.soldGoodsInclusiveCostPesewas,
+    soldGoodsCost.soldGoodsTaxableCostPesewas,
+  );
 
   const inputRows = db
     .prepare(
@@ -472,7 +485,8 @@ export function getTaxesReport(db: DB, input: ReportsTaxesInput): ReportsTaxes {
   const soldGoodsDays = db
     .prepare(
       `SELECT date(s.created_at) AS date,
-              COALESCE(SUM(sl.unit_cost_pesewas * sl.quantity), 0) AS soldGoodsInclusiveCostPesewas
+              COALESCE(SUM(${LINE_COST_SQL}), 0) AS soldGoodsInclusiveCostPesewas,
+              COALESCE(SUM(${inclusiveBaseSql(LINE_COST_SQL)}), 0) AS soldGoodsTaxableCostPesewas
          FROM sale_lines sl
          JOIN sales s ON s.id = sl.sale_id
         WHERE s.voided = 0
@@ -481,12 +495,15 @@ export function getTaxesReport(db: DB, input: ReportsTaxesInput): ReportsTaxes {
         GROUP BY date(s.created_at)
         ORDER BY date(s.created_at) ASC`,
     )
-    .all(input.fromDate, toExclusiveDate) as Array<{ date: string; soldGoodsInclusiveCostPesewas: number }>;
+    .all(input.fromDate, toExclusiveDate) as Array<{
+      date: string;
+      soldGoodsInclusiveCostPesewas: number;
+      soldGoodsTaxableCostPesewas: number;
+    }>;
   for (const row of soldGoodsDays) {
     const d = dayRow(row.date);
-    const breakdown = extractInclusiveVat(row.soldGoodsInclusiveCostPesewas);
     d.soldGoodsInclusiveCostPesewas = row.soldGoodsInclusiveCostPesewas;
-    d.inputTaxPesewas = breakdown.vatPesewas + breakdown.nhilPesewas + breakdown.getfundPesewas;
+    d.inputTaxPesewas = row.soldGoodsInclusiveCostPesewas - row.soldGoodsTaxableCostPesewas;
   }
 
   for (const row of inputRows) {
@@ -498,9 +515,11 @@ export function getTaxesReport(db: DB, input: ReportsTaxesInput): ReportsTaxes {
     inputNhilPesewas += breakdown.nhilPesewas;
     inputGetfundPesewas += breakdown.getfundPesewas;
 
+    // Purchases are shown for reference only. Input tax is claimed on goods
+    // sold (above), so adding it here as well counted it twice on any day with
+    // both sales and a supplier invoice.
     const d = dayRow(row.invoiceDate);
     d.purchaseInclusivePesewas += row.purchaseInclusivePesewas;
-    d.inputTaxPesewas += inputTax;
 
     const key = row.supplierId;
     const supplier = supplierMap.get(key) ?? {
@@ -1112,7 +1131,8 @@ export function getGraphsReport(db: DB, input: GraphsReportInput): GraphsReportR
     .prepare(
       `SELECT date(s.created_at, 'localtime') AS date,
               COALESCE(SUM(${netRevenue} - ${netCogs}), 0) AS netProfitPesewas,
-              COALESCE(SUM(sl.unit_cost_pesewas * sl.quantity), 0) AS soldGoodsInclusiveCostPesewas
+              COALESCE(SUM(${LINE_COST_SQL}), 0) AS soldGoodsInclusiveCostPesewas,
+              COALESCE(SUM(${inclusiveBaseSql(LINE_COST_SQL)}), 0) AS soldGoodsTaxableCostPesewas
          FROM sale_lines sl
          JOIN sales s ON s.id = sl.sale_id
         WHERE s.voided = 0
@@ -1123,13 +1143,13 @@ export function getGraphsReport(db: DB, input: GraphsReportInput): GraphsReportR
       date: string;
       netProfitPesewas: number;
       soldGoodsInclusiveCostPesewas: number;
+      soldGoodsTaxableCostPesewas: number;
     }>;
   for (const row of profitRows) {
     const d = series.get(row.date);
     if (!d) continue;
-    const costInputTax = extractInclusiveVat(Math.max(0, Math.round(row.soldGoodsInclusiveCostPesewas)));
     d.netProfitPesewas = row.netProfitPesewas;
-    d.taxPayablePesewas -= costInputTax.vatPesewas + costInputTax.nhilPesewas + costInputTax.getfundPesewas;
+    d.taxPayablePesewas -= row.soldGoodsInclusiveCostPesewas - row.soldGoodsTaxableCostPesewas;
   }
 
   const expenseRows = db
@@ -2133,15 +2153,16 @@ function getTaxBalanceAsOf(db: DB, locationId: string, toExclusiveISO: string): 
     .get(locationId, toExclusiveISO) as { total: number };
   const soldGoods = db
     .prepare(
-      `SELECT COALESCE(SUM(sl.unit_cost_pesewas * sl.quantity), 0) AS total
+      `SELECT COALESCE(SUM(${LINE_COST_SQL}), 0) AS total,
+              COALESCE(SUM(${inclusiveBaseSql(LINE_COST_SQL)}), 0) AS taxable
          FROM sale_lines sl
          JOIN sales s ON s.id = sl.sale_id
         WHERE s.location_id = ?
           AND s.voided = 0
           AND s.created_at < ?`,
     )
-    .get(locationId, toExclusiveISO) as { total: number };
-  const inputTax = extractInclusiveVat(Math.max(0, soldGoods.total));
+    .get(locationId, toExclusiveISO) as { total: number; taxable: number };
+  const inputTax = splitInclusiveVat(soldGoods.total, soldGoods.taxable);
   const paid = db
     .prepare(
       `SELECT COALESCE(SUM(amount_pesewas), 0) AS total

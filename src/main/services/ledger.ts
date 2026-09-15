@@ -11,7 +11,7 @@ import { DEFAULT_LOCATION_ID } from '../../shared/lib/constants.js';
 import { logAudit } from '../db/audit.js';
 import { assertNotSealed, isDateSealed } from './periods.js';
 import { verifyPin } from './workers.js';
-import { vatForSale } from '../../shared/lib/vat.js';
+import { VAT_ENABLED, inclusiveBaseSql, inputTaxForCost, vatForSale } from '../../shared/lib/vat.js';
 import { maybeOpenFinancialAccountVarianceCase } from './varianceCases.js';
 
 export type LedgerAccountClass = 'ASSET' | 'LIABILITY' | 'EQUITY' | 'REVENUE' | 'COGS' | 'EXPENSE';
@@ -297,9 +297,7 @@ export function verifyLedgerShadow(
                            WHERE je.location_id = s.location_id AND je.source_type = 'SALE'
                              AND je.source_id = s.id AND je.posting_type = 'SALE_COMPLETE'
                              AND je.status = 'POSTED' AND la.code = 'COGS')), 0) AS ledgerCogs,
-            COALESCE(SUM((SELECT SUM(CASE WHEN sl.line_cogs_pesewas > 0
-                                         THEN sl.line_cogs_pesewas
-                                         ELSE sl.unit_cost_pesewas * sl.quantity END)
+            COALESCE(SUM((SELECT SUM(${saleLineNetCostSql('sl')})
                             FROM sale_lines sl WHERE sl.sale_id = s.id)), 0) AS operationalCogs,
             COALESCE(SUM(CASE WHEN NOT EXISTS (
               SELECT 1 FROM journal_entries je WHERE je.location_id = s.location_id
@@ -2198,6 +2196,23 @@ export function disposeFixedAsset(
 
 // --- Operational posting helpers -----------------------------------------
 
+/** A sale line's cost: the exact valuation slice, falling back to the snapshot. */
+export function saleLineCostSql(alias = ''): string {
+  const col = alias ? `${alias}.` : '';
+  return `CASE WHEN ${col}line_cogs_pesewas > 0 THEN ${col}line_cogs_pesewas
+               ELSE ${col}unit_cost_pesewas * ${col}quantity END`;
+}
+
+/**
+ * The part of a sale line's cost the P&L books as COGS. In the VAT build supplier
+ * costs carry reclaimable input VAT, so COGS is the VAT-exclusive base, extracted
+ * per line exactly as the daily summary and reports do. The no-VAT build books
+ * the whole cost.
+ */
+export function saleLineNetCostSql(alias = ''): string {
+  return VAT_ENABLED ? inclusiveBaseSql(saleLineCostSql(alias)) : saleLineCostSql(alias);
+}
+
 export function postSaleIfActive(
   db: DB,
   saleId: string,
@@ -2221,12 +2236,15 @@ export function postSaleIfActive(
     `SELECT payment_method AS method, amount_pesewas AS amountPesewas
        FROM sale_payments WHERE sale_id = ?`,
   ).all(saleId) as Array<{ method: string; amountPesewas: number }>;
-  const cogs = (db.prepare(
-    `SELECT COALESCE(SUM(CASE WHEN line_cogs_pesewas > 0
-                             THEN line_cogs_pesewas
-                             ELSE unit_cost_pesewas * quantity END), 0) AS total
+  const cost = db.prepare(
+    `SELECT COALESCE(SUM(${saleLineCostSql()}), 0) AS gross,
+            COALESCE(SUM(${saleLineNetCostSql()}), 0) AS net
        FROM sale_lines WHERE sale_id = ?`,
-  ).get(saleId) as { total: number }).total;
+  ).get(saleId) as { gross: number; net: number };
+  // Inventory is relieved at the full cost the goods were received at. The
+  // input VAT inside that cost is reclaimed when the goods are sold (the Taxes
+  // report's basis), so it offsets the output tax owed instead of hitting COGS.
+  const inputTax = cost.gross - cost.net;
   const lines: JournalLineInput[] = payments.map((payment) => {
     if (payment.method === 'CREDIT') {
       return {
@@ -2242,9 +2260,10 @@ export function postSaleIfActive(
   });
   if (netSales > 0) lines.push({ accountCode: LEDGER_CODES.SALES_NET, creditPesewas: netSales });
   if (tax > 0) lines.push({ accountCode: LEDGER_CODES.TAX_PAYABLE, creditPesewas: tax });
-  if (cogs > 0) {
-    lines.push({ accountCode: LEDGER_CODES.COGS, debitPesewas: cogs });
-    lines.push({ accountCode: LEDGER_CODES.INVENTORY, creditPesewas: cogs });
+  if (cost.gross > 0) {
+    if (cost.net > 0) lines.push({ accountCode: LEDGER_CODES.COGS, debitPesewas: cost.net });
+    if (inputTax > 0) lines.push({ accountCode: LEDGER_CODES.TAX_PAYABLE, debitPesewas: inputTax });
+    lines.push({ accountCode: LEDGER_CODES.INVENTORY, creditPesewas: cost.gross });
   }
   return postJournal(db, {
     locationId: sale.locationId,
@@ -2653,6 +2672,7 @@ export function postCustomerReturnIfActive(
       WHERE crl.return_id = ?`,
   ).all(row.id) as Array<{ stockMovementId: string; productId: string; quantity: number }>;
   let restoredCogs = 0;
+  let restoredNetCogs = 0;
   for (const line of returnLines) {
     let exactInbound: number | undefined;
     if (row.originalSaleId) {
@@ -2675,6 +2695,7 @@ export function postCustomerReturnIfActive(
       deviceId,
     });
     restoredCogs += valuation.valueDeltaPesewas;
+    restoredNetCogs += inputTaxForCost(valuation.valueDeltaPesewas).taxablePesewas;
     db.prepare(
       `UPDATE stock_movements
           SET total_value_pesewas = ?, updated_at = ?, updated_by = ?
@@ -2720,8 +2741,11 @@ export function postCustomerReturnIfActive(
     }
   }
   if (restoredCogs > 0) {
+    // Mirror of the sale posting: the input VAT reclaimed on sale is given back.
+    const restoredInputTax = restoredCogs - restoredNetCogs;
     refundLines.push({ accountCode: LEDGER_CODES.INVENTORY, debitPesewas: restoredCogs });
-    refundLines.push({ accountCode: LEDGER_CODES.COGS, creditPesewas: restoredCogs });
+    if (restoredNetCogs > 0) refundLines.push({ accountCode: LEDGER_CODES.COGS, creditPesewas: restoredNetCogs });
+    if (restoredInputTax > 0) refundLines.push({ accountCode: LEDGER_CODES.TAX_PAYABLE, creditPesewas: restoredInputTax });
   }
   return postJournal(db, {
     locationId: row.locationId,

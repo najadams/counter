@@ -48,7 +48,9 @@ function lineNetRevenueSql(): string {
 }
 
 function lineNetCogsSql(): string {
-  return taxableSql('sl.unit_cost_pesewas * sl.quantity');
+  // The exact valuation slice when the ledger recorded one, else the snapshot.
+  return taxableSql(`CASE WHEN sl.line_cogs_pesewas > 0 THEN sl.line_cogs_pesewas
+                          ELSE sl.unit_cost_pesewas * sl.quantity END`);
 }
 
 export interface PendingOrderSummary {

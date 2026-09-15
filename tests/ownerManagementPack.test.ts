@@ -6,7 +6,7 @@ import { runMigrations } from '../src/main/db/migrations';
 import { runSeed } from '../src/main/db/seed';
 import { openShift } from '../src/main/services/shifts';
 import { completeSaleCore } from '../src/main/services/sales';
-import { vatForSale } from '../src/shared/lib/vat';
+import { inputTaxForCost, vatForSale } from '../src/shared/lib/vat';
 import {
   activateFinancialCutover,
   createAccountTransfer,
@@ -311,9 +311,11 @@ describe('owner management ledger foundation', () => {
       actorWorkerId: OWNER, pin: PIN, deviceId: DEVICE,
       locationId: LOCATION, fromDate: cutoverDate, toDate: cutoverDate,
     });
-    expect(profit.accrual.cogsPesewas).toBe(line.cogs);
+    // The VAT build reclaims the input VAT inside the cost; COGS is the rest.
+    const expectedCogs = inputTaxForCost(line.cogs).taxablePesewas;
+    expect(profit.accrual.cogsPesewas).toBe(expectedCogs);
     expect(profit.accrual.grossProfitPesewas)
-      .toBe(profit.accrual.netSalesPesewas - line.cogs);
+      .toBe(profit.accrual.netSalesPesewas - expectedCogs);
   });
 
   it('excludes internal transfers from net cash and preserves the cash identity', () => {
@@ -507,12 +509,13 @@ describe('owner management ledger foundation', () => {
 
     const tax = vatForSale(800);
     const expectedNetSales = 800 - tax.vatPesewas - tax.nhilPesewas - tax.getfundPesewas;
+    const expectedCogs = inputTaxForCost(productCost).taxablePesewas;
     expect(profit.accrual).toMatchObject({
       netSalesPesewas: expectedNetSales,
-      cogsPesewas: productCost,
-      grossProfitPesewas: expectedNetSales - productCost,
+      cogsPesewas: expectedCogs,
+      grossProfitPesewas: expectedNetSales - expectedCogs,
       operatingExpensesPesewas: 300,
-      operatingProfitPesewas: expectedNetSales - productCost - 300,
+      operatingProfitPesewas: expectedNetSales - expectedCogs - 300,
     });
     expect(position).toMatchObject({ integrityOk: true, equationDifferencePesewas: 0 });
     expect(cash).toMatchObject({ integrityOk: true, reconciliationDifferencePesewas: 0 });

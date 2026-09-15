@@ -11,6 +11,7 @@ import { creditPrincipalExpr } from './customerCredit.js';
 import {
   getFinancialDataQuality,
   listFinancialAccounts,
+  saleLineNetCostSql,
   type DataQualityResult,
   type FinancialAccountRow,
 } from './ledger.js';
@@ -154,9 +155,7 @@ function legacyAccrual(
       WHERE location_id = ? AND voided = 0 AND created_at >= ? AND created_at < ?`,
   ).get(locationId, fromISO, toExclusiveISO) as { netSales: number };
   const cogs = db.prepare(
-    `SELECT COALESCE(SUM(CASE WHEN sl.line_cogs_pesewas > 0
-                             THEN sl.line_cogs_pesewas
-                             ELSE sl.unit_cost_pesewas * sl.quantity END), 0) AS cogs
+    `SELECT COALESCE(SUM(${saleLineNetCostSql('sl')}), 0) AS cogs
        FROM sale_lines sl
        JOIN sales s ON s.id = sl.sale_id
       WHERE s.location_id = ? AND s.voided = 0
@@ -1026,8 +1025,7 @@ function concentrationRows(
                 (sl.line_total_pesewas - ROUND(
                   (s.vat_pesewas + s.nhil_pesewas + s.getfund_pesewas)
                   * sl.line_total_pesewas * 1.0 / MAX(1, s.total_pesewas)
-                )) - CASE WHEN sl.line_cogs_pesewas > 0
-                          THEN sl.line_cogs_pesewas ELSE sl.unit_cost_pesewas * sl.quantity END
+                )) - ${saleLineNetCostSql('sl')}
               ), 0) AS amountPesewas
          FROM sale_lines sl
          JOIN sales s ON s.id = sl.sale_id
@@ -1044,8 +1042,7 @@ function concentrationRows(
                 (sl.line_total_pesewas - ROUND(
                   (s.vat_pesewas + s.nhil_pesewas + s.getfund_pesewas)
                   * sl.line_total_pesewas * 1.0 / MAX(1, s.total_pesewas)
-                )) - CASE WHEN sl.line_cogs_pesewas > 0
-                          THEN sl.line_cogs_pesewas ELSE sl.unit_cost_pesewas * sl.quantity END
+                )) - ${saleLineNetCostSql('sl')}
               ), 0) AS amountPesewas
          FROM sale_lines sl
          JOIN sales s ON s.id = sl.sale_id

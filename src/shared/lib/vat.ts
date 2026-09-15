@@ -57,13 +57,42 @@ export function extractInclusiveVat(totalPesewas: Pesewas): VatBreakdown {
     throw new Error(`extractInclusiveVat: total must be a non-negative integer, got ${totalPesewas}`);
   }
   const taxablePesewas = Math.round((totalPesewas * 10000) / (10000 + COMBINED_BPS));
+  return splitInclusiveVat(totalPesewas, taxablePesewas);
+}
+
+/**
+ * Split a VAT-inclusive total whose taxable base is already known -- e.g. a sum
+ * of per-line bases from `inclusiveBaseSql`, so a period total agrees to the
+ * pesewa with per-line postings instead of re-rounding the whole period.
+ */
+export function splitInclusiveVat(totalPesewas: Pesewas, taxablePesewas: Pesewas): VatBreakdown {
   const nhilPesewas = Math.round((taxablePesewas * NHIL_BPS) / 10000);
   const getfundPesewas = Math.round((taxablePesewas * GETFUND_BPS) / 10000);
   const vatPesewas = totalPesewas - taxablePesewas - nhilPesewas - getfundPesewas;
   return { taxablePesewas, vatPesewas, nhilPesewas, getfundPesewas };
 }
 
+/**
+ * SQL for the taxable base of a VAT-inclusive pesewa expression, rounded the
+ * same way as `extractInclusiveVat`. Always extracts; callers gate on
+ * VAT_ENABLED where the no-VAT build should keep the whole amount.
+ */
+export function inclusiveBaseSql(expr: string): string {
+  return `ROUND((${expr}) * 10000.0 / ${10000 + COMBINED_BPS}.0)`;
+}
+
 /** The breakdown for a sale, honouring the build flag. */
 export function vatForSale(totalPesewas: Pesewas): VatBreakdown {
   return VAT_ENABLED ? extractInclusiveVat(totalPesewas) : ZERO_VAT;
+}
+
+/**
+ * Split a supplier cost into its VAT-exclusive part and the input tax inside
+ * it, honouring the build flag. The VAT build treats supplier costs as
+ * VAT-inclusive at the standard rate, with that input tax reclaimed when the
+ * goods are sold -- the Taxes report's basis. The no-VAT build keeps the whole
+ * cost as the taxable part and reclaims nothing.
+ */
+export function inputTaxForCost(costPesewas: Pesewas): VatBreakdown {
+  return VAT_ENABLED ? extractInclusiveVat(costPesewas) : { ...ZERO_VAT, taxablePesewas: costPesewas };
 }
