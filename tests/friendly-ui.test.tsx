@@ -30,6 +30,7 @@ vi.mock('../src/renderer/lib/feedback', () => ({ chimeSuccess: vi.fn(), chimeWar
 
 import { FRIENDLY_UI_ENABLED } from '../src/shared/lib/buildFlags';
 import { NumberPad, applyNumberPadKey } from '../src/renderer/components/friendly/NumberPad';
+import { TaskIllustration } from '../src/renderer/components/friendly/TaskIllustration';
 import { FriendlyHomeMenu, type FriendlyHomeCounts } from '../src/renderer/components/friendly/FriendlyHomeMenu';
 import { AppHeader } from '../src/renderer/components/AppHeader';
 import LoginScreen from '../src/renderer/screens/LoginScreen';
@@ -59,6 +60,31 @@ afterEach(() => {
 describe('build flag', () => {
   it('is on for this suite', () => {
     expect(FRIENDLY_UI_ENABLED).toBe(true);
+  });
+});
+
+describe('TaskIllustration', () => {
+  // Real artwork (assets/illustrations/raster/<name>.webp) replaces a line
+  // drawing name by name. Every name with no picture on disk must keep its
+  // SVG, so the set can be swapped one at a time without blank tiles.
+  it('falls back to the line drawing for a name with no raster picture', () => {
+    render(<TaskIllustration name="sell" size={48} />);
+    const el = document.querySelector('[data-illustration="sell"]') as HTMLElement;
+    expect(el).toBeInTheDocument();
+    expect(el).toHaveAttribute('aria-hidden');
+    if (el.dataset['art'] === 'photo') {
+      expect(el.querySelector('img')).toBeInTheDocument();
+    } else {
+      expect(el.dataset['art']).toBe('line');
+      expect(el.querySelector('svg')).toBeInTheDocument();
+    }
+  });
+
+  it('renders nothing for an unknown name rather than an empty box', () => {
+    const { container } = render(
+      <TaskIllustration name={'not-a-picture' as never} size={48} />,
+    );
+    expect(container).toBeEmptyDOMElement();
   });
 });
 

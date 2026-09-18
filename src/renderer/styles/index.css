@@ -12,6 +12,8 @@
  * The runtime swap is driven by a `data-theme` attribute on <html>:
  *   - no attribute / "light"  -> warm light theme (default)
  *   - "dark"                   -> financial dark theme
+ *   - "violet"                 -> cool grey + vivid violet
+ *   - "sea"                    -> off-white + sea blue
  *   - "system"                 -> dark or light based on prefers-color-scheme,
  *                                  resolved synchronously by the script in
  *                                  index.html before React mounts.
@@ -115,6 +117,46 @@
   --c-warning:       237 137 54;     /* #ED8936 — warm orange */
 
   --c-scrim:         0 0 0;          /* used with /40 opacity */
+
+  color-scheme: light;
+}
+
+:root[data-theme='sea'] {
+  /* Sea — off-white page, sea-blue accent. Cooler and quieter than Violet:
+   * the page recedes and the accent does the pointing, which suits a till
+   * stared at all day under fluorescent light or daylight glare.
+   *
+   * Like Violet, accents are saturated enough to need WHITE text on them
+   * (--c-text-ink), unlike the gold themes. */
+  --c-bg-deep:       244 247 248;    /* #F4F7F8 — off-white with a sea tint */
+  --c-bg-surface:    234 240 242;    /* recessed panels */
+  --c-bg-elevated:   255 255 255;    /* white cards */
+  --c-bg-input:      255 255 255;
+  --c-bg-modal:      255 255 255;
+
+  --c-border:        212 224 228;    /* #D4E0E4 */
+  --c-border-strong: 169 192 199;
+  --c-border-subtle: 231 238 240;
+
+  --c-text-primary:  16 35 43;       /* #10232B — deep sea ink */
+  --c-text-secondary: 74 102 112;
+  --c-text-tertiary: 107 133 142;
+  --c-text-ink:      255 255 255;    /* WHITE on accents */
+
+  --c-accent:        14 116 144;     /* #0E7490 — sea blue; 5.4:1 with white */
+  --c-accent-light:  22 152 185;     /* hover */
+  --c-accent-dim:    8 84 105;       /* pressed / dim */
+
+  /* Deliberately darker than the usual Material shades: every one of these
+   * clears 4.5:1 BOTH as text on --c-bg-deep and under white --c-text-ink,
+   * because a badge here is white-on-colour and the same token is also used
+   * as plain text. The stock amber (#D97706) only manages 3.2:1 on white. */
+  --c-success:       19 107 52;      /* green, kept clear of the blue accent */
+  --c-danger:        190 38 38;
+  --c-danger-light:  248 180 180;
+  --c-warning:       171 79 8;       /* burnt amber */
+
+  --c-scrim:         0 0 0;          /* used with /40 opacity, as in light */
 
   color-scheme: light;
 }
@@ -245,7 +287,8 @@
   /* Scrim used by modals — pulls from the themed --c-scrim and applies
    * a lighter alpha on light theme so modal contents still pop. */
   .bg-scrim { background-color: rgb(var(--c-scrim) / 0.70); }
-  :root[data-theme='light'] .bg-scrim { background-color: rgb(var(--c-scrim) / 0.40); }
+  :root[data-theme='light'] .bg-scrim,
+  :root[data-theme='sea'] .bg-scrim { background-color: rgb(var(--c-scrim) / 0.40); }
 
   /* Counter-PC zoom for the dense sale screen. `zoom` also scales width, so
    * on phones (LAN browser access) it forces horizontal overflow — drop it
@@ -347,6 +390,69 @@ body.flash-warning::after { background: rgb(var(--c-warning) / 0.45); }
 .task-illustration .il-pen { fill: #d8863b; }
 .task-illustration .il-ok { fill: #2e9a5e; }
 .task-illustration .il-drop { fill: #6fb4d9; }
+
+/* Depth helpers, used by every drawing: a contact shadow on the ground, a
+   form shadow down the side facing away from the light (which comes from the
+   upper left), a glint, and a hairline for interior detail that must not
+   compete with the 2.5px outline at 40px. */
+.task-illustration .il-ground { fill: rgb(30 26 22 / 0.13); }
+.task-illustration .il-shade { fill: rgb(30 26 22 / 0.15); }
+.task-illustration .il-hi { fill: #fff; opacity: 0.4; }
+.task-illustration .il-detail {
+  fill: none; stroke: rgb(30 26 22); stroke-width: 1.4;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+.task-illustration .il-glyph {
+  fill: none; stroke: #fff; stroke-width: 2.6;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+.task-illustration .il-glyph-thin {
+  fill: none; stroke: #fff; stroke-width: 1.7;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+
+/* Dark theme. The drawings are ink-on-paper: a near-black outline around a
+   light fill, which needs something light behind it. On the dark theme the
+   accent-tinted backdrop resolves to a dark olive, so every outline — and the
+   whole silhouette — disappears into it.
+
+   Rather than redraw the set in a dark palette (which would cost the colour
+   coding: green bottle, amber bottle, gold coin, green cash), the backdrop
+   becomes a parchment plate and the drawing sits on it unchanged. Only the two
+   strokes that follow the theme have to be re-pointed, because on dark they
+   resolve to light-on-light. */
+:root[data-theme='dark'] .task-illustration .il-bg { fill: rgb(238 232 219); }
+:root[data-theme='dark'] .task-illustration .il-line { stroke: rgb(30 26 22); }
+:root[data-theme='dark'] .task-illustration .il-line-accent { stroke: #b28a38; }
+
+/* Some drawings overhang the plate — a bottle cap, a roof eave, the corner of
+   a phone. Those few pixels land on the near-black page with a near-black
+   outline, so they disappear. A pair of zero-offset drop shadows puts a light
+   rim around the whole silhouette: invisible where it traces the plate (cream
+   on cream), and exactly what the stragglers need. */
+:root[data-theme='dark'] .task-illustration svg {
+  filter: drop-shadow(0 0 0.8px rgb(238 232 219))
+          drop-shadow(0 0 0.8px rgb(238 232 219));
+}
+
+/* Real artwork (assets/illustrations/raster). Rendered as an <img>, so unlike
+   the line drawings above it cannot follow the theme — it keeps its own
+   colours, and gets the round backdrop the SVGs draw for themselves. Art is
+   expected square; cover and contain agree for a square picture, and cover
+   keeps a slightly-off one from sitting in a letterboxed gap. */
+.task-illustration[data-art='photo'] {
+  background: rgb(var(--c-accent) / 0.16);
+  border-radius: 9999px;
+  overflow: hidden;
+}
+.task-illustration[data-art='photo'] img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  user-select: none;
+  -webkit-user-drag: none;
+}
 
 :root[data-ui='friendly'] :focus-visible {
   outline: 4px solid rgb(var(--c-accent));

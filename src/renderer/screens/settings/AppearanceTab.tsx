@@ -28,7 +28,7 @@ export function AppearanceTab() {
     <div className="max-w-6xl flex flex-col gap-8">
       <section>
         <h2 className="text-text-secondary uppercase tracking-wider text-xs mb-3">Theme</h2>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
           <ThemeCard
             label="Dark"
             description="Original. Sharp gold on near-black."
@@ -49,6 +49,13 @@ export function AppearanceTab() {
             active={choice === 'violet'}
             onClick={() => setChoice('violet')}
             swatch={<Swatch bg="#EDEDF3" fg="#121218" accent="#7C3AED" border="#C4C4D2" />}
+          />
+          <ThemeCard
+            label="Sea"
+            description="Calm. Off-white page with a sea-blue accent."
+            active={choice === 'sea'}
+            onClick={() => setChoice('sea')}
+            swatch={<Swatch bg="#F4F7F8" fg="#10232B" accent="#0E7490" border="#A9C0C7" />}
           />
           <ThemeCard
             label="System"

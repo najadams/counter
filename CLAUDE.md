@@ -1005,6 +1005,23 @@ Illustrations are local SVGs in `src/renderer/assets/illustrations/`, inlined by
 `TaskIllustration` so they work offline and follow the theme (palette in
 `styles/index.css` under `.task-illustration`). Always pair one with words.
 
+**Real artwork instead of line drawings.** `TaskIllustration` also looks in
+`src/renderer/assets/illustrations/raster/`. A file named after an illustration
+(`sell.webp`, `receive-stock.png` — `.webp`/`.png`/`.jpg`/`.avif`) is rendered as
+an `<img>` in place of that SVG; names with no file there keep their line drawing,
+so the set can be replaced one picture at a time and a picture is backed out by
+deleting it. The glob is behind `FRIENDLY_UI_ENABLED`, so the standard and VAT
+bundles ship none of those bytes.
+
+The trade is that a raster picture **cannot follow the theme** the way an inlined
+SVG does — it keeps its own colours on every theme, and gets
+the round accent backdrop (`[data-art='photo']` in `styles/index.css`) that the
+SVGs draw for themselves. Art must be **square, 256px or larger** (drawn at
+32–120 CSS px on 2× screens, masked to a circle), readable at 40px, one subject,
+no text in the picture, and small — everything here ships inside the installer
+and must work with no internet, so keep each under ~40 KB. The contract is
+restated for whoever draws them in that directory's `README.md`.
+
 ### Shared fixes (both builds)
 
 - A synchronous lock in `SaleScreen` stops a double tap / F2 from posting the same

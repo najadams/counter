@@ -8,26 +8,31 @@
 //
 // Values:
 //   'dark'   — financial dark
-//   'light'  — warm parchment light (default for a new installation)
+//   'light'  — warm parchment light
 //   'violet' — Sophon-inspired cool grey + vivid violet accent
+//   'sea'    — off-white page with a sea-blue accent (default for a new
+//              installation; an existing device keeps whatever it stored)
 //   'system' — follow prefers-color-scheme; resolves to dark or light only
-//              (system follows OS dark/light, not violet)
+//              (system follows OS dark/light, not violet or sea)
 
 import { create } from 'zustand';
 
-export type ThemeChoice = 'dark' | 'light' | 'violet' | 'system';
-type ResolvedTheme = 'dark' | 'light' | 'violet';
+export type ThemeChoice = 'dark' | 'light' | 'violet' | 'sea' | 'system';
+type ResolvedTheme = 'dark' | 'light' | 'violet' | 'sea';
 
 export const THEME_KEY = 'counter.theme';
+
+/** What a device shows before anyone picks a theme. */
+export const DEFAULT_CHOICE: ThemeChoice = 'sea';
 
 export function readStoredChoice(): ThemeChoice {
   try {
     const v = window.localStorage.getItem(THEME_KEY);
-    if (v === 'light' || v === 'dark' || v === 'violet' || v === 'system') return v;
+    if (v === 'light' || v === 'dark' || v === 'violet' || v === 'sea' || v === 'system') return v;
   } catch {
     /* localStorage may be unavailable; fall through to default */
   }
-  return 'light';
+  return DEFAULT_CHOICE;
 }
 
 export function resolveChoice(choice: ThemeChoice): ResolvedTheme {
@@ -48,7 +53,7 @@ interface ThemeStore {
   setChoice: (c: ThemeChoice) => void;
 }
 
-const initialChoice = typeof window === 'undefined' ? 'light' : readStoredChoice();
+const initialChoice = typeof window === 'undefined' ? DEFAULT_CHOICE : readStoredChoice();
 
 // Apply the initial theme synchronously at module load. The inline script in
 // index.html does this earlier (to prevent FOUC), but if it's blocked by CSP
@@ -60,7 +65,7 @@ if (typeof window !== 'undefined') {
 
 export const useTheme = create<ThemeStore>((set) => ({
   choice: initialChoice,
-  resolved: typeof window === 'undefined' ? 'light' : resolveChoice(initialChoice),
+  resolved: typeof window === 'undefined' ? resolveChoice(DEFAULT_CHOICE) : resolveChoice(initialChoice),
   setChoice: (c: ThemeChoice) => {
     try { window.localStorage.setItem(THEME_KEY, c); } catch { /* ignore */ }
     applyChoice(c);
