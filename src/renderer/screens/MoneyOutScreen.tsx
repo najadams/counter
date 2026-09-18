@@ -12,6 +12,8 @@ import type {
   ExpenseTotalsForShiftResponse,
 } from '../../shared/types/ipc';
 import { SupplierPaymentsTab } from './settings/SupplierPaymentsTab';
+import { AppHeader } from '../components/AppHeader';
+import { FRIENDLY_UI_ENABLED } from '../../shared/lib/buildFlags';
 
 type Tab = 'expenses' | 'drawings' | 'suppliers' | 'taxes';
 type CashDropCategory = CashDropListResponse['drops'][number]['category'];
@@ -56,6 +58,7 @@ export default function MoneyOutScreen({ shiftId, onExit }: { shiftId: string; o
 
   return (
     <div className="min-h-screen bg-bg-deep text-text-primary flex flex-col">
+      {FRIENDLY_UI_ENABLED ? <AppHeader subtitle="Money out" onBack={onExit} /> : (
       <header className="border-b border-border bg-bg-surface px-6 py-4 flex items-center justify-between">
         <div>
           <div className="text-text-tertiary uppercase tracking-wider text-xs">Money out</div>
@@ -65,6 +68,7 @@ export default function MoneyOutScreen({ shiftId, onExit }: { shiftId: string; o
           Back <span className="ml-2 text-xs border border-border-subtle px-1">F9</span>
         </button>
       </header>
+      )}
 
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 py-6 flex flex-col gap-5">
         <nav className="bg-bg-surface border border-border p-2 flex flex-wrap gap-2">

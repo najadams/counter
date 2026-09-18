@@ -18,7 +18,7 @@ const CAUSES: Array<[VarianceCauseCode, string]> = [
   ['SYSTEM_DATA_ERROR', 'System/data error'], ['OTHER', 'Other'],
 ];
 
-export default function VarianceCasesScreen({ onExit }: { onExit: () => void }) {
+export default function VarianceCasesScreen({ onExit, backLabel }: { onExit: () => void; backLabel?: string }) {
   const workerId = useSession((state) => state.workerId);
   const role = useSession((state) => state.workerRole);
   const [tab, setTab] = useState<'OPEN' | 'HISTORY'>('OPEN');
@@ -117,7 +117,7 @@ export default function VarianceCasesScreen({ onExit }: { onExit: () => void }) 
   }
 
   return <div className="min-h-screen bg-bg-deep text-text-primary flex flex-col">
-    <AppHeader subtitle="variance review" onBack={onExit} />
+    <AppHeader subtitle="variance review" onBack={onExit} backLabel={backLabel} />
     <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-8 py-6 flex flex-col gap-5">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div><div className="eyebrow">Reconciliation control</div><h1 className="text-2xl font-semibold mt-1">Variance cases</h1><p className="text-sm text-text-secondary mt-1">Every material difference gets an owner, evidence, root cause, and auditable resolution.</p></div>

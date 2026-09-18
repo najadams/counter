@@ -8,6 +8,8 @@ declare global {
   var __COUNTER_VAT__: boolean | undefined;
   // eslint-disable-next-line no-var
   var __COUNTERS_DECOY__: boolean | undefined;
+  // eslint-disable-next-line no-var
+  var __COUNTER_FRIENDLY__: boolean | undefined;
 }
 
 export const VAT_ENABLED: boolean =
@@ -20,3 +22,11 @@ export const COUNTERS_DECOY_ENABLED: boolean =
   typeof __COUNTERS_DECOY__ !== 'undefined'
     ? __COUNTERS_DECOY__
     : process.env['COUNTERS_DECOY'] === '1';
+
+/** True only for the "Counter Friendly" build: large illustrated buttons,
+ *  simple wording, on-screen number pads. Renderer-only; sale, stock, audit
+ *  and VAT behaviour are identical to the standard build. */
+export const FRIENDLY_UI_ENABLED: boolean =
+  typeof __COUNTER_FRIENDLY__ !== 'undefined'
+    ? __COUNTER_FRIENDLY__
+    : process.env['COUNTER_FRIENDLY'] === '1';

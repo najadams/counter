@@ -294,7 +294,74 @@ body.flash-warning::after { background: rgb(var(--c-warning) / 0.45); }
  * first. Keep every interactive button at the 44px minimum after Tailwind's
  * size utilities have been resolved. */
 @media (max-width: 640px) {
-  button, [role='button'] {
+  :root:not([data-ui='friendly']) button, :root:not([data-ui='friendly']) [role='button'] {
     min-height: 2.75rem !important;
   }
+}
+
+/* -----------------------------------------------------------------------
+ * Counter Friendly build (FRIENDLY_UI_ENABLED) — illustration palette and
+ * the larger focus ring. main.tsx stamps <html data-ui="friendly"> only in
+ * that build, so none of this affects the standard Counter look.
+ *
+ * Illustrations are local SVGs inlined by TaskIllustration, so the classes
+ * below reach inside them. Object colours (bottles, cash, wood) stay fixed —
+ * they are real things — while outlines and the backdrop follow the theme.
+ * --------------------------------------------------------------------- */
+.task-illustration svg { display: block; width: 100%; height: 100%; }
+.task-illustration .il-bg { fill: rgb(var(--c-accent) / 0.16); }
+.task-illustration .il-stroke,
+.task-illustration .il-line,
+.task-illustration .il-line-accent,
+.task-illustration .il-line-ok,
+.task-illustration .il-line-sun,
+.task-illustration .il-line-white {
+  stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round;
+}
+.task-illustration .il-stroke { stroke: rgb(30 26 22); }
+.task-illustration .il-line { fill: none; stroke: rgb(var(--c-text-primary)); }
+.task-illustration .il-line-accent { fill: none; stroke: rgb(var(--c-accent)); }
+.task-illustration .il-line-ok { fill: none; stroke: #2e7950; }
+.task-illustration .il-line-sun { fill: none; stroke: #e0a526; }
+.task-illustration .il-line-white { fill: none; stroke: #fff; stroke-width: 4; }
+.task-illustration .il-ink { fill: rgb(30 26 22); }
+.task-illustration .il-paper { fill: #fffdf6; }
+.task-illustration .il-glass { fill: #3e9a63; }
+.task-illustration .il-amber { fill: #c8782e; }
+.task-illustration .il-wood { fill: #d39a52; }
+.task-illustration .il-cash { fill: #8cc47c; }
+.task-illustration .il-cash-dark { fill: #4e8c45; }
+.task-illustration .il-skin { fill: #8d5a3b; }
+.task-illustration .il-skin2 { fill: #b77a4f; }
+.task-illustration .il-cloth { fill: #d8863b; }
+.task-illustration .il-cloth2 { fill: #3f7cac; }
+.task-illustration .il-roof { fill: #c0583a; }
+.task-illustration .il-wall { fill: #f3dcb4; }
+.task-illustration .il-awning { fill: #e0673f; }
+.task-illustration .il-phone { fill: #33373f; }
+.task-illustration .il-momo { fill: #f2c14e; }
+.task-illustration .il-coin { fill: #f2c14e; }
+.task-illustration .il-bubble { fill: #7cc58f; }
+.task-illustration .il-moon { fill: #f4d77a; }
+.task-illustration .il-sun { fill: #f2c14e; }
+.task-illustration .il-pen { fill: #d8863b; }
+.task-illustration .il-ok { fill: #2e9a5e; }
+.task-illustration .il-drop { fill: #6fb4d9; }
+
+:root[data-ui='friendly'] :focus-visible {
+  outline: 4px solid rgb(var(--c-accent));
+  outline-offset: 3px;
+}
+
+/* Friendly controls keep their explicit larger sizes on small screens. */
+:root[data-ui='friendly'] button:not([class*='min-h-']),
+:root[data-ui='friendly'] button.min-h-12 { min-height: 3.5rem; }
+/* Warning badges use dark ink even in the violet theme. */
+:root[data-ui='friendly'] .bg-warning.text-ink { color: #121218; }
+:root[data-ui='friendly'] .text-warning { color: rgb(var(--c-text-primary)); }
+
+@media (max-height: 500px) {
+  .friendly-checkout-footer { grid-template-columns: 2fr 1fr; padding: 0.5rem; }
+  .friendly-checkout-footer button { min-height: 3.5rem; font-size: 1.125rem; line-height: 1.3; }
+  .friendly-checkout-footer .task-illustration { display: none; }
 }

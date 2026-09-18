@@ -5,7 +5,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import log from 'electron-log/main';
-import { COUNTERS_DECOY_ENABLED } from '../shared/lib/buildFlags.js';
+import { COUNTERS_DECOY_ENABLED, FRIENDLY_UI_ENABLED } from '../shared/lib/buildFlags.js';
 
 log.initialize();
 log.transports.file.level = 'info';
@@ -19,6 +19,12 @@ let countersDecoyRefreshTimer: ReturnType<typeof setInterval> | null = null;
 
 if (COUNTERS_DECOY_ENABLED) {
   app.setName('Counters');
+} else if (FRIENDLY_UI_ENABLED && app.isPackaged) {
+  // The packaged app's package.json carries only `name: "counter"`, so without
+  // this Electron resolves userData to the same folder as a development run —
+  // the installed Friendly till would open the dev database. Must run before
+  // anything calls app.getPath('userData'). Dev runs keep the dev database.
+  app.setName('Counter Friendly');
 }
 
 function resolveMigrationsDir(defaultMigrationsDir: () => string): string {

@@ -232,29 +232,30 @@ function runBackup(opts) {
 /**
  * Resolve the OS default backup target dir: ~/CounterBackups
  */
-function defaultBackupTarget() {
+function defaultBackupTarget(variant = 'standard') {
   const os = require('node:os');
-  return path.join(os.homedir(), 'CounterBackups');
+  return path.join(os.homedir(), variant === 'friendly' ? 'CounterFriendlyBackups' : 'CounterBackups');
 }
 
 /**
  * Resolve the OS default Counter userData dir. Mirrors Electron's
  * app.getPath('userData') for each platform.
  */
-function defaultUserDataDir() {
+function defaultUserDataDir(variant = 'standard') {
+  const appName = variant === 'friendly' ? 'Counter Friendly' : 'Counter';
   const os = require('node:os');
   switch (process.platform) {
     case 'win32':
       return path.join(
         process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'),
-        'Counter',
+        appName,
       );
     case 'darwin':
-      return path.join(os.homedir(), 'Library', 'Application Support', 'Counter');
+      return path.join(os.homedir(), 'Library', 'Application Support', appName);
     default:
       return path.join(
         process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'),
-        'Counter',
+        appName,
       );
   }
 }

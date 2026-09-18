@@ -131,9 +131,12 @@ export function recordCustomerReturn(
     let unitId: string | null = null;
     if (l.unitId) {
       const u = db
-        .prepare(`SELECT id, conversion_factor FROM product_units WHERE id = ? AND active = 1`)
-        .get(l.unitId) as { id: string; conversion_factor: number } | undefined;
+        .prepare(`SELECT id, product_id, conversion_factor FROM product_units WHERE id = ? AND active = 1`)
+        .get(l.unitId) as { id: string; product_id: string; conversion_factor: number } | undefined;
       if (!u) throw new Error(`recordCustomerReturn: unit ${l.unitId} not found or inactive`);
+      if (u.product_id !== l.productId) {
+        throw new Error(`recordCustomerReturn: unit ${l.unitId} does not belong to product ${l.productId}`);
+      }
       factor = u.conversion_factor;
       unitId = u.id;
     }
@@ -149,7 +152,8 @@ export function recordCustomerReturn(
       quantityDisplay: l.quantity,
       quantityCanonical,
       unitPricePesewas: l.unitPricePesewas,
-      canonicalUnitCost: Math.floor(product.cost_price_pesewas / factor),
+      // Product cost is already per canonical unit; the movement multiplies by canonical quantity.
+      canonicalUnitCost: product.cost_price_pesewas,
       lineTotalPesewas: lineTotal,
     };
   });

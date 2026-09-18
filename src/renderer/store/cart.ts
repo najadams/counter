@@ -60,16 +60,16 @@ export interface CartState {
 
   setChannel: (channel: SaleChannel) => void;
   addLine: (line: Partial<CartLine> & { productId: string; sku: string; name: string; unitPricePesewas: number; unitsOnHand: number; unitId?: string | null; unitName?: string; factor?: number }) => void;
-  removeLine: (productId: string) => void;
-  setQuantity: (productId: string, quantity: number) => void;
-  bumpQuantity: (productId: string, delta: number) => void;
+  removeLine: (productId: string, unitId?: string | null) => void;
+  setQuantity: (productId: string, quantity: number, unitId?: string | null) => void;
+  bumpQuantity: (productId: string, delta: number, unitId?: string | null) => void;
   setPaymentMethod: (m: PaymentMethod | null) => void;
   setPaymentReference: (s: string) => void;
   setCashGivenPesewas: (n: number | null) => void;
   setCustomer: (c: CartCustomer | null) => void;
   setDiscount: (pesewas: number, reason: string) => void;
-  applyTier: (productId: string, tier: { id: string; unitPricePesewas: number; minQuantity: number } | null) => void;
-  swapUnit: (productId: string, unit: { id: string; unitName: string; conversionFactor: number; pricePesewas: number }) => void;
+  applyTier: (productId: string, tier: { id: string; unitPricePesewas: number; minQuantity: number } | null, unitId?: string | null) => void;
+  swapUnit: (productId: string, unit: { id: string; unitName: string; conversionFactor: number; pricePesewas: number }, sourceUnitId?: string | null) => void;
   /**
    * Update the per-unit base price of one or more lines in place. Used when
    * the channel changes — each line's price is recomputed by the backend
@@ -88,6 +88,11 @@ export interface CartState {
   /** VAT contained in the (inclusive) total — null in the no-VAT build. Display
    *  only; does NOT change totalPesewas. */
   vatBreakdown: () => VatBreakdown | null;
+}
+
+// Old single-row callers may omit the unit; till actions always pass it.
+function matchesLine(line: CartLine, productId: string, unitId: string | null | undefined): boolean {
+  return line.productId === productId && (unitId === undefined || line.unitId === unitId);
 }
 
 export const useCart = create<CartState>((set, get) => ({
@@ -132,20 +137,20 @@ export const useCart = create<CartState>((set, get) => ({
     return { lines: [...state.lines, fresh] };
   }),
 
-  removeLine: (productId) =>
-    set((state) => ({ lines: state.lines.filter((l) => l.productId !== productId) })),
+  removeLine: (productId, unitId) =>
+    set((state) => ({ lines: state.lines.filter((l) => !matchesLine(l, productId, unitId)) })),
 
-  setQuantity: (productId, quantity) =>
+  setQuantity: (productId, quantity, unitId) =>
     set((state) => ({
       lines: quantity > 0
-        ? state.lines.map((l) => l.productId === productId ? { ...l, quantity } : l)
-        : state.lines.filter((l) => l.productId !== productId),
+        ? state.lines.map((l) => matchesLine(l, productId, unitId) ? { ...l, quantity } : l)
+        : state.lines.filter((l) => !matchesLine(l, productId, unitId)),
     })),
 
-  bumpQuantity: (productId, delta) => {
-    const current = get().lines.find((l) => l.productId === productId);
+  bumpQuantity: (productId, delta, unitId) => {
+    const current = get().lines.find((l) => matchesLine(l, productId, unitId));
     if (!current) return;
-    get().setQuantity(productId, Math.max(0, current.quantity + delta));
+    get().setQuantity(productId, Math.max(0, current.quantity + delta), unitId);
   },
 
   setPaymentMethod: (paymentMethod) => set({ paymentMethod }),
@@ -154,9 +159,9 @@ export const useCart = create<CartState>((set, get) => ({
   setCustomer: (customer) => set({ customer }),
   setDiscount: (discountPesewas, discountReason) => set({ discountPesewas, discountReason }),
 
-  applyTier: (productId, tier) => set((state) => ({
+  applyTier: (productId, tier, unitId) => set((state) => ({
     lines: state.lines.map((l) => {
-      if (l.productId !== productId) return l;
+      if (!matchesLine(l, productId, unitId)) return l;
       const tierUnitPrice = tier ? tier.unitPricePesewas * l.factor : null;
       return {
         ...l,
@@ -184,25 +189,21 @@ export const useCart = create<CartState>((set, get) => ({
     }),
   })),
 
-  swapUnit: (productId, unit) => set((state) => ({
-    lines: state.lines.map((l) =>
-      l.productId === productId
-        ? {
-            ...l,
-            unitId: unit.id,
-            unitName: unit.unitName,
-            factor: unit.conversionFactor,
-            basePricePesewas: unit.pricePesewas,
-            unitPricePesewas: unit.pricePesewas,        // tier will reapply on next qty change
-            appliedTierId: null,
-            appliedTierMinQuantity: null,
-            // Reset quantity to 1 when swapping units — '5 crates' doesn't translate
-            // sensibly to '5 of a smaller/different unit.'
-            quantity: 1,
-          }
-        : l,
-    ),
-  })),
+  swapUnit: (productId, unit, sourceUnitId) => set((state) => {
+    const source = state.lines.find((l) => matchesLine(l, productId, sourceUnitId));
+    if (!source || source.unitId === unit.id) return {};
+    const existing = state.lines.find((l) => l.productId === productId && l.unitId === unit.id);
+    const changed: CartLine = {
+      ...source, unitId: unit.id, unitName: unit.unitName, factor: unit.conversionFactor,
+      basePricePesewas: unit.pricePesewas, unitPricePesewas: unit.pricePesewas,
+      appliedTierId: null, appliedTierMinQuantity: null,
+      // Switching units starts at one of the chosen unit. Merge if it is already in the cart.
+      quantity: (existing?.quantity ?? 0) + 1,
+    };
+    return { lines: state.lines.flatMap((l) =>
+      l === source ? (existing ? [] : [changed]) : l === existing ? [changed] : [l],
+    ) };
+  }),
 
   loadLines: (lines, channel, customer) => set((state) => ({
     lines: lines.map((l) => ({ ...l })),

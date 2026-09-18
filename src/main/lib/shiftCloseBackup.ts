@@ -1,3 +1,4 @@
+import { FRIENDLY_UI_ENABLED } from '../../shared/lib/buildFlags';
 // shiftCloseBackup.ts — decides whether to fire the auto-backup after a
 // shift close, and runs it.
 //
@@ -57,7 +58,7 @@ type BackupRunnerModule = {
     timestamp: string;
     prunedCount: number;
   } | { ok: false; error: string; code?: string };
-  defaultBackupTarget: () => string;
+  defaultBackupTarget: (variant?: 'standard' | 'friendly') => string;
 };
 
 // Lazy-load the runner the first time it's needed. Earlier this module
@@ -183,7 +184,7 @@ function heartbeatExistsForDate(userDataDir: string, dateKey: string): boolean {
 }
 
 function defaultTarget(runner: BackupRunnerModule): string {
-  return runner.defaultBackupTarget();
+  return runner.defaultBackupTarget(FRIENDLY_UI_ENABLED ? 'friendly' : 'standard');
 }
 
 function errMsg(e: unknown): string {

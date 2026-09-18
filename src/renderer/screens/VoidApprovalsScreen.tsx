@@ -1,3 +1,4 @@
+import { FRIENDLY_UI_ENABLED } from '../../shared/lib/buildFlags';
 import { useCallback, useEffect, useState } from 'react';
 import { AppHeader } from '../components/AppHeader';
 import { FeedbackBanner } from '../components/FeedbackBanner';
@@ -7,7 +8,7 @@ import type { SaleVoidRequestDetail, SaleVoidRequestSummary } from '../../shared
 
 type Tab = 'PENDING' | 'HISTORY';
 
-export default function VoidApprovalsScreen({ onExit }: { onExit: () => void }) {
+export default function VoidApprovalsScreen({ onExit, backLabel }: { onExit: () => void; backLabel?: string }) {
   const [tab, setTab] = useState<Tab>('PENDING');
   const [rows, setRows] = useState<SaleVoidRequestSummary[]>([]);
   const [selected, setSelected] = useState<SaleVoidRequestDetail | null>(null);
@@ -79,7 +80,7 @@ export default function VoidApprovalsScreen({ onExit }: { onExit: () => void }) 
 
   return (
     <div className="min-h-screen bg-bg-deep text-text-primary flex flex-col">
-      <AppHeader subtitle="void approvals" onBack={onExit} />
+      <AppHeader subtitle={FRIENDLY_UI_ENABLED ? "Review sale cancellations" : "void approvals"} onBack={onExit} backLabel={backLabel} />
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-8 py-6 flex flex-col gap-5">
         <header className="flex flex-wrap items-end justify-between gap-3">
           <div>

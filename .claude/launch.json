@@ -4,8 +4,23 @@
     {
       "name": "counter-lan",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["tsx", "scripts/serve-lan.ts"],
+      "runtimeArgs": [
+        "tsx",
+        "scripts/serve-lan.ts"
+      ],
       "port": 4181
+    },
+    {
+      "name": "counter-friendly-app",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "cross-env",
+        "COUNTER_FRIENDLY=1",
+        "COUNTER_HTTP=1",
+        "COUNTER_HTTP_HOST=0.0.0.0",
+        "vite"
+      ],
+      "port": 5175
     }
   ]
 }

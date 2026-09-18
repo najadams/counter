@@ -22,19 +22,26 @@ const { runBackup, defaultBackupTarget, defaultUserDataDir } = require('./lib/ba
 
 let DEFAULT_KEEP = 14;
 let target;
+let variant = 'standard';
 let keep = DEFAULT_KEEP;
 
 const argv = process.argv.slice(2);
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
-  if (a === '--keep' || a === '-k') {
+  if (a === '--variant') {
+    variant = argv[++i];
+    if (variant !== 'standard' && variant !== 'friendly') {
+      console.error('backup: --variant must be standard or friendly');
+      process.exit(2);
+    }
+  } else if (a === '--keep' || a === '-k') {
     keep = parseInt(argv[++i], 10);
     if (!Number.isInteger(keep) || keep < 1) {
       console.error(`backup: --keep must be a positive integer`);
       process.exit(2);
     }
   } else if (a === '--help' || a === '-h') {
-    console.log(`Usage: node scripts/backup.cjs [--keep N] [target-dir]`);
+    console.log(`Usage: node scripts/backup.cjs [--variant standard|friendly] [--keep N] [target-dir]`);
     process.exit(0);
   } else if (!target) {
     target = a;
@@ -44,10 +51,10 @@ for (let i = 0; i < argv.length; i++) {
   }
 }
 
-target = target || defaultBackupTarget();
+target = target || defaultBackupTarget(variant);
 
 const result = runBackup({
-  sourceDir: defaultUserDataDir(),
+  sourceDir: defaultUserDataDir(variant),
   target,
   keep,
   // Use the project's locally-installed better-sqlite3 so VACUUM INTO works.

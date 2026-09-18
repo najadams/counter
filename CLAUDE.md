@@ -57,6 +57,12 @@ installer (`Counter-VAT-Setup-${version}-x64.exe`, etc.). The `:vat` scripts set
 distinct appId/name so both can install side by side. CI builds all six (3 OS ×
 2 variants) — see `.github/workflows/release.yml`.
 
+**Friendly variant.** `npm run dist:win:friendly` (and `dist:mac:friendly`,
+`dist:linux:friendly`) builds **Counter Friendly** — the no-VAT build with large
+illustrated buttons, simple wording and on-screen number pads (see §13). Output is
+`Counter-Friendly-Setup-${version}-x64.exe` etc.; it installs beside Counter with
+its own data. CI builds these three too.
+
 ### 2a. Cross-build caveat & the recommended path
 
 `better-sqlite3` is a native module. **You cannot build a working Windows
@@ -954,3 +960,114 @@ never rotates, so it stays valid without the private key being present.
 
 > Note: the `Counters` decoy build (§2) is a separate app identity with its own
 > database, so it needs **its own** activation key for whatever PC it runs on.
+
+## 13. Counter Friendly — the illustrated build
+
+A third binary from the same `main` branch, for shops whose staff find the
+keyboard-first till hard to read. Same sales, payment, stock, permission, audit
+and activation rules; only the renderer changes. No database migrations, no IPC
+changes.
+
+### The flag
+
+`COUNTER_FRIENDLY=1` at **build time** → Vite injects `__COUNTER_FRIENDLY__` →
+`FRIENDLY_UI_ENABLED` in `src/shared/lib/buildFlags.ts`. `main.tsx` stamps
+`<html data-ui="friendly">` for the larger focus ring. Like VAT it is not a
+runtime toggle, and the standard bundle tree-shakes the Friendly screens out.
+`electron-builder.friendly.cjs` gives it its own appId (`com.counter.pos.friendly`)
+and name, so it has its **own userData dir, database and activation key**. It is
+no-VAT only for now.
+
+```bash
+npm run dev:friendly      # renderer on :5175
+npm run build:friendly    # dist/ for the LAN preview (scripts/serve-lan.ts)
+```
+
+### What it changes
+
+- **Home** (`components/friendly/FriendlyHomeMenu.tsx`): six big tiles — Sell
+  drinks (highlighted; becomes *Continue sale* while the cart has items), Customers,
+  Money out, Receive stock, Recent sales, Today's summary — then three expandable
+  groups (Stock tools, Orders & receipts, Manage shop). Close shift sits apart.
+  All F-keys, role gates and notification counts are unchanged.
+- **Sign in / open shift / close shift**: "Choose your name", "Enter your PIN",
+  "Count the money in the drawer. Enter the amount." with an on-screen
+  `NumberPad` that never takes focus from the field, so taps and typing mix.
+- **Selling**: bigger search, names and units; 56px quantity buttons; a large
+  Total; **Take payment** opens the touch checkout on every device (hybrid PCs),
+  while F4/F5/F6, Split payment and F2 stay visible. The checkout shows **Total**,
+  **Money received**, **Change to give**, and answers to F4/F5/F6/F2/Esc.
+- **Header**: a large **Home** button with a house picture on every screen that
+  returns home; screens that return elsewhere pass `backLabel` (e.g. *Back to
+  customers*, *Back to open shift*). F9 unchanged.
+
+Illustrations are local SVGs in `src/renderer/assets/illustrations/`, inlined by
+`TaskIllustration` so they work offline and follow the theme (palette in
+`styles/index.css` under `.task-illustration`). Always pair one with words.
+
+### Shared fixes (both builds)
+
+- A synchronous lock in `SaleScreen` stops a double tap / F2 from posting the same
+  cart twice before React re-renders.
+- A refused split payment keeps the split dialog open with every tender intact.
+
+### Verifying
+
+`npx vitest --run tests/friendly-ui.test.tsx` — home groups and role visibility,
+Continue sale, number pad, mixed tap/keyboard sign-in, Home/Back labels, checkout
+wording, one sale per repeated tap, and inputs kept after a refused sale or split.
+Not yet done: the staff walkthrough (sign in, sell, take payment, go home, find
+stock counting, close shift) without coaching.
+
+
+### Friendly upgrades: payment, installation, and recovery
+
+Friendly uses one illustrated checkout: Take payment / F4 opens Cash, F5 opens
+MoMo, F6 opens Pay later. Only the top dialog receives shortcuts. Escape returns
+to the previous dialog or cart; it cannot clear the sale underneath. While saving,
+controls and navigation are locked. Failed responses preserve entries; a transport
+failure asks staff to check Recent sales before retrying because the save outcome
+may be unknown. The app never retries a sale automatically.
+
+The completion panel retains change and printer status until **Next sale**. Print
+receipt retries printing without recording another sale. Friendly home uses six
+compact illustrated tiles with three columns on wide screens. Split payment uses
+labelled payment cards and shows the amount remaining.
+
+Development and builds:
+
+```bash
+npm run dev:friendly
+npm run build:friendly
+npm run dist:win:friendly       # run on Windows or use release CI
+npm run dist:mac:friendly
+npm run dist:linux:friendly
+```
+
+On Windows, install `release/<version>/Counter-Friendly-Setup-<version>-x64.exe`
+and launch **Counter Friendly**. Its database is
+`%APPDATA%\Counter Friendly\counter.db`; standard Counter is independent. The
+packaged app runs first-time setup for its own installation. Development still
+uses the checkout's `dev.db`, so do not run two development variants concurrently.
+No existing Counter data is automatically imported.
+
+Back up Friendly explicitly from a checkout:
+
+```bash
+npm run backup -- --variant friendly
+npm run backup -- --variant friendly --keep 30 "D:\CounterFriendlyBackups"
+```
+
+The default destination is `~/CounterFriendlyBackups`; standard Counter keeps
+`~/CounterBackups`. Friendly's automatic shift-close backup uses the same Friendly
+default unless Settings selects another directory. Assign distinct custom backup
+folders to each installation. Scheduled jobs must include `--variant friendly`.
+
+To recover, close Counter Friendly, retain a copy of its current data folder,
+and copy a known-good Friendly backup to that folder as `counter.db`. Move any
+old `counter.db-wal` and `counter.db-shm` files into the retained copy before
+reopening. Restore the matching photo archive into the `photos` subdirectory if
+needed. On macOS the data folder is
+`~/Library/Application Support/Counter Friendly`; on Linux it is
+`${XDG_CONFIG_HOME:-~/.config}/Counter Friendly`. Restore only a Friendly backup
+to this installation; data recorded after the snapshot will not be present.

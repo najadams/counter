@@ -15,6 +15,7 @@ import path from 'node:path';
 const buildFlagDefine = {
   __COUNTER_VAT__: JSON.stringify(process.env.COUNTER_VAT === '1'),
   __COUNTERS_DECOY__: JSON.stringify(process.env.COUNTERS_DECOY === '1'),
+  __COUNTER_FRIENDLY__: JSON.stringify(process.env.COUNTER_FRIENDLY === '1'),
 };
 
 // Vite + Electron + React. Single config drives main, preload, and renderer.
@@ -55,7 +56,7 @@ export default defineConfig({
     }),
   ],
   server: {
-    port: process.env.COUNTERS_DECOY === '1' ? 5174 : 5173,
+    port: process.env.COUNTERS_DECOY === '1' ? 5174 : process.env.COUNTER_FRIENDLY === '1' ? 5175 : 5173,
     strictPort: true,
   },
   // Applies to the renderer build.
