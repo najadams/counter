@@ -8,6 +8,9 @@ import type {
   IntelligenceBrief, IntelligenceCategory, IntelligenceGetItemResponse, IntelligenceItem, IntelligenceListRequest,
   IntelligenceSeverity, IntelligenceStatus,
 } from '../../shared/types/ipc';
+import { Button } from '../components/ui/button';
+import { Badge } from '../components/ui/badge';
+import { severityTone } from '../lib/tones';
 
 type View = NonNullable<IntelligenceListRequest['view']>;
 type Destination = 'variance' | 'voidApprovals' | 'stockApprovals' | 'stocktake' | 'customers' | 'settings' | 'reports';
@@ -144,9 +147,9 @@ export default function IntelligenceScreen({ onExit, onNavigate }: {
               {Object.entries(knownShops).map(([id, name]) => <option key={id} value={id}>{name}</option>)}
             </select>
           </label>}
-          <button className="btn btn-quiet ml-auto" onClick={() => void refreshModels()} disabled={loading}>
+          <Button variant="secondary" className="ml-auto" onClick={() => void refreshModels()} disabled={loading}>
             {loading ? 'Refreshing…' : 'Refresh intelligence'}
-          </button>
+          </Button>
         </section>
 
         {error && <FeedbackBanner>{error}</FeedbackBanner>}
@@ -202,7 +205,7 @@ function IntelligenceCard({ item, onTransition, onNavigate }: {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex gap-2 items-center text-xs">
-              <span className={`status-badge ${item.severity === 'CRITICAL' ? 'status-danger' : item.severity === 'HIGH' ? 'status-pending' : 'status-neutral'}`}>{item.severity}</span>
+              <Badge tone={severityTone(item.severity)}>{item.severity}</Badge>
               <span className="text-text-tertiary">{item.category} · {item.status}</span>
               {item.controlOverride && <span className="text-danger">control priority</span>}
               {item.overdue && <span className="text-danger">overdue</span>}
@@ -268,12 +271,12 @@ function IntelligenceCard({ item, onTransition, onNavigate }: {
             </div>
           )}
           <div className="flex flex-wrap gap-2">
-            <button onClick={onNavigate} className="btn btn-primary">Open related workflow</button>
-            {active && item.status === 'OPEN' && <button onClick={() => onTransition('ACKNOWLEDGE')} className="btn btn-quiet">Acknowledge</button>}
-            {active && <button onClick={() => onTransition('ASSIGN')} className="btn btn-quiet">Assign to me</button>}
-            {active && ([1,3,7] as const).map((days) => <button key={days} onClick={() => onTransition('SNOOZE', days)} className="btn btn-quiet">Snooze {days}d</button>)}
-            {active && <button onClick={() => onTransition('RESOLVE')} className="btn border-success text-success">Resolve</button>}
-            {active && <button onClick={() => onTransition('DISMISS')} className="btn border-danger text-danger">Dismiss</button>}
+            <Button variant="primary" onClick={onNavigate}>Open related workflow</Button>
+            {active && item.status === 'OPEN' && <Button variant="secondary" onClick={() => onTransition('ACKNOWLEDGE')}>Acknowledge</Button>}
+            {active && <Button variant="secondary" onClick={() => onTransition('ASSIGN')}>Assign to me</Button>}
+            {active && ([1,3,7] as const).map((days) => <Button variant="secondary" key={days} onClick={() => onTransition('SNOOZE', days)}>Snooze {days}d</Button>)}
+            {active && <Button variant="success" onClick={() => onTransition('RESOLVE')}>Resolve</Button>}
+            {active && <Button variant="danger" onClick={() => onTransition('DISMISS')}>Dismiss</Button>}
           </div>
           <p className="text-[11px] text-text-tertiary">Advice only. Opening a workflow does not pre-fill or execute a business action.</p>
         </div>
@@ -294,7 +297,7 @@ function destinationFor(item: IntelligenceItem): Destination {
 }
 
 function Tab({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return <button onClick={onClick} className={`btn ${active ? 'btn-primary' : 'btn-quiet'}`}>{children}</button>;
+  return <Button onClick={onClick} variant={active ? 'primary' : 'secondary'} aria-pressed={active}>{children}</Button>;
 }
 function Stat({ label, value }: { label: string; value: string }) {
   return <div className="panel p-3"><div className="text-xs text-text-tertiary uppercase tracking-wider">{label}</div><div className="font-mono tnum text-lg mt-1">{value}</div></div>;

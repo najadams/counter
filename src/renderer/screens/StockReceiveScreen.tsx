@@ -8,6 +8,9 @@ import { formatMoney, formatMoneyWithCurrency, parseCedisToPesewas } from '../..
 import { FeedbackBanner } from '../components/FeedbackBanner';
 import { useSession } from '../store/session';
 import type { StockReceiptRequestSummary } from '../../shared/types/ipc';
+import { Button } from '../components/ui/button';
+import { Badge } from '../components/ui/badge';
+import { reviewStatusTone } from '../lib/tones';
 
 interface Supplier { id: string; name: string; paymentTermsDays: number; currentBalancePesewas: number }
 interface DraftPO { id: string; poNumber: string; supplierId: string; totalOrderedPesewas: number; lineCount: number; createdAt: string }
@@ -208,14 +211,14 @@ export default function StockReceiveScreen({ onExit }: { onExit: () => void }) {
           <div className="eyebrow">My recent receipt requests</div>
           <p className="text-xs text-text-secondary mt-1 mb-3">Pending requests have not changed inventory or the books. Approved requests are posted; declined and withdrawn requests have no operational effect.</p>
           {myRequests.map((request) => <div key={request.id} className="flex flex-wrap items-center gap-3 py-2 border-t border-border-subtle text-sm">
-            <span className={`status-badge ${request.status === 'PENDING' ? 'status-pending' : request.status === 'APPROVED' ? 'status-approved' : request.status === 'DECLINED' ? 'status-danger' : 'status-neutral'}`}>{request.status[0] + request.status.slice(1).toLowerCase()}</span>
+            <Badge tone={reviewStatusTone(request.status)}>{request.status[0] + request.status.slice(1).toLowerCase()}</Badge>
             <span className="font-mono">#{request.id.slice(-8)}</span>
             <span>{request.supplierName ?? 'Opening stock'}</span>
             <span className="font-mono tnum">{formatMoneyWithCurrency(request.totalPayablePesewas)}</span>
             <span className="text-xs text-text-tertiary flex-1">{request.reviewedAt && request.reviewerName
               ? `${request.reviewerName} · ${new Date(request.reviewedAt).toLocaleString()}${request.reviewNote ? ` · ${request.reviewNote}` : ''}`
               : new Date(request.requestedAt).toLocaleString()}</span>
-            {request.status === 'PENDING' && <button className="btn btn-quiet text-xs" onClick={() => void withdraw(request.id)}>Withdraw</button>}
+            {request.status === 'PENDING' && <Button variant="secondary" size="sm" onClick={() => void withdraw(request.id)}>Withdraw</Button>}
           </div>)}
         </section>}
 

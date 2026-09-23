@@ -47,6 +47,7 @@ import { FRIENDLY_UI_ENABLED } from '../../shared/lib/buildFlags';
 import { FriendlyHomeMenu } from '../components/friendly/FriendlyHomeMenu';
 import { NumberPad } from '../components/friendly/NumberPad';
 import { TaskIllustration } from '../components/friendly/TaskIllustration';
+import { Button } from '../components/ui/button';
 
 type View = 'home' | 'sale' | 'void' | 'voidApprovals' | 'varianceCases' | 'stockApprovals' | 'breakage' | 'consumption' | 'stock' | 'settings' | 'stocktake' | 'summary' | 'customers' | 'reports' | 'intelligence' | 'pendingOrders' | 'moneyOut' | 'paperReceipts';
 
@@ -344,7 +345,7 @@ export default function HomeScreen({ onReactivate }: { onReactivate?: () => void
               <div className="notice notice-warning">
                 <div className="font-semibold">Unresolved void requests block this shift from closing</div>
                 <p className="text-xs mt-1">Resolve or withdraw every request first. Sales and expected cash remain unchanged while requests are pending.</p>
-                <button className="btn btn-quiet mt-3" onClick={() => setView(isSenior ? 'voidApprovals' : 'void')}>{isSenior ? 'Review requests' : 'View my requests'}</button>
+                <Button variant="secondary" className="mt-3" onClick={() => setView(isSenior ? 'voidApprovals' : 'void')}>{isSenior ? 'Review requests' : 'View my requests'}</Button>
               </div>
             )}
             {pendingReprints.length > 0 && (

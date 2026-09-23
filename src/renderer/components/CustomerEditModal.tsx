@@ -1,7 +1,9 @@
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { counter } from '../lib/ipc';
 import { formatMoney, parseCedisToPesewas } from '../../shared/lib/money';
 import { FeedbackBanner } from './FeedbackBanner';
+import { Button } from './ui/button';
+import { Dialog, DialogContent, DialogTitle } from './ui/dialog';
 
 const CUSTOMER_TYPES = [
   { code: 'WALK_IN_REGULAR', label: 'Regular walk-in' },
@@ -44,6 +46,7 @@ export function CustomerEditModal({ customer, canEditCreditPolicy, onCancel, onS
   const [notes, setNotes] = useState(customer.notes ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
 
   async function submit() {
     const name = displayName.trim();
@@ -82,16 +85,16 @@ export function CustomerEditModal({ customer, canEditCreditPolicy, onCancel, onS
     onSaved();
   }
 
-  return <div className="fixed inset-0 bg-scrim flex items-center justify-center z-70 overflow-y-auto py-6" onClick={onCancel}>
-    <div className="panel w-full max-w-2xl max-h-[94vh] flex flex-col my-auto" onClick={(event) => event.stopPropagation()}>
+  return <Dialog onClose={onCancel} busy={submitting}>
+    <DialogContent showCloseButton={false} initialFocus={nameRef} className="w-[min(42rem,calc(100%-2rem))] max-h-[94vh] gap-0 p-0">
       <header className="px-6 py-5 border-b border-border-subtle flex items-center justify-between gap-4">
-        <div><div className="eyebrow">Customer record</div><h2 className="text-xl font-semibold mt-1">Edit customer information</h2></div>
-        <button className="btn btn-quiet" onClick={onCancel} aria-label="Close">Close</button>
+        <div><div className="eyebrow">Customer record</div><DialogTitle className="text-xl mt-1">Edit customer information</DialogTitle></div>
+        <Button variant="secondary" onClick={onCancel} shortcut="Esc">Close</Button>
       </header>
       {error && <FeedbackBanner className="mx-6 mt-4">{error}</FeedbackBanner>}
       <div className="flex-1 overflow-y-auto px-6 py-5 flex flex-col gap-5">
         <section className="grid sm:grid-cols-2 gap-4">
-          <Field label="Customer name"><input autoFocus className="input w-full" value={displayName} onChange={(e) => setDisplayName(e.target.value)} /></Field>
+          <Field label="Customer name"><input ref={nameRef} className="input w-full" value={displayName} onChange={(e) => setDisplayName(e.target.value)} /></Field>
           <Field label="Primary phone" hint={canEditCreditPolicy ? 'A unique login/search identifier.' : 'Supervisor or above can change this.'}>
             <input className="input w-full font-mono" value={phone} disabled={!canEditCreditPolicy} onChange={(e) => setPhone(e.target.value)} />
           </Field>
@@ -118,9 +121,9 @@ export function CustomerEditModal({ customer, canEditCreditPolicy, onCancel, onS
 
         <Field label="Notes"><textarea className="input w-full" rows={4} maxLength={1000} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Delivery instructions, contact context, or account notes" /></Field>
       </div>
-      <footer className="px-6 py-4 border-t border-border-subtle flex justify-end gap-3"><button className="btn btn-quiet" onClick={onCancel}>Cancel</button><button className="btn btn-primary" disabled={submitting || !displayName.trim()} onClick={() => void submit()}>{submitting ? 'Saving…' : 'Save changes'}</button></footer>
-    </div>
-  </div>;
+      <footer className="px-6 py-4 border-t border-border-subtle flex justify-end gap-3"><Button variant="secondary" onClick={onCancel}>Cancel</Button><Button variant="primary" disabled={submitting || !displayName.trim()} onClick={() => void submit()}>{submitting ? 'Saving…' : 'Save changes'}</Button></footer>
+    </DialogContent>
+  </Dialog>;
 }
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {

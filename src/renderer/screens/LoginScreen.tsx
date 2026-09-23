@@ -11,6 +11,7 @@ import { FeedbackBanner } from '../components/FeedbackBanner';
 import { FRIENDLY_UI_ENABLED } from '../../shared/lib/buildFlags';
 import { NumberPad } from '../components/friendly/NumberPad';
 import { TaskIllustration } from '../components/friendly/TaskIllustration';
+import { Button } from '../components/ui/button';
 
 interface Candidate { id: string; fullName: string; role: string }
 
@@ -210,14 +211,14 @@ export default function LoginScreen() {
           <div className="text-text-tertiary text-xs">
             4–6 digits. <span className="kbd">Enter</span> to submit.
           </div>
-          <button
+          <Button variant="primary"
             type="button"
             onClick={() => void submit()}
             disabled={submitting || pin.length < 4 || lockedUntil !== null}
-            className="btn btn-primary w-full disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {submitting ? 'Signing in…' : 'Sign in'}
-          </button>
+          </Button>
           {error && (
             <FeedbackBanner>{error}</FeedbackBanner>
           )}

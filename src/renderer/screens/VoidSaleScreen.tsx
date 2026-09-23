@@ -10,6 +10,9 @@ import type { SaleReceipt } from '../../shared/lib/receipt';
 import { formatMoney, formatMoneyWithCurrency } from '../../shared/lib/money';
 import { FeedbackBanner } from '../components/FeedbackBanner';
 import { useSession } from '../store/session';
+import { Button } from '../components/ui/button';
+import { Badge } from '../components/ui/badge';
+import { reviewStatusTone } from '../lib/tones';
 
 interface RecentSale {
   id: string; createdAt: string; channel: string; totalPesewas: number;
@@ -149,7 +152,7 @@ export default function VoidSaleScreen({ onExit, onDuplicate }: { onExit: () => 
                   <td className="px-4 py-3 font-mono tnum">
                     {new Date(s.createdAt).toLocaleTimeString()}
                     <span className="text-text-tertiary ml-2">#{s.id.slice(-6)}</span>
-                    {s.voidRequest && <div className="mt-1"><span className={`status-badge status-${s.voidRequest.status.toLowerCase()}`}>{s.voidRequest.status.toLowerCase()}</span></div>}
+                    {s.voidRequest && <div className="mt-1"><Badge tone={reviewStatusTone(s.voidRequest.status)}>{s.voidRequest.status.toLowerCase()}</Badge></div>}
                   </td>
                   <td className="px-4 py-3">{s.workerName}</td>
                   <td className="px-4 py-3">{s.channel} · {s.paymentMethod}{s.customerName ? ` · ${s.customerName}` : ''}</td>
@@ -168,12 +171,12 @@ export default function VoidSaleScreen({ onExit, onDuplicate }: { onExit: () => 
                         Duplicate
                       </button>
                       {s.voided
-                        ? <span className="status-badge status-voided">Voided</span>
+                        ? <Badge tone="danger">Voided</Badge>
                         : s.voidRequest?.status === 'PENDING'
                         ? <>
-                            <span className="status-badge status-pending">Pending approval</span>
+                            <Badge tone="warning">Pending approval</Badge>
                             {s.voidRequest.requesterId === workerId && (
-                              <button onClick={() => void withdraw(s.voidRequest!.id)} className="btn btn-quiet text-xs">Withdraw</button>
+                              <Button variant="secondary" size="sm" onClick={() => void withdraw(s.voidRequest!.id)}>Withdraw</Button>
                             )}
                           </>
                         : <>
@@ -223,12 +226,12 @@ export default function VoidSaleScreen({ onExit, onDuplicate }: { onExit: () => 
             {error && <FeedbackBanner>{error}</FeedbackBanner>}
             <div className="flex gap-3">
               <button onClick={() => setSelected(null)} className="px-5 py-3 border border-border hover:bg-bg-elevated">Cancel</button>
-              <button
+              <Button variant="primary"
                 onClick={() => void submitRequest()}
                 disabled={reason.trim().length < 3 || reason.trim().length > 200}
-                className="btn btn-primary disabled:opacity-40">
+                className="disabled:opacity-40">
                 Submit void request
-              </button>
+              </Button>
             </div>
             <p className="text-xs text-warning">Do not refund cash or return stock yet. The original sale remains valid until approval.</p>
           </div>
