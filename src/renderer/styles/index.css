@@ -40,6 +40,14 @@
   --color-danger: rgb(var(--c-danger));
   --color-danger-light: rgb(var(--c-danger-light));
   --color-warning: rgb(var(--c-warning));
+  --color-chart-1: rgb(var(--c-chart-1));
+  --color-chart-2: rgb(var(--c-chart-2));
+  --color-chart-3: rgb(var(--c-chart-3));
+  --color-chart-4: rgb(var(--c-chart-4));
+  --color-chart-5: rgb(var(--c-chart-5));
+  --color-chart-6: rgb(var(--c-chart-6));
+  --color-chart-7: rgb(var(--c-chart-7));
+  --color-chart-8: rgb(var(--c-chart-8));
   /* The modal scrim is the `bg-scrim` utility below, not a colour, so the
    * alpha can be baked in per theme. */
 }
@@ -163,6 +171,17 @@
   --c-danger-light:  140 28 18;      /* darker danger for text on a danger tint */
   --c-warning:       143 84 0;       /* #8F5400 burnt amber */
 
+  /* Chart series, in the order charts use them. Each clears 3:1 against a
+   * card (WCAG 1.4.11 for graphics); tests/theme-tokens.test.ts checks. */
+  --c-chart-1:     11 110 131;  /* teal (the accent) */
+  --c-chart-2:     31 138 76;  /* green */
+  --c-chart-3:     194 98 10;  /* orange */
+  --c-chart-4:     194 58 43;  /* red */
+  --c-chart-5:     47 111 209;  /* blue */
+  --c-chart-6:     91 112 121;  /* slate */
+  --c-chart-7:     122 79 201;  /* violet */
+  --c-chart-8:     184 51 106;  /* rose */
+
   --c-scrim:         12 30 36;       /* used with /40 opacity */
 
   color-scheme: light;
@@ -194,6 +213,16 @@
   --c-danger:        255 122 110;    /* #FF7A6E */
   --c-danger-light:  255 178 170;    /* light coral for text on a danger tint */
   --c-warning:       242 180 90;     /* #F2B45A */
+
+  /* Chart series: the same eight hues, tuned for this surface. */
+  --c-chart-1:     60 179 200;
+  --c-chart-2:     76 201 138;
+  --c-chart-3:     242 166 90;
+  --c-chart-4:     255 122 110;
+  --c-chart-5:     111 168 255;
+  --c-chart-6:     147 167 173;
+  --c-chart-7:     185 154 245;
+  --c-chart-8:     240 122 168;
 
   --c-scrim:         0 0 0;          /* used with /70 opacity */
 
@@ -227,6 +256,16 @@
   --c-danger-light:  110 20 12;
   --c-warning:       106 62 0;       /* #6A3E00 */
 
+  /* Chart series: the same eight hues, tuned for this surface. */
+  --c-chart-1:     0 85 102;
+  --c-chart-2:     10 90 46;
+  --c-chart-3:     138 67 0;
+  --c-chart-4:     142 27 18;
+  --c-chart-5:     30 79 163;
+  --c-chart-6:     45 64 71;
+  --c-chart-7:     90 47 168;
+  --c-chart-8:     140 29 79;
+
   --c-scrim:         0 0 0;          /* used with /40 opacity */
 
   color-scheme: light;
@@ -253,8 +292,11 @@
 }
 
 @layer components {
+  /* A Harbour card (the same look as <Card>): white, just off the page.
+   * Anything inside that needs its own fill uses bg-surface, a recessed well;
+   * bg-elevated would vanish into the card. */
   .panel {
-    background: rgb(var(--c-bg-surface));
+    background: rgb(var(--c-bg-elevated));
     border: 1px solid rgb(var(--c-border));
     border-radius: var(--radius-xl);
     box-shadow: 0 1px 2px rgb(15 42 51 / 0.06), 0 6px 20px rgb(15 42 51 / 0.07);
@@ -262,23 +304,20 @@
   :root[data-theme='dark'] .panel { box-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px rgb(0 0 0 / 0.35); }
   :root[data-theme='contrast'] .panel { box-shadow: none; }
   .subpanel {
-    background: rgb(var(--c-bg-elevated) / 0.68);
+    background: rgb(var(--c-bg-surface));
     border: 1px solid rgb(var(--c-border-subtle));
     border-radius: var(--radius-lg);
     padding: 0.9rem;
   }
   .subpanel > h3 { color: rgb(var(--c-text-secondary)); font-size: 0.82rem; font-weight: 650; margin-bottom: 0.55rem; }
   .eyebrow { color: rgb(var(--c-text-tertiary)); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
-  .notice { border: 1px solid rgb(var(--c-border)); border-radius: var(--radius-lg); background: rgb(var(--c-bg-elevated) / 0.55); padding: 0.9rem 1rem; font-size: 0.875rem; }
+  .notice { border: 1px solid rgb(var(--c-border)); border-radius: var(--radius-lg); background: rgb(var(--c-bg-surface)); padding: 0.9rem 1rem; font-size: 0.875rem; }
   .notice-warning { border-color: rgb(var(--c-warning) / 0.45); background: rgb(var(--c-warning) / 0.09); color: rgb(var(--c-warning)); }
   .empty-state { padding: 2.5rem 1rem; text-align: center; color: rgb(var(--c-text-tertiary)); font-size: 0.875rem; }
   .data-table thead { background: rgb(var(--c-bg-deep) / 0.65); color: rgb(var(--c-text-secondary)); font-size: 0.72rem; }
   .data-table th { padding: 0.7rem 0.9rem; text-align: left; font-weight: 700; white-space: nowrap; }
   .data-table td { padding: 0.75rem 0.9rem; border-top: 1px solid rgb(var(--c-border-subtle)); font-size: 0.82rem; vertical-align: top; }
   .data-table tbody tr:hover { background: rgb(var(--c-bg-elevated) / 0.45); }
-  .segmented-control { display: inline-flex; padding: 0.2rem; gap: 0.2rem; border-radius: var(--radius-xl); background: rgb(var(--c-bg-surface)); border: 1px solid rgb(var(--c-border)); }
-  .segmented-control button { min-height: 2.35rem; padding: 0.4rem 0.9rem; color: rgb(var(--c-text-secondary)); font-size: 0.82rem; }
-  .segmented-control button.active { color: rgb(var(--c-text-primary)); background: rgb(var(--c-bg-elevated)); box-shadow: 0 1px 3px rgb(0 0 0 / 0.12); }
 }
 
 /* Custom utilities. `@utility` lets them take variants (hover:, lg:) like

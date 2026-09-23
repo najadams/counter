@@ -916,8 +916,8 @@ function ProductUnitsEditor({
               <td className="font-mono px-3 py-2">{u.unitName}</td>
               <td className="text-right font-mono tnum px-3 py-2">× {u.conversionFactor}</td>
               <td className="text-right font-mono tnum px-3 py-2">{formatMoney(u.pricePesewas)}</td>
-              <td className="text-center px-3 py-2">{u.isSaleUnit ? '✓' : '—'}</td>
-              <td className="text-center px-3 py-2">{u.isPurchaseUnit ? '✓' : '—'}</td>
+              <td className="text-center px-3 py-2"><YesNo value={u.isSaleUnit} /></td>
+              <td className="text-center px-3 py-2"><YesNo value={u.isPurchaseUnit} /></td>
               <td className="px-3 py-2">{u.active ? <span className="text-success">active</span> : <span className="text-text-tertiary">inactive</span>}</td>
               <td className="text-right px-3 py-2 whitespace-nowrap">
                 <button onClick={() => startEdit(u)} className="text-text-tertiary hover:text-text-primary text-xs">edit</button>
@@ -1007,7 +1007,7 @@ function ProductUnitsEditor({
           </div>
           <div className="flex justify-end items-center gap-3">
             {primarySaved && (
-              <span className="text-success text-xs">✓ Saved</span>
+              <span className="inline-flex items-center gap-1 text-success text-xs"><CheckIcon aria-hidden="true" className="size-3.5" />Saved</span>
             )}
             <button onClick={() => void savePrimaryUnits()} disabled={savingPrimary}
               className="px-4 py-2 border border-border hover:bg-bg-elevated text-xs disabled:opacity-40">

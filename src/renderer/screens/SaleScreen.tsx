@@ -12,7 +12,7 @@
 //   F2              complete sale (when payment is ready)
 //   F9              go back to home
 
-import { FlashlightIcon, PlusIcon, XIcon } from 'lucide-react';
+import { ChevronDownIcon, CircleCheckIcon, FlashlightIcon, PlusIcon, TriangleAlertIcon, XIcon } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   BrowserMultiFormatOneDReader,
@@ -429,7 +429,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
     } else { chimeSuccess(); flashBody('flash-success'); }
     let toast = `Sale ${saleId.slice(-8)} complete.`;
     if (changePesewas != null && changePesewas > 0) toast += ` Change: ${formatMoneyWithCurrency(changePesewas)}.`;
-    if (printerFailed) toast += `  ⚠ Receipt queued — ${printerError ?? 'printer offline'}.`;
+    if (printerFailed) toast += ` Receipt queued — ${printerError ?? 'printer offline'}.`;
     setCompletedToast(toast);
     setCompletedInfo({ changePesewas: changePesewas ?? null, printerFailed, printerError });
     setLastReceipt(receipt);
@@ -522,7 +522,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
     }
     let toast = `Sale ${saleId.slice(-8)} complete.`;
     if (changePesewas != null) toast += ` Change: ${formatMoneyWithCurrency(changePesewas)}.`;
-    if (printerFailed) toast += `  ⚠ Receipt queued — ${printerError ?? 'printer offline'}.`;
+    if (printerFailed) toast += ` Receipt queued — ${printerError ?? 'printer offline'}.`;
     setCompletedToast(toast);
     setCompletedInfo({ changePesewas: changePesewas ?? null, printerFailed, printerError });
     setLastReceipt(receipt);
@@ -881,7 +881,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
                     onClick={() => setSwapUnitFor({ productId: l.productId, unitId: l.unitId })}
                     className="min-h-14 px-4 rounded-xl border-2 border-border text-lg text-text-primary hover:bg-bg-elevated"
                     title="Change unit"
-                  >{l.unitName.toLowerCase()} ▾</button>
+                  >{l.unitName.toLowerCase()} <ChevronDownIcon aria-hidden="true" className="inline size-5 align-middle" /></button>
                   <span className="text-lg text-text-secondary">× {formatMoney(l.unitPricePesewas)}</span>
                   {l.appliedTierId && l.appliedTierMinQuantity != null && (
                     <span className="bg-accent-dim text-ink px-2 py-1 rounded text-base">bulk price</span>
@@ -1058,8 +1058,13 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
             )}
 
             {!FRIENDLY_UI_ENABLED && completedToast && (
-              <div className="bg-bg-deep border border-success px-4 py-2 text-success text-sm flex items-center justify-between gap-3">
-                <span>{completedToast}</span>
+              <div className={`rounded-lg border px-4 py-2 text-sm flex items-center justify-between gap-3 ${completedInfo?.printerFailed ? 'border-warning bg-warning/10 text-warning' : 'border-success bg-success/10 text-success'}`}>
+                <span className="flex items-center gap-2">
+                  {completedInfo?.printerFailed
+                    ? <TriangleAlertIcon aria-hidden="true" className="size-4 shrink-0" />
+                    : <CircleCheckIcon aria-hidden="true" className="size-4 shrink-0" />}
+                  {completedToast}
+                </span>
                 {lastReceipt && (
                   <button
                     type="button"

@@ -2,6 +2,7 @@
 // Filters: worker, action, entity_type, date range, free-text search.
 // Click a row to expand and see before/after JSON snapshots.
 
+import { ChevronDownIcon, ChevronUpIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { counter } from '../../lib/ipc';
 import { useSession } from '../../store/session';
@@ -240,7 +241,7 @@ function RowExpandable({ entry, expanded, onToggle, idNames }: {
           <div className="text-xs text-text-tertiary font-mono">{entityLabel}</div>
         </td>
         <td className="px-3 py-2 text-text-secondary">{entry.notes ?? '—'}</td>
-        <td className="px-3 py-2 text-right text-text-tertiary text-xs">{expanded ? '▲' : '▼'}</td>
+        <td className="px-3 py-2 text-right text-text-tertiary text-xs">{expanded ? <ChevronUpIcon aria-label="Collapse" className="ml-auto size-4" /> : <ChevronDownIcon aria-label="Expand" className="ml-auto size-4" />}</td>
       </tr>
       {expanded && (
         <tr className="border-t border-border-subtle bg-bg-deep/40">

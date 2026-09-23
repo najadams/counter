@@ -1,3 +1,4 @@
+import { RefreshCwIcon } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Area,
@@ -22,21 +23,19 @@ import { formatMoneyWithCurrency } from '../../../shared/lib/money';
 import type { ReportsGraphsResponse } from '../../../shared/types/ipc';
 import { DateRangePicker, defaultDateRange, type DateRange } from '../../components/DateRangePicker';
 import { FeedbackBanner } from '../../components/FeedbackBanner';
+import { Button } from '../../components/ui/button';
+import { Card } from '../../components/ui/card';
+import { useChartTheme, type ChartTheme } from '../../lib/chartTheme';
 
-const COLORS = {
-  revenue: '#7c3aed',
-  profit: '#16a34a',
-  tax: '#f97316',
-  expenses: '#dc2626',
-  drawings: '#0891b2',
-  sales: '#64748b',
-  stock: '#0d9488',
-  credit: '#be123c',
-  supplier: '#9333ea',
-  amber: '#d97706',
-};
-
-const CATEGORY_COLORS = ['#7c3aed', '#16a34a', '#f97316', '#0891b2', '#dc2626', '#64748b', '#d97706', '#0d9488'];
+/** Which themed series colour each measure uses, so it keeps one colour
+ *  across every chart (revenue is always the accent, profit always green). */
+function seriesColors(t: ChartTheme) {
+  const [teal, green, orange, red, blue, slate, violet, rose] = t.series as [string, string, string, string, string, string, string, string];
+  return {
+    revenue: teal, profit: green, tax: orange, expenses: red, drawings: blue,
+    sales: slate, stock: teal, credit: rose, supplier: violet, amber: orange,
+  };
+}
 
 type GraphRow = ReportsGraphsResponse['series'][number] & {
   label: string;
@@ -86,6 +85,14 @@ export function GraphsTab({ reportAccessToken }: { reportAccessToken: string }) 
   const [data, setData] = useState<ReportsGraphsResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const t = useChartTheme();
+  const COLORS = seriesColors(t);
+  const CATEGORY_COLORS = t.series;
+  const axisText = { fill: t.label, fontSize: 12 };
+  // Axis numbers are money, counts and dates: mono, like every figure.
+  const axisNum = { ...axisText, fontFamily: t.fontMono };
+  const legendStyle = { color: t.reference, fontSize: 12 };
+  const tooltipStyle = t.tooltip;
 
   async function load() {
     setLoading(true);
@@ -179,13 +186,13 @@ export function GraphsTab({ reportAccessToken }: { reportAccessToken: string }) 
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="bg-bg-surface border border-border p-4 flex items-end justify-between gap-3 flex-wrap">
+      <Card className="flex-row flex-wrap items-end justify-between gap-3 p-4">
         <DateRangePicker value={range} onChange={setRange} />
-        <button onClick={() => void load()}
-          className="px-4 py-2 border border-border hover:bg-bg-elevated text-sm">
-          {loading ? 'Loading...' : 'Refresh'}
-        </button>
-      </div>
+        <Button onClick={() => void load()} disabled={loading}>
+          <RefreshCwIcon aria-hidden="true" className={loading ? 'animate-spin' : undefined} />
+          {loading ? 'Loading…' : 'Refresh'}
+        </Button>
+      </Card>
 
       {error && <FeedbackBanner>{error}</FeedbackBanner>}
       {loading && !data && <div className="text-text-tertiary text-sm">Loading...</div>}
@@ -227,14 +234,14 @@ export function GraphsTab({ reportAccessToken }: { reportAccessToken: string }) 
                       <stop offset="95%" stopColor={COLORS.profit} stopOpacity={0.02} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid stroke="#d9dce6" strokeDasharray="4 4" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fill: '#8b8f9f', fontSize: 12 }} tickLine={false} axisLine={{ stroke: '#d9dce6' }} />
-                  <YAxis tickFormatter={cedisAxis} tick={{ fill: '#8b8f9f', fontSize: 12 }} tickLine={false} axisLine={false} width={74} />
+                  <CartesianGrid stroke={t.grid} strokeDasharray="4 4" vertical={false} />
+                  <XAxis dataKey="label" tick={axisNum} tickLine={false} axisLine={{ stroke: t.axis }} />
+                  <YAxis tickFormatter={cedisAxis} tick={axisNum} tickLine={false} axisLine={false} width={74} />
                   <Tooltip formatter={netTaxTooltip} labelFormatter={(_, payload) => payload?.[0]?.payload?.date ?? ''} contentStyle={tooltipStyle} />
-                  <Legend iconType="circle" wrapperStyle={{ color: '#6b7280', fontSize: 12 }} />
+                  <Legend iconType="circle" wrapperStyle={legendStyle} />
                   <Area type="monotone" dataKey="revenue" name="Revenue" stroke={COLORS.revenue} fill="url(#revenueFill)" strokeWidth={3} dot={false} activeDot={{ r: 5 }} />
                   <Area type="monotone" dataKey="profit" name="Gross profit" stroke={COLORS.profit} fill="url(#profitFill)" strokeWidth={3} dot={false} activeDot={{ r: 5 }} />
-                  <ReferenceLine y={0} stroke="#9ca3af" />
+                  <ReferenceLine y={0} stroke={t.reference} />
                 </AreaChart>
               </ResponsiveContainer>
             </ChartCard>
@@ -242,15 +249,15 @@ export function GraphsTab({ reportAccessToken }: { reportAccessToken: string }) 
             <ChartCard title="Money leaving the business">
               <ResponsiveContainer width="100%" height={320}>
                 <LineChart data={rows} margin={{ top: 16, right: 20, bottom: 8, left: 8 }}>
-                  <CartesianGrid stroke="#d9dce6" strokeDasharray="4 4" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fill: '#8b8f9f', fontSize: 12 }} tickLine={false} axisLine={{ stroke: '#d9dce6' }} />
-                  <YAxis tickFormatter={cedisAxis} tick={{ fill: '#8b8f9f', fontSize: 12 }} tickLine={false} axisLine={false} width={74} />
+                  <CartesianGrid stroke={t.grid} strokeDasharray="4 4" vertical={false} />
+                  <XAxis dataKey="label" tick={axisNum} tickLine={false} axisLine={{ stroke: t.axis }} />
+                  <YAxis tickFormatter={cedisAxis} tick={axisNum} tickLine={false} axisLine={false} width={74} />
                   <Tooltip formatter={cedisTooltip} labelFormatter={(_, payload) => payload?.[0]?.payload?.date ?? ''} contentStyle={tooltipStyle} />
-                  <Legend iconType="circle" wrapperStyle={{ color: '#6b7280', fontSize: 12 }} />
+                  <Legend iconType="circle" wrapperStyle={legendStyle} />
                   <Line type="monotone" dataKey="tax" name="Net tax" stroke={COLORS.tax} strokeWidth={3} dot={false} activeDot={{ r: 5 }} />
                   <Line type="monotone" dataKey="expenses" name="Expenses" stroke={COLORS.expenses} strokeWidth={3} dot={false} activeDot={{ r: 5 }} />
                   <Line type="monotone" dataKey="drawings" name="Drawings" stroke={COLORS.drawings} strokeWidth={3} dot={false} activeDot={{ r: 5 }} />
-                  <ReferenceLine y={0} stroke="#9ca3af" />
+                  <ReferenceLine y={0} stroke={t.reference} />
                 </LineChart>
               </ResponsiveContainer>
             </ChartCard>
@@ -261,9 +268,9 @@ export function GraphsTab({ reportAccessToken }: { reportAccessToken: string }) 
               {stockoutForecast.length > 0 ? (
                 <ResponsiveContainer width="100%" height={360}>
                   <BarChart data={stockoutForecast} layout="vertical" margin={{ top: 12, right: 24, bottom: 8, left: 84 }}>
-                    <CartesianGrid stroke="#d9dce6" strokeDasharray="4 4" horizontal={false} />
-                    <XAxis type="number" tick={{ fill: '#8b8f9f', fontSize: 12 }} tickLine={false} axisLine={false} />
-                    <YAxis dataKey="shortName" type="category" tick={{ fill: '#6b7280', fontSize: 12 }} tickLine={false} axisLine={false} width={110} />
+                    <CartesianGrid stroke={t.grid} strokeDasharray="4 4" horizontal={false} />
+                    <XAxis type="number" tick={axisNum} tickLine={false} axisLine={false} />
+                    <YAxis dataKey="shortName" type="category" tick={axisText} tickLine={false} axisLine={false} width={110} />
                     <Tooltip
                       formatter={(value, name) => [String(value), String(name)]}
                       contentStyle={tooltipStyle}
@@ -278,11 +285,11 @@ export function GraphsTab({ reportAccessToken }: { reportAccessToken: string }) 
               {cashVarianceByWorker.length > 0 ? (
                 <ResponsiveContainer width="100%" height={360}>
                   <BarChart data={cashVarianceByWorker} layout="vertical" margin={{ top: 12, right: 24, bottom: 8, left: 84 }}>
-                    <CartesianGrid stroke="#d9dce6" strokeDasharray="4 4" horizontal={false} />
-                    <XAxis type="number" tickFormatter={cedisAxis} tick={{ fill: '#8b8f9f', fontSize: 12 }} tickLine={false} axisLine={false} />
-                    <YAxis dataKey="shortName" type="category" tick={{ fill: '#6b7280', fontSize: 12 }} tickLine={false} axisLine={false} width={110} />
+                    <CartesianGrid stroke={t.grid} strokeDasharray="4 4" horizontal={false} />
+                    <XAxis type="number" tickFormatter={cedisAxis} tick={axisNum} tickLine={false} axisLine={false} />
+                    <YAxis dataKey="shortName" type="category" tick={axisText} tickLine={false} axisLine={false} width={110} />
                     <Tooltip formatter={cedisTooltip} contentStyle={tooltipStyle} />
-                    <Legend iconType="circle" wrapperStyle={{ color: '#6b7280', fontSize: 12 }} />
+                    <Legend iconType="circle" wrapperStyle={legendStyle} />
                     <Bar dataKey="totalAbsoluteVariance" name="Total variance" fill={COLORS.credit} radius={[0, 4, 4, 0]} maxBarSize={18} />
                     <Bar dataKey="avgAbsoluteVariance" name="Avg variance" fill={COLORS.sales} radius={[0, 4, 4, 0]} maxBarSize={18} />
                   </BarChart>
@@ -296,15 +303,15 @@ export function GraphsTab({ reportAccessToken }: { reportAccessToken: string }) 
               {deliveryByDay.length > 0 ? (
                 <ResponsiveContainer width="100%" height={320}>
                   <LineChart data={deliveryByDay} margin={{ top: 16, right: 20, bottom: 8, left: 8 }}>
-                    <CartesianGrid stroke="#d9dce6" strokeDasharray="4 4" vertical={false} />
-                    <XAxis dataKey="label" tick={{ fill: '#8b8f9f', fontSize: 12 }} tickLine={false} axisLine={{ stroke: '#d9dce6' }} />
-                    <YAxis tickFormatter={cedisAxis} tick={{ fill: '#8b8f9f', fontSize: 12 }} tickLine={false} axisLine={false} width={74} />
+                    <CartesianGrid stroke={t.grid} strokeDasharray="4 4" vertical={false} />
+                    <XAxis dataKey="label" tick={axisNum} tickLine={false} axisLine={{ stroke: t.axis }} />
+                    <YAxis tickFormatter={cedisAxis} tick={axisNum} tickLine={false} axisLine={false} width={74} />
                     <Tooltip formatter={cedisTooltip} labelFormatter={(_, payload) => payload?.[0]?.payload?.date ?? ''} contentStyle={tooltipStyle} />
-                    <Legend iconType="circle" wrapperStyle={{ color: '#6b7280', fontSize: 12 }} />
+                    <Legend iconType="circle" wrapperStyle={legendStyle} />
                     <Line type="monotone" dataKey="fee" name="Fees" stroke={COLORS.drawings} strokeWidth={3} dot={false} activeDot={{ r: 5 }} />
                     <Line type="monotone" dataKey="cost" name="Costs" stroke={COLORS.expenses} strokeWidth={3} dot={false} activeDot={{ r: 5 }} />
                     <Line type="monotone" dataKey="profit" name="Profit" stroke={COLORS.profit} strokeWidth={3} dot={false} activeDot={{ r: 5 }} />
-                    <ReferenceLine y={0} stroke="#9ca3af" />
+                    <ReferenceLine y={0} stroke={t.reference} />
                   </LineChart>
                 </ResponsiveContainer>
               ) : <EmptyChart />}
@@ -314,12 +321,12 @@ export function GraphsTab({ reportAccessToken }: { reportAccessToken: string }) 
               {deliveryByDriver.length > 0 ? (
                 <ResponsiveContainer width="100%" height={320}>
                   <BarChart data={deliveryByDriver} layout="vertical" margin={{ top: 12, right: 24, bottom: 8, left: 84 }}>
-                    <CartesianGrid stroke="#d9dce6" strokeDasharray="4 4" horizontal={false} />
-                    <XAxis type="number" tickFormatter={cedisAxis} tick={{ fill: '#8b8f9f', fontSize: 12 }} tickLine={false} axisLine={false} />
-                    <YAxis dataKey="shortName" type="category" tick={{ fill: '#6b7280', fontSize: 12 }} tickLine={false} axisLine={false} width={110} />
+                    <CartesianGrid stroke={t.grid} strokeDasharray="4 4" horizontal={false} />
+                    <XAxis type="number" tickFormatter={cedisAxis} tick={axisNum} tickLine={false} axisLine={false} />
+                    <YAxis dataKey="shortName" type="category" tick={axisText} tickLine={false} axisLine={false} width={110} />
                     <Tooltip formatter={cedisTooltip} contentStyle={tooltipStyle} />
                     <Bar dataKey="profit" name="Delivery profit" fill={COLORS.profit} radius={[0, 4, 4, 0]} maxBarSize={20} />
-                    <ReferenceLine x={0} stroke="#9ca3af" />
+                    <ReferenceLine x={0} stroke={t.reference} />
                   </BarChart>
                 </ResponsiveContainer>
               ) : <EmptyChart />}
@@ -331,11 +338,11 @@ export function GraphsTab({ reportAccessToken }: { reportAccessToken: string }) 
               {topProducts.length > 0 ? (
                 <ResponsiveContainer width="100%" height={360}>
                   <BarChart data={topProducts} layout="vertical" margin={{ top: 12, right: 24, bottom: 8, left: 84 }}>
-                    <CartesianGrid stroke="#d9dce6" strokeDasharray="4 4" horizontal={false} />
-                    <XAxis type="number" tickFormatter={cedisAxis} tick={{ fill: '#8b8f9f', fontSize: 12 }} tickLine={false} axisLine={false} />
-                    <YAxis dataKey="shortName" type="category" tick={{ fill: '#6b7280', fontSize: 12 }} tickLine={false} axisLine={false} width={110} />
+                    <CartesianGrid stroke={t.grid} strokeDasharray="4 4" horizontal={false} />
+                    <XAxis type="number" tickFormatter={cedisAxis} tick={axisNum} tickLine={false} axisLine={false} />
+                    <YAxis dataKey="shortName" type="category" tick={axisText} tickLine={false} axisLine={false} width={110} />
                     <Tooltip formatter={cedisTooltip} contentStyle={tooltipStyle} />
-                    <Legend iconType="circle" wrapperStyle={{ color: '#6b7280', fontSize: 12 }} />
+                    <Legend iconType="circle" wrapperStyle={legendStyle} />
                     <Bar dataKey="profit" name="Gross profit" fill={COLORS.profit} radius={[0, 4, 4, 0]} maxBarSize={18} />
                     <Bar dataKey="revenue" name="Revenue" fill={COLORS.revenue} radius={[0, 4, 4, 0]} maxBarSize={18} />
                   </BarChart>
@@ -347,11 +354,11 @@ export function GraphsTab({ reportAccessToken }: { reportAccessToken: string }) 
               {categoryProfit.length > 0 ? (
                 <ResponsiveContainer width="100%" height={360}>
                   <BarChart data={categoryProfit} margin={{ top: 16, right: 20, bottom: 8, left: 8 }}>
-                    <CartesianGrid stroke="#d9dce6" strokeDasharray="4 4" vertical={false} />
-                    <XAxis dataKey="categoryLabel" tick={{ fill: '#8b8f9f', fontSize: 12 }} tickLine={false} axisLine={{ stroke: '#d9dce6' }} />
-                    <YAxis tickFormatter={cedisAxis} tick={{ fill: '#8b8f9f', fontSize: 12 }} tickLine={false} axisLine={false} width={74} />
+                    <CartesianGrid stroke={t.grid} strokeDasharray="4 4" vertical={false} />
+                    <XAxis dataKey="categoryLabel" tick={axisText} tickLine={false} axisLine={{ stroke: t.axis }} />
+                    <YAxis tickFormatter={cedisAxis} tick={axisNum} tickLine={false} axisLine={false} width={74} />
                     <Tooltip formatter={cedisTooltip} contentStyle={tooltipStyle} />
-                    <Legend iconType="circle" wrapperStyle={{ color: '#6b7280', fontSize: 12 }} />
+                    <Legend iconType="circle" wrapperStyle={legendStyle} />
                     <Bar dataKey="revenue" name="Revenue" fill={COLORS.revenue} radius={[4, 4, 0, 0]} maxBarSize={34} />
                     <Bar dataKey="profit" name="Gross profit" fill={COLORS.profit} radius={[4, 4, 0, 0]} maxBarSize={34} />
                   </BarChart>
@@ -365,9 +372,9 @@ export function GraphsTab({ reportAccessToken }: { reportAccessToken: string }) 
               {slowStock.length > 0 ? (
                 <ResponsiveContainer width="100%" height={360}>
                   <BarChart data={slowStock} layout="vertical" margin={{ top: 12, right: 24, bottom: 8, left: 84 }}>
-                    <CartesianGrid stroke="#d9dce6" strokeDasharray="4 4" horizontal={false} />
-                    <XAxis type="number" tickFormatter={cedisAxis} tick={{ fill: '#8b8f9f', fontSize: 12 }} tickLine={false} axisLine={false} />
-                    <YAxis dataKey="shortName" type="category" tick={{ fill: '#6b7280', fontSize: 12 }} tickLine={false} axisLine={false} width={110} />
+                    <CartesianGrid stroke={t.grid} strokeDasharray="4 4" horizontal={false} />
+                    <XAxis type="number" tickFormatter={cedisAxis} tick={axisNum} tickLine={false} axisLine={false} />
+                    <YAxis dataKey="shortName" type="category" tick={axisText} tickLine={false} axisLine={false} width={110} />
                     <Tooltip formatter={cedisTooltip} contentStyle={tooltipStyle} />
                     <Bar dataKey="stockValue" name="Stock value" fill={COLORS.stock} radius={[0, 4, 4, 0]} maxBarSize={20} />
                   </BarChart>
@@ -379,9 +386,9 @@ export function GraphsTab({ reportAccessToken }: { reportAccessToken: string }) 
               {customerValue.length > 0 ? (
                 <ResponsiveContainer width="100%" height={360}>
                   <BarChart data={customerValue} layout="vertical" margin={{ top: 12, right: 24, bottom: 8, left: 84 }}>
-                    <CartesianGrid stroke="#d9dce6" strokeDasharray="4 4" horizontal={false} />
-                    <XAxis type="number" tickFormatter={cedisAxis} tick={{ fill: '#8b8f9f', fontSize: 12 }} tickLine={false} axisLine={false} />
-                    <YAxis dataKey="shortName" type="category" tick={{ fill: '#6b7280', fontSize: 12 }} tickLine={false} axisLine={false} width={110} />
+                    <CartesianGrid stroke={t.grid} strokeDasharray="4 4" horizontal={false} />
+                    <XAxis type="number" tickFormatter={cedisAxis} tick={axisNum} tickLine={false} axisLine={false} />
+                    <YAxis dataKey="shortName" type="category" tick={axisText} tickLine={false} axisLine={false} width={110} />
                     <Tooltip formatter={cedisTooltip} contentStyle={tooltipStyle} />
                     <Bar dataKey="revenue" name="Revenue" fill={COLORS.supplier} radius={[0, 4, 4, 0]} maxBarSize={20} />
                   </BarChart>
@@ -395,9 +402,9 @@ export function GraphsTab({ reportAccessToken }: { reportAccessToken: string }) 
               {creditAging.length > 0 ? (
                 <ResponsiveContainer width="100%" height={320}>
                   <BarChart data={creditAging} margin={{ top: 16, right: 20, bottom: 8, left: 8 }}>
-                    <CartesianGrid stroke="#d9dce6" strokeDasharray="4 4" vertical={false} />
-                    <XAxis dataKey="bucket" tick={{ fill: '#8b8f9f', fontSize: 12 }} tickLine={false} axisLine={{ stroke: '#d9dce6' }} />
-                    <YAxis tickFormatter={cedisAxis} tick={{ fill: '#8b8f9f', fontSize: 12 }} tickLine={false} axisLine={false} width={74} />
+                    <CartesianGrid stroke={t.grid} strokeDasharray="4 4" vertical={false} />
+                    <XAxis dataKey="bucket" tick={axisText} tickLine={false} axisLine={{ stroke: t.axis }} />
+                    <YAxis tickFormatter={cedisAxis} tick={axisNum} tickLine={false} axisLine={false} width={74} />
                     <Tooltip formatter={cedisTooltip} contentStyle={tooltipStyle} />
                     <Bar dataKey="amount" name="Outstanding" fill={COLORS.credit} radius={[4, 4, 0, 0]} maxBarSize={44} />
                   </BarChart>
@@ -410,7 +417,7 @@ export function GraphsTab({ reportAccessToken }: { reportAccessToken: string }) 
                 <ResponsiveContainer width="100%" height={320}>
                   <PieChart>
                     <Tooltip formatter={cedisTooltip} contentStyle={tooltipStyle} />
-                    <Legend iconType="circle" wrapperStyle={{ color: '#6b7280', fontSize: 12 }} />
+                    <Legend iconType="circle" wrapperStyle={legendStyle} />
                     <Pie data={moneyOut} dataKey="amount" nameKey="kind" innerRadius={68} outerRadius={112} paddingAngle={2}>
                       {moneyOut.map((_, idx) => (
                         <Cell key={idx} fill={CATEGORY_COLORS[idx % CATEGORY_COLORS.length]} />
@@ -426,11 +433,11 @@ export function GraphsTab({ reportAccessToken }: { reportAccessToken: string }) 
             <ChartCard title="Daily net tax">
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={rows} margin={{ top: 16, right: 20, bottom: 8, left: 8 }}>
-                  <CartesianGrid stroke="#d9dce6" strokeDasharray="4 4" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fill: '#8b8f9f', fontSize: 12 }} tickLine={false} axisLine={{ stroke: '#d9dce6' }} />
-                  <YAxis tickFormatter={cedisAxis} tick={{ fill: '#8b8f9f', fontSize: 12 }} tickLine={false} axisLine={false} width={74} />
+                  <CartesianGrid stroke={t.grid} strokeDasharray="4 4" vertical={false} />
+                  <XAxis dataKey="label" tick={axisNum} tickLine={false} axisLine={{ stroke: t.axis }} />
+                  <YAxis tickFormatter={cedisAxis} tick={axisNum} tickLine={false} axisLine={false} width={74} />
                   <Tooltip formatter={cedisTooltip} labelFormatter={(_, payload) => payload?.[0]?.payload?.date ?? ''} contentStyle={tooltipStyle} />
-                  <Legend iconType="circle" wrapperStyle={{ color: '#6b7280', fontSize: 12 }} />
+                  <Legend iconType="circle" wrapperStyle={legendStyle} />
                   <Bar dataKey="taxDue" name="Tax to pay" fill={COLORS.tax} radius={[4, 4, 0, 0]} maxBarSize={42} />
                   <Bar dataKey="taxCredit" name="Tax credit" fill={COLORS.profit} radius={[4, 4, 0, 0]} maxBarSize={42} />
                 </BarChart>
@@ -440,11 +447,11 @@ export function GraphsTab({ reportAccessToken }: { reportAccessToken: string }) 
             <ChartCard title="Expenses and drawings">
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={rows} margin={{ top: 16, right: 20, bottom: 8, left: 8 }}>
-                  <CartesianGrid stroke="#d9dce6" strokeDasharray="4 4" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fill: '#8b8f9f', fontSize: 12 }} tickLine={false} axisLine={{ stroke: '#d9dce6' }} />
-                  <YAxis tickFormatter={cedisAxis} tick={{ fill: '#8b8f9f', fontSize: 12 }} tickLine={false} axisLine={false} width={74} />
+                  <CartesianGrid stroke={t.grid} strokeDasharray="4 4" vertical={false} />
+                  <XAxis dataKey="label" tick={axisNum} tickLine={false} axisLine={{ stroke: t.axis }} />
+                  <YAxis tickFormatter={cedisAxis} tick={axisNum} tickLine={false} axisLine={false} width={74} />
                   <Tooltip formatter={cedisTooltip} labelFormatter={(_, payload) => payload?.[0]?.payload?.date ?? ''} contentStyle={tooltipStyle} />
-                  <Legend iconType="circle" wrapperStyle={{ color: '#6b7280', fontSize: 12 }} />
+                  <Legend iconType="circle" wrapperStyle={legendStyle} />
                   <Bar dataKey="expenses" name="Expenses" fill={COLORS.expenses} radius={[4, 4, 0, 0]} maxBarSize={36} />
                   <Bar dataKey="drawings" name="Drawings" fill={COLORS.drawings} radius={[4, 4, 0, 0]} maxBarSize={36} />
                 </BarChart>
@@ -491,30 +498,22 @@ export function GraphsTab({ reportAccessToken }: { reportAccessToken: string }) 
   );
 }
 
-const tooltipStyle = {
-  background: '#ffffff',
-  border: '1px solid #d9dce6',
-  borderRadius: 4,
-  color: '#111827',
-  fontSize: 12,
-};
-
 function Stat({ label, value, tone }: { label: string; value: string; tone?: 'success' | 'warning' | 'danger' }) {
   const color = tone === 'success' ? 'text-success' : tone === 'warning' ? 'text-warning' : tone === 'danger' ? 'text-danger' : '';
   return (
-    <div className="bg-bg-surface border border-border p-4">
-      <div className="text-text-tertiary uppercase tracking-wider text-xs">{label}</div>
-      <div className={`font-mono tnum text-lg mt-1 ${color}`}>{value}</div>
-    </div>
+    <Card className="gap-1 p-4">
+      <div className="eyebrow">{label}</div>
+      <div className={`font-mono tnum text-lg ${color}`}>{value}</div>
+    </Card>
   );
 }
 
 function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="bg-bg-surface border border-border p-4 min-h-[380px]">
-      <h3 className="text-text-secondary uppercase tracking-wider text-xs mb-3">{title}</h3>
+    <Card role="group" aria-label={title} className="min-h-[380px] gap-3 p-4">
+      <h3 className="text-sm font-semibold text-text-secondary">{title}</h3>
       {children}
-    </section>
+    </Card>
   );
 }
 
@@ -528,9 +527,9 @@ function EmptyChart() {
 
 function BreakdownTable({ title, rows }: { title: string; rows: Array<{ label: string; value: string }> }) {
   return (
-    <section className="bg-bg-surface border border-border">
+    <Card className="gap-0 overflow-hidden py-0">
       <div className="px-4 py-3 border-b border-border-subtle">
-        <h3 className="text-text-secondary uppercase tracking-wider text-xs">{title}</h3>
+        <h3 className="text-sm font-semibold text-text-secondary">{title}</h3>
       </div>
       <div className="divide-y divide-border-subtle">
         {rows.length > 0 ? rows.map((row) => (
@@ -542,6 +541,6 @@ function BreakdownTable({ title, rows }: { title: string; rows: Array<{ label: s
           <div className="px-4 py-6 text-center text-text-tertiary text-sm">No data in this period.</div>
         )}
       </div>
-    </section>
+    </Card>
   );
 }

@@ -1,5 +1,6 @@
 // CustomersScreen: aging-focused list of who owes us what.
 
+import { XIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { counter } from '../lib/ipc';
 import { AppHeader } from '../components/AppHeader';
@@ -7,6 +8,7 @@ import { formatMoney, formatMoneyWithCurrency } from '../../shared/lib/money';
 import CustomerDetailScreen from './CustomerDetailScreen';
 import { RecordPaymentModal } from '../components/RecordPaymentModal';
 import { CustomerCreateModal } from '../components/CustomerCreateModal';
+import { Button } from '../components/ui/button';
 
 interface Row {
   id: string; displayName: string; businessName: string | null; phone: string; customerType: string;
@@ -120,10 +122,9 @@ export default function CustomersScreen({ onExit }: { onExit: () => void }) {
             include 0-balance
           </label>
           {bucket && (
-            <button onClick={() => setBucket(null)}
-              className="px-3 py-2 border border-border text-text-tertiary hover:text-text-primary text-sm">
-              clear bucket: {BUCKET_LABEL[bucket]} ✕
-            </button>
+            <Button variant="ghost" onClick={() => setBucket(null)}>
+              clear bucket: {BUCKET_LABEL[bucket]} <XIcon aria-hidden="true" />
+            </Button>
           )}
         </div>
 

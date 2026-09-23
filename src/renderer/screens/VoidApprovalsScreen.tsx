@@ -8,6 +8,7 @@ import type { SaleVoidRequestDetail, SaleVoidRequestSummary } from '../../shared
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { reviewStatusTone } from '../lib/tones';
+import { Segmented } from '../components/ui/segmented';
 
 type Tab = 'PENDING' | 'HISTORY';
 
@@ -91,10 +92,8 @@ export default function VoidApprovalsScreen({ onExit, backLabel }: { onExit: () 
             <h1 className="text-2xl font-semibold mt-1">Void approvals</h1>
             <p className="text-sm text-text-secondary mt-1">Review the receipt and its full stock, credit, tax, and cash effect before deciding.</p>
           </div>
-          <div className="segmented-control">
-            <button className={tab === 'PENDING' ? 'active' : ''} onClick={() => { setTab('PENDING'); setSelected(null); }}>Pending</button>
-            <button className={tab === 'HISTORY' ? 'active' : ''} onClick={() => { setTab('HISTORY'); setSelected(null); }}>History</button>
-          </div>
+          <Segmented label="Show" value={tab} onChange={(next) => { setTab(next); setSelected(null); }}
+            options={[{ value: 'PENDING', label: 'Pending' }, { value: 'HISTORY', label: 'History' }]} />
         </header>
 
         {error && <FeedbackBanner>{error}</FeedbackBanner>}

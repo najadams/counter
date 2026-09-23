@@ -92,6 +92,18 @@ describe('theme contrast', () => {
       expect(failures).toEqual([]);
     });
 
+    it(`${theme}: chart series stand out at 3:1 on a card`, () => {
+      // WCAG 1.4.11: graphics need 3:1 against what they sit on.
+      const c = channels(theme);
+      const series = Object.keys(c).filter((k) => k.startsWith('--c-chart-'));
+      expect(series).toHaveLength(8);
+      const failures = series
+        .map((s) => [s, ratio(c[s]!, c['--c-bg-elevated']!)] as const)
+        .filter(([, r]) => r < 3)
+        .map(([s, r]) => `${s} on --c-bg-elevated: ${r.toFixed(2)}`);
+      expect(failures).toEqual([]);
+    });
+
     it(`${theme}: ink reads at 4.5:1 on accent and status fills`, () => {
       const c = channels(theme);
       const failures = FILLS
