@@ -216,7 +216,7 @@ export function TouchCheckoutSheet(p: TouchCheckoutSheetProps): JSX.Element {
                   onClick={() => { setCashRaw(formatMoney(p.totalPesewas)); setCashPristine(true); }}
                   className="rounded-xl border-2 border-border text-lg"
                 >
-                  Exact amount (<span className="font-mono tnum">{formatMoney(p.totalPesewas)}</span>)
+                  <span>Exact amount (<span className="font-mono tnum">{formatMoney(p.totalPesewas)}</span>)</span>
                 </Button>
               </div>
               <div

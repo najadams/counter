@@ -789,6 +789,14 @@ fails any text/background pairing under WCAG AA (4.5:1). Keep every F-key and
 each screen's primary action where it is: the redesign must not retrain staff.
 
 Build screens from the shared components in `src/renderer/components/ui/`
-(Button, Dialog, Sheet, Badge, Card, Table, fields). The Dialog keeps the
-till's keyboard rules — topmost-only Escape and F-keys, a busy lock, focus
-return — and `tests/ui-components.test.tsx` holds it to them.
+(Button, Dialog, Sheet, Badge, Card, Table, Field, NativeSelect, Segmented).
+The Dialog keeps the till's keyboard rules — topmost-only Escape and F-keys,
+a busy lock, focus return — and `tests/ui-components.test.tsx` holds it to
+them. A dialog opened on top of another must render inside the other's
+`DialogContent`; see "Dialog rules" in the design doc.
+
+The sale screen's **quick picks** — the eight best sellers at this shop over
+30 days, by units, as tiles with Alt+1 … Alt+8 — come from
+`topSellingProducts()` in `src/main/services/sales.ts` over
+`product:top-sellers`. They are fetched once per shift, so positions don't
+move mid-shift; a shop with no sales shows no strip.

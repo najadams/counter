@@ -34,6 +34,7 @@ import {
 } from '../../shared/lib/constants';
 import { SupervisorPinModal } from '../components/SupervisorPinModal';
 import { TouchCheckoutSheet } from '../components/TouchCheckoutSheet';
+import { QUICK_PICK_COUNT, QuickPicks, quickPickIndex } from '../components/QuickPicks';
 import { FeedbackBanner } from '../components/FeedbackBanner';
 import { Button } from '../components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../components/ui/dialog';
@@ -84,6 +85,9 @@ async function writeBackPaperReceiptPosted(saleId: string): Promise<void> {
     console.error(`[paper-receipt] failed to mark ${draftId} posted by sale ${saleId}:`, r.error);
   }
 }
+
+/** Quick picks per `${shiftId}:${channel}`, kept for the life of the shift. */
+const quickPickCache = new Map<string, ProductHit[]>();
 
 interface ProductHit {
   id: string; sku: string; barcode: string | null; name: string; brand: string | null;
@@ -269,6 +273,42 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
     });
     // Keep query so user can keep adding or clear with backspace.
   }
+
+  // Quick picks: fetched once per shift and channel, then held (see
+  // QuickPicks.tsx) so tiles and their Alt keys don't move mid-shift.
+  const [quickPicks, setQuickPicks] = useState<ProductHit[]>(() => quickPickCache.get(`${shiftId}:${channel}`) ?? []);
+  useEffect(() => {
+    const key = `${shiftId}:${channel}`;
+    const cached = quickPickCache.get(key);
+    if (cached) { setQuickPicks(cached); return; }
+    let cancelled = false;
+    void counter.topSellers(channel, QUICK_PICK_COUNT).then((r) => {
+      if (cancelled || !r?.success) return;
+      // An empty list isn't held: a new shop's picks appear once it sells.
+      if (r.data.products.length > 0) quickPickCache.set(key, r.data.products);
+      setQuickPicks(r.data.products);
+    });
+    return () => { cancelled = true; };
+  }, [shiftId, channel]);
+
+  const addQuickPick = useRef<(index: number) => void>(() => {});
+  addQuickPick.current = (index: number) => {
+    const pick = quickPicks[index];
+    if (pick && !submitLockRef.current) addProductHitToCart(pick);
+  };
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const index = quickPickIndex(e);
+      if (index === null) return;
+      // Dialogs only catch Escape and F-keys; Alt+digit must not reach the
+      // cart behind an open one.
+      if (document.querySelector('[data-counter-dialog]:not([data-closed])')) return;
+      e.preventDefault();
+      addQuickPick.current(index);
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   function addHitToCart(idx: number) {
     const hit = hits[idx];
@@ -714,6 +754,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
               <span className="kbd">Esc</span> Clear
             </div>
           </div>
+          <QuickPicks picks={quickPicks} onPick={(i) => addQuickPick.current(i)} showKeys={!isTouch} />
           <ul className="flex-1 overflow-y-auto max-h-[45vh] lg:max-h-none">
             {hits.length === 0 && (
               <li className={FRIENDLY_UI_ENABLED ? 'px-6 py-6 text-xl text-text-secondary' : 'px-6 py-4 text-text-tertiary'}>{FRIENDLY_UI_ENABLED ? (query.trim() === '' ? 'Type a drink name above to find it.' : 'No drinks match. Check the spelling, or try fewer letters.') : 'No products match.'}</li>

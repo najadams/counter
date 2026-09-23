@@ -18,6 +18,7 @@ const counterMock = vi.hoisted(() => ({
   login: vi.fn(),
   getOpenShift: vi.fn(),
   searchProducts: vi.fn(),
+  topSellers: vi.fn(),
   activationStatus: vi.fn(),
   getBestPricingTier: vi.fn(),
   completeSale: vi.fn(),
@@ -261,6 +262,7 @@ describe('SaleScreen checkout', () => {
     useSession.setState({ shiftId: 'shift-1', workerName: 'Ama', workerRole: 'CASHIER' });
     counterMock.activationStatus.mockResolvedValue({ success: true, data: { salesBlocked: false } });
     counterMock.searchProducts.mockResolvedValue({ success: true, data: { products: [] } });
+    counterMock.topSellers.mockResolvedValue({ success: true, data: { products: [] } });
     counterMock.getBestPricingTier.mockResolvedValue({ success: true, data: { tier: null } });
     counterMock.searchCustomers.mockResolvedValue({ success: true, data: { customers: [] } });
     useCart.getState().clear();
