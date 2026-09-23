@@ -4,10 +4,15 @@
 // Each migration is wrapped in a transaction. If any statement fails, the
 // transaction rolls back and no schema_migrations row is recorded — so the
 // next run picks up where we left off.
+//
+// With `snapshotDir` set, an existing database is copied aside before any
+// pending migration runs (see preMigrationSnapshot.ts). A brand-new database
+// has nothing to lose, so first-run setup skips it.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Database as DB } from 'better-sqlite3';
+import { snapshotBeforeMigrations, type PreMigrationSnapshotResult } from './preMigrationSnapshot.js';
 
 const SCHEMA_MIGRATIONS_DDL = `
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -20,9 +25,22 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 export interface MigrationResult {
   applied: string[];
   alreadyApplied: string[];
+  /** Set only when a snapshot was attempted. */
+  snapshot?: PreMigrationSnapshotResult;
 }
 
-export function runMigrations(db: DB, migrationsDir: string): MigrationResult {
+export interface RunMigrationsOptions {
+  /** Snapshot an existing DB into this directory before applying migrations. */
+  snapshotDir?: string;
+  /** Clock injection for tests. */
+  now?: Date;
+}
+
+export function runMigrations(
+  db: DB,
+  migrationsDir: string,
+  opts: RunMigrationsOptions = {},
+): MigrationResult {
   if (!fs.existsSync(migrationsDir)) {
     throw new Error(`Migrations directory not found: ${migrationsDir}`);
   }
@@ -43,6 +61,11 @@ export function runMigrations(db: DB, migrationsDir: string): MigrationResult {
 
   const applied: string[] = [];
   const alreadyApplied: string[] = [];
+
+  const firstPending = files.find((f) => !appliedSet.has(f));
+  const snapshot = opts.snapshotDir && firstPending && appliedSet.size > 0
+    ? snapshotBeforeMigrations(db, { dir: opts.snapshotDir, firstPending, now: opts.now })
+    : undefined;
 
   for (const file of files) {
     if (appliedSet.has(file)) {
@@ -71,7 +94,7 @@ export function runMigrations(db: DB, migrationsDir: string): MigrationResult {
     }
   }
 
-  return { applied, alreadyApplied };
+  return { applied, alreadyApplied, snapshot };
 }
 
 function simpleChecksum(s: string): string {

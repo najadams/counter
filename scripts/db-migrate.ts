@@ -26,7 +26,14 @@ function main() {
 
   console.log(`[db:migrate] target: ${dbPath}`);
   const db = connect({ filePath: dbPath, verbose: false });
-  const result = runMigrations(db, defaultMigrationsDir());
+  const result = runMigrations(db, defaultMigrationsDir(), {
+    snapshotDir: path.join(userData, 'pre-migration-backups'),
+  });
+  if (result.snapshot?.ok) {
+    console.log(`[db:migrate] snapshot taken first: ${result.snapshot.path}`);
+  } else if (result.snapshot) {
+    console.warn(`[db:migrate] snapshot FAILED, migrated without one: ${result.snapshot.error}`);
+  }
   if (result.applied.length === 0) {
     console.log('[db:migrate] up to date (no pending migrations)');
   } else {

@@ -137,7 +137,16 @@ app.whenReady().then(async () => {
   const db = connection.connect({ filePath: dbPath, verbose: isDev });
   const migrationsDir = resolveMigrationsDir(connection.defaultMigrationsDir);
   log.info(`[main] migrations dir: ${migrationsDir}`);
-  const result = migrations.runMigrations(db, migrationsDir);
+  const result = migrations.runMigrations(db, migrationsDir, {
+    snapshotDir: path.join(userData, 'pre-migration-backups'),
+  });
+  if (result.snapshot?.ok) {
+    log.info(`[main] pre-migration snapshot: ${result.snapshot.path} (${result.snapshot.sizeBytes} bytes, pruned ${result.snapshot.pruned})`);
+  } else if (result.snapshot) {
+    // Migrate anyway: refusing to start would stop the shop trading, and this
+    // is no worse than before snapshots existed.
+    log.error(`[main] pre-migration snapshot FAILED, migrating without one: ${result.snapshot.error}`);
+  }
   log.info(`[main] migrations applied: ${result.applied.length}, already applied: ${result.alreadyApplied.length}`);
 
   const deviceId = device.getDeviceId(db);
