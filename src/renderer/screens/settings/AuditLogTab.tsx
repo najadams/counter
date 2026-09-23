@@ -10,6 +10,7 @@ import { FeedbackBanner } from '../../components/FeedbackBanner';
 import { Button } from '../../components/ui/button';
 import { NativeSelect } from '../../components/ui/native-select';
 import { Input } from '../../components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 
 interface Entry {
   id: string; workerId: string; workerName: string; workerRole: string;
@@ -162,31 +163,31 @@ export function AuditLogTab() {
       {error && <FeedbackBanner>{error}</FeedbackBanner>}
 
       <div className="bg-bg-elevated rounded border border-border-subtle overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-bg-deep text-text-tertiary uppercase text-xs">
-            <tr>
-              <th className="text-left px-3 py-2">When</th>
-              <th className="text-left px-3 py-2">Worker</th>
-              <th className="text-left px-3 py-2">Action</th>
-              <th className="text-left px-3 py-2">Entity</th>
-              <th className="text-left px-3 py-2">Notes</th>
-              <th className="px-3 py-2"></th>
-            </tr>
-          </thead>
-          <tbody>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="px-3">When</TableHead>
+              <TableHead className="px-3">Worker</TableHead>
+              <TableHead className="px-3">Action</TableHead>
+              <TableHead className="px-3">Entity</TableHead>
+              <TableHead className="px-3">Notes</TableHead>
+              <TableHead className="px-3"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {loading && (
-              <tr><td colSpan={6} className="px-4 py-6 text-center text-text-tertiary">Loading…</td></tr>
+              <TableRow><TableCell colSpan={6} className="px-4 py-6 text-center text-text-tertiary">Loading…</TableCell></TableRow>
             )}
             {!loading && entries.length === 0 && (
-              <tr><td colSpan={6} className="px-4 py-6 text-center text-text-tertiary">No entries match these filters.</td></tr>
+              <TableRow><TableCell colSpan={6} className="px-4 py-6 text-center text-text-tertiary">No entries match these filters.</TableCell></TableRow>
             )}
             {entries.map((e) => (
               <RowExpandable key={e.id} entry={e} idNames={idNames}
                 expanded={expanded === e.id}
                 onToggle={() => setExpanded(expanded === e.id ? null : e.id)} />
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
     </div>
   );
@@ -221,24 +222,24 @@ function RowExpandable({ entry, expanded, onToggle, idNames }: {
   const entityLabel = entry.entityName ?? entry.entityId;
   return (
     <>
-      <tr className="border-t border-border-subtle hover:bg-bg-deep/40 cursor-pointer"
+      <TableRow className="cursor-pointer"
           onClick={onToggle}>
-        <td className="px-3 py-2 font-mono text-xs text-text-secondary">{dateStr}</td>
-        <td className="px-3 py-2">
+        <TableCell className="px-3 py-2 font-mono text-xs text-text-secondary">{dateStr}</TableCell>
+        <TableCell className="px-3 py-2">
           <div>{entry.workerName}</div>
           <div className="text-xs text-text-tertiary">{entry.workerRole}</div>
-        </td>
-        <td className="px-3 py-2 font-medium">{entry.action}</td>
-        <td className="px-3 py-2">
+        </TableCell>
+        <TableCell className="px-3 py-2 font-medium">{entry.action}</TableCell>
+        <TableCell className="px-3 py-2">
           <div className="text-text-secondary">{entry.entityType}</div>
           <div className="text-xs text-text-tertiary font-mono">{entityLabel}</div>
-        </td>
-        <td className="px-3 py-2 text-text-secondary">{entry.notes ?? '—'}</td>
-        <td className="px-3 py-2 text-right text-text-tertiary text-xs">{expanded ? <ChevronUpIcon aria-label="Collapse" className="ml-auto size-4" /> : <ChevronDownIcon aria-label="Expand" className="ml-auto size-4" />}</td>
-      </tr>
+        </TableCell>
+        <TableCell className="px-3 py-2 text-text-secondary">{entry.notes ?? '—'}</TableCell>
+        <TableCell className="px-3 py-2 text-right text-text-tertiary text-xs">{expanded ? <ChevronUpIcon aria-label="Collapse" className="ml-auto size-4" /> : <ChevronDownIcon aria-label="Expand" className="ml-auto size-4" />}</TableCell>
+      </TableRow>
       {expanded && (
-        <tr className="border-t border-border-subtle bg-bg-deep/40">
-          <td colSpan={6} className="px-4 py-3">
+        <TableRow className="bg-bg-deep/40">
+          <TableCell colSpan={6} className="px-4 py-3">
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <div className="text-xs text-text-tertiary uppercase tracking-wider mb-1">Before</div>
@@ -257,8 +258,8 @@ function RowExpandable({ entry, expanded, onToggle, idNames }: {
               entry id: <span className="font-mono">{entry.id}</span> · device: <span className="font-mono">{entry.deviceId}</span>
               {entry.entityName && <> · entity: <span className="font-mono">{entry.entityId}</span></>}
             </div>
-          </td>
-        </tr>
+          </TableCell>
+        </TableRow>
       )}
     </>
   );

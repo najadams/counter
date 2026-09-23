@@ -19,6 +19,7 @@ import type {
   CatalogImportPickResponse, CatalogImportTableReport, CatalogTable,
 } from '../../../shared/types/ipc';
 import { Button } from '../../components/ui/button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 
 type BannerKind = 'success' | 'warning' | 'danger' | 'info';
 interface InlineMessage { kind: BannerKind; text: string }
@@ -219,7 +220,7 @@ export function DataTransferTab() {
         </div>
 
         {pickResult && pickResult.header && pickResult.report && (
-          <div className="space-y-3 bg-bg-surface border border-border p-4">
+          <div className="space-y-3 panel p-4">
             <div className="text-xs text-text-tertiary">
               <div><span className="font-semibold text-text-secondary">File:</span> <span className="font-mono break-all">{pickResult.filePath}</span> ({formatBytes(pickResult.sizeBytes ?? 0)})</div>
               <div><span className="font-semibold text-text-secondary">Exported:</span> {pickResult.header.exportedAt}</div>
@@ -285,30 +286,30 @@ function ReportTable({
 }: { rows: CatalogImportTableReport[]; appliedView?: boolean }) {
   return (
     <div className="border border-border-subtle overflow-x-auto">
-      <table className="w-full text-sm tnum">
-        <thead className="bg-bg-elevated text-xs uppercase tracking-wider text-text-tertiary">
-          <tr>
-            <th className="text-left px-3 py-2">Table</th>
-            <th className="text-right px-3 py-2">In file</th>
-            <th className="text-right px-3 py-2">{appliedView ? 'Inserted' : 'To insert'}</th>
-            <th className="text-right px-3 py-2">{appliedView ? 'Updated' : 'To update'}</th>
-            <th className="text-right px-3 py-2">Matched</th>
-            <th className="text-right px-3 py-2">Skipped</th>
-          </tr>
-        </thead>
-        <tbody>
+      <Table className="tnum">
+        <TableHeader>
+          <TableRow>
+            <TableHead className="px-3">Table</TableHead>
+            <TableHead className="text-right px-3">In file</TableHead>
+            <TableHead className="text-right px-3">{appliedView ? 'Inserted' : 'To insert'}</TableHead>
+            <TableHead className="text-right px-3">{appliedView ? 'Updated' : 'To update'}</TableHead>
+            <TableHead className="text-right px-3">Matched</TableHead>
+            <TableHead className="text-right px-3">Skipped</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {rows.map((r) => (
-            <tr key={r.table} className="border-t border-border-subtle">
-              <td className="px-3 py-2 font-mono">{r.table}</td>
-              <td className="text-right px-3 py-2">{r.inFile}</td>
-              <td className="text-right px-3 py-2">{r.toInsert}</td>
-              <td className="text-right px-3 py-2">{r.toUpdate}</td>
-              <td className="text-right px-3 py-2">{r.matched}</td>
-              <td className={'text-right px-3 py-2 ' + (r.skipped > 0 ? 'text-warning font-semibold' : '')}>{r.skipped}</td>
-            </tr>
+            <TableRow key={r.table}>
+              <TableCell className="px-3 py-2 font-mono">{r.table}</TableCell>
+              <TableCell className="text-right px-3 py-2">{r.inFile}</TableCell>
+              <TableCell className="text-right px-3 py-2">{r.toInsert}</TableCell>
+              <TableCell className="text-right px-3 py-2">{r.toUpdate}</TableCell>
+              <TableCell className="text-right px-3 py-2">{r.matched}</TableCell>
+              <TableCell className={'text-right px-3 py-2 ' + (r.skipped > 0 ? 'text-warning font-semibold' : '')}>{r.skipped}</TableCell>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
       {rows.some((r) => r.warnings.length > 0) && (
         <div className="border-t border-border-subtle p-3 text-xs space-y-2 bg-bg-surface">
           {rows.filter((r) => r.warnings.length > 0).map((r) => (

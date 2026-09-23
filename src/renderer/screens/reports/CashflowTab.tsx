@@ -6,6 +6,7 @@ import { DateRangePicker, defaultDateRange, type DateRange } from '../../compone
 import { FeedbackBanner } from '../../components/FeedbackBanner';
 import { buildCsvFilename, exportRowsAsCsv, pesewasToCsvNumber } from '../../lib/csv';
 import { Button } from '../../components/ui/button';
+import { Table, TableBody, TableCell, TableRow } from '../../components/ui/table';
 
 export function CashflowTab({ reportAccessToken }: { reportAccessToken: string }) {
   const [range, setRangeState] = useState<DateRange>(defaultDateRange());
@@ -57,7 +58,7 @@ export function CashflowTab({ reportAccessToken }: { reportAccessToken: string }
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="bg-bg-surface border border-border p-4 flex items-end justify-between gap-3 flex-wrap">
+      <div className="panel p-4 flex items-end justify-between gap-3 flex-wrap">
         <DateRangePicker value={range} onChange={setRange} />
         <div className="flex items-end gap-3">
           <Button onClick={() => void load()} disabled={loading}>
@@ -77,7 +78,7 @@ export function CashflowTab({ reportAccessToken }: { reportAccessToken: string }
 
       {data && (
         <>
-          <section className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <section className="grid grid-cols-1 @2xl:grid-cols-4 gap-3">
             <Stat label="Inflows" value={formatMoneyWithCurrency(data.inflows.totalPesewas)} tone="success" />
             <Stat label="Outflows" value={formatMoneyWithCurrency(data.outflows.totalPesewas)} />
             <Stat label="Net cashflow" value={formatMoneyWithCurrency(data.netCashflowPesewas)}
@@ -85,14 +86,14 @@ export function CashflowTab({ reportAccessToken }: { reportAccessToken: string }
             <Stat label="Non-cash movement" value={formatMoneyWithCurrency(data.nonCash.totalPesewas)} />
           </section>
 
-          <section className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+          <section className="grid grid-cols-1 @6xl:grid-cols-2 gap-5">
             <StatementSection title="Inflows" total={data.inflows.totalPesewas} lines={data.inflows.lines} empty="No recorded inflows." />
             <StatementSection title="Outflows" total={data.outflows.totalPesewas} lines={data.outflows.lines} empty="No recorded outflows." />
             <StatementSection title="Transfers" total={data.transfers.totalPesewas} lines={data.transfers.lines} empty="No generic cash transfers." />
             <StatementSection title="Non-cash movement" total={data.nonCash.totalPesewas} lines={data.nonCash.lines} empty="No non-cash movements." />
           </section>
 
-          <section className="bg-bg-surface border border-border p-4">
+          <section className="panel p-4">
             <h3 className="text-text-secondary uppercase tracking-wider text-xs mb-3">Notes</h3>
             <div className="flex flex-col gap-2 text-sm text-text-tertiary">
               {data.caveats.map((c) => <div key={c}>{c}</div>)}
@@ -111,29 +112,29 @@ function StatementSection({ title, total, lines, empty }: {
   empty: string;
 }) {
   return (
-    <div className="bg-bg-surface border border-border overflow-hidden">
+    <div className="panel overflow-hidden">
       <div className="px-4 py-3 flex items-center justify-between bg-bg-deep">
         <h3 className="text-text-secondary uppercase tracking-wider text-xs">{title}</h3>
         <div className="font-mono tnum">{formatMoneyWithCurrency(total)}</div>
       </div>
-      <table className="w-full text-sm">
-        <tbody>
+      <Table>
+        <TableBody>
           {lines.length === 0 && (
-            <tr><td className="px-4 py-6 text-center text-text-tertiary">{empty}</td></tr>
+            <TableRow><TableCell className="px-4 py-6 text-center text-text-tertiary">{empty}</TableCell></TableRow>
           )}
           {lines.map((line) => (
-            <tr key={line.label} className="border-t border-border-subtle align-top">
-              <td className="px-4 py-3">
+            <TableRow key={line.label} className="align-top">
+              <TableCell className="px-4 py-3">
                 <div className="text-text-primary">{line.label}</div>
                 {line.note && <div className="text-text-tertiary text-xs mt-1">{line.note}</div>}
-              </td>
-              <td className="px-4 py-3 text-right font-mono tnum whitespace-nowrap">
+              </TableCell>
+              <TableCell className="px-4 py-3 text-right font-mono tnum whitespace-nowrap">
                 {formatMoneyWithCurrency(line.amountPesewas)}
-              </td>
-            </tr>
+              </TableCell>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   );
 }
@@ -141,7 +142,7 @@ function StatementSection({ title, total, lines, empty }: {
 function Stat({ label, value, tone }: { label: string; value: string; tone?: 'success' | 'danger' }) {
   const color = tone === 'success' ? 'text-success' : tone === 'danger' ? 'text-danger' : 'text-text-primary';
   return (
-    <div className="bg-bg-surface border border-border p-4">
+    <div className="panel p-4">
       <div className="text-xs uppercase tracking-wider text-text-tertiary">{label}</div>
       <div className={`text-2xl font-mono tnum mt-1 ${color}`}>{value}</div>
     </div>

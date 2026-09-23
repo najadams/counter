@@ -146,7 +146,7 @@ export function BreakageReviewTab() {
 
       {error && <FeedbackBanner>{error}</FeedbackBanner>}
 
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 @4xl:grid-cols-3 gap-3">
         {loading && <div className="col-span-full text-center text-text-tertiary py-6">Loading…</div>}
         {!loading && rows.length === 0 && (
           <div className="col-span-full text-center text-text-tertiary py-6">No breakage events match.</div>

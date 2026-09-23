@@ -53,7 +53,7 @@ export function PinUnlockPanel({
   return (
     <form
       onSubmit={(e) => void submit(e)}
-      className={`bg-bg-surface border border-border p-5 flex flex-col gap-4 ${className}`}
+      className={`panel p-5 flex flex-col gap-4 ${className}`}
     >
       <div>
         <div className="text-text-secondary uppercase tracking-wider text-xs">{title}</div>

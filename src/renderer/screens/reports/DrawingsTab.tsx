@@ -6,6 +6,7 @@ import { FeedbackBanner } from '../../components/FeedbackBanner';
 import { Button } from '../../components/ui/button';
 import { NativeSelect } from '../../components/ui/native-select';
 import { Input } from '../../components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 
 type Period = 'DAILY' | 'WEEKLY' | 'MONTHLY';
 
@@ -41,7 +42,7 @@ export function DrawingsTab({ reportAccessToken }: { reportAccessToken: string }
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="bg-bg-surface border border-border p-4 flex flex-wrap items-end gap-3">
+      <div className="panel p-4 flex flex-wrap items-end gap-3">
         <label>
           <span className="block text-text-secondary text-xs uppercase tracking-wider mb-1">Group</span>
           <NativeSelect value={period} onChange={(e) => setPeriod(e.target.value as Period)}>
@@ -68,32 +69,32 @@ export function DrawingsTab({ reportAccessToken }: { reportAccessToken: string }
 
       {error && <FeedbackBanner>{error}</FeedbackBanner>}
 
-      <div className="bg-bg-surface border border-border overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-bg-deep text-text-tertiary uppercase text-xs">
-            <tr>
-              <th className="text-left px-4 py-3">Period</th>
-              <th className="text-left px-4 py-3">Category</th>
-              <th className="text-left px-4 py-3">Beneficiary</th>
-              <th className="text-right px-4 py-3">Count</th>
-              <th className="text-right px-4 py-3">Total</th>
-            </tr>
-          </thead>
-          <tbody>
+      <div className="panel overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Period</TableHead>
+              <TableHead>Category</TableHead>
+              <TableHead>Beneficiary</TableHead>
+              <TableHead className="text-right">Count</TableHead>
+              <TableHead className="text-right">Total</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {rows.length === 0 && (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-text-tertiary">No drawings in this period.</td></tr>
+              <TableRow><TableCell colSpan={5} className="px-4 py-8 text-center text-text-tertiary">No drawings in this period.</TableCell></TableRow>
             )}
             {rows.map((r) => (
-              <tr key={`${r.periodKey}:${r.category}:${r.beneficiaryName}`} className="border-t border-border-subtle">
-                <td className="px-4 py-3 font-mono">{r.periodKey}</td>
-                <td className="px-4 py-3">{r.category.replace('_', ' ').toLowerCase()}</td>
-                <td className="px-4 py-3">{r.beneficiaryName}</td>
-                <td className="px-4 py-3 text-right font-mono tnum">{r.count}</td>
-                <td className="px-4 py-3 text-right font-mono tnum">{formatMoneyWithCurrency(r.totalPesewas)}</td>
-              </tr>
+              <TableRow key={`${r.periodKey}:${r.category}:${r.beneficiaryName}`}>
+                <TableCell className="px-4 py-3 font-mono">{r.periodKey}</TableCell>
+                <TableCell className="px-4 py-3">{r.category.replace('_', ' ').toLowerCase()}</TableCell>
+                <TableCell className="px-4 py-3">{r.beneficiaryName}</TableCell>
+                <TableCell className="px-4 py-3 text-right font-mono tnum">{r.count}</TableCell>
+                <TableCell className="px-4 py-3 text-right font-mono tnum">{formatMoneyWithCurrency(r.totalPesewas)}</TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
     </div>
   );

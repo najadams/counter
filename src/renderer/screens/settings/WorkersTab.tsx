@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Field } from '../../components/ui/field';
 import { Input } from '../../components/ui/input';
 import { NativeSelect } from '../../components/ui/native-select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 
 interface AdminWorker {
   id: string; fullName: string; phone: string; role: string; active: boolean;
@@ -100,36 +101,36 @@ export function WorkersTab() {
       {info && <div className="bg-bg-surface border border-success px-5 py-3 text-success text-sm">{info}</div>}
       {error && <FeedbackBanner>{error}</FeedbackBanner>}
 
-      <div className="bg-bg-surface border border-border overflow-hidden">
-        <table className="w-full">
-          <thead>
-            <tr className="text-text-secondary text-xs uppercase tracking-wider">
-              <th className="px-4 py-3 text-left">Name</th>
-              <th className="px-4 py-3 text-left">Phone</th>
-              <th className="px-4 py-3 text-left">Role</th>
-              <th className="px-4 py-3 text-right">Salary</th>
-              <th className="px-4 py-3 text-left">Status</th>
-              <th className="px-4 py-3"></th>
-            </tr>
-          </thead>
-          <tbody className="text-sm">
+      <div className="panel overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Phone</TableHead>
+              <TableHead>Role</TableHead>
+              <TableHead className="text-right">Salary</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody className="text-sm">
             {workers.map((w) => (
-              <tr key={w.id} className="border-t border-border">
-                <td className="px-4 py-3">
+              <TableRow key={w.id}>
+                <TableCell className="px-4 py-3">
                   {w.fullName}
                   {w.id === myWorkerId && <span className="text-accent text-xs ml-2">you</span>}
-                </td>
-                <td className="px-4 py-3 font-mono tnum">{w.phone}</td>
-                <td className="px-4 py-3">{w.role}</td>
-                <td className="px-4 py-3 text-right font-mono tnum">{formatMoneyWithCurrency(w.baseSalaryPesewas)}</td>
-                <td className="px-4 py-3">
+                </TableCell>
+                <TableCell className="px-4 py-3 font-mono tnum">{w.phone}</TableCell>
+                <TableCell className="px-4 py-3">{w.role}</TableCell>
+                <TableCell className="px-4 py-3 text-right font-mono tnum">{formatMoneyWithCurrency(w.baseSalaryPesewas)}</TableCell>
+                <TableCell className="px-4 py-3">
                   {w.terminatedAt
                     ? <span className="text-text-tertiary">terminated {w.terminatedAt}</span>
                     : w.active
                       ? <span className="text-success">active</span>
                       : <span className="text-warning">inactive</span>}
-                </td>
-                <td className="px-4 py-3 text-right space-x-2">
+                </TableCell>
+                <TableCell className="px-4 py-3 text-right space-x-2">
                   {w.id === myWorkerId ? (
                     <span className="text-text-tertiary text-xs">—</span>
                   ) : isAdmin ? (
@@ -148,14 +149,14 @@ export function WorkersTab() {
                   ) : (
                     <span className="text-text-tertiary text-xs">admin only</span>
                   )}
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))}
             {workers.length === 0 && (
-              <tr><td colSpan={6} className="px-4 py-6 text-text-tertiary text-center">No workers.</td></tr>
+              <TableRow><TableCell colSpan={6} className="px-4 py-6 text-text-tertiary text-center">No workers.</TableCell></TableRow>
             )}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
 
       {showAdd && (

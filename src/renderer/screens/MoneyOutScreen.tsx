@@ -190,7 +190,7 @@ function ExpensesPanel({ shiftId }: { shiftId: string }) {
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-[0.95fr_1.25fr] gap-5">
-      <section className="bg-bg-surface border border-border p-4">
+      <section className="panel p-4">
         <SectionTitle title="Record expense" subtitle="Bills, transport, repairs, staff wages, bank fees." />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
           <Field label="Amount">
@@ -264,7 +264,7 @@ function ExpensesPanel({ shiftId }: { shiftId: string }) {
         </Button>
       </section>
 
-      <section className="bg-bg-surface border border-border">
+      <section className="panel">
         <Header title="This shift expenses" count={rows.length} />
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 border-b border-border-subtle">
           <Stat label="Total" value={formatMoneyWithCurrency(totals?.totalPesewas ?? 0)} />
@@ -350,7 +350,7 @@ function DrawingsPanel({ shiftId }: { shiftId: string }) {
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-[0.95fr_1.25fr] gap-5">
-      <section className="bg-bg-surface border border-border p-4">
+      <section className="panel p-4">
         <SectionTitle title="Record drawing or cash movement" subtitle="Owner drawings, family support, safe drops, bank deposits." />
         {expected != null && (
           <div className="mt-3 bg-bg-deep/50 border border-border-subtle p-3 text-sm">
@@ -412,7 +412,7 @@ function DrawingsPanel({ shiftId }: { shiftId: string }) {
         </Button>
       </section>
 
-      <section className="bg-bg-surface border border-border">
+      <section className="panel">
         <Header title="This shift cash out" count={drops.length} />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-4 border-b border-border-subtle">
           <Stat label="Total moved out" value={formatMoneyWithCurrency(total)} />

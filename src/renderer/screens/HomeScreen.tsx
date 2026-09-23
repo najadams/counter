@@ -256,7 +256,7 @@ export default function HomeScreen({ onReactivate }: { onReactivate?: () => void
   return (
     <div className="min-h-screen bg-bg-deep text-text-primary flex flex-col">
       <AppHeader subtitle="home" />
-      <main className={`flex-1 ${FRIENDLY_UI_ENABLED ? "max-w-6xl" : "max-w-4xl"} w-full mx-auto px-4 py-6 sm:px-12 sm:py-10 flex flex-col gap-4`}>
+      <main className={`@container flex-1 ${FRIENDLY_UI_ENABLED ? "max-w-6xl" : "max-w-4xl"} w-full mx-auto px-4 py-6 sm:px-12 sm:py-10 flex flex-col gap-4`}>
         {step === 'idle' && (
           <>
             <BackupHealthBanner />
@@ -305,7 +305,7 @@ export default function HomeScreen({ onReactivate }: { onReactivate?: () => void
             <LanJoinCard />
 
             <ActionRow kind="primary" label="Sale" hot="F1" caption="Search SKUs, build cart, take payment." onClick={() => setView('sale')} />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 @xl:grid-cols-2 gap-4">
               <ActionRow
                 kind={pendingOrderCount > 0 ? 'warn' : 'default'}
                 label="WhatsApp orders"
@@ -402,7 +402,7 @@ export default function HomeScreen({ onReactivate }: { onReactivate?: () => void
                 <div className="max-w-md w-full self-center">
                   <NumberPad label="Cash count number pad" value={counted} onChange={setCounted} allowDecimal disabled={closing} />
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 @xl:grid-cols-2 gap-3">
                   <Button size="xl" className="min-h-16 rounded-xl border-2 text-xl" type="button" onClick={() => { setStep('idle'); setCounted(''); setError(null); }}>Cancel</Button>
                   <Button variant="primary" size="xl" className="min-h-16 rounded-xl text-xl" type="button" onClick={() => void submitCountAndClose()}
                     disabled={closing || voidCounts.currentShiftPendingCount > 0 || (pendingReprints.length > 0 && !reprintAck)}
@@ -441,7 +441,7 @@ export default function HomeScreen({ onReactivate }: { onReactivate?: () => void
         {step === 'reconciled' && reconciled && (
           <div className="flex flex-col gap-4">
             <h2 className={FRIENDLY_UI_ENABLED ? "text-3xl font-semibold" : "text-text-secondary uppercase tracking-wider text-xs"}>{FRIENDLY_UI_ENABLED ? "Shift closed" : "Reconciliation"}</h2>
-            <div className="bg-bg-surface border border-border divide-y divide-border">
+            <div className="panel divide-y divide-border">
               <Row label="Counted"  value={formatMoneyWithCurrency(reconciled.countedPesewas)} />
               <Row label="Expected" value={formatMoneyWithCurrency(reconciled.expectedPesewas)} />
               <Row label="Variance"

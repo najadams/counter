@@ -14,6 +14,7 @@ import { Segmented } from '../components/ui/segmented';
 import { Textarea } from '../components/ui/textarea';
 import { NativeSelect } from '../components/ui/native-select';
 import { Input } from '../components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 
 const CAUSES: Array<[VarianceCauseCode, string]> = [
   ['WRONG_CHANGE', 'Wrong change'], ['MISSED_SALE', 'Missed sale'],
@@ -137,14 +138,14 @@ export default function VarianceCasesScreen({ onExit, backLabel }: { onExit: () 
         <Metric label="Overdue" value={String(summary.overdueCount)} tone={summary.overdueCount ? 'bad' : 'ok'} />
         <Metric label="Unresolved value" value={formatMoneyWithCurrency(summary.unresolvedPesewas)} tone={summary.unresolvedPesewas ? 'warn' : 'ok'} />
       </section>
-      <section className="panel overflow-hidden"><div className="overflow-x-auto"><table className="data-table w-full"><thead><tr><th>Due</th><th>Case</th><th>Subject</th><th>Difference</th><th>Owner</th><th>Status</th><th></th></tr></thead><tbody>{rows.map((row) => <tr key={row.id}>
-        <td className={row.overdue ? 'text-danger font-semibold' : ''}>{new Date(row.dueAt).toLocaleDateString()}</td>
-        <td><div className="font-medium">{row.title}</div><div className="text-xs text-text-tertiary">{label(row.caseType)} · {row.sourceType.replace(/_/g, ' ')}</div></td>
-        <td>{row.subjectName ?? 'Shop'}</td>
-        <td className={row.amountPesewas < 0 ? 'text-danger font-mono tnum' : 'text-warning font-mono tnum'}>{row.amountPesewas > 0 ? '+' : ''}{formatMoneyWithCurrency(row.amountPesewas)}</td>
-        <td>{row.assignedToName ?? <span className="text-text-tertiary">Unassigned</span>}</td><td><CaseStatus status={row.status} /></td>
-        <td className="text-right"><Button variant="secondary" size="sm" onClick={() => void open(row)}>Open</Button></td>
-      </tr>)}</tbody></table></div>{rows.length === 0 && <div className="empty-state">{tab === 'OPEN' ? 'No material variances need investigation.' : 'No closed cases yet.'}</div>}</section>
+      <section className="panel overflow-hidden"><div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Due</TableHead><TableHead>Case</TableHead><TableHead>Subject</TableHead><TableHead>Difference</TableHead><TableHead>Owner</TableHead><TableHead>Status</TableHead><TableHead></TableHead></TableRow></TableHeader><TableBody>{rows.map((row) => <TableRow key={row.id}>
+        <TableCell className={row.overdue ? 'text-danger font-semibold' : ''}>{new Date(row.dueAt).toLocaleDateString()}</TableCell>
+        <TableCell><div className="font-medium">{row.title}</div><div className="text-xs text-text-tertiary">{label(row.caseType)} · {row.sourceType.replace(/_/g, ' ')}</div></TableCell>
+        <TableCell>{row.subjectName ?? 'Shop'}</TableCell>
+        <TableCell className={row.amountPesewas < 0 ? 'text-danger font-mono tnum' : 'text-warning font-mono tnum'}>{row.amountPesewas > 0 ? '+' : ''}{formatMoneyWithCurrency(row.amountPesewas)}</TableCell>
+        <TableCell>{row.assignedToName ?? <span className="text-text-tertiary">Unassigned</span>}</TableCell><TableCell><CaseStatus status={row.status} /></TableCell>
+        <TableCell className="text-right"><Button variant="secondary" size="sm" onClick={() => void open(row)}>Open</Button></TableCell>
+      </TableRow>)}</TableBody></Table></div>{rows.length === 0 && <div className="empty-state">{tab === 'OPEN' ? 'No material variances need investigation.' : 'No closed cases yet.'}</div>}</section>
 
       {selected && <section className="panel p-5 sm:p-6 flex flex-col gap-5 border-warning/50">
         <div className="flex justify-between gap-3"><div><div className="eyebrow">{label(selected.case.caseType)} · {selected.case.sourceType.replace(/_/g, ' ')}</div><h2 className="text-xl font-semibold mt-1">{selected.case.title}</h2><p className="text-sm text-text-secondary">Detected {new Date(selected.case.detectedAt).toLocaleString()} · due {new Date(selected.case.dueAt).toLocaleString()}</p></div><CaseStatus status={selected.case.status} /></div>

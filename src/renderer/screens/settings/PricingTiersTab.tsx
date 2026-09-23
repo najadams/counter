@@ -16,6 +16,7 @@ import { FeedbackBanner } from '../../components/FeedbackBanner';
 import { Button } from '../../components/ui/button';
 import { NativeSelect } from '../../components/ui/native-select';
 import { Input } from '../../components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 
 interface AdminProduct {
   id: string; sku: string; name: string;
@@ -138,7 +139,7 @@ export function PricingTiersTab() {
   }
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6">
+    <div className="flex flex-col @4xl:flex-row gap-6">
       {/* Left: product picker. Full-width on small windows so the picker
        *  stays usable; collapses to a 18rem sidebar at lg+ widths. */}
       <div className="w-full lg:w-72 xl:w-80 lg:shrink-0 flex flex-col gap-2">
@@ -153,7 +154,7 @@ export function PricingTiersTab() {
               key={p.id}
               onClick={() => setSelectedId(p.id)}
               className={`w-full text-left px-3 py-2 text-sm border-b border-border-subtle last:border-b-0 ${
-                selectedId === p.id ? 'bg-bg-elevated' : 'hover:bg-bg-elevated'
+                selectedId === p.id ? 'bg-accent/10' : 'hover:bg-bg-surface'
               }`}
             >
               <div className="font-mono tnum text-xs text-text-secondary">{p.sku}</div>
@@ -196,30 +197,30 @@ export function PricingTiersTab() {
 
             {/* Tier table */}
             <div className="overflow-x-auto border border-border-subtle rounded">
-            <table className="w-full min-w-[640px] text-sm">
-              <thead className="bg-bg-elevated text-text-secondary text-xs uppercase tracking-wider">
-                <tr>
-                  <th className="px-3 py-2 text-left">Channel</th>
-                  <th className="px-3 py-2 text-right">Min qty</th>
-                  <th className="px-3 py-2 text-right">Unit price</th>
-                  <th className="px-3 py-2 text-left">Unit scope</th>
-                  <th className="px-3 py-2 text-right">Priority</th>
-                  <th className="px-3 py-2 text-left">Notes</th>
-                  <th className="px-3 py-2 text-right">Status</th>
-                  <th className="px-3 py-2"></th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table className="min-w-[640px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="px-3">Channel</TableHead>
+                  <TableHead className="px-3 text-right">Min qty</TableHead>
+                  <TableHead className="px-3 text-right">Unit price</TableHead>
+                  <TableHead className="px-3">Unit scope</TableHead>
+                  <TableHead className="px-3 text-right">Priority</TableHead>
+                  <TableHead className="px-3">Notes</TableHead>
+                  <TableHead className="px-3 text-right">Status</TableHead>
+                  <TableHead className="px-3"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {visibleTiers.map((t) => {
                   const unitName = t.appliesToUnitId
                     ? selected.units.find((u) => u.id === t.appliesToUnitId)?.unitName ?? '?'
                     : 'Any';
                   const isEditing = editingId === t.id;
                   return (
-                    <tr key={t.id} className={`border-t border-border-subtle ${t.active ? '' : 'opacity-50'}`}>
-                      <td className="px-3 py-2">{t.channel}</td>
-                      <td className="px-3 py-2 text-right font-mono tnum">{t.minQuantity}</td>
-                      <td className="px-3 py-2 text-right font-mono tnum">
+                    <TableRow key={t.id} className={`border-t border-border-subtle ${t.active ? '' : 'opacity-50'}`}>
+                      <TableCell className="px-3 py-2">{t.channel}</TableCell>
+                      <TableCell className="px-3 py-2 text-right font-mono tnum">{t.minQuantity}</TableCell>
+                      <TableCell className="px-3 py-2 text-right font-mono tnum">
                         {isEditing ? (
                           <Input className="text-right w-20 h-8 px-2"
                             value={editPriceRaw}
@@ -227,9 +228,9 @@ export function PricingTiersTab() {
                         ) : (
                           formatMoney(t.unitPricePesewas)
                         )}
-                      </td>
-                      <td className="px-3 py-2">{unitName}</td>
-                      <td className="px-3 py-2 text-right font-mono tnum">
+                      </TableCell>
+                      <TableCell className="px-3 py-2">{unitName}</TableCell>
+                      <TableCell className="px-3 py-2 text-right font-mono tnum">
                         {isEditing ? (
                           <Input className="text-right w-12 h-8 px-2"
                             value={editPriority}
@@ -237,10 +238,10 @@ export function PricingTiersTab() {
                         ) : (
                           t.priority
                         )}
-                      </td>
-                      <td className="px-3 py-2 text-text-tertiary text-xs">{t.notes ?? ''}</td>
-                      <td className="px-3 py-2 text-right">{t.active ? 'Active' : 'Inactive'}</td>
-                      <td className="px-3 py-2 text-right">
+                      </TableCell>
+                      <TableCell className="px-3 py-2 text-text-tertiary text-xs">{t.notes ?? ''}</TableCell>
+                      <TableCell className="px-3 py-2 text-right">{t.active ? 'Active' : 'Inactive'}</TableCell>
+                      <TableCell className="px-3 py-2 text-right">
                         {isAdmin && isEditing && (
                           <div className="flex gap-1 justify-end">
                             <Button variant="primary" size="sm"
@@ -265,19 +266,19 @@ export function PricingTiersTab() {
                             </Button>
                           </div>
                         )}
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
                 {visibleTiers.length === 0 && (
-                  <tr>
-                    <td colSpan={8} className="px-3 py-6 text-center text-text-tertiary text-sm">
+                  <TableRow>
+                    <TableCell colSpan={8} className="px-3 py-6 text-center text-text-tertiary text-sm">
                       No tiers yet for this product.
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 )}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
             </div>
 
             {/* Add-tier form. Each field is wrapped with a label so the form

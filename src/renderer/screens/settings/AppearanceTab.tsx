@@ -29,7 +29,7 @@ export function AppearanceTab() {
     <div className="max-w-6xl flex flex-col gap-8">
       <section>
         <h2 className="text-text-secondary uppercase tracking-wider text-xs mb-3">Theme</h2>
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 @6xl:grid-cols-4 gap-3">
           <ThemeCard
             label="Light"
             description="Calm off-white with a sea-teal accent."
@@ -219,7 +219,7 @@ function ReceiptSection(): JSX.Element {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_auto] gap-8 items-start">
+      <div className="grid grid-cols-1 @4xl:grid-cols-[minmax(0,1fr)_auto] gap-8 items-start">
         {/* Form */}
         <fieldset disabled={!isOwner} className="space-y-5 min-w-0">
           {/* Header */}
@@ -549,7 +549,7 @@ function PrinterSetupField({
       )}
 
       {mode === 'network' && (
-        <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_8rem] gap-3">
+        <div className="grid grid-cols-1 @xl:grid-cols-[minmax(0,1fr)_8rem] gap-3">
           <TextField
             label="Printer IP address"
             value={net.host}

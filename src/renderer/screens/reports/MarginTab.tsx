@@ -10,6 +10,7 @@ import { bpsToCsvPercent, buildCsvFilename, exportRowsAsCsv, pesewasToCsvNumber 
 import type { ReportsMarginResponse } from '../../../shared/types/ipc';
 import { FeedbackBanner } from '../../components/FeedbackBanner';
 import { Button } from '../../components/ui/button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 
 type ProductSort = 'margin' | 'revenue' | 'marginBps' | 'units';
 
@@ -89,7 +90,7 @@ export function MarginTab({ reportAccessToken }: { reportAccessToken: string }) 
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="bg-bg-surface border border-border p-4">
+      <div className="panel p-4">
         <DateRangePicker value={range} onChange={setRange} />
       </div>
 
@@ -98,7 +99,7 @@ export function MarginTab({ reportAccessToken }: { reportAccessToken: string }) 
 
       {data && (
         <>
-          <section className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <section className="grid grid-cols-2 @xl:grid-cols-4 gap-4">
             <Stat label="Net revenue" value={formatMoneyWithCurrency(data.totalRevenuePesewas)} />
             <Stat label="Net COGS" value={formatMoneyWithCurrency(data.totalCogsPesewas)} />
             <Stat label="Net margin" value={formatMoneyWithCurrency(data.totalMarginPesewas)}
@@ -122,43 +123,43 @@ export function MarginTab({ reportAccessToken }: { reportAccessToken: string }) 
                 set too low, a discount went too deep, or COGS jumped without the sell price
                 being updated. Worst 10:
               </div>
-              <table className="w-full text-sm mt-1">
-                <thead className="text-text-tertiary text-xs uppercase tracking-wider">
-                  <tr>
-                    <th className="text-left pb-1">When</th>
-                    <th className="text-left pb-1">Product</th>
-                    <th className="text-right pb-1">Qty</th>
-                    <th className="text-right pb-1">Price</th>
-                    <th className="text-right pb-1">Cost</th>
-                    <th className="text-right pb-1">Loss</th>
-                    <th className="text-left pb-1">Cashier</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table className="mt-1">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="pb-1">When</TableHead>
+                    <TableHead className="pb-1">Product</TableHead>
+                    <TableHead className="text-right pb-1">Qty</TableHead>
+                    <TableHead className="text-right pb-1">Price</TableHead>
+                    <TableHead className="text-right pb-1">Cost</TableHead>
+                    <TableHead className="text-right pb-1">Loss</TableHead>
+                    <TableHead className="pb-1">Cashier</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {data.belowCost.worst.map((l) => (
-                    <tr key={l.saleId + l.productId} className="border-t border-danger/30">
-                      <td className="py-1.5 text-text-tertiary text-xs">
+                    <TableRow key={l.saleId + l.productId} className="border-danger/30">
+                      <TableCell className="py-1.5 text-text-tertiary text-xs">
                         {new Date(l.saleAt).toLocaleString()}
-                      </td>
-                      <td className="py-1.5">
+                      </TableCell>
+                      <TableCell className="py-1.5">
                         <div>{l.name}</div>
                         <div className="text-text-tertiary text-xs font-mono">{l.sku}</div>
-                      </td>
-                      <td className="py-1.5 text-right font-mono tabular-nums">{l.quantity}</td>
-                      <td className="py-1.5 text-right font-mono tabular-nums">{formatMoney(l.unitPricePesewas)}</td>
-                      <td className="py-1.5 text-right font-mono tabular-nums">{formatMoney(l.unitCostPesewas)}</td>
-                      <td className="py-1.5 text-right font-mono tabular-nums text-danger">
+                      </TableCell>
+                      <TableCell className="py-1.5 text-right font-mono tabular-nums">{l.quantity}</TableCell>
+                      <TableCell className="py-1.5 text-right font-mono tabular-nums">{formatMoney(l.unitPricePesewas)}</TableCell>
+                      <TableCell className="py-1.5 text-right font-mono tabular-nums">{formatMoney(l.unitCostPesewas)}</TableCell>
+                      <TableCell className="py-1.5 text-right font-mono tabular-nums text-danger">
                         {formatMoney(-l.marginPesewas)}
-                      </td>
-                      <td className="py-1.5 text-text-secondary text-xs">{l.workerName}</td>
-                    </tr>
+                      </TableCell>
+                      <TableCell className="py-1.5 text-text-secondary text-xs">{l.workerName}</TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </section>
           )}
 
-          <section className="bg-bg-surface border border-border">
+          <section className="panel">
             <div className="px-4 py-3 border-b border-border-subtle flex items-center justify-between">
               <h3 className="text-text-secondary uppercase tracking-wider text-xs">By product</h3>
               <div className="flex gap-3 items-center">
@@ -173,46 +174,46 @@ export function MarginTab({ reportAccessToken }: { reportAccessToken: string }) 
                 No sales recorded in this range — no margin to break down.
               </div>
             ) : (
-              <table className="w-full text-sm">
-                <thead className="bg-bg-deep/60 text-text-tertiary text-xs uppercase tracking-wider">
-                  <tr>
-                    <th className="text-left px-4 py-2">Product</th>
-                    <th className="text-left px-4 py-2">Category</th>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Product</TableHead>
+                    <TableHead>Category</TableHead>
                     <SortHeader label="Units" col="units" current={sortBy} dir={sortDir} onSort={setSort} />
                     <SortHeader label="Net revenue" col="revenue" current={sortBy} dir={sortDir} onSort={setSort} />
-                    <th className="text-right px-4 py-2">Net COGS</th>
+                    <TableHead className="text-right">Net COGS</TableHead>
                     <SortHeader label="Margin ₵" col="margin" current={sortBy} dir={sortDir} onSort={setSort} />
                     <SortHeader label="Margin %" col="marginBps" current={sortBy} dir={sortDir} onSort={setSort} />
-                  </tr>
-                </thead>
-                <tbody>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {sortedProducts.map((p) => (
-                    <tr key={p.productId}
+                    <TableRow key={p.productId}
                         className={`border-t border-border-subtle ${p.marginPesewas < 0 ? 'bg-danger/5' : ''}`}>
-                      <td className="px-4 py-2">
+                      <TableCell className="px-4 py-2">
                         <div>{p.name}</div>
                         <div className="text-text-tertiary text-xs font-mono">{p.sku}</div>
-                      </td>
-                      <td className="px-4 py-2 text-text-tertiary text-xs">{p.category}</td>
-                      <td className="px-4 py-2 text-right font-mono tabular-nums">{p.unitsSold}</td>
-                      <td className="px-4 py-2 text-right font-mono tabular-nums">{formatMoney(p.revenuePesewas)}</td>
-                      <td className="px-4 py-2 text-right font-mono tabular-nums text-text-tertiary">
+                      </TableCell>
+                      <TableCell className="px-4 py-2 text-text-tertiary text-xs">{p.category}</TableCell>
+                      <TableCell className="px-4 py-2 text-right font-mono tabular-nums">{p.unitsSold}</TableCell>
+                      <TableCell className="px-4 py-2 text-right font-mono tabular-nums">{formatMoney(p.revenuePesewas)}</TableCell>
+                      <TableCell className="px-4 py-2 text-right font-mono tabular-nums text-text-tertiary">
                         {formatMoney(p.cogsPesewas)}
-                      </td>
-                      <td className={`px-4 py-2 text-right font-mono tabular-nums ${p.marginPesewas < 0 ? 'text-danger' : ''}`}>
+                      </TableCell>
+                      <TableCell className={`px-4 py-2 text-right font-mono tabular-nums ${p.marginPesewas < 0 ? 'text-danger' : ''}`}>
                         {formatMoney(p.marginPesewas)}
-                      </td>
-                      <td className={`px-4 py-2 text-right font-mono tabular-nums ${p.marginBps < 0 ? 'text-danger' : p.marginBps < 500 ? 'text-warning' : 'text-success'}`}>
+                      </TableCell>
+                      <TableCell className={`px-4 py-2 text-right font-mono tabular-nums ${p.marginBps < 0 ? 'text-danger' : p.marginBps < 500 ? 'text-warning' : 'text-success'}`}>
                         {(p.marginBps / 100).toFixed(1)}%
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             )}
           </section>
 
-          <section className="bg-bg-surface border border-border">
+          <section className="panel">
             <div className="px-4 py-3 border-b border-border-subtle flex items-center justify-between">
               <h3 className="text-text-secondary uppercase tracking-wider text-xs">By category</h3>
               <Button size="sm" onClick={exportCategories} disabled={data.byCategory.length === 0}>
@@ -222,38 +223,38 @@ export function MarginTab({ reportAccessToken }: { reportAccessToken: string }) 
             {data.byCategory.length === 0 ? (
               <div className="px-4 py-6 text-text-tertiary text-sm text-center">No category data.</div>
             ) : (
-              <table className="w-full text-sm">
-                <thead className="bg-bg-deep/60 text-text-tertiary text-xs uppercase tracking-wider">
-                  <tr>
-                    <th className="text-left px-4 py-2">Category</th>
-                    <th className="text-right px-4 py-2">Products</th>
-                    <th className="text-right px-4 py-2">Units</th>
-                    <th className="text-right px-4 py-2">Net revenue</th>
-                    <th className="text-right px-4 py-2">Net COGS</th>
-                    <th className="text-right px-4 py-2">Margin ₵</th>
-                    <th className="text-right px-4 py-2">Margin %</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Category</TableHead>
+                    <TableHead className="text-right">Products</TableHead>
+                    <TableHead className="text-right">Units</TableHead>
+                    <TableHead className="text-right">Net revenue</TableHead>
+                    <TableHead className="text-right">Net COGS</TableHead>
+                    <TableHead className="text-right">Margin ₵</TableHead>
+                    <TableHead className="text-right">Margin %</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {data.byCategory.map((c) => (
-                    <tr key={c.category} className="border-t border-border-subtle">
-                      <td className="px-4 py-2">{c.category}</td>
-                      <td className="px-4 py-2 text-right font-mono tabular-nums">{c.productCount}</td>
-                      <td className="px-4 py-2 text-right font-mono tabular-nums">{c.unitsSold}</td>
-                      <td className="px-4 py-2 text-right font-mono tabular-nums">{formatMoney(c.revenuePesewas)}</td>
-                      <td className="px-4 py-2 text-right font-mono tabular-nums text-text-tertiary">
+                    <TableRow key={c.category}>
+                      <TableCell className="px-4 py-2">{c.category}</TableCell>
+                      <TableCell className="px-4 py-2 text-right font-mono tabular-nums">{c.productCount}</TableCell>
+                      <TableCell className="px-4 py-2 text-right font-mono tabular-nums">{c.unitsSold}</TableCell>
+                      <TableCell className="px-4 py-2 text-right font-mono tabular-nums">{formatMoney(c.revenuePesewas)}</TableCell>
+                      <TableCell className="px-4 py-2 text-right font-mono tabular-nums text-text-tertiary">
                         {formatMoney(c.cogsPesewas)}
-                      </td>
-                      <td className={`px-4 py-2 text-right font-mono tabular-nums ${c.marginPesewas < 0 ? 'text-danger' : ''}`}>
+                      </TableCell>
+                      <TableCell className={`px-4 py-2 text-right font-mono tabular-nums ${c.marginPesewas < 0 ? 'text-danger' : ''}`}>
                         {formatMoney(c.marginPesewas)}
-                      </td>
-                      <td className={`px-4 py-2 text-right font-mono tabular-nums ${c.marginBps < 0 ? 'text-danger' : c.marginBps < 500 ? 'text-warning' : 'text-success'}`}>
+                      </TableCell>
+                      <TableCell className={`px-4 py-2 text-right font-mono tabular-nums ${c.marginBps < 0 ? 'text-danger' : c.marginBps < 500 ? 'text-warning' : 'text-success'}`}>
                         {(c.marginBps / 100).toFixed(1)}%
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             )}
           </section>
         </>
@@ -265,7 +266,7 @@ export function MarginTab({ reportAccessToken }: { reportAccessToken: string }) 
 function Stat({ label, value, accent }: { label: string; value: string; accent?: 'ok' | 'danger' }) {
   const tone = accent === 'danger' ? 'text-danger' : '';
   return (
-    <div className="bg-bg-surface border border-border p-4">
+    <div className="panel p-4">
       <div className="text-text-tertiary uppercase tracking-wider text-xs">{label}</div>
       <div className={`text-xl font-bold tabular-nums mt-1 ${tone}`}>{value}</div>
     </div>
@@ -283,11 +284,11 @@ function SortHeader<T extends string>({
 }) {
   const active = current === col;
   return (
-    <th className="text-right px-4 py-2">
+    <TableHead className="text-right">
       <button onClick={() => onSort(col)}
         className={`uppercase tracking-wider text-xs ${active ? 'text-accent' : 'hover:text-text-primary'}`}>
         <span className="inline-flex items-center gap-1">{label}{active && (dir === 'desc' ? <ChevronDownIcon aria-label="descending" className="size-3.5" /> : <ChevronUpIcon aria-label="ascending" className="size-3.5" />)}</span>
       </button>
-    </th>
+    </TableHead>
   );
 }

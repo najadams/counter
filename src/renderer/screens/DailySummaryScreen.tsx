@@ -11,6 +11,7 @@ import { FeedbackBanner } from '../components/FeedbackBanner';
 import { PinUnlockPanel } from '../components/PinUnlockPanel';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 
 interface SummaryRow { date: string; locationId: string; revenuePesewas: number; numSales: number;
   shrinkageRate: number | null; generatedAt: string; whatsappSentAt: string | null }
@@ -102,14 +103,14 @@ export default function DailySummaryScreen({ onExit }: { onExit: () => void }) {
             <h2 className="text-text-secondary uppercase tracking-wider text-xs">Recent</h2>
             <span className="text-text-tertiary text-xs"><span className="kbd">F9</span> back</span>
           </div>
-          <ul className="bg-bg-surface border border-border max-h-[60vh] overflow-y-auto">
+          <ul className="panel max-h-[60vh] overflow-y-auto">
             {list.map((s) => (
               <li key={`${s.date}-${s.locationId}`}>
                 <button
                   onClick={() => void loadDetail(s.date)}
                   className={[
                     'w-full text-left px-4 py-3 border-b border-border',
-                    selectedDate === s.date ? 'bg-bg-elevated' : 'hover:bg-bg-elevated',
+                    selectedDate === s.date ? 'bg-accent/10' : 'hover:bg-bg-surface',
                   ].join(' ')}>
                   <div className="flex justify-between">
                     <span className="font-mono tnum">{s.date}</span>
@@ -202,7 +203,7 @@ export default function DailySummaryScreen({ onExit }: { onExit: () => void }) {
               )}
 
               {varianceUnlocked && (
-                <div className="bg-bg-surface border border-border p-5">
+                <div className="panel p-5">
                   <div className="flex items-baseline justify-between mb-3">
                     <span className="text-text-secondary uppercase tracking-wider text-xs">Shrinkage (stocktake-derived)</span>
                     {detail.stocktakeShrinkageRate == null && (
@@ -223,7 +224,7 @@ export default function DailySummaryScreen({ onExit }: { onExit: () => void }) {
               )}
 
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-bg-surface border border-border p-4">
+                <div className="panel p-4">
                   <h4 className="text-text-secondary uppercase tracking-wider text-xs mb-2">Top SKUs</h4>
                   <ul className="text-sm">
                     {detail.topSkus.map((s) => (
@@ -235,7 +236,7 @@ export default function DailySummaryScreen({ onExit }: { onExit: () => void }) {
                     {detail.topSkus.length === 0 && <li className="text-text-tertiary text-sm">—</li>}
                   </ul>
                 </div>
-                <div className="bg-bg-surface border border-border p-4">
+                <div className="panel p-4">
                   <h4 className="text-text-secondary uppercase tracking-wider text-xs mb-2">Reorder alerts</h4>
                   <ul className="text-sm">
                     {detail.reorderAlerts.map((r) => (
@@ -249,34 +250,34 @@ export default function DailySummaryScreen({ onExit }: { onExit: () => void }) {
                 </div>
               </div>
 
-              <div className="bg-bg-surface border border-border p-4">
+              <div className="panel p-4">
                 <h4 className="text-text-secondary uppercase tracking-wider text-xs mb-2">Shifts</h4>
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-text-secondary text-xs uppercase tracking-wider">
-                      <th className="text-left">Worker</th>
-                      <th className="text-left">Closed</th>
-                      <th className="text-right">Sales</th>
-                      <th className="text-right">Variance</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Worker</TableHead>
+                      <TableHead>Closed</TableHead>
+                      <TableHead className="text-right">Sales</TableHead>
+                      <TableHead className="text-right">Variance</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {detail.shiftSummaries.map((s) => (
-                      <tr key={s.shiftId} className="border-t border-border">
-                        <td className="py-1">{s.workerName}</td>
-                        <td className="py-1 text-text-tertiary text-xs">{s.closedAt ? new Date(s.closedAt).toLocaleTimeString() : 'open'}</td>
-                        <td className="py-1 text-right font-mono tnum">{formatMoney(s.totalSalesPesewas)}</td>
+                      <TableRow key={s.shiftId}>
+                        <TableCell className="py-1">{s.workerName}</TableCell>
+                        <TableCell className="py-1 text-text-tertiary text-xs">{s.closedAt ? new Date(s.closedAt).toLocaleTimeString() : 'open'}</TableCell>
+                        <TableCell className="py-1 text-right font-mono tnum">{formatMoney(s.totalSalesPesewas)}</TableCell>
                         {varianceUnlocked ? (
-                          <td className={`py-1 text-right font-mono tnum ${s.cashVariancePesewas == null ? 'text-text-tertiary' : s.cashVariancePesewas < 0 ? 'text-danger' : s.cashVariancePesewas > 0 ? 'text-warning' : 'text-success'}`}>
+                          <TableCell className={`py-1 text-right font-mono tnum ${s.cashVariancePesewas == null ? 'text-text-tertiary' : s.cashVariancePesewas < 0 ? 'text-danger' : s.cashVariancePesewas > 0 ? 'text-warning' : 'text-success'}`}>
                             {s.cashVariancePesewas == null ? '—' : (s.cashVariancePesewas >= 0 ? '+' : '') + formatMoney(s.cashVariancePesewas)}
-                          </td>
+                          </TableCell>
                         ) : (
-                          <td className="py-1 text-right font-mono tnum text-warning">Locked</td>
+                          <TableCell className="py-1 text-right font-mono tnum text-warning">Locked</TableCell>
                         )}
-                      </tr>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
 
               <div className="text-text-tertiary text-xs">Generated {new Date(detail.generatedAt).toLocaleString()}</div>
@@ -291,7 +292,7 @@ export default function DailySummaryScreen({ onExit }: { onExit: () => void }) {
 function KPI({ label, value, subtle, tone = 'ok' }: { label: string; value: string; subtle?: string; tone?: 'ok' | 'warn' | 'danger' }) {
   const c = tone === 'danger' ? 'text-danger' : tone === 'warn' ? 'text-warning' : 'text-text-primary';
   return (
-    <div className="bg-bg-surface border border-border p-4">
+    <div className="panel p-4">
       <div className="text-text-secondary uppercase tracking-wider text-xs">{label}</div>
       <div className={`font-mono tnum text-xl mt-1 ${c}`}>{value}</div>
       {subtle && <div className="text-text-tertiary text-xs mt-1">{subtle}</div>}

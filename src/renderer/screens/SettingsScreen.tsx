@@ -50,7 +50,7 @@ export default function SettingsScreen({ onExit }: { onExit: () => void }) {
        *  forced the tab row to overflow into a hidden zone where the "Done"
        *  button vanished off the right edge. Use full width with sensible
        *  padding that scales to the viewport. */}
-      <main className="flex-1 w-full mx-auto px-4 sm:px-6 lg:px-10 py-6 flex flex-col gap-5">
+      <main className="@container flex-1 w-full mx-auto px-4 sm:px-6 lg:px-10 py-6 flex flex-col gap-5">
         {/* Header row: tabs and action buttons share one wrap-aware flex
          *  container. On narrow widths the tabs wrap to a second line and
          *  the action buttons slide below them automatically. */}

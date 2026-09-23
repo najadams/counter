@@ -109,12 +109,12 @@ export default function BreakageScreen({ onExit }: { onExit: () => void }) {
         <Input className="h-12 px-4"
           ref={searchRef} type="text" value={query} onChange={(e) => setQuery(e.target.value)}
           placeholder="Search product (SKU or name)…" />
-        <ul className="bg-bg-surface border border-border max-h-48 overflow-y-auto">
+        <ul className="panel max-h-48 overflow-y-auto">
           {hits.map((p) => (
             <li key={p.id}>
               <button
                 onClick={() => setSelected(p)}
-                className={`w-full text-left px-4 py-2 flex justify-between border-b border-border ${selected?.id === p.id ? 'bg-bg-elevated' : 'hover:bg-bg-elevated'}`}>
+                className={`w-full text-left px-4 py-2 flex justify-between border-b border-border ${selected?.id === p.id ? 'bg-accent/10' : 'hover:bg-bg-surface'}`}>
                 <span>{p.name} <span className="text-text-tertiary text-xs">{p.sku}</span></span>
                 <span className="text-text-tertiary text-sm">{p.unitsOnHand} on hand · cost {formatMoney(p.costPricePesewas)}</span>
               </button>
@@ -124,7 +124,7 @@ export default function BreakageScreen({ onExit }: { onExit: () => void }) {
         </ul>
 
         {selected && (
-          <div className="bg-bg-surface border border-border p-5 flex flex-col gap-4">
+          <div className="panel p-5 flex flex-col gap-4">
             <div className="text-text-primary">{selected.name} <span className="text-text-tertiary text-xs">{selected.sku}</span></div>
             <div className="grid grid-cols-2 gap-4">
               <div>

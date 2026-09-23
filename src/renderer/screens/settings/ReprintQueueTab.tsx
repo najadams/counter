@@ -11,6 +11,7 @@ import { Button } from '../../components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import { Field } from '../../components/ui/field';
 import { Input } from '../../components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 
 interface Reprint {
   id: string; saleId: string; reason: string;
@@ -79,37 +80,37 @@ export function ReprintQueueTab() {
       {info && <div className="bg-success/10 border border-success/40 text-success text-sm px-3 py-2 rounded">{info}</div>}
 
       <div className="bg-bg-elevated rounded border border-border-subtle overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-bg-deep text-text-tertiary uppercase text-xs">
-            <tr>
-              <th className="text-left px-3 py-2">Sale</th>
-              <th className="text-left px-3 py-2">Cashier</th>
-              <th className="text-right px-3 py-2">Total</th>
-              <th className="text-left px-3 py-2">Reason</th>
-              <th className="text-left px-3 py-2">Age</th>
-              <th className="px-3 py-2"></th>
-            </tr>
-          </thead>
-          <tbody>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="px-3">Sale</TableHead>
+              <TableHead className="px-3">Cashier</TableHead>
+              <TableHead className="text-right px-3">Total</TableHead>
+              <TableHead className="px-3">Reason</TableHead>
+              <TableHead className="px-3">Age</TableHead>
+              <TableHead className="px-3"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {loading && (
-              <tr><td colSpan={6} className="px-4 py-6 text-center text-text-tertiary">Loading…</td></tr>
+              <TableRow><TableCell colSpan={6} className="px-4 py-6 text-center text-text-tertiary">Loading…</TableCell></TableRow>
             )}
             {!loading && reprints.length === 0 && (
-              <tr><td colSpan={6} className="px-4 py-6 text-center text-text-tertiary">
+              <TableRow><TableCell colSpan={6} className="px-4 py-6 text-center text-text-tertiary">
                 Queue is empty. All receipts printed cleanly.
-              </td></tr>
+              </TableCell></TableRow>
             )}
             {reprints.map((r) => (
-              <tr key={r.id} className="border-t border-border-subtle hover:bg-bg-deep/40">
-                <td className="px-3 py-2 font-mono text-xs">
+              <TableRow key={r.id}>
+                <TableCell className="px-3 py-2 font-mono text-xs">
                   {r.saleId.slice(-8)}
                   <div className="text-text-tertiary">{new Date(r.saleCreatedAt).toLocaleString()}</div>
-                </td>
-                <td className="px-3 py-2">{r.saleWorkerName}</td>
-                <td className="px-3 py-2 text-right tabular-nums">{formatMoneyWithCurrency(r.saleTotalPesewas)}</td>
-                <td className="px-3 py-2 text-text-secondary">{r.reason}</td>
-                <td className="px-3 py-2 text-text-tertiary">{formatAge(r.ageHours)}</td>
-                <td className="px-3 py-2 text-right">
+                </TableCell>
+                <TableCell className="px-3 py-2">{r.saleWorkerName}</TableCell>
+                <TableCell className="px-3 py-2 text-right tabular-nums">{formatMoneyWithCurrency(r.saleTotalPesewas)}</TableCell>
+                <TableCell className="px-3 py-2 text-text-secondary">{r.reason}</TableCell>
+                <TableCell className="px-3 py-2 text-text-tertiary">{formatAge(r.ageHours)}</TableCell>
+                <TableCell className="px-3 py-2 text-right">
                   <div className="flex gap-2 justify-end">
                     <Button variant="primary" size="sm" onClick={() => void retry(r)}>
                       Print now
@@ -118,11 +119,11 @@ export function ReprintQueueTab() {
                       Discard
                     </Button>
                   </div>
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
 
       {discarding && (

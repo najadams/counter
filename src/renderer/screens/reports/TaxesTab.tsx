@@ -8,6 +8,7 @@ import { Button } from '../../components/ui/button';
 import { Textarea } from '../../components/ui/textarea';
 import { NativeSelect } from '../../components/ui/native-select';
 import { Input } from '../../components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 
 type TaxPaymentMethod = ReportsTaxPaymentRecordRequest['paymentMethod'];
 
@@ -93,7 +94,7 @@ export function TaxesTab({ reportAccessToken }: { reportAccessToken: string }) {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="bg-bg-surface border border-border p-4 flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+      <div className="panel p-4 flex flex-col gap-3 @6xl:flex-row xl:items-end xl:justify-between">
         <DateRangePicker value={range} onChange={setRange} />
         <Button variant="primary" size="lg"
           type="button"
@@ -108,7 +109,7 @@ export function TaxesTab({ reportAccessToken }: { reportAccessToken: string }) {
 
       {data && (
         <>
-          <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[1.25fr_1fr_1fr_1fr_1fr] gap-4">
+          <section className="grid grid-cols-1 @2xl:grid-cols-2 @6xl:grid-cols-[1.25fr_1fr_1fr_1fr_1fr] gap-4">
             <Stat
               label={data.netVatPayablePesewas >= 0 ? 'Tax to pay' : 'Tax credit'}
               value={formatMoneyWithCurrency(Math.abs(data.netVatPayablePesewas))}
@@ -126,14 +127,14 @@ export function TaxesTab({ reportAccessToken }: { reportAccessToken: string }) {
           </section>
 
           {showPaymentForm && (
-            <section className="bg-bg-surface border border-border p-4">
+            <section className="panel p-4">
               <div className="flex items-center justify-between gap-3 mb-4">
                 <h3 className="text-text-secondary uppercase tracking-wider text-xs">Record tax payment</h3>
                 <Button variant="link" className="text-text-tertiary hover:text-text-primary no-underline hover:underline text-sm" type="button" onClick={() => setShowPaymentForm(false)}>
                   Cancel
                 </Button>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1.4fr] gap-3">
+              <div className="grid grid-cols-1 @2xl:grid-cols-2 @6xl:grid-cols-[1fr_1fr_1fr_1.4fr] gap-3">
                 <label className="flex flex-col gap-1">
                   <span className="text-text-tertiary uppercase tracking-wider text-xs">Amount (cedis)</span>
                   <Input className="font-mono tnum"
@@ -192,7 +193,7 @@ export function TaxesTab({ reportAccessToken }: { reportAccessToken: string }) {
             </section>
           )}
 
-          <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <section className="grid grid-cols-1 @4xl:grid-cols-2 gap-4">
             <Stat
               label="Voided receipts"
               value={`${data.voidedSaleCount} · ${formatMoneyWithCurrency(data.voidedOutputTaxTotalPesewas)}`}
@@ -201,9 +202,9 @@ export function TaxesTab({ reportAccessToken }: { reportAccessToken: string }) {
             <Stat label="Supplier invoice rows" value={`${data.supplierInputs.length}`} />
           </section>
 
-          <section className="bg-bg-surface border border-border p-4">
+          <section className="panel p-4">
             <div className="text-text-secondary uppercase tracking-wider text-xs mb-3">Payable calculation</div>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3 text-sm">
+            <div className="grid grid-cols-1 @2xl:grid-cols-2 @6xl:grid-cols-5 gap-3 text-sm">
               <CalcStep label="VAT-inclusive sales" value={data.salesInclusivePesewas} />
               <CalcStep label="VAT-inclusive cost sold" value={data.soldGoodsInclusiveCostPesewas} />
               <CalcStep label="Value added" value={data.salesInclusivePesewas - data.soldGoodsInclusiveCostPesewas} />
@@ -212,7 +213,7 @@ export function TaxesTab({ reportAccessToken }: { reportAccessToken: string }) {
             </div>
           </section>
 
-          <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <section className="grid grid-cols-1 @4xl:grid-cols-2 gap-4">
             <Breakdown
               title="Sales output tax"
               rows={[
@@ -242,138 +243,138 @@ export function TaxesTab({ reportAccessToken }: { reportAccessToken: string }) {
             />
           </section>
 
-          <section className="bg-bg-surface border border-border">
+          <section className="panel">
             <Header title="Tax payments recorded" count={data.taxPayments.length} />
-            <table className="w-full text-sm">
-              <thead className="bg-bg-deep/60 text-text-tertiary text-xs uppercase tracking-wider">
-                <tr>
-                  <th className="text-left px-4 py-2">Paid at</th>
-                  <th className="text-left px-4 py-2">Method</th>
-                  <th className="text-left px-4 py-2">Reference</th>
-                  <th className="text-left px-4 py-2">Recorded by</th>
-                  <th className="text-right px-4 py-2">Amount</th>
-                  <th className="text-left px-4 py-2">Notes</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Paid at</TableHead>
+                  <TableHead>Method</TableHead>
+                  <TableHead>Reference</TableHead>
+                  <TableHead>Recorded by</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead>Notes</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {data.taxPayments.map((r) => (
-                  <tr key={r.id} className="border-t border-border-subtle">
-                    <td className="px-4 py-2 text-text-secondary text-xs">{new Date(r.paidAt).toLocaleString()}</td>
-                    <td className="px-4 py-2">{paymentMethodLabel(r.paymentMethod)}</td>
-                    <td className="px-4 py-2 text-text-secondary">{r.paymentReference ?? '—'}</td>
-                    <td className="px-4 py-2">{r.workerName}</td>
-                    <td className="px-4 py-2 text-right font-mono tnum text-success">{formatMoneyWithCurrency(r.amountPesewas)}</td>
-                    <td className="px-4 py-2 text-text-secondary">{r.notes ?? '—'}</td>
-                  </tr>
+                  <TableRow key={r.id}>
+                    <TableCell className="px-4 py-2 text-text-secondary text-xs">{new Date(r.paidAt).toLocaleString()}</TableCell>
+                    <TableCell className="px-4 py-2">{paymentMethodLabel(r.paymentMethod)}</TableCell>
+                    <TableCell className="px-4 py-2 text-text-secondary">{r.paymentReference ?? '—'}</TableCell>
+                    <TableCell className="px-4 py-2">{r.workerName}</TableCell>
+                    <TableCell className="px-4 py-2 text-right font-mono tnum text-success">{formatMoneyWithCurrency(r.amountPesewas)}</TableCell>
+                    <TableCell className="px-4 py-2 text-text-secondary">{r.notes ?? '—'}</TableCell>
+                  </TableRow>
                 ))}
                 {data.taxPayments.length === 0 && (
-                  <tr><td colSpan={6} className="px-4 py-6 text-center text-text-tertiary">No tax payments recorded in this period.</td></tr>
+                  <TableRow><TableCell colSpan={6} className="px-4 py-6 text-center text-text-tertiary">No tax payments recorded in this period.</TableCell></TableRow>
                 )}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </section>
 
-          <section className="bg-bg-surface border border-border">
+          <section className="panel">
             <Header title="Daily net tax" count={data.byDay.length} />
-            <table className="w-full text-sm">
-              <thead className="bg-bg-deep/60 text-text-tertiary text-xs uppercase tracking-wider">
-                <tr>
-                  <th className="text-left px-4 py-2">Date</th>
-                  <th className="text-right px-4 py-2">Sales</th>
-                  <th className="text-right px-4 py-2">Output tax</th>
-                  <th className="text-right px-4 py-2">Voided</th>
-                  <th className="text-right px-4 py-2">Void tax</th>
-                  <th className="text-right px-4 py-2">Cost sold</th>
-                  <th className="text-right px-4 py-2">Input tax</th>
-                  <th className="text-right px-4 py-2">Net</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead className="text-right">Sales</TableHead>
+                  <TableHead className="text-right">Output tax</TableHead>
+                  <TableHead className="text-right">Voided</TableHead>
+                  <TableHead className="text-right">Void tax</TableHead>
+                  <TableHead className="text-right">Cost sold</TableHead>
+                  <TableHead className="text-right">Input tax</TableHead>
+                  <TableHead className="text-right">Net</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {data.byDay.map((r) => (
-                  <tr key={r.date} className="border-t border-border-subtle">
-                    <td className="px-4 py-2">{r.date}</td>
-                    <td className="px-4 py-2 text-right font-mono tnum">{formatMoneyWithCurrency(r.salesInclusivePesewas)}</td>
-                    <td className="px-4 py-2 text-right font-mono tnum">{formatMoneyWithCurrency(r.outputTaxPesewas)}</td>
-                    <td className="px-4 py-2 text-right font-mono tnum text-warning">{formatMoneyWithCurrency(r.voidedSalesInclusivePesewas)}</td>
-                    <td className="px-4 py-2 text-right font-mono tnum text-warning">{formatMoneyWithCurrency(r.voidedOutputTaxPesewas)}</td>
-                    <td className="px-4 py-2 text-right font-mono tnum">{formatMoneyWithCurrency(r.soldGoodsInclusiveCostPesewas)}</td>
-                    <td className="px-4 py-2 text-right font-mono tnum">{formatMoneyWithCurrency(r.inputTaxPesewas)}</td>
-                    <td className={`px-4 py-2 text-right font-mono tnum ${r.netPayablePesewas < 0 ? 'text-success' : 'text-warning'}`}>
+                  <TableRow key={r.date}>
+                    <TableCell className="px-4 py-2">{r.date}</TableCell>
+                    <TableCell className="px-4 py-2 text-right font-mono tnum">{formatMoneyWithCurrency(r.salesInclusivePesewas)}</TableCell>
+                    <TableCell className="px-4 py-2 text-right font-mono tnum">{formatMoneyWithCurrency(r.outputTaxPesewas)}</TableCell>
+                    <TableCell className="px-4 py-2 text-right font-mono tnum text-warning">{formatMoneyWithCurrency(r.voidedSalesInclusivePesewas)}</TableCell>
+                    <TableCell className="px-4 py-2 text-right font-mono tnum text-warning">{formatMoneyWithCurrency(r.voidedOutputTaxPesewas)}</TableCell>
+                    <TableCell className="px-4 py-2 text-right font-mono tnum">{formatMoneyWithCurrency(r.soldGoodsInclusiveCostPesewas)}</TableCell>
+                    <TableCell className="px-4 py-2 text-right font-mono tnum">{formatMoneyWithCurrency(r.inputTaxPesewas)}</TableCell>
+                    <TableCell className={`px-4 py-2 text-right font-mono tnum ${r.netPayablePesewas < 0 ? 'text-success' : 'text-warning'}`}>
                       {formatMoneyWithCurrency(r.netPayablePesewas)}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
                 {data.byDay.length === 0 && (
-                  <tr><td colSpan={8} className="px-4 py-6 text-center text-text-tertiary">No sales, voids, or supplier invoices in this period.</td></tr>
+                  <TableRow><TableCell colSpan={8} className="px-4 py-6 text-center text-text-tertiary">No sales, voids, or supplier invoices in this period.</TableCell></TableRow>
                 )}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </section>
 
-          <section className="bg-bg-surface border border-border">
+          <section className="panel">
             <Header title="Voided receipt tax audit" count={data.voidedReceipts.length} />
-            <table className="w-full text-sm">
-              <thead className="bg-bg-deep/60 text-text-tertiary text-xs uppercase tracking-wider">
-                <tr>
-                  <th className="text-left px-4 py-2">Voided at</th>
-                  <th className="text-left px-4 py-2">Sale</th>
-                  <th className="text-left px-4 py-2">Cashier</th>
-                  <th className="text-left px-4 py-2">Voided by</th>
-                  <th className="text-right px-4 py-2">Receipt total</th>
-                  <th className="text-right px-4 py-2">Output tax</th>
-                  <th className="text-left px-4 py-2">Reason</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Voided at</TableHead>
+                  <TableHead>Sale</TableHead>
+                  <TableHead>Cashier</TableHead>
+                  <TableHead>Voided by</TableHead>
+                  <TableHead className="text-right">Receipt total</TableHead>
+                  <TableHead className="text-right">Output tax</TableHead>
+                  <TableHead>Reason</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {data.voidedReceipts.map((r) => (
-                  <tr key={r.saleId} className="border-t border-border-subtle">
-                    <td className="px-4 py-2 text-text-secondary text-xs">{new Date(r.voidedAt).toLocaleString()}</td>
-                    <td className="px-4 py-2">
+                  <TableRow key={r.saleId}>
+                    <TableCell className="px-4 py-2 text-text-secondary text-xs">{new Date(r.voidedAt).toLocaleString()}</TableCell>
+                    <TableCell className="px-4 py-2">
                       <div className="font-mono text-xs">{r.saleId.slice(0, 8)}</div>
                       <div className="text-text-tertiary text-xs">{new Date(r.saleAt).toLocaleString()}</div>
-                    </td>
-                    <td className="px-4 py-2">{r.cashierName}</td>
-                    <td className="px-4 py-2">{r.voidedByName ?? '—'}</td>
-                    <td className="px-4 py-2 text-right font-mono tnum">{formatMoneyWithCurrency(r.totalPesewas)}</td>
-                    <td className="px-4 py-2 text-right font-mono tnum text-warning">{formatMoneyWithCurrency(r.outputTaxPesewas)}</td>
-                    <td className="px-4 py-2 text-text-secondary">{r.voidReason ?? '—'}</td>
-                  </tr>
+                    </TableCell>
+                    <TableCell className="px-4 py-2">{r.cashierName}</TableCell>
+                    <TableCell className="px-4 py-2">{r.voidedByName ?? '—'}</TableCell>
+                    <TableCell className="px-4 py-2 text-right font-mono tnum">{formatMoneyWithCurrency(r.totalPesewas)}</TableCell>
+                    <TableCell className="px-4 py-2 text-right font-mono tnum text-warning">{formatMoneyWithCurrency(r.outputTaxPesewas)}</TableCell>
+                    <TableCell className="px-4 py-2 text-text-secondary">{r.voidReason ?? '—'}</TableCell>
+                  </TableRow>
                 ))}
                 {data.voidedReceipts.length === 0 && (
-                  <tr><td colSpan={7} className="px-4 py-6 text-center text-text-tertiary">No voided receipts in this period.</td></tr>
+                  <TableRow><TableCell colSpan={7} className="px-4 py-6 text-center text-text-tertiary">No voided receipts in this period.</TableCell></TableRow>
                 )}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </section>
 
-          <section className="bg-bg-surface border border-border">
+          <section className="panel">
             <Header title="Supplier invoice evidence" count={data.supplierInputs.length} />
             <div className="px-4 py-3 text-xs text-text-tertiary border-b border-border-subtle">
               These rows help audit supplier purchases. The payable amount above uses the VAT-inclusive cost of goods sold so a product with a recorded cost still gets its input-tax credit.
             </div>
-            <table className="w-full text-sm">
-              <thead className="bg-bg-deep/60 text-text-tertiary text-xs uppercase tracking-wider">
-                <tr>
-                  <th className="text-left px-4 py-2">Supplier</th>
-                  <th className="text-right px-4 py-2">Invoices</th>
-                  <th className="text-right px-4 py-2">Purchases</th>
-                  <th className="text-right px-4 py-2">Input tax</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Supplier</TableHead>
+                  <TableHead className="text-right">Invoices</TableHead>
+                  <TableHead className="text-right">Purchases</TableHead>
+                  <TableHead className="text-right">Input tax</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {data.supplierInputs.map((r) => (
-                  <tr key={r.supplierId} className="border-t border-border-subtle">
-                    <td className="px-4 py-2">{r.supplierName}</td>
-                    <td className="px-4 py-2 text-right font-mono tnum">{r.invoiceCount}</td>
-                    <td className="px-4 py-2 text-right font-mono tnum">{formatMoneyWithCurrency(r.purchaseInclusivePesewas)}</td>
-                    <td className="px-4 py-2 text-right font-mono tnum">{formatMoneyWithCurrency(r.inputTaxPesewas)}</td>
-                  </tr>
+                  <TableRow key={r.supplierId}>
+                    <TableCell className="px-4 py-2">{r.supplierName}</TableCell>
+                    <TableCell className="px-4 py-2 text-right font-mono tnum">{r.invoiceCount}</TableCell>
+                    <TableCell className="px-4 py-2 text-right font-mono tnum">{formatMoneyWithCurrency(r.purchaseInclusivePesewas)}</TableCell>
+                    <TableCell className="px-4 py-2 text-right font-mono tnum">{formatMoneyWithCurrency(r.inputTaxPesewas)}</TableCell>
+                  </TableRow>
                 ))}
                 {data.supplierInputs.length === 0 && (
-                  <tr><td colSpan={4} className="px-4 py-6 text-center text-text-tertiary">No supplier invoices recorded in this period.</td></tr>
+                  <TableRow><TableCell colSpan={4} className="px-4 py-6 text-center text-text-tertiary">No supplier invoices recorded in this period.</TableCell></TableRow>
                 )}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </section>
         </>
       )}
@@ -402,7 +403,7 @@ function Stat({
 }) {
   const color = accent === 'warning' ? 'text-warning' : accent === 'success' ? 'text-success' : 'text-text-primary';
   return (
-    <div className="bg-bg-surface border border-border p-4">
+    <div className="panel p-4">
       <div className="text-text-secondary uppercase tracking-wider text-xs">{label}</div>
       <div className={`font-mono tnum mt-1 ${large ? 'text-3xl' : 'text-xl'} ${color}`}>{value}</div>
     </div>
@@ -421,7 +422,7 @@ function CalcStep({ label, value, accent }: { label: string; value: number; acce
 
 function Breakdown({ title, rows }: { title: string; rows: Array<[string, number]> }) {
   return (
-    <section className="bg-bg-surface border border-border">
+    <section className="panel">
       <Header title={title} />
       <div className="divide-y divide-border-subtle">
         {rows.map(([label, value], idx) => (

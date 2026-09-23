@@ -68,7 +68,7 @@ export function FriendlyHomeMenu({
 
   return (
     <div className="flex flex-col gap-6">
-      <section aria-labelledby="friendly-main-actions" className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+      <section aria-labelledby="friendly-main-actions" className="grid grid-cols-1 @2xl:grid-cols-2 @5xl:grid-cols-3 gap-3">
         <h2 id="friendly-main-actions" className="sr-only">Main actions</h2>
         <ActionTile
           size="regular"
@@ -206,7 +206,7 @@ function MenuGroup({ id, title, illustration, badge, open, onToggle, children }:
         )}
         <span aria-hidden className={`text-2xl text-text-secondary transition-transform ${open ? 'rotate-180' : ''}`}>⌄</span>
       </button>
-      <div id={panelId} role="region" aria-label={title} hidden={!open} className={`${open ? 'grid' : 'hidden'} grid-cols-1 md:grid-cols-2 gap-3 px-4 pb-4`}>
+      <div id={panelId} role="region" aria-label={title} hidden={!open} className={`${open ? 'grid' : 'hidden'} grid-cols-1 @2xl:grid-cols-2 gap-3 px-4 pb-4`}>
         {children}
       </div>
     </div>

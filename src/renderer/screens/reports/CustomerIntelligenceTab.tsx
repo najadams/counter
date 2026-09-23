@@ -4,6 +4,7 @@ import { formatMoney, formatMoneyWithCurrency } from '../../../shared/lib/money'
 import type { ReportsCustomerIntelligenceResponse } from '../../../shared/types/ipc';
 import { FeedbackBanner } from '../../components/FeedbackBanner';
 import { Input } from '../../components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 
 export function CustomerIntelligenceTab({ reportAccessToken }: { reportAccessToken: string }) {
   const [data, setData] = useState<ReportsCustomerIntelligenceResponse | null>(null);
@@ -26,8 +27,8 @@ export function CustomerIntelligenceTab({ reportAccessToken }: { reportAccessTok
 
   return (
     <div className="flex flex-col gap-5">
-      <section className="bg-bg-surface border border-border p-4 flex items-center justify-between gap-3">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 flex-1">
+      <section className="panel p-4 flex items-center justify-between gap-3">
+        <div className="grid grid-cols-2 @xl:grid-cols-4 gap-4 flex-1">
           <Stat label="Customers" value={String(data.rows.length)} />
           <Stat label="Inactive" value={String(data.inactive.length)} />
           <Stat label="Lifetime value" value={formatMoneyWithCurrency(totalValue)} />
@@ -43,41 +44,41 @@ export function CustomerIntelligenceTab({ reportAccessToken }: { reportAccessTok
         </label>
       </section>
 
-      <section className="bg-bg-surface border border-border">
+      <section className="panel">
         <Header title="Customer value and frequency" count={data.rows.length} />
-        <table className="w-full text-sm">
-          <thead className="bg-bg-deep/60 text-text-tertiary text-xs uppercase tracking-wider">
-            <tr>
-              <th className="text-left px-4 py-2">Customer</th>
-              <th className="text-right px-4 py-2">Class</th>
-              <th className="text-right px-4 py-2">Purchases</th>
-              <th className="text-right px-4 py-2">Freq.</th>
-              <th className="text-right px-4 py-2">Inactive</th>
-              <th className="text-right px-4 py-2">Monthly</th>
-              <th className="text-right px-4 py-2">Lifetime</th>
-            </tr>
-          </thead>
-          <tbody>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Customer</TableHead>
+              <TableHead className="text-right">Class</TableHead>
+              <TableHead className="text-right">Purchases</TableHead>
+              <TableHead className="text-right">Freq.</TableHead>
+              <TableHead className="text-right">Inactive</TableHead>
+              <TableHead className="text-right">Monthly</TableHead>
+              <TableHead className="text-right">Lifetime</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {data.rows.map((r) => (
-              <tr key={r.customerId} className="border-t border-border-subtle">
-                <td className="px-4 py-2">{r.name}<span className="text-text-tertiary text-xs ml-2">{r.phone ?? ''}</span></td>
-                <td className="px-4 py-2 text-right font-mono tnum">{r.abcClass}</td>
-                <td className="px-4 py-2 text-right font-mono tnum">{r.purchaseCount}</td>
-                <td className="px-4 py-2 text-right font-mono tnum">
+              <TableRow key={r.customerId}>
+                <TableCell className="px-4 py-2">{r.name}<span className="text-text-tertiary text-xs ml-2">{r.phone ?? ''}</span></TableCell>
+                <TableCell className="px-4 py-2 text-right font-mono tnum">{r.abcClass}</TableCell>
+                <TableCell className="px-4 py-2 text-right font-mono tnum">{r.purchaseCount}</TableCell>
+                <TableCell className="px-4 py-2 text-right font-mono tnum">
                   {r.purchaseFrequencyDays == null ? '—' : `${r.purchaseFrequencyDays}d`}
-                </td>
-                <td className={`px-4 py-2 text-right font-mono tnum ${r.daysInactive == null || r.daysInactive >= inactiveDays ? 'text-warning' : 'text-text-tertiary'}`}>
+                </TableCell>
+                <TableCell className={`px-4 py-2 text-right font-mono tnum ${r.daysInactive == null || r.daysInactive >= inactiveDays ? 'text-warning' : 'text-text-tertiary'}`}>
                   {r.daysInactive == null ? 'never' : `${r.daysInactive}d`}
-                </td>
-                <td className="px-4 py-2 text-right font-mono tnum">{formatMoney(r.monthlyValuePesewas)}</td>
-                <td className="px-4 py-2 text-right font-mono tnum">{formatMoney(r.totalValuePesewas)}</td>
-              </tr>
+                </TableCell>
+                <TableCell className="px-4 py-2 text-right font-mono tnum">{formatMoney(r.monthlyValuePesewas)}</TableCell>
+                <TableCell className="px-4 py-2 text-right font-mono tnum">{formatMoney(r.totalValuePesewas)}</TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </section>
 
-      <section className="bg-bg-surface border border-border">
+      <section className="panel">
         <Header title="Top products per customer" count={data.topProducts.length} />
         <div className="divide-y divide-border-subtle">
           {data.topProducts.slice(0, 80).map((r, index) => (

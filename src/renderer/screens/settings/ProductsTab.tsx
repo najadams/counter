@@ -106,47 +106,47 @@ export function ProductsTab() {
       {info && <div className="bg-bg-surface border border-success px-5 py-3 text-success text-sm">{info}</div>}
       {error && <FeedbackBanner>{error}</FeedbackBanner>}
 
-      <div className="bg-bg-surface border border-border overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-text-secondary text-xs uppercase tracking-wider">
-              <th className="px-3 py-3 text-left">Product</th>
-              <th className="px-3 py-3 text-left">Category</th>
-              <th className="px-3 py-3 text-right">Cost</th>
-              <th className="px-3 py-3 text-right">Walk-in</th>
-              <th className="px-3 py-3 text-right">Wholesale</th>
-              <th className="px-3 py-3 text-right">Route</th>
-              <th className="px-3 py-3 text-right">On hand</th>
-              <th className="px-3 py-3 text-right">Reorder</th>
-              <th className="px-3 py-3 text-left">Status</th>
-              <th className="px-3 py-3"></th>
-            </tr>
-          </thead>
-          <tbody>
+      <div className="panel overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="px-3">Product</TableHead>
+              <TableHead className="px-3">Category</TableHead>
+              <TableHead className="px-3 text-right">Cost</TableHead>
+              <TableHead className="px-3 text-right">Walk-in</TableHead>
+              <TableHead className="px-3 text-right">Wholesale</TableHead>
+              <TableHead className="px-3 text-right">Route</TableHead>
+              <TableHead className="px-3 text-right">On hand</TableHead>
+              <TableHead className="px-3 text-right">Reorder</TableHead>
+              <TableHead className="px-3">Status</TableHead>
+              <TableHead className="px-3"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {visible.map((p) => {
               const lowMargin = p.walkInPricePesewas < p.costPricePesewas;
               return (
-                <tr key={p.id} className="border-t border-border">
-                  <td className="px-3 py-2">
+                <TableRow key={p.id}>
+                  <TableCell className="px-3 py-2">
                     <div>{p.name}</div>
                     <div className="text-text-tertiary text-xs">{p.sku}{p.brand ? ` · ${p.brand}` : ''}</div>
-                  </td>
-                  <td className="px-3 py-2">{p.category}</td>
-                  <td className="px-3 py-2 text-right font-mono tnum">{formatMoney(p.costPricePesewas)}</td>
-                  <td className={`px-3 py-2 text-right font-mono tnum ${lowMargin ? 'text-danger' : ''}`}>{formatMoney(p.walkInPricePesewas)}</td>
-                  <td className="px-3 py-2 text-right font-mono tnum">{formatMoney(p.wholesalePricePesewas)}</td>
-                  <td className="px-3 py-2 text-right font-mono tnum">{formatMoney(p.routePricePesewas)}</td>
-                  <td className={`px-3 py-2 text-right font-mono tnum ${p.unitsOnHand <= p.reorderThreshold && p.reorderThreshold > 0 ? 'text-warning' : ''}`}
+                  </TableCell>
+                  <TableCell className="px-3 py-2">{p.category}</TableCell>
+                  <TableCell className="px-3 py-2 text-right font-mono tnum">{formatMoney(p.costPricePesewas)}</TableCell>
+                  <TableCell className={`px-3 py-2 text-right font-mono tnum ${lowMargin ? 'text-danger' : ''}`}>{formatMoney(p.walkInPricePesewas)}</TableCell>
+                  <TableCell className="px-3 py-2 text-right font-mono tnum">{formatMoney(p.wholesalePricePesewas)}</TableCell>
+                  <TableCell className="px-3 py-2 text-right font-mono tnum">{formatMoney(p.routePricePesewas)}</TableCell>
+                  <TableCell className={`px-3 py-2 text-right font-mono tnum ${p.unitsOnHand <= p.reorderThreshold && p.reorderThreshold > 0 ? 'text-warning' : ''}`}
                       title={`${p.unitsOnHand} canonical units`}>
                     {p.units.length > 1
                       ? formatStockCompact(p.unitsOnHand, p.units)
                       : p.unitsOnHand}
-                  </td>
-                  <td className="px-3 py-2 text-right font-mono tnum text-text-tertiary">
+                  </TableCell>
+                  <TableCell className="px-3 py-2 text-right font-mono tnum text-text-tertiary">
                     {p.reorderThreshold > 0 ? `≤ ${p.reorderThreshold}` : '—'}
-                  </td>
-                  <td className="px-3 py-2">{p.active ? <span className="text-success">active</span> : <span className="text-text-tertiary">inactive</span>}</td>
-                  <td className="px-3 py-2 text-right space-x-2">
+                  </TableCell>
+                  <TableCell className="px-3 py-2">{p.active ? <span className="text-success">active</span> : <span className="text-text-tertiary">inactive</span>}</TableCell>
+                  <TableCell className="px-3 py-2 text-right space-x-2">
                     <Button variant="link" className="text-text-tertiary hover:text-accent no-underline hover:underline text-xs" onClick={() => setHistoryFor(p)}>history</Button>
                     {isAdmin ? (
                       <>
@@ -158,15 +158,15 @@ export function ProductsTab() {
                     ) : (
                       <span className="text-text-tertiary text-xs" title="OWNER or FOUNDER role required to edit or deactivate">edit/deactivate: admin only</span>
                     )}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               );
             })}
             {visible.length === 0 && (
-              <tr><td colSpan={10} className="px-4 py-6 text-text-tertiary text-center">No products match.</td></tr>
+              <TableRow><TableCell colSpan={10} className="px-4 py-6 text-text-tertiary text-center">No products match.</TableCell></TableRow>
             )}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
 
       {showAdd && (
@@ -658,37 +658,37 @@ function PricingTiersEditor({ productId, onError }: { productId: string; onError
           Channel ALL applies to walk-in, wholesale, and route.
         </div>
       </div>
-      <table className="w-full text-sm border border-border-subtle">
-        <thead>
-          <tr className="text-text-secondary text-xs uppercase tracking-wider bg-bg-surface/60">
-            <th className="text-left px-3 py-2">Channel</th>
-            <th className="text-left px-3 py-2">Applies to</th>
-            <th className="text-right px-3 py-2">Min qty</th>
-            <th className="text-right px-3 py-2">Unit price</th>
-            <th className="text-left px-3 py-2">Status</th>
-            <th className="px-3 py-2"></th>
-          </tr>
-        </thead>
-        <tbody>
+      <Table className="border border-border-subtle">
+        <TableHeader>
+          <TableRow className="bg-bg-surface/60">
+            <TableHead className="px-3">Channel</TableHead>
+            <TableHead className="px-3">Applies to</TableHead>
+            <TableHead className="text-right px-3">Min qty</TableHead>
+            <TableHead className="text-right px-3">Unit price</TableHead>
+            <TableHead className="px-3">Status</TableHead>
+            <TableHead className="px-3"></TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {tiers.map((t) => (
-            <tr key={t.id} className="border-t border-border-subtle hover:bg-bg-deep/40">
-              <td className="px-3 py-2">{t.channel}</td>
-              <td className="px-3 py-2 text-text-tertiary text-xs">{unitName(t.appliesToUnitId)}</td>
-              <td className="text-right font-mono tnum px-3 py-2">{t.minQuantity}</td>
-              <td className="text-right font-mono tnum px-3 py-2">{formatMoney(t.unitPricePesewas)}</td>
-              <td className="px-3 py-2">{t.active ? <span className="text-success">active</span> : <span className="text-text-tertiary">inactive</span>}</td>
-              <td className="text-right px-3 py-2">
+            <TableRow key={t.id}>
+              <TableCell className="px-3 py-2">{t.channel}</TableCell>
+              <TableCell className="px-3 py-2 text-text-tertiary text-xs">{unitName(t.appliesToUnitId)}</TableCell>
+              <TableCell className="text-right font-mono tnum px-3 py-2">{t.minQuantity}</TableCell>
+              <TableCell className="text-right font-mono tnum px-3 py-2">{formatMoney(t.unitPricePesewas)}</TableCell>
+              <TableCell className="px-3 py-2">{t.active ? <span className="text-success">active</span> : <span className="text-text-tertiary">inactive</span>}</TableCell>
+              <TableCell className="text-right px-3 py-2">
                 {t.active
                   ? <Button variant="link" className="text-text-tertiary hover:text-warning no-underline hover:underline text-xs" onClick={() => void deactivate(t)}>deactivate</Button>
                   : <Button variant="link" className="text-text-tertiary hover:text-success no-underline hover:underline text-xs" onClick={() => void reactivate(t)}>reactivate</Button>}
-              </td>
-            </tr>
+              </TableCell>
+            </TableRow>
           ))}
           {tiers.length === 0 && (
-            <tr><td colSpan={6} className="text-text-tertiary text-center py-4 px-3">No tiers yet.</td></tr>
+            <TableRow><TableCell colSpan={6} className="text-text-tertiary text-center py-4 px-3">No tiers yet.</TableCell></TableRow>
           )}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
       <div className="flex flex-col gap-3 border-t border-border pt-3">
         <div className="grid grid-cols-4 gap-3">
           <div className="flex flex-col gap-1">
@@ -864,65 +864,65 @@ function ProductUnitsEditor({
           whole boxes, just add ONE row with factor 1.
         </div>
       </div>
-      <table className="w-full text-sm border border-border-subtle">
-        <thead>
-          <tr className="text-text-secondary text-xs uppercase tracking-wider bg-bg-deep/60">
-            <th className="text-left px-3 py-2">Name</th>
-            <th className="text-right px-3 py-2">Factor</th>
-            <th className="text-right px-3 py-2">Price (each)</th>
-            <th className="text-center px-3 py-2">Sale</th>
-            <th className="text-center px-3 py-2">Purchase</th>
-            <th className="text-left px-3 py-2">Status</th>
-            <th className="px-3 py-2"></th>
-          </tr>
-        </thead>
-        <tbody>
+      <Table className="border border-border-subtle">
+        <TableHeader>
+          <TableRow className="bg-bg-deep/60">
+            <TableHead className="px-3">Name</TableHead>
+            <TableHead className="text-right px-3">Factor</TableHead>
+            <TableHead className="text-right px-3">Price (each)</TableHead>
+            <TableHead className="text-center px-3">Sale</TableHead>
+            <TableHead className="text-center px-3">Purchase</TableHead>
+            <TableHead className="px-3">Status</TableHead>
+            <TableHead className="px-3"></TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {units.map((u) => (
             editId === u.id ? (
-              <tr key={u.id} className="border-t border-border-subtle bg-bg-deep/40">
-                <td className="px-2 py-1.5">
+              <TableRow key={u.id} className="bg-bg-deep/40">
+                <TableCell className="px-2 py-1.5">
                   <Input className="font-mono h-8 px-2" value={editName} onChange={(e) => setEditName(e.target.value.toUpperCase())} />
-                </td>
-                <td className="px-2 py-1.5">
+                </TableCell>
+                <TableCell className="px-2 py-1.5">
                   <Input className="font-mono tnum text-right h-8 px-2" value={editFactor} onChange={(e) => setEditFactor(e.target.value.replace(/\D/g, ''))} />
-                </td>
-                <td className="px-2 py-1.5">
+                </TableCell>
+                <TableCell className="px-2 py-1.5">
                   <Input className="font-mono tnum text-right h-8 px-2" value={editPrice} onChange={(e) => setEditPrice(e.target.value)} />
-                </td>
-                <td className="text-center px-2 py-1.5">
+                </TableCell>
+                <TableCell className="text-center px-2 py-1.5">
                   <input type="checkbox" checked={editSale} onChange={(e) => setEditSale(e.target.checked)} />
-                </td>
-                <td className="text-center px-2 py-1.5">
+                </TableCell>
+                <TableCell className="text-center px-2 py-1.5">
                   <input type="checkbox" checked={editPurchase} onChange={(e) => setEditPurchase(e.target.checked)} />
-                </td>
-                <td className="px-3 py-1.5">{u.active ? <span className="text-success">active</span> : <span className="text-text-tertiary">inactive</span>}</td>
-                <td className="text-right px-3 py-1.5 whitespace-nowrap">
+                </TableCell>
+                <TableCell className="px-3 py-1.5">{u.active ? <span className="text-success">active</span> : <span className="text-text-tertiary">inactive</span>}</TableCell>
+                <TableCell className="text-right px-3 py-1.5 whitespace-nowrap">
                   <Button variant="link" className="text-accent hover:text-accent-light no-underline hover:underline text-xs" onClick={() => void saveEdit(u)}>save</Button>
                   <Button variant="link" className="text-text-tertiary hover:text-text-primary ml-3 no-underline hover:underline text-xs" onClick={cancelEdit}>cancel</Button>
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ) : (
-            <tr key={u.id} className="border-t border-border-subtle hover:bg-bg-deep/40">
-              <td className="font-mono px-3 py-2">{u.unitName}</td>
-              <td className="text-right font-mono tnum px-3 py-2">× {u.conversionFactor}</td>
-              <td className="text-right font-mono tnum px-3 py-2">{formatMoney(u.pricePesewas)}</td>
-              <td className="text-center px-3 py-2"><YesNo value={u.isSaleUnit} /></td>
-              <td className="text-center px-3 py-2"><YesNo value={u.isPurchaseUnit} /></td>
-              <td className="px-3 py-2">{u.active ? <span className="text-success">active</span> : <span className="text-text-tertiary">inactive</span>}</td>
-              <td className="text-right px-3 py-2 whitespace-nowrap">
+            <TableRow key={u.id}>
+              <TableCell className="font-mono px-3 py-2">{u.unitName}</TableCell>
+              <TableCell className="text-right font-mono tnum px-3 py-2">× {u.conversionFactor}</TableCell>
+              <TableCell className="text-right font-mono tnum px-3 py-2">{formatMoney(u.pricePesewas)}</TableCell>
+              <TableCell className="text-center px-3 py-2"><YesNo value={u.isSaleUnit} /></TableCell>
+              <TableCell className="text-center px-3 py-2"><YesNo value={u.isPurchaseUnit} /></TableCell>
+              <TableCell className="px-3 py-2">{u.active ? <span className="text-success">active</span> : <span className="text-text-tertiary">inactive</span>}</TableCell>
+              <TableCell className="text-right px-3 py-2 whitespace-nowrap">
                 <Button variant="link" className="text-text-tertiary hover:text-text-primary no-underline hover:underline text-xs" onClick={() => startEdit(u)}>edit</Button>
                 {u.active
                   ? <Button variant="link" className="text-text-tertiary hover:text-warning ml-3 no-underline hover:underline text-xs" onClick={() => void deactivate(u)}>deactivate</Button>
                   : <Button variant="link" className="text-text-tertiary hover:text-success ml-3 no-underline hover:underline text-xs" onClick={() => void reactivate(u)}>reactivate</Button>}
-              </td>
-            </tr>
+              </TableCell>
+            </TableRow>
             )
           ))}
           {units.length === 0 && (
-            <tr><td colSpan={7} className="text-text-tertiary text-center py-4 px-3">No units defined yet.</td></tr>
+            <TableRow><TableCell colSpan={7} className="text-text-tertiary text-center py-4 px-3">No units defined yet.</TableCell></TableRow>
           )}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
       <div className="flex flex-col gap-3 border-t border-border pt-3">
         <div className="grid grid-cols-[1fr_7rem_9rem] gap-3">
           <div className="flex flex-col gap-1">

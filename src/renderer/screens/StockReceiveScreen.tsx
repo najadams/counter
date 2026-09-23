@@ -14,6 +14,7 @@ import { reviewStatusTone } from '../lib/tones';
 import { Textarea } from '../components/ui/textarea';
 import { NativeSelect } from '../components/ui/native-select';
 import { Input } from '../components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 
 interface Supplier { id: string; name: string; paymentTermsDays: number; currentBalancePesewas: number }
 interface DraftPO { id: string; poNumber: string; supplierId: string; totalOrderedPesewas: number; lineCount: number; createdAt: string }
@@ -307,42 +308,42 @@ export default function StockReceiveScreen({ onExit }: { onExit: () => void }) {
         )}
 
         <h3 className="text-text-secondary uppercase tracking-wider text-xs mt-2">Lines</h3>
-        <div className="bg-bg-surface border border-border">
-          <table className="w-full">
-            <thead>
-              <tr className="text-text-secondary text-xs uppercase tracking-wider">
-                <th className="px-4 py-2 text-left">Product</th>
-                <th className="px-4 py-2 text-right">Qty</th>
-                <th className="px-4 py-2 text-right">Cost / unit</th>
-                <th className="px-4 py-2 text-right">Line total</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody className="text-sm">
+        <div className="panel">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Product</TableHead>
+                <TableHead className="text-right">Qty</TableHead>
+                <TableHead className="text-right">Cost / unit</TableHead>
+                <TableHead className="text-right">Line total</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody className="text-sm">
               {lines.map((l, i) => (
-                <tr key={i} className="border-t border-border">
-                  <td className="px-4 py-2">{l.productName} <span className="text-text-tertiary text-xs">{l.productSku} · {l.unitName}{l.conversionFactor > 1 ? ` (×${l.conversionFactor})` : ''}</span></td>
-                  <td className="px-4 py-2 text-right font-mono tnum">{l.quantity}</td>
-                  <td className="px-4 py-2 text-right font-mono tnum">{formatMoney(l.unitCostPesewas)}</td>
-                  <td className="px-4 py-2 text-right font-mono tnum">{formatMoney(l.quantity * l.unitCostPesewas)}</td>
-                  <td className="px-2 py-2 text-right">
+                <TableRow key={i}>
+                  <TableCell className="px-4 py-2">{l.productName} <span className="text-text-tertiary text-xs">{l.productSku} · {l.unitName}{l.conversionFactor > 1 ? ` (×${l.conversionFactor})` : ''}</span></TableCell>
+                  <TableCell className="px-4 py-2 text-right font-mono tnum">{l.quantity}</TableCell>
+                  <TableCell className="px-4 py-2 text-right font-mono tnum">{formatMoney(l.unitCostPesewas)}</TableCell>
+                  <TableCell className="px-4 py-2 text-right font-mono tnum">{formatMoney(l.quantity * l.unitCostPesewas)}</TableCell>
+                  <TableCell className="px-2 py-2 text-right">
                     <Button variant="link" className="text-text-tertiary hover:text-danger no-underline hover:underline text-xs" onClick={() => removeLine(i)}>remove</Button>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
               {lines.length === 0 && (
-                <tr><td colSpan={5} className="px-4 py-3 text-text-tertiary text-center">No lines yet.</td></tr>
+                <TableRow><TableCell colSpan={5} className="px-4 py-3 text-text-tertiary text-center">No lines yet.</TableCell></TableRow>
               )}
-              <tr className="border-t border-border bg-bg-deep">
-                <td className="px-4 py-2 text-text-secondary uppercase tracking-wider text-xs" colSpan={3}>Total</td>
-                <td className="px-4 py-2 text-right font-mono tnum text-text-primary">{formatMoney(totalValue)}</td>
-                <td></td>
-              </tr>
-            </tbody>
-          </table>
+              <TableRow className="bg-bg-deep">
+                <TableCell className="px-4 py-2 text-text-secondary uppercase tracking-wider text-xs" colSpan={3}>Total</TableCell>
+                <TableCell className="px-4 py-2 text-right font-mono tnum text-text-primary">{formatMoney(totalValue)}</TableCell>
+                <TableCell></TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
         </div>
 
-        <div className="bg-bg-surface border border-border p-5 flex flex-col gap-3">
+        <div className="panel p-5 flex flex-col gap-3">
           <h4 className="text-text-secondary uppercase tracking-wider text-xs">Add line</h4>
           <Input className="px-4" value={productQuery} onChange={(e) => setProductQuery(e.target.value)}
             placeholder="Search product…" />
@@ -350,7 +351,7 @@ export default function StockReceiveScreen({ onExit }: { onExit: () => void }) {
             {hits.slice(0, 5).map((p) => (
               <li key={p.id}>
                 <button onClick={() => { setPendingProduct(p); setPendingQty(0); }}
-                  className={`w-full text-left px-3 py-2 flex justify-between border-b border-border ${pendingProduct?.id === p.id ? 'bg-bg-elevated' : 'hover:bg-bg-elevated'}`}>
+                  className={`w-full text-left px-3 py-2 flex justify-between border-b border-border ${pendingProduct?.id === p.id ? 'bg-accent/10' : 'hover:bg-bg-surface'}`}>
                   <span>{p.name} <span className="text-text-tertiary text-xs">{p.sku}</span></span>
                   <span className="text-text-tertiary text-sm" title="Per smallest unit (canonical). Cost field below will scale to the chosen receive unit.">
                     last cost {formatMoney(p.costPricePesewas)}<span className="opacity-50"> / single</span>

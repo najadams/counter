@@ -44,13 +44,14 @@ export function QuickPicks({ picks, onPick, showKeys }: {
   return (
     <div role="group" aria-label="Quick picks" className="border-b border-border px-6 py-3">
       <div className="eyebrow mb-2">Quick picks</div>
-      {/* A scrolling row of chips on a phone; a 4-across grid of tiles from
-          the small breakpoint up. */}
-      <ul className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 sm:grid sm:grid-cols-4 sm:overflow-visible sm:pb-0">
+      {/* Sized by the search pane it sits in (the sale screen makes that pane
+          a container): a scrolling row of chips when it's phone-narrow,
+          three tiles across from 32rem, four from 42rem. */}
+      <ul className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 @lg:grid @lg:grid-cols-3 @lg:overflow-visible @lg:pb-0 @2xl:grid-cols-4">
         {picks.slice(0, QUICK_PICK_COUNT).map((pick, i) => {
           const key = `Alt+${i + 1}`;
           return (
-            <li key={pick.id} className="shrink-0 sm:min-w-0">
+            <li key={pick.id} className="shrink-0 @lg:min-w-0">
               <button
                 type="button"
                 onClick={() => onPick(i)}
@@ -58,15 +59,15 @@ export function QuickPicks({ picks, onPick, showKeys }: {
                 aria-keyshortcuts={showKeys ? key : undefined}
                 className={cn(
                   'flex items-center gap-2 rounded-full border border-border bg-bg-elevated px-4 text-left text-text-primary shadow-card transition-colors duration-(--duration-fast) ease-(--ease-standard) hover:border-accent hover:bg-accent/5 active:translate-y-px',
-                  'min-h-11 sm:h-[84px] sm:w-full sm:flex-col sm:items-stretch sm:justify-between sm:gap-0.5 sm:rounded-xl sm:px-3 sm:py-2',
-                  FRIENDLY_UI_ENABLED && 'min-h-14 sm:h-28 sm:px-4 sm:py-2.5',
+                  'min-h-11 @lg:h-[84px] @lg:w-full @lg:flex-col @lg:items-stretch @lg:justify-between @lg:gap-0.5 @lg:rounded-xl @lg:px-3 @lg:py-2',
+                  FRIENDLY_UI_ENABLED && 'min-h-14 @lg:h-28 @lg:px-4 @lg:py-2.5',
                 )}
               >
-                <span className={cn('font-semibold leading-tight whitespace-nowrap sm:line-clamp-2 sm:whitespace-normal', FRIENDLY_UI_ENABLED ? 'text-lg' : 'text-sm')}>
+                <span className={cn('font-semibold leading-tight whitespace-nowrap @lg:line-clamp-2 @lg:whitespace-normal', FRIENDLY_UI_ENABLED ? 'text-lg' : 'text-sm')}>
                   {pick.name}
                 </span>
                 <span className="flex items-center justify-between gap-2">
-                  <span className="hidden items-center gap-1.5 sm:flex">
+                  <span className="hidden items-center gap-1.5 @lg:flex">
                     {showKeys && <Kbd aria-hidden="true">{key}</Kbd>}
                     <span className={cn('text-text-tertiary', FRIENDLY_UI_ENABLED ? 'text-base' : 'text-xs')}>{unitLabel(pick.defaultUnitName)}</span>
                   </span>

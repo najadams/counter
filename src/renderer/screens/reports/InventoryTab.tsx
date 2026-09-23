@@ -15,6 +15,7 @@ import { FeedbackBanner } from '../../components/FeedbackBanner';
 import { Button } from '../../components/ui/button';
 import { NativeSelect } from '../../components/ui/native-select';
 import { Input } from '../../components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 
 type Filter = 'all' | 'belowReorder' | 'stockout' | 'inStock';
 type Sort =
@@ -106,7 +107,7 @@ export function InventoryTab({ reportAccessToken }: { reportAccessToken: string 
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="bg-bg-surface border border-border p-4 flex flex-col gap-3">
+      <div className="panel p-4 flex flex-col gap-3">
         <div className="flex items-end justify-between flex-wrap gap-3">
           <div className="flex gap-2 items-end">
             <label className="flex flex-col gap-1">
@@ -147,7 +148,7 @@ export function InventoryTab({ reportAccessToken }: { reportAccessToken: string 
               onClick={() => setFilter('stockout')} active={filter === 'stockout'} />
           </section>
 
-          <section className="bg-bg-surface border border-border">
+          <section className="panel">
             <div className="px-4 py-3 border-b border-border-subtle flex items-center justify-between">
               <h3 className="text-text-secondary uppercase tracking-wider text-xs">
                 Stock valuation · {sorted.length} of {data.activeSkuCount} SKUs
@@ -160,9 +161,9 @@ export function InventoryTab({ reportAccessToken }: { reportAccessToken: string 
                 Nothing matches the current filter.
               </div>
             ) : (
-              <table className="w-full text-sm">
-                <thead className="bg-bg-deep/60 text-text-tertiary text-xs uppercase tracking-wider">
-                  <tr>
+              <Table>
+                <TableHeader>
+                  <TableRow>
                     <SortHeader label="Product" col="name" current={sort} dir={dir} onSort={clickSort} align="left" />
                     <SortHeader label="Category" col="category" current={sort} dir={dir} onSort={clickSort} align="left" />
                     <SortHeader label="On hand" col="onHand" current={sort} dir={dir} onSort={clickSort} />
@@ -170,30 +171,30 @@ export function InventoryTab({ reportAccessToken }: { reportAccessToken: string 
                     <SortHeader label="Net retail" col="atRetail" current={sort} dir={dir} onSort={clickSort} />
                     <SortHeader label="DoS" col="dos" current={sort} dir={dir} onSort={clickSort} />
                     <SortHeader label="Last sold" col="lastSold" current={sort} dir={dir} onSort={clickSort} align="left" />
-                  </tr>
-                </thead>
-                <tbody>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {sorted.map((r) => (
-                    <tr key={r.productId}
+                    <TableRow key={r.productId}
                         className={`border-t border-border-subtle ${r.stockout ? 'bg-danger/5' : r.belowReorder ? 'bg-warning/5' : ''}`}>
-                      <td className="px-4 py-2">
+                      <TableCell className="px-4 py-2">
                         <div>{r.name}</div>
                         <div className="text-text-tertiary text-xs font-mono">{r.sku}</div>
-                      </td>
-                      <td className="px-4 py-2 text-text-tertiary text-xs">{r.category}</td>
-                      <td className={`px-4 py-2 text-right font-mono tabular-nums ${r.stockout ? 'text-danger' : r.belowReorder ? 'text-warning' : ''}`}>
+                      </TableCell>
+                      <TableCell className="px-4 py-2 text-text-tertiary text-xs">{r.category}</TableCell>
+                      <TableCell className={`px-4 py-2 text-right font-mono tabular-nums ${r.stockout ? 'text-danger' : r.belowReorder ? 'text-warning' : ''}`}>
                         {r.unitsOnHand}
                         {r.reorderThreshold > 0 && (
                           <span className="text-text-tertiary text-xs"> / {r.reorderThreshold}</span>
                         )}
-                      </td>
-                      <td className="px-4 py-2 text-right font-mono tabular-nums">
+                      </TableCell>
+                      <TableCell className="px-4 py-2 text-right font-mono tabular-nums">
                         {formatMoney(r.totalAtCostPesewas)}
-                      </td>
-                      <td className="px-4 py-2 text-right font-mono tabular-nums text-text-tertiary">
+                      </TableCell>
+                      <TableCell className="px-4 py-2 text-right font-mono tabular-nums text-text-tertiary">
                         {formatMoney(r.totalAtRetailPesewas)}
-                      </td>
-                      <td className="px-4 py-2 text-right font-mono tabular-nums">
+                      </TableCell>
+                      <TableCell className="px-4 py-2 text-right font-mono tabular-nums">
                         {r.daysOfSupply == null
                           ? <span className="text-text-tertiary">—</span>
                           : r.daysOfSupply < 7
@@ -201,16 +202,16 @@ export function InventoryTab({ reportAccessToken }: { reportAccessToken: string 
                             : r.daysOfSupply > 120
                               ? <span className="text-warning">{r.daysOfSupply}d</span>
                               : <span>{r.daysOfSupply}d</span>}
-                      </td>
-                      <td className="px-4 py-2 text-text-tertiary text-xs">
+                      </TableCell>
+                      <TableCell className="px-4 py-2 text-text-tertiary text-xs">
                         {r.lastSoldAt
                           ? new Date(r.lastSoldAt).toLocaleDateString()
                           : 'never'}
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             )}
           </section>
         </>
@@ -234,7 +235,7 @@ function Stat({ label, value, tone, onClick, active }: {
       className={[
         'bg-bg-surface border p-4 text-left',
         active ? 'border-accent' : 'border-border',
-        clickable ? 'hover:bg-bg-elevated cursor-pointer transition-colors' : '',
+        clickable ? 'hover:border-accent hover:bg-accent/5 cursor-pointer transition-colors' : '',
       ].join(' ')}>
       <div className="text-text-tertiary uppercase tracking-wider text-xs">{label}</div>
       <div className={`text-xl font-bold tabular-nums mt-1 ${toneCls}`}>{value}</div>
@@ -254,11 +255,11 @@ function SortHeader<T extends string>({
 }) {
   const active = current === col;
   return (
-    <th className={`${align === 'left' ? 'text-left' : 'text-right'} px-4 py-2`}>
+    <TableHead className={`${align === 'left' ? 'text-left' : 'text-right'} px-4 py-2`}>
       <button onClick={() => onSort(col)}
         className={`uppercase tracking-wider text-xs ${active ? 'text-accent' : 'hover:text-text-primary'}`}>
         <span className="inline-flex items-center gap-1">{label}{active && (dir === 'desc' ? <ChevronDownIcon aria-label="descending" className="size-3.5" /> : <ChevronUpIcon aria-label="ascending" className="size-3.5" />)}</span>
       </button>
-    </th>
+    </TableHead>
   );
 }

@@ -13,6 +13,7 @@ import type {
 import { Button } from '../components/ui/button';
 import { NativeSelect } from '../components/ui/native-select';
 import { Input } from '../components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 
 const PAYMENT_METHODS = ['CASH', 'MOMO_MTN', 'MOMO_VODAFONE', 'MOMO_AIRTELTIGO', 'BANK_TRANSFER', 'CREDIT'] as const;
 
@@ -283,7 +284,7 @@ export default function PaperReceiptsScreen({ onExit, onOpenAtTill }: { onExit: 
         {error && <FeedbackBanner>{error}</FeedbackBanner>}
 
         <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4">
-          <aside className="bg-bg-surface border border-border">
+          <aside className="panel">
             <div className="px-4 py-3 border-b border-border flex items-center justify-between">
               <span className="text-text-secondary uppercase tracking-wider text-xs">Queue</span>
               <Button variant="link" className="text-accent hover:text-accent-light no-underline hover:underline text-xs" onClick={clearSelected}>New</Button>
@@ -296,7 +297,7 @@ export default function PaperReceiptsScreen({ onExit, onOpenAtTill }: { onExit: 
                     <button
                       key={d.id}
                       onClick={() => void openDraft(d.id)}
-                      className={`w-full px-4 py-3 text-left hover:bg-bg-elevated ${selected?.id === d.id ? 'bg-bg-elevated' : ''}`}
+                      className={`w-full px-4 py-3 text-left hover:bg-bg-surface ${selected?.id === d.id ? 'bg-accent/10' : ''}`}
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-mono text-xs">#{d.id.slice(-6)}</span>
@@ -317,7 +318,7 @@ export default function PaperReceiptsScreen({ onExit, onOpenAtTill }: { onExit: 
             </div>
           </aside>
 
-          <section className="bg-bg-surface border border-border p-5 flex flex-col gap-4">
+          <section className="panel p-5 flex flex-col gap-4">
             <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-4">
               <div className="flex flex-col gap-3">
                 <label className="text-text-secondary text-xs uppercase tracking-wider">Receipt photo</label>
@@ -373,67 +374,67 @@ export default function PaperReceiptsScreen({ onExit, onOpenAtTill }: { onExit: 
                 </div>
 
                 <div className="overflow-x-auto border border-border">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-text-secondary uppercase tracking-wider text-xs">
-                        <th className="px-3 py-2 text-left">Raw</th>
-                        <th className="px-3 py-2 text-left">Product</th>
-                        <th className="px-3 py-2 text-right">Qty</th>
-                        <th className="px-3 py-2 text-left">Unit</th>
-                        <th className="px-3 py-2 text-right">Unit price</th>
-                        <th className="px-3 py-2 text-right">Line</th>
-                        <th className="px-3 py-2 text-right">Confidence</th>
-                        <th className="px-3 py-2"></th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="px-3">Raw</TableHead>
+                        <TableHead className="px-3">Product</TableHead>
+                        <TableHead className="px-3 text-right">Qty</TableHead>
+                        <TableHead className="px-3">Unit</TableHead>
+                        <TableHead className="px-3 text-right">Unit price</TableHead>
+                        <TableHead className="px-3 text-right">Line</TableHead>
+                        <TableHead className="px-3 text-right">Confidence</TableHead>
+                        <TableHead className="px-3"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody className="divide-y divide-border">
                       {lines.map((line, idx) => (
-                        <tr key={line.id}>
-                          <td className="px-3 py-2 min-w-44">
+                        <TableRow key={line.id}>
+                          <TableCell className="px-3 py-2 min-w-44">
                             <Input className="text-xs" value={line.rawText} disabled={!canEdit} onChange={(e) => patchLine(idx, { rawText: e.target.value })} />
-                          </td>
-                          <td className="px-3 py-2 min-w-52">
+                          </TableCell>
+                          <TableCell className="px-3 py-2 min-w-52">
                             <div className={line.productId ? '' : 'text-danger'}>
                               {line.productName ?? 'Unmatched'}
                               {line.productSku && <span className="text-text-tertiary text-xs ml-2">{line.productSku}</span>}
                             </div>
                             {line.reviewNote && <div className="text-xs text-text-tertiary">{line.reviewNote}</div>}
-                          </td>
-                          <td className="px-3 py-2 text-right">
+                          </TableCell>
+                          <TableCell className="px-3 py-2 text-right">
                             <Input className="w-20 text-right font-mono tnum"
                               type="number"
                               min={1}
                               value={line.quantity ?? ''}
                               disabled={!canEdit}
                               onChange={(e) => patchLine(idx, { quantity: e.target.value ? Number(e.target.value) : null })} />
-                          </td>
-                          <td className="px-3 py-2 text-left">
+                          </TableCell>
+                          <TableCell className="px-3 py-2 text-left">
                             <span className="text-xs uppercase tracking-wider text-text-tertiary">
                               {line.unitName ?? 'default'}
                             </span>
-                          </td>
-                          <td className="px-3 py-2 text-right">
+                          </TableCell>
+                          <TableCell className="px-3 py-2 text-right">
                             <Input className="w-28 text-right font-mono tnum"
                               value={line.unitPricePesewas == null ? '' : formatMoney(line.unitPricePesewas)}
                               disabled={!canEdit}
                               onChange={(e) => patchLine(idx, { unitPricePesewas: e.target.value ? parseCedisToPesewas(e.target.value) : null })} />
-                          </td>
-                          <td className="px-3 py-2 text-right font-mono tnum">
+                          </TableCell>
+                          <TableCell className="px-3 py-2 text-right font-mono tnum">
                             {formatMoney((line.quantity ?? 0) * (line.unitPricePesewas ?? 0))}
-                          </td>
-                          <td className="px-3 py-2 text-right font-mono tnum">{line.confidence}</td>
-                          <td className="px-3 py-2 text-right">
+                          </TableCell>
+                          <TableCell className="px-3 py-2 text-right font-mono tnum">{line.confidence}</TableCell>
+                          <TableCell className="px-3 py-2 text-right">
                             {canEdit && (
                               <Button variant="link" className="text-accent hover:text-accent-light no-underline hover:underline text-xs" onClick={() => void chooseProduct(idx)}>Find</Button>
                             )}
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                       ))}
                       {lines.length === 0 && (
-                        <tr><td colSpan={8} className="px-3 py-6 text-center text-text-tertiary">No lines parsed.</td></tr>
+                        <TableRow><TableCell colSpan={8} className="px-3 py-6 text-center text-text-tertiary">No lines parsed.</TableCell></TableRow>
                       )}
-                    </tbody>
-                  </table>
+                    </TableBody>
+                  </Table>
                 </div>
 
                 <div className="flex flex-wrap gap-3">

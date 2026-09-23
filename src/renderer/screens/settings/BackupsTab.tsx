@@ -315,7 +315,7 @@ function HistoryList({ history }: { history: BackupListHistoryResponse }) {
     );
   }
   return (
-    <div className="bg-bg-surface border border-border divide-y divide-border">
+    <div className="panel divide-y divide-border">
       {history.entries.slice(0, 14).map((entry) => (
         <HistoryRow key={entry.filename} entry={entry} />
       ))}

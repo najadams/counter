@@ -8,6 +8,7 @@ import { formatMoneyWithCurrency } from '../../../shared/lib/money';
 import { FeedbackBanner } from '../../components/FeedbackBanner';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 
 function todayIso(): string { return new Date().toISOString().slice(0, 10); }
 function daysAgoIso(n: number): string {
@@ -91,72 +92,72 @@ export function ExceptionsTab() {
       {error && <FeedbackBanner>{error}</FeedbackBanner>}
 
       <Section title="Voids by cashier" subtitle="Who's voiding the most. Outliers ≠ proof, but always worth asking.">
-        <Table headers={['Cashier', 'Role', 'Voids', 'Voided value']}>
+        <ReportTable headers={['Cashier', 'Role', 'Voids', 'Voided value']}>
           {voids.length === 0 ? <EmptyRow cols={4} /> : voids.map((r, i) => (
-            <tr key={i} className="border-t border-border-subtle">
-              <td className="px-3 py-2">{r.workerName}</td>
-              <td className="px-3 py-2 text-text-tertiary">{r.workerRole}</td>
-              <td className="px-3 py-2 font-mono text-right">{r.voidCount}</td>
-              <td className="px-3 py-2 font-mono text-right">{formatMoneyWithCurrency(r.voidValuePesewas)}</td>
-            </tr>
+            <TableRow key={i}>
+              <TableCell className="px-3 py-2">{r.workerName}</TableCell>
+              <TableCell className="px-3 py-2 text-text-tertiary">{r.workerRole}</TableCell>
+              <TableCell className="px-3 py-2 font-mono text-right">{r.voidCount}</TableCell>
+              <TableCell className="px-3 py-2 font-mono text-right">{formatMoneyWithCurrency(r.voidValuePesewas)}</TableCell>
+            </TableRow>
           ))}
-        </Table>
+        </ReportTable>
       </Section>
 
       <Section title="Discounts by cashier" subtitle="Total and largest discount given by each cashier.">
-        <Table headers={['Cashier', 'Role', 'Discounted sales', 'Total discount', 'Largest']}>
+        <ReportTable headers={['Cashier', 'Role', 'Discounted sales', 'Total discount', 'Largest']}>
           {discounts.length === 0 ? <EmptyRow cols={5} /> : discounts.map((r, i) => (
-            <tr key={i} className="border-t border-border-subtle">
-              <td className="px-3 py-2">{r.workerName}</td>
-              <td className="px-3 py-2 text-text-tertiary">{r.workerRole}</td>
-              <td className="px-3 py-2 font-mono text-right">{r.discountSaleCount}</td>
-              <td className="px-3 py-2 font-mono text-right">{formatMoneyWithCurrency(r.totalDiscountPesewas)}</td>
-              <td className="px-3 py-2 font-mono text-right">{formatMoneyWithCurrency(r.largestDiscountPesewas)}</td>
-            </tr>
+            <TableRow key={i}>
+              <TableCell className="px-3 py-2">{r.workerName}</TableCell>
+              <TableCell className="px-3 py-2 text-text-tertiary">{r.workerRole}</TableCell>
+              <TableCell className="px-3 py-2 font-mono text-right">{r.discountSaleCount}</TableCell>
+              <TableCell className="px-3 py-2 font-mono text-right">{formatMoneyWithCurrency(r.totalDiscountPesewas)}</TableCell>
+              <TableCell className="px-3 py-2 font-mono text-right">{formatMoneyWithCurrency(r.largestDiscountPesewas)}</TableCell>
+            </TableRow>
           ))}
-        </Table>
+        </ReportTable>
       </Section>
 
       <Section title="Post-sale edits" subtitle="Any change to a sale after it was completed. Should be rare.">
-        <Table headers={['When', 'Action', 'By', 'Sale', 'Original cashier']}>
+        <ReportTable headers={['When', 'Action', 'By', 'Sale', 'Original cashier']}>
           {edits.length === 0 ? <EmptyRow cols={5} /> : edits.map((r) => (
-            <tr key={r.editAuditId} className="border-t border-border-subtle">
-              <td className="px-3 py-2 font-mono text-xs">{new Date(r.editAt).toLocaleString()}</td>
-              <td className="px-3 py-2"><span className="text-warning">{r.editAction}</span></td>
-              <td className="px-3 py-2">{r.editWorkerName} ({r.editWorkerRole})</td>
-              <td className="px-3 py-2 font-mono text-xs">{r.saleId.slice(-8)}</td>
-              <td className="px-3 py-2 text-text-tertiary">{r.saleWorkerName}</td>
-            </tr>
+            <TableRow key={r.editAuditId}>
+              <TableCell className="px-3 py-2 font-mono text-xs">{new Date(r.editAt).toLocaleString()}</TableCell>
+              <TableCell className="px-3 py-2"><span className="text-warning">{r.editAction}</span></TableCell>
+              <TableCell className="px-3 py-2">{r.editWorkerName} ({r.editWorkerRole})</TableCell>
+              <TableCell className="px-3 py-2 font-mono text-xs">{r.saleId.slice(-8)}</TableCell>
+              <TableCell className="px-3 py-2 text-text-tertiary">{r.saleWorkerName}</TableCell>
+            </TableRow>
           ))}
-        </Table>
+        </ReportTable>
       </Section>
 
       <Section title="Repeated SKU voids" subtitle="Same product voided 3+ times by the same cashier in one day. Classic shrinkage pattern.">
-        <Table headers={['Date', 'Cashier', 'Product', 'Voids']}>
+        <ReportTable headers={['Date', 'Cashier', 'Product', 'Voids']}>
           {skuVoids.length === 0 ? <EmptyRow cols={4} /> : skuVoids.map((r, i) => (
-            <tr key={i} className="border-t border-border-subtle">
-              <td className="px-3 py-2 font-mono text-xs">{r.businessDate}</td>
-              <td className="px-3 py-2">{r.workerName}</td>
-              <td className="px-3 py-2">{r.productName}</td>
-              <td className="px-3 py-2 font-mono text-right text-danger">{r.voidCount}</td>
-            </tr>
+            <TableRow key={i}>
+              <TableCell className="px-3 py-2 font-mono text-xs">{r.businessDate}</TableCell>
+              <TableCell className="px-3 py-2">{r.workerName}</TableCell>
+              <TableCell className="px-3 py-2">{r.productName}</TableCell>
+              <TableCell className="px-3 py-2 font-mono text-right text-danger">{r.voidCount}</TableCell>
+            </TableRow>
           ))}
-        </Table>
+        </ReportTable>
       </Section>
 
       <Section title="Large discounts" subtitle="Discounts ≥ ₵2.00 absolute or ≥ 5% of subtotal. Should always have a reason.">
-        <Table headers={['When', 'Cashier', 'Total', 'Discount', '% of subtotal', 'Reason']}>
+        <ReportTable headers={['When', 'Cashier', 'Total', 'Discount', '% of subtotal', 'Reason']}>
           {bigDiscounts.length === 0 ? <EmptyRow cols={6} /> : bigDiscounts.map((r) => (
-            <tr key={r.saleId} className="border-t border-border-subtle">
-              <td className="px-3 py-2 font-mono text-xs">{new Date(r.saleAt).toLocaleString()}</td>
-              <td className="px-3 py-2">{r.workerName}</td>
-              <td className="px-3 py-2 font-mono text-right">{formatMoneyWithCurrency(r.totalPesewas)}</td>
-              <td className="px-3 py-2 font-mono text-right text-warning">{formatMoneyWithCurrency(r.discountPesewas)}</td>
-              <td className="px-3 py-2 font-mono text-right">{(r.discountRatio * 100).toFixed(1)}%</td>
-              <td className="px-3 py-2 text-text-secondary">{r.reason ?? '—'}</td>
-            </tr>
+            <TableRow key={r.saleId}>
+              <TableCell className="px-3 py-2 font-mono text-xs">{new Date(r.saleAt).toLocaleString()}</TableCell>
+              <TableCell className="px-3 py-2">{r.workerName}</TableCell>
+              <TableCell className="px-3 py-2 font-mono text-right">{formatMoneyWithCurrency(r.totalPesewas)}</TableCell>
+              <TableCell className="px-3 py-2 font-mono text-right text-warning">{formatMoneyWithCurrency(r.discountPesewas)}</TableCell>
+              <TableCell className="px-3 py-2 font-mono text-right">{(r.discountRatio * 100).toFixed(1)}%</TableCell>
+              <TableCell className="px-3 py-2 text-text-secondary">{r.reason ?? '—'}</TableCell>
+            </TableRow>
           ))}
-        </Table>
+        </ReportTable>
       </Section>
     </div>
   );
@@ -174,19 +175,19 @@ function Section({ title, subtitle, children }: { title: string; subtitle: strin
   );
 }
 
-function Table({ headers, children }: { headers: string[]; children: React.ReactNode }) {
+function ReportTable({ headers, children }: { headers: string[]; children: React.ReactNode }) {
   return (
-    <table className="w-full text-sm">
-      <thead className="bg-bg-deep text-text-tertiary uppercase text-xs">
-        <tr>{headers.map((h, i) => (
-          <th key={i} className={`px-3 py-2 ${i >= 2 && /count|value|discount|%|voids/i.test(h) ? 'text-right' : 'text-left'}`}>{h}</th>
-        ))}</tr>
-      </thead>
-      <tbody>{children}</tbody>
-    </table>
+    <Table>
+      <TableHeader>
+        <TableRow>{headers.map((h, i) => (
+          <TableHead key={i} className={`px-3 py-2 ${i >= 2 && /count|value|discount|%|voids/i.test(h) ? 'text-right' : 'text-left'}`}>{h}</TableHead>
+        ))}</TableRow>
+      </TableHeader>
+      <TableBody>{children}</TableBody>
+    </Table>
   );
 }
 
 function EmptyRow({ cols }: { cols: number }) {
-  return <tr><td colSpan={cols} className="px-4 py-6 text-center text-text-tertiary">No matching events in this range.</td></tr>;
+  return <TableRow><TableCell colSpan={cols} className="px-4 py-6 text-center text-text-tertiary">No matching events in this range.</TableCell></TableRow>;
 }

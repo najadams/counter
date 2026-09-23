@@ -21,6 +21,7 @@ import { Field } from '../../components/ui/field';
 import { Input } from '../../components/ui/input';
 import { NativeSelect } from '../../components/ui/native-select';
 import { Textarea } from '../../components/ui/textarea';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 
 interface AdminSupplier {
   id: string;
@@ -108,32 +109,32 @@ export function SupplierPaymentsTab() {
       <section>
         <h3 className="text-xs uppercase tracking-wider text-text-tertiary mb-2">Supplier balances</h3>
         <div className="bg-bg-elevated rounded border border-border-subtle overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-bg-deep text-text-tertiary uppercase text-xs">
-              <tr>
-                <th className="text-left px-4 py-3">Supplier</th>
-                <th className="text-right px-4 py-3">Cached balance</th>
-                <th className="text-right px-4 py-3">Lifetime received</th>
-                <th className="text-right px-4 py-3">Lifetime paid</th>
-                <th className="text-right px-4 py-3">Open invoices</th>
-                <th className="text-left px-4 py-3">Last receipt</th>
-                <th className="text-left px-4 py-3">Last payment</th>
-                <th className="px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Supplier</TableHead>
+                <TableHead className="text-right">Cached balance</TableHead>
+                <TableHead className="text-right">Lifetime received</TableHead>
+                <TableHead className="text-right">Lifetime paid</TableHead>
+                <TableHead className="text-right">Open invoices</TableHead>
+                <TableHead>Last receipt</TableHead>
+                <TableHead>Last payment</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {statements.length === 0 && (
-                <tr><td colSpan={8} className="px-4 py-8 text-center text-text-tertiary">
+                <TableRow><TableCell colSpan={8} className="px-4 py-8 text-center text-text-tertiary">
                   No active suppliers. Add suppliers under the Suppliers tab.
-                </td></tr>
+                </TableCell></TableRow>
               )}
               {statements.map((r) => {
                 const owe = r.currentBalancePesewas;
                 return (
-                  <tr key={r.supplierId}
-                      className="border-t border-border-subtle hover:bg-bg-deep/40">
-                    <td className="px-4 py-3 font-medium">{r.supplierName}</td>
-                    <td className="px-4 py-3 text-right tabular-nums">
+                  <TableRow key={r.supplierId}
+                     >
+                    <TableCell className="px-4 py-3 font-medium">{r.supplierName}</TableCell>
+                    <TableCell className="px-4 py-3 text-right tabular-nums">
                       <span className={
                         owe > 0 ? 'text-warning'
                         : owe < 0 ? 'text-success'
@@ -141,37 +142,37 @@ export function SupplierPaymentsTab() {
                       }>
                         {formatMoneyWithCurrency(owe)}
                       </span>
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums text-text-secondary">
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-right tabular-nums text-text-secondary">
                       {formatMoneyWithCurrency(r.lifetimeReceivedCostPesewas)}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums text-text-secondary">
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-right tabular-nums text-text-secondary">
                       {formatMoneyWithCurrency(r.lifetimePaidPesewas)}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-right tabular-nums">
                       <span className={r.overdueInvoiceCount > 0 ? 'text-danger' : 'text-text-secondary'}>
                         {r.openInvoiceCount}
                       </span>
                       {r.nextDueDate && <div className="text-xs text-text-tertiary">next {new Date(r.nextDueDate).toLocaleDateString()}</div>}
-                    </td>
-                    <td className="px-4 py-3 text-text-tertiary text-xs">
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-text-tertiary text-xs">
                       {r.lastReceiptAt ? new Date(r.lastReceiptAt).toLocaleDateString() : '—'}
-                    </td>
-                    <td className="px-4 py-3 text-text-tertiary text-xs">
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-text-tertiary text-xs">
                       {r.lastPaidAt ? new Date(r.lastPaidAt).toLocaleDateString() : '—'}
-                    </td>
-                    <td className="px-4 py-3 text-right">
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-right">
                       <Button size="sm"
                         onClick={() => isAdmin && setShowRecord({ presetSupplierId: r.supplierId })}
                         disabled={!isAdmin}>
                         Pay
                       </Button>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 );
               })}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
         <p className="text-xs text-text-tertiary mt-2 leading-relaxed">
           "Cached balance" is what the system currently believes we owe. Positive = we owe them,
@@ -183,44 +184,44 @@ export function SupplierPaymentsTab() {
       <section>
         <h3 className="text-xs uppercase tracking-wider text-text-tertiary mb-2">Open supplier invoices</h3>
         <div className="bg-bg-elevated rounded border border-border-subtle overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-bg-deep text-text-tertiary uppercase text-xs">
-              <tr>
-                <th className="text-left px-4 py-3">Invoice</th>
-                <th className="text-left px-4 py-3">Supplier</th>
-                <th className="text-left px-4 py-3">Due</th>
-                <th className="text-right px-4 py-3">Total</th>
-                <th className="text-right px-4 py-3">Paid</th>
-                <th className="text-right px-4 py-3">Outstanding</th>
-                <th className="text-left px-4 py-3">Match</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Invoice</TableHead>
+                <TableHead>Supplier</TableHead>
+                <TableHead>Due</TableHead>
+                <TableHead className="text-right">Total</TableHead>
+                <TableHead className="text-right">Paid</TableHead>
+                <TableHead className="text-right">Outstanding</TableHead>
+                <TableHead>Match</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {invoices.length === 0 && (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-text-tertiary">
+                <TableRow><TableCell colSpan={7} className="px-4 py-8 text-center text-text-tertiary">
                   No open supplier invoices.
-                </td></tr>
+                </TableCell></TableRow>
               )}
               {invoices.map((inv) => {
                 const overdue = inv.dueDate && inv.dueDate < new Date().toISOString().slice(0, 10);
                 return (
-                  <tr key={inv.id} className="border-t border-border-subtle hover:bg-bg-deep/40">
-                    <td className="px-4 py-3 font-mono">{inv.invoiceNumber}</td>
-                    <td className="px-4 py-3">{inv.supplierName}</td>
-                    <td className={`px-4 py-3 ${overdue ? 'text-danger' : 'text-text-secondary'}`}>
+                  <TableRow key={inv.id}>
+                    <TableCell className="px-4 py-3 font-mono">{inv.invoiceNumber}</TableCell>
+                    <TableCell className="px-4 py-3">{inv.supplierName}</TableCell>
+                    <TableCell className={`px-4 py-3 ${overdue ? 'text-danger' : 'text-text-secondary'}`}>
                       {inv.dueDate ? new Date(inv.dueDate).toLocaleDateString() : '—'}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">{formatMoneyWithCurrency(inv.totalPesewas)}</td>
-                    <td className="px-4 py-3 text-right tabular-nums text-text-secondary">{formatMoneyWithCurrency(inv.totalPaidPesewas)}</td>
-                    <td className="px-4 py-3 text-right tabular-nums text-warning">{formatMoneyWithCurrency(inv.outstandingPesewas)}</td>
-                    <td className="px-4 py-3 text-text-tertiary text-xs">
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-right tabular-nums">{formatMoneyWithCurrency(inv.totalPesewas)}</TableCell>
+                    <TableCell className="px-4 py-3 text-right tabular-nums text-text-secondary">{formatMoneyWithCurrency(inv.totalPaidPesewas)}</TableCell>
+                    <TableCell className="px-4 py-3 text-right tabular-nums text-warning">{formatMoneyWithCurrency(inv.outstandingPesewas)}</TableCell>
+                    <TableCell className="px-4 py-3 text-text-tertiary text-xs">
                       {inv.purchaseOrderId ? `PO ${inv.purchaseOrderId.slice(-8)}` : 'receipt-only'}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 );
               })}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       </section>
 
@@ -240,47 +241,47 @@ export function SupplierPaymentsTab() {
         </div>
 
         <div className="bg-bg-elevated rounded border border-border-subtle overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-bg-deep text-text-tertiary uppercase text-xs">
-              <tr>
-                <th className="text-left px-4 py-3">When</th>
-                <th className="text-left px-4 py-3">Supplier</th>
-                <th className="text-right px-4 py-3">Amount</th>
-                <th className="text-left px-4 py-3">Method</th>
-                <th className="text-left px-4 py-3">Reference</th>
-                <th className="text-left px-4 py-3">Approved by</th>
-                <th className="text-left px-4 py-3">Notes</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>When</TableHead>
+                <TableHead>Supplier</TableHead>
+                <TableHead className="text-right">Amount</TableHead>
+                <TableHead>Method</TableHead>
+                <TableHead>Reference</TableHead>
+                <TableHead>Approved by</TableHead>
+                <TableHead>Notes</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {payments.length === 0 && (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-text-tertiary">
+                <TableRow><TableCell colSpan={7} className="px-4 py-8 text-center text-text-tertiary">
                   No payments recorded {filterSupplier ? 'for this supplier' : 'yet'}.
-                </td></tr>
+                </TableCell></TableRow>
               )}
               {payments.map((p) => (
-                <tr key={p.id} className="border-t border-border-subtle hover:bg-bg-deep/40">
-                  <td className="px-4 py-3 text-text-secondary">
+                <TableRow key={p.id}>
+                  <TableCell className="px-4 py-3 text-text-secondary">
                     {new Date(p.paidAt).toLocaleString(undefined, {
                       year: 'numeric', month: 'short', day: '2-digit',
                       hour: '2-digit', minute: '2-digit',
                     })}
-                  </td>
-                  <td className="px-4 py-3 font-medium">{p.supplierName}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">
+                  </TableCell>
+                  <TableCell className="px-4 py-3 font-medium">{p.supplierName}</TableCell>
+                  <TableCell className="px-4 py-3 text-right tabular-nums">
                     {formatMoneyWithCurrency(p.amountPesewas)}
-                  </td>
-                  <td className="px-4 py-3 text-text-secondary">{p.paymentMethod}</td>
-                  <td className="px-4 py-3 text-text-secondary">{p.paymentReference ?? '—'}</td>
-                  <td className="px-4 py-3 text-text-secondary">{p.approvedByName}</td>
-                  <td className="px-4 py-3 text-text-tertiary text-xs">
+                  </TableCell>
+                  <TableCell className="px-4 py-3 text-text-secondary">{p.paymentMethod}</TableCell>
+                  <TableCell className="px-4 py-3 text-text-secondary">{p.paymentReference ?? '—'}</TableCell>
+                  <TableCell className="px-4 py-3 text-text-secondary">{p.approvedByName}</TableCell>
+                  <TableCell className="px-4 py-3 text-text-tertiary text-xs">
                     {p.allocatedPesewas > 0 ? `allocated ${formatMoneyWithCurrency(p.allocatedPesewas)}` : 'unallocated'}
                     {p.notes ? ` · ${p.notes}` : ''}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       </section>
 

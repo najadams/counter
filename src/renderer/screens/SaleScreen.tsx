@@ -708,7 +708,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
       <main className={`flex-1 grid grid-cols-1 gap-0 ${FRIENDLY_UI_ENABLED ? "lg:grid-cols-[3fr_2fr]" : "lg:grid-cols-[2fr_1fr]"}`}>
         <fieldset disabled={submitting} className="contents">
         {/* Left: search + results */}
-        <section className="border-b lg:border-b-0 lg:border-r border-border flex flex-col">
+        <section className="@container border-b lg:border-b-0 lg:border-r border-border flex flex-col">
           <div className="px-6 py-4 border-b border-border bg-bg-surface">
             {FRIENDLY_UI_ENABLED && (
               <label htmlFor="sale-search" className="flex items-center gap-3 mb-3">

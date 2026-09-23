@@ -10,6 +10,7 @@ import { Badge } from '../components/ui/badge';
 import { reviewStatusTone } from '../lib/tones';
 import { Segmented } from '../components/ui/segmented';
 import { Textarea } from '../components/ui/textarea';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 
 type Tab = 'PENDING' | 'HISTORY';
 
@@ -102,22 +103,22 @@ export default function VoidApprovalsScreen({ onExit, backLabel }: { onExit: () 
 
         <section className="panel overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="data-table w-full">
-              <thead><tr><th>Requested</th><th>Receipt</th><th>Requested by</th><th>Reason</th><th>Amount</th><th>Status</th><th></th></tr></thead>
-              <tbody>
+            <Table>
+              <TableHeader><TableRow><TableHead>Requested</TableHead><TableHead>Receipt</TableHead><TableHead>Requested by</TableHead><TableHead>Reason</TableHead><TableHead>Amount</TableHead><TableHead>Status</TableHead><TableHead></TableHead></TableRow></TableHeader>
+              <TableBody>
                 {rows.map((row) => (
-                  <tr key={row.id}>
-                    <td className="font-mono">{new Date(row.requestedAt).toLocaleString()}</td>
-                    <td><div className="font-mono">#{row.saleId.slice(-8)}</div><div className="text-xs text-text-tertiary">{row.saleWorkerName}</div></td>
-                    <td>{row.requesterName}</td>
-                    <td className="max-w-xs">{row.reason}</td>
-                    <td className="text-right font-mono tnum">{formatMoneyWithCurrency(row.totalPesewas)}</td>
-                    <td><Status status={row.status} /></td>
-                    <td className="text-right"><Button variant="secondary" size="sm" onClick={() => void open(row)}>{row.status === 'PENDING' ? 'Review' : 'View'}</Button></td>
-                  </tr>
+                  <TableRow key={row.id}>
+                    <TableCell className="font-mono">{new Date(row.requestedAt).toLocaleString()}</TableCell>
+                    <TableCell><div className="font-mono">#{row.saleId.slice(-8)}</div><div className="text-xs text-text-tertiary">{row.saleWorkerName}</div></TableCell>
+                    <TableCell>{row.requesterName}</TableCell>
+                    <TableCell className="max-w-xs">{row.reason}</TableCell>
+                    <TableCell className="text-right font-mono tnum">{formatMoneyWithCurrency(row.totalPesewas)}</TableCell>
+                    <TableCell><Status status={row.status} /></TableCell>
+                    <TableCell className="text-right"><Button variant="secondary" size="sm" onClick={() => void open(row)}>{row.status === 'PENDING' ? 'Review' : 'View'}</Button></TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
           {!loading && rows.length === 0 && <div className="empty-state">{tab === 'PENDING' ? 'No void requests are waiting.' : 'No reviewed requests yet.'}</div>}
           {loading && <div className="empty-state">Loading requests…</div>}

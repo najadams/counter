@@ -59,8 +59,8 @@ export function StockHistoryModal({
             <div className="text-text-tertiary py-6 text-center">No stock movements recorded yet.</div>
           )}
           {!loading && rows.length > 0 && (
-            <Table>
-              <TableHeader className="sticky top-0">
+            <Table scroll={false}>
+              <TableHeader className="sticky top-0 bg-bg-surface">
                 <TableRow>
                   <TableHead>When</TableHead>
                   <TableHead className="text-right">Qty</TableHead>

@@ -10,6 +10,7 @@ import type { ReportsSalesResponse, ReportGroupBy } from '../../../shared/types/
 import { FeedbackBanner } from '../../components/FeedbackBanner';
 import { Button } from '../../components/ui/button';
 import { Segmented } from '../../components/ui/segmented';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 
 export function SalesTab({ reportAccessToken }: { reportAccessToken: string }) {
   const [range, setRange] = useState<DateRange>(defaultDateRange());
@@ -67,7 +68,7 @@ export function SalesTab({ reportAccessToken }: { reportAccessToken: string }) {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="bg-bg-surface border border-border p-4 flex flex-col gap-3">
+      <div className="panel p-4 flex flex-col gap-3">
         <DateRangePicker value={range} onChange={setRange} />
         <div className="flex items-center justify-between gap-3">
           <Segmented label="Group by" size="sm" value={groupBy} onChange={setGroupBy}
@@ -83,7 +84,7 @@ export function SalesTab({ reportAccessToken }: { reportAccessToken: string }) {
 
       {data && (
         <>
-          <section className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <section className="grid grid-cols-2 @xl:grid-cols-4 gap-4">
             <Stat label="Revenue" value={formatMoneyWithCurrency(data.totalRevenuePesewas)} />
             <Stat label="Sales" value={String(data.totalNumSales)} />
             <Stat label="Unique customers" value={String(data.totalUniqueCustomers)} />
@@ -92,7 +93,7 @@ export function SalesTab({ reportAccessToken }: { reportAccessToken: string }) {
           </section>
 
           {/* Buckets table */}
-          <section className="bg-bg-surface border border-border">
+          <section className="panel">
             <div className="px-4 py-3 border-b border-border-subtle flex items-center justify-between">
               <h3 className="text-text-secondary uppercase tracking-wider text-xs">
                 Revenue per {groupBy}
@@ -104,59 +105,59 @@ export function SalesTab({ reportAccessToken }: { reportAccessToken: string }) {
                 No sales in this date range.
               </div>
             ) : (
-              <table className="w-full text-sm">
-                <thead className="bg-bg-deep/60 text-text-tertiary text-xs uppercase tracking-wider">
-                  <tr>
-                    <th className="text-left px-4 py-2">When</th>
-                    <th className="text-right px-4 py-2">Revenue</th>
-                    <th className="text-right px-4 py-2">Sales</th>
-                    <th className="text-right px-4 py-2">Cust.</th>
-                    <th className="text-right px-4 py-2">Avg basket</th>
-                    <th className="text-right px-4 py-2">Walk-in</th>
-                    <th className="text-right px-4 py-2">Wholesale</th>
-                    <th className="text-right px-4 py-2">Route</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>When</TableHead>
+                    <TableHead className="text-right">Revenue</TableHead>
+                    <TableHead className="text-right">Sales</TableHead>
+                    <TableHead className="text-right">Cust.</TableHead>
+                    <TableHead className="text-right">Avg basket</TableHead>
+                    <TableHead className="text-right">Walk-in</TableHead>
+                    <TableHead className="text-right">Wholesale</TableHead>
+                    <TableHead className="text-right">Route</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {data.buckets.map((b) => {
                     const widthPct = peakBucket > 0 ? (b.revenuePesewas / peakBucket) * 100 : 0;
                     return (
-                      <tr key={b.bucket} className="border-t border-border-subtle hover:bg-bg-elevated/40">
-                        <td className="px-4 py-2 font-mono relative">
+                      <TableRow key={b.bucket}>
+                        <TableCell className="px-4 py-2 font-mono relative">
                           <span className="relative z-10">{b.bucket}</span>
                           <span
                             aria-hidden
                             className="absolute inset-y-0 left-0 bg-accent/10 pointer-events-none"
                             style={{ width: `${widthPct}%` }}
                           />
-                        </td>
-                        <td className="px-4 py-2 text-right font-mono tabular-nums">
+                        </TableCell>
+                        <TableCell className="px-4 py-2 text-right font-mono tabular-nums">
                           {formatMoney(b.revenuePesewas)}
-                        </td>
-                        <td className="px-4 py-2 text-right font-mono tabular-nums">{b.numSales}</td>
-                        <td className="px-4 py-2 text-right font-mono tabular-nums">{b.numUniqueCustomers}</td>
-                        <td className="px-4 py-2 text-right font-mono tabular-nums text-text-secondary">
+                        </TableCell>
+                        <TableCell className="px-4 py-2 text-right font-mono tabular-nums">{b.numSales}</TableCell>
+                        <TableCell className="px-4 py-2 text-right font-mono tabular-nums">{b.numUniqueCustomers}</TableCell>
+                        <TableCell className="px-4 py-2 text-right font-mono tabular-nums text-text-secondary">
                           {b.avgBasketPesewas == null ? '—' : formatMoney(b.avgBasketPesewas)}
-                        </td>
-                        <td className="px-4 py-2 text-right font-mono tabular-nums text-text-tertiary">
+                        </TableCell>
+                        <TableCell className="px-4 py-2 text-right font-mono tabular-nums text-text-tertiary">
                           {formatMoney(b.walkInPesewas)}
-                        </td>
-                        <td className="px-4 py-2 text-right font-mono tabular-nums text-text-tertiary">
+                        </TableCell>
+                        <TableCell className="px-4 py-2 text-right font-mono tabular-nums text-text-tertiary">
                           {formatMoney(b.wholesalePesewas)}
-                        </td>
-                        <td className="px-4 py-2 text-right font-mono tabular-nums text-text-tertiary">
+                        </TableCell>
+                        <TableCell className="px-4 py-2 text-right font-mono tabular-nums text-text-tertiary">
                           {formatMoney(b.routePesewas)}
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     );
                   })}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             )}
           </section>
 
           {/* Breakdown grid */}
-          <section className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+          <section className="grid grid-cols-2 @xl:grid-cols-3 gap-4">
             <BreakdownTable
               title="By channel" totalRev={data.totalRevenuePesewas}
               rows={data.byChannel.map((c) => ({ label: c.channel, rev: c.revenuePesewas, sub: `${c.numSales} sale${c.numSales === 1 ? '' : 's'}` }))}
@@ -165,7 +166,7 @@ export function SalesTab({ reportAccessToken }: { reportAccessToken: string }) {
               title="By payment method" totalRev={data.totalRevenuePesewas}
               rows={data.byPaymentMethod.map((m) => ({ label: m.method, rev: m.revenuePesewas, sub: `${m.numSales} sale${m.numSales === 1 ? '' : 's'}` }))}
             />
-            <div className="bg-bg-surface border border-border flex flex-col">
+            <div className="panel flex flex-col">
               <div className="px-4 py-3 border-b border-border-subtle flex items-center justify-between">
                 <h3 className="text-text-secondary uppercase tracking-wider text-xs">By cashier</h3>
                 <Button variant="link" className="text-text-tertiary hover:text-accent no-underline hover:underline text-xs" onClick={exportCashiers} disabled={data.byCashier.length === 0}>
@@ -175,24 +176,24 @@ export function SalesTab({ reportAccessToken }: { reportAccessToken: string }) {
               {data.byCashier.length === 0 ? (
                 <div className="px-4 py-4 text-text-tertiary text-sm">No sales by cashier yet.</div>
               ) : (
-                <table className="w-full text-sm">
-                  <tbody>
+                <Table>
+                  <TableBody>
                     {data.byCashier.map((c) => (
-                      <tr key={c.workerId} className="border-t border-border-subtle">
-                        <td className="px-4 py-2">
+                      <TableRow key={c.workerId}>
+                        <TableCell className="px-4 py-2">
                           <div>{c.workerName}</div>
                           <div className="text-text-tertiary text-xs">
                             {c.numSales} sale{c.numSales === 1 ? '' : 's'}
                             {c.voidedCount > 0 && <span className="text-warning"> · {c.voidedCount} voided</span>}
                           </div>
-                        </td>
-                        <td className="px-4 py-2 text-right font-mono tabular-nums">
+                        </TableCell>
+                        <TableCell className="px-4 py-2 text-right font-mono tabular-nums">
                           {formatMoney(c.revenuePesewas)}
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               )}
             </div>
           </section>
@@ -204,7 +205,7 @@ export function SalesTab({ reportAccessToken }: { reportAccessToken: string }) {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-bg-surface border border-border p-4">
+    <div className="panel p-4">
       <div className="text-text-tertiary uppercase tracking-wider text-xs">{label}</div>
       <div className="text-xl font-bold tabular-nums mt-1">{value}</div>
     </div>
@@ -219,34 +220,34 @@ function BreakdownTable({
   rows: Array<{ label: string; rev: number; sub: string }>;
 }) {
   return (
-    <div className="bg-bg-surface border border-border">
+    <div className="panel">
       <div className="px-4 py-3 border-b border-border-subtle">
         <h3 className="text-text-secondary uppercase tracking-wider text-xs">{title}</h3>
       </div>
       {rows.length === 0 ? (
         <div className="px-4 py-4 text-text-tertiary text-sm">No data.</div>
       ) : (
-        <table className="w-full text-sm">
-          <tbody>
+        <Table>
+          <TableBody>
             {rows.map((r) => {
               const pct = totalRev > 0 ? (r.rev / totalRev) * 100 : 0;
               return (
-                <tr key={r.label} className="border-t border-border-subtle">
-                  <td className="px-4 py-2 relative">
+                <TableRow key={r.label}>
+                  <TableCell className="px-4 py-2 relative">
                     <span className="relative z-10">
                       <div>{r.label}</div>
                       <div className="text-text-tertiary text-xs">{r.sub} · {pct.toFixed(1)}%</div>
                     </span>
                     <span aria-hidden className="absolute inset-y-0 left-0 bg-accent/10" style={{ width: `${pct}%` }} />
-                  </td>
-                  <td className="px-4 py-2 text-right font-mono tabular-nums">
+                  </TableCell>
+                  <TableCell className="px-4 py-2 text-right font-mono tabular-nums">
                     {formatMoney(r.rev)}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               );
             })}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       )}
     </div>
   );

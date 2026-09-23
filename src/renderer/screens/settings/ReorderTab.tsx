@@ -9,6 +9,7 @@ import { FeedbackBanner } from '../../components/FeedbackBanner';
 import { Button } from '../../components/ui/button';
 import { NativeSelect } from '../../components/ui/native-select';
 import { Input } from '../../components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 
 interface Suggestion {
   productId: string; sku: string; productName: string;
@@ -151,20 +152,20 @@ export function ReorderTab() {
             )}
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-bg-deep text-text-tertiary uppercase text-xs">
-                <tr>
-                  <th className="text-left px-3 py-2">SKU</th>
-                  <th className="text-left px-3 py-2">Product</th>
-                  <th className="text-right px-3 py-2">On hand</th>
-                  <th className="text-right px-3 py-2">Threshold</th>
-                  <th className="text-right px-3 py-2">Suggested</th>
-                  <th className="text-right px-3 py-2">Order qty</th>
-                  <th className="text-right px-3 py-2">Last cost</th>
-                  <th className="text-right px-3 py-2">Line value</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="px-3">SKU</TableHead>
+                  <TableHead className="px-3">Product</TableHead>
+                  <TableHead className="text-right px-3">On hand</TableHead>
+                  <TableHead className="text-right px-3">Threshold</TableHead>
+                  <TableHead className="text-right px-3">Suggested</TableHead>
+                  <TableHead className="text-right px-3">Order qty</TableHead>
+                  <TableHead className="text-right px-3">Last cost</TableHead>
+                  <TableHead className="text-right px-3">Line value</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {g.rows.map((r) => {
                   const qty = orderQty[r.productId] ?? r.suggestedQty;
                   const value = qty * r.lastCostPesewas;
@@ -172,33 +173,33 @@ export function ReorderTab() {
                     r.currentOnHand <= 0 ? 'text-danger' :
                     r.currentOnHand < r.reorderThreshold / 2 ? 'text-warning' : '';
                   return (
-                    <tr key={r.productId} className="border-t border-border-subtle">
-                      <td className="px-3 py-2 font-mono text-xs">{r.sku}</td>
-                      <td className="px-3 py-2">{r.productName}</td>
-                      <td className={`px-3 py-2 text-right tabular-nums ${onHandClass}`}>
+                    <TableRow key={r.productId}>
+                      <TableCell className="px-3 py-2 font-mono text-xs">{r.sku}</TableCell>
+                      <TableCell className="px-3 py-2">{r.productName}</TableCell>
+                      <TableCell className={`px-3 py-2 text-right tabular-nums ${onHandClass}`}>
                         {r.currentOnHand}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums text-text-tertiary">
+                      </TableCell>
+                      <TableCell className="px-3 py-2 text-right tabular-nums text-text-tertiary">
                         {r.reorderThreshold}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums text-text-secondary">
+                      </TableCell>
+                      <TableCell className="px-3 py-2 text-right tabular-nums text-text-secondary">
                         {r.suggestedQty}
-                      </td>
-                      <td className="px-3 py-2 text-right">
+                      </TableCell>
+                      <TableCell className="px-3 py-2 text-right">
                         <Input className="w-20 text-right tabular-nums h-8 px-2" type="number" min={0} value={qty}
                           onChange={(e) => setOrderQty((prev) => ({ ...prev, [r.productId]: parseInt(e.target.value || '0', 10) }))} />
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums text-text-tertiary">
+                      </TableCell>
+                      <TableCell className="px-3 py-2 text-right tabular-nums text-text-tertiary">
                         {formatMoneyWithCurrency(r.lastCostPesewas)}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums">
+                      </TableCell>
+                      <TableCell className="px-3 py-2 text-right tabular-nums">
                         {formatMoneyWithCurrency(value)}
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         </div>
       ))}
@@ -209,28 +210,28 @@ export function ReorderTab() {
             <div className="font-semibold">Draft purchase orders ({drafts.length})</div>
             <div className="text-xs text-text-tertiary">Created but not yet placed. Use the PO flow to advance them.</div>
           </div>
-          <table className="w-full text-sm">
-            <thead className="bg-bg-deep text-text-tertiary uppercase text-xs">
-              <tr>
-                <th className="text-left px-3 py-2">PO #</th>
-                <th className="text-left px-3 py-2">Supplier</th>
-                <th className="text-right px-3 py-2">Lines</th>
-                <th className="text-right px-3 py-2">Total</th>
-                <th className="text-left px-3 py-2">Created</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="px-3">PO #</TableHead>
+                <TableHead className="px-3">Supplier</TableHead>
+                <TableHead className="text-right px-3">Lines</TableHead>
+                <TableHead className="text-right px-3">Total</TableHead>
+                <TableHead className="px-3">Created</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {drafts.map((d) => (
-                <tr key={d.id} className="border-t border-border-subtle">
-                  <td className="px-3 py-2 font-mono text-xs">{d.poNumber}</td>
-                  <td className="px-3 py-2">{d.supplierName}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{d.lineCount}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{formatMoneyWithCurrency(d.totalOrderedPesewas)}</td>
-                  <td className="px-3 py-2 text-text-tertiary text-xs">{new Date(d.createdAt).toLocaleString()}</td>
-                </tr>
+                <TableRow key={d.id}>
+                  <TableCell className="px-3 py-2 font-mono text-xs">{d.poNumber}</TableCell>
+                  <TableCell className="px-3 py-2">{d.supplierName}</TableCell>
+                  <TableCell className="px-3 py-2 text-right tabular-nums">{d.lineCount}</TableCell>
+                  <TableCell className="px-3 py-2 text-right tabular-nums">{formatMoneyWithCurrency(d.totalOrderedPesewas)}</TableCell>
+                  <TableCell className="px-3 py-2 text-text-tertiary text-xs">{new Date(d.createdAt).toLocaleString()}</TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       )}
     </div>

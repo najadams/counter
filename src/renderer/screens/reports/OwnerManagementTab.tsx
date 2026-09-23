@@ -26,6 +26,7 @@ import { Button } from '../../components/ui/button';
 import { Textarea } from '../../components/ui/textarea';
 import { NativeSelect } from '../../components/ui/native-select';
 import { Input } from '../../components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 
 export type OwnerManagementView =
   | 'summary' | 'profit' | 'position' | 'cash'
@@ -212,7 +213,7 @@ export function OwnerManagementTab({ view, reportAccessToken }: { view: OwnerMan
 
   return (
     <div className="flex flex-col gap-5">
-      <section className="bg-bg-surface border border-border p-4 flex flex-wrap items-end gap-3">
+      <section className="panel p-4 flex flex-wrap items-end gap-3">
         {(view === 'summary' || view === 'profit' || view === 'cash' || view === 'concentration') && (
           <DateRangePicker value={range} onChange={(next) => { setRange(next); setData(null); }} />
         )}
@@ -247,7 +248,7 @@ export function OwnerManagementTab({ view, reportAccessToken }: { view: OwnerMan
           </>
         )}
         {(view === 'downside' || view === 'summary') && preset === 'CUSTOM' && (
-          <div className="basis-full grid grid-cols-2 md:grid-cols-4 gap-2">
+          <div className="basis-full grid grid-cols-2 @2xl:grid-cols-4 gap-2">
             {([
               ['salesVolumeChangeBps', 'Sales volume %'],
               ['sellingPriceChangeBps', 'Selling price %'],
@@ -297,7 +298,7 @@ export function OwnerManagementTab({ view, reportAccessToken }: { view: OwnerMan
         }} />
       )}
       {!data && !loading && (
-        <section className="bg-bg-surface border border-border p-6 text-text-tertiary text-sm">
+        <section className="panel p-6 text-text-tertiary text-sm">
           No management data is available for this selection.
         </section>
       )}
@@ -643,7 +644,7 @@ function FinancialControls({ pin, reportAccessToken, data, fixedAssets, shadow, 
   return (
     <ReportSection title="Financial controls" answer="Configure where money lives, reconcile it, and activate the ledger only from a verified opening position.">
       {message && <FeedbackBanner>{message}</FeedbackBanner>}
-      <div className="grid lg:grid-cols-2 gap-4">
+      <div className="grid @4xl:grid-cols-2 gap-4">
         <ControlBox title="Money-location accounts">
           <div className="space-y-2 mb-3">
             {data.accounts.map((account) => (
@@ -696,7 +697,7 @@ function FinancialControls({ pin, reportAccessToken, data, fixedAssets, shadow, 
         </ControlBox>
 
         <ControlBox title="Payment-method mapping">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 @xl:grid-cols-3 gap-2">
             <NativeSelect className="px-2" value={mapMethod} onChange={(e) => setMapMethod(e.target.value)}>
               {['CASH', 'MOMO_MTN', 'MOMO_VODAFONE', 'MOMO_AIRTELTIGO', 'BANK_TRANSFER']
                 .map((method) => <option key={method}>{method}</option>)}
@@ -712,7 +713,7 @@ function FinancialControls({ pin, reportAccessToken, data, fixedAssets, shadow, 
         </ControlBox>
 
         <ControlBox title="Internal transfer">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 @xl:grid-cols-3 gap-2">
             <NativeSelect className="px-2" value={fromId} onChange={(e) => setFromId(e.target.value)}>
               {data.accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
             </NativeSelect>
@@ -727,7 +728,7 @@ function FinancialControls({ pin, reportAccessToken, data, fixedAssets, shadow, 
         </ControlBox>
 
         <ControlBox title="Reconcile account">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 @xl:grid-cols-2 gap-2">
             <NativeSelect className="px-2" value={reconcileId} onChange={(e) => setReconcileId(e.target.value)}>
               {data.accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
             </NativeSelect>
@@ -881,7 +882,7 @@ function FinancialControls({ pin, reportAccessToken, data, fixedAssets, shadow, 
             Counter will use opening equity only as the balancing equity account.
           </p>
           <Input className="mb-3 px-2" type="date" value={cutoverDate} onChange={(e) => { setCutoverDate(e.target.value); setPreview(null); }} />
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+          <div className="grid @xl:grid-cols-2 @4xl:grid-cols-3 gap-2">
             {balanceAccounts.map((account) => (
               <label key={account.id} className="text-xs text-text-secondary">
                 {account.name} <span className="text-text-tertiary">({account.code})</span>
@@ -967,20 +968,20 @@ function DrilldownPanel({ data, error, onClose }: {
       {error && <FeedbackBanner>{error}</FeedbackBanner>}
       {data && (
         <div className="overflow-x-auto max-h-96">
-          <table className="w-full text-xs">
-            <thead><tr className="text-left text-text-tertiary border-b border-border">
-              <th className="py-2">Date</th><th>Source</th><th>Description</th><th>Account</th><th className="text-right">Debit</th><th className="text-right">Credit</th>
-            </tr></thead>
-            <tbody>{data.rows.map((row) => (
-              <tr key={`${row.journalEntryId}-${row.accountCode}`} className="border-b border-border-subtle">
-                <td className="py-2 font-mono">{row.businessDate}</td>
-                <td>{row.sourceType}<div className="text-text-tertiary font-mono">{row.sourceId}</div></td>
-                <td>{row.description}</td><td>{row.accountName}</td>
-                <td className="text-right font-mono">{row.debitPesewas ? formatMoneyWithCurrency(row.debitPesewas) : '—'}</td>
-                <td className="text-right font-mono">{row.creditPesewas ? formatMoneyWithCurrency(row.creditPesewas) : '—'}</td>
-              </tr>
-            ))}</tbody>
-          </table>
+          <Table className="text-xs">
+            <TableHeader><TableRow className="text-left text-text-tertiary">
+              <TableHead>Date</TableHead><TableHead>Source</TableHead><TableHead>Description</TableHead><TableHead>Account</TableHead><TableHead className="text-right">Debit</TableHead><TableHead className="text-right">Credit</TableHead>
+            </TableRow></TableHeader>
+            <TableBody>{data.rows.map((row) => (
+              <TableRow key={`${row.journalEntryId}-${row.accountCode}`}>
+                <TableCell className="py-2 font-mono">{row.businessDate}</TableCell>
+                <TableCell>{row.sourceType}<div className="text-text-tertiary font-mono">{row.sourceId}</div></TableCell>
+                <TableCell>{row.description}</TableCell><TableCell>{row.accountName}</TableCell>
+                <TableCell className="text-right font-mono">{row.debitPesewas ? formatMoneyWithCurrency(row.debitPesewas) : '—'}</TableCell>
+                <TableCell className="text-right font-mono">{row.creditPesewas ? formatMoneyWithCurrency(row.creditPesewas) : '—'}</TableCell>
+              </TableRow>
+            ))}</TableBody>
+          </Table>
           {data.rows.length === 0 && <p className="text-sm text-text-tertiary py-3">No posted ledger source lines match this selection.</p>}
           {data.truncated && <p className="text-xs text-warning mt-2">Showing the latest 500 source lines.</p>}
         </div>
@@ -1028,7 +1029,7 @@ function PositionView({ data, compact, onDrilldown }: {
         ['Equity', data.equity.totalPesewas], ['Working capital', data.workingCapitalPesewas],
       ]} />
       {!compact && (
-        <div className="grid lg:grid-cols-3 gap-3">
+        <div className="grid @4xl:grid-cols-3 gap-3">
           <LineTable title="Assets" lines={data.assets.lines} onDrilldown={(line) => onDrilldown({ accountCode: line.code, asOfDate: data.asOfDate })} />
           <LineTable title="Liabilities" lines={data.liabilities.lines} onDrilldown={(line) => onDrilldown({ accountCode: line.code, asOfDate: data.asOfDate })} />
           <LineTable title="Equity" lines={data.equity.lines} onDrilldown={(line) => onDrilldown({ accountCode: line.code, asOfDate: data.asOfDate })} />
@@ -1108,27 +1109,27 @@ function ObligationsView({ data, compact, pin, accounts, onPaid, onPinConsumed, 
       {!compact && (
         <>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead><tr className="text-left text-text-tertiary border-b border-border">
-              <th className="py-2">Due</th><th>Creditor</th><th>Type</th><th>Status</th><th className="text-right">Outstanding</th><th></th>
-            </tr></thead>
-            <tbody>{data.rows.map((row) => (
-              <tr key={row.id} className="border-b border-border-subtle">
-                <td className="py-2 font-mono">{row.dueDate ?? 'MISSING'}</td>
-                <td>{row.creditorName}</td><td>{row.obligationType.replace(/_/g, ' ')}</td><td>{row.status}</td>
-                <td className="text-right font-mono">{formatMoneyWithCurrency(row.outstandingPesewas)}</td>
-                <td className="text-right"><Button variant="link" className="text-inherit text-xs" onClick={() => void onDrilldown({
+          <Table>
+            <TableHeader><TableRow className="text-left text-text-tertiary">
+              <TableHead>Due</TableHead><TableHead>Creditor</TableHead><TableHead>Type</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Outstanding</TableHead><TableHead></TableHead>
+            </TableRow></TableHeader>
+            <TableBody>{data.rows.map((row) => (
+              <TableRow key={row.id}>
+                <TableCell className="py-2 font-mono">{row.dueDate ?? 'MISSING'}</TableCell>
+                <TableCell>{row.creditorName}</TableCell><TableCell>{row.obligationType.replace(/_/g, ' ')}</TableCell><TableCell>{row.status}</TableCell>
+                <TableCell className="text-right font-mono">{formatMoneyWithCurrency(row.outstandingPesewas)}</TableCell>
+                <TableCell className="text-right"><Button variant="link" className="text-inherit text-xs" onClick={() => void onDrilldown({
                   sourceType: row.sourceType, sourceId: row.sourceId, asOfDate: data.asOfDate,
-                })}>Source</Button></td>
-              </tr>
-            ))}</tbody>
-          </table>
+                })}>Source</Button></TableCell>
+              </TableRow>
+            ))}</TableBody>
+          </Table>
         </div>
         {data.rows.length > 0 && accounts.length > 0 && (
           <div className="border border-border p-3">
             <div className="text-xs uppercase text-text-tertiary mb-2">Pay an obligation</div>
             {message && <div className="text-sm mb-2">{message}</div>}
-            <div className="grid sm:grid-cols-3 gap-2">
+            <div className="grid @xl:grid-cols-3 gap-2">
               <NativeSelect className="px-2" value={obligationId} onChange={(e) => {
                 const row = data.rows.find((item) => item.id === e.target.value);
                 setObligationId(e.target.value); setDueDate(row?.dueDate ?? '');
@@ -1149,7 +1150,7 @@ function ObligationsView({ data, compact, pin, accounts, onPaid, onPinConsumed, 
             <Button className="mt-2" onClick={() => void pay()} disabled={!(Number(amount) > 0)}>
               Allocate payment
             </Button>
-            <div className="grid sm:grid-cols-3 gap-2 mt-3 pt-3 border-t border-border-subtle">
+            <div className="grid @xl:grid-cols-3 gap-2 mt-3 pt-3 border-t border-border-subtle">
               <Input className="px-2" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={disputed} onChange={(e) => setDisputed(e.target.checked)} /> Disputed
@@ -1194,7 +1195,7 @@ function ConcentrationView({ data, compact, pin, onRefresh, onPinConsumed }: {
       answer={danger.length > 0
         ? `${danger.map((item) => item.dimension.toLowerCase().replace('_', ' ')).join(', ')} concentration is above the danger threshold.`
         : 'No measured concentration is above its configured danger threshold.'}>
-      <div className="grid md:grid-cols-2 xl:grid-cols-5 gap-3">
+      <div className="grid @2xl:grid-cols-2 @6xl:grid-cols-5 gap-3">
         {data.dimensions.map((item) => (
           <div key={item.dimension} className="bg-bg-deep border border-border p-3">
             <div className="text-xs uppercase text-text-tertiary">{item.dimension.replace('_', ' ')}</div>
@@ -1291,7 +1292,7 @@ function DownsideView({ data, compact, pin, riskConfig, onRefresh, onPinConsumed
         <>
           <p className="text-xs text-text-tertiary">{data.disclaimer}</p>
           {message && <FeedbackBanner>{message}</FeedbackBanner>}
-          <div className="grid lg:grid-cols-2 gap-3 print:hidden">
+          <div className="grid @4xl:grid-cols-2 gap-3 print:hidden">
             <ControlBox title="Saved management scenarios">
               <div className="space-y-2 mb-3">
                 {(riskConfig?.scenarios ?? []).map((scenario) => (
@@ -1342,7 +1343,7 @@ function ReportSection({ title, answer, children }: {
   title: string; answer: string; children: React.ReactNode;
 }) {
   return (
-    <section className="bg-bg-surface border border-border p-5 flex flex-col gap-4 break-inside-avoid">
+    <section className="panel p-5 flex flex-col gap-4 break-inside-avoid">
       <div>
         <h2 className="text-xs uppercase tracking-wider text-text-tertiary">{title}</h2>
         <p className="text-lg mt-2">{answer}</p>
@@ -1354,7 +1355,7 @@ function ReportSection({ title, answer, children }: {
 
 function CardGrid({ items }: { items: Array<[string, number]> }) {
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+    <div className="grid grid-cols-2 @4xl:grid-cols-3 gap-3">
       {items.map(([label, amount]) => (
         <div key={label} className="bg-bg-deep border border-border p-3">
           <div className="text-xs uppercase text-text-tertiary">{label}</div>
@@ -1375,17 +1376,17 @@ function LineTable({ title, lines, onDrilldown }: {
   return (
     <div className="border border-border overflow-hidden">
       {title && <div className="px-3 py-2 text-xs uppercase text-text-tertiary bg-bg-deep">{title}</div>}
-      <table className="w-full text-sm"><tbody>
+      <Table><TableBody>
         {lines.map((line, index) => (
-          <tr key={`${line.code}-${index}`} className="border-t border-border-subtle">
-            <td className="px-3 py-2">{line.label}{line.note && <div className="text-xs text-text-tertiary">{line.note}</div>}</td>
-            <td className="px-3 py-2 text-right font-mono tnum">{formatMoneyWithCurrency(line.amountPesewas)}</td>
-            {onDrilldown && <td className="px-3 py-2 text-right print:hidden">
+          <TableRow key={`${line.code}-${index}`}>
+            <TableCell className="px-3 py-2">{line.label}{line.note && <div className="text-xs text-text-tertiary">{line.note}</div>}</TableCell>
+            <TableCell className="px-3 py-2 text-right font-mono tnum">{formatMoneyWithCurrency(line.amountPesewas)}</TableCell>
+            {onDrilldown && <TableCell className="px-3 py-2 text-right print:hidden">
               <Button variant="link" className="text-inherit text-xs" onClick={() => void onDrilldown(line)}>Source</Button>
-            </td>}
-          </tr>
+            </TableCell>}
+          </TableRow>
         ))}
-      </tbody></table>
+      </TableBody></Table>
     </div>
   );
 }

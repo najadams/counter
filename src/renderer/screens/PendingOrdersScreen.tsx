@@ -16,6 +16,7 @@ import type { PendingOrderDetail, PendingOrderSummary } from '../../shared/types
 import { FeedbackBanner } from '../components/FeedbackBanner';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 
 export default function PendingOrdersScreen({ onExit, onAccept }: { onExit: () => void; onAccept: () => void }) {
   const loadLines = useCart((s) => s.loadLines);
@@ -160,68 +161,68 @@ export default function PendingOrdersScreen({ onExit, onAccept }: { onExit: () =
         {info && <div className="bg-bg-surface border border-success px-5 py-3 text-success text-sm">{info}</div>}
         {error && !selectedId && <FeedbackBanner>{error}</FeedbackBanner>}
 
-        <div className="bg-bg-surface border border-border overflow-y-auto" style={{ maxHeight: '55vh' }}>
-          <table className="w-full">
-            <thead>
-              <tr className="text-text-secondary text-xs uppercase tracking-wider">
-                <th className="px-4 py-3 text-left">Received</th>
-                <th className="px-4 py-3 text-left">Customer</th>
-                <th className="px-4 py-3 text-left">Channel</th>
-                <th className="px-4 py-3 text-right">Lines</th>
-                <th className="px-4 py-3 text-right">Total</th>
-                <th className="px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody className="text-sm">
+        <div className="panel overflow-y-auto" style={{ maxHeight: '55vh' }}>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Received</TableHead>
+                <TableHead>Customer</TableHead>
+                <TableHead>Channel</TableHead>
+                <TableHead className="text-right">Lines</TableHead>
+                <TableHead className="text-right">Total</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody className="text-sm">
               {orders.map((o) => (
-                <tr key={o.id} className="border-t border-border">
-                  <td className="px-4 py-3 font-mono tnum">
+                <TableRow key={o.id}>
+                  <TableCell className="px-4 py-3 font-mono tnum">
                     {new Date(o.receivedAt).toLocaleTimeString()}
                     <span className="text-text-tertiary ml-2">#{o.id.slice(-6)}</span>
-                  </td>
-                  <td className="px-4 py-3">{o.customerName ?? o.customerPhone}</td>
-                  <td className="px-4 py-3">{o.channel}</td>
-                  <td className="px-4 py-3 text-right font-mono tnum">{o.lineCount}</td>
-                  <td className="px-4 py-3 text-right font-mono tnum">{formatMoney(o.totalPesewas)}</td>
-                  <td className="px-4 py-3 text-right">
+                  </TableCell>
+                  <TableCell className="px-4 py-3">{o.customerName ?? o.customerPhone}</TableCell>
+                  <TableCell className="px-4 py-3">{o.channel}</TableCell>
+                  <TableCell className="px-4 py-3 text-right font-mono tnum">{o.lineCount}</TableCell>
+                  <TableCell className="px-4 py-3 text-right font-mono tnum">{formatMoney(o.totalPesewas)}</TableCell>
+                  <TableCell className="px-4 py-3 text-right">
                     <Button size="sm" className="text-accent" onClick={() => { setSelectedId(o.id); setError(null); setInfo(null); }}>
                       Review
                     </Button>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
               {orders.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-6 text-text-tertiary text-center">No orders waiting.</td></tr>
+                <TableRow><TableCell colSpan={6} className="px-4 py-6 text-text-tertiary text-center">No orders waiting.</TableCell></TableRow>
               )}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
 
-        <div className="bg-bg-surface border border-border overflow-y-auto" style={{ maxHeight: '35vh' }}>
+        <div className="panel overflow-y-auto" style={{ maxHeight: '35vh' }}>
           <div className="px-4 py-3 border-b border-border-subtle flex items-center justify-between">
             <h3 className="text-text-secondary uppercase tracking-wider text-xs">Delivery operations</h3>
             <span className="text-text-tertiary text-xs">{deliveryOrders.length}</span>
           </div>
-          <table className="w-full">
-            <thead>
-              <tr className="text-text-secondary text-xs uppercase tracking-wider">
-                <th className="px-4 py-3 text-left">Customer</th>
-                <th className="px-4 py-3 text-left">Status</th>
-                <th className="px-4 py-3 text-left">Driver</th>
-                <th className="px-4 py-3 text-right">Profit</th>
-                <th className="px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody className="text-sm">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Customer</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Driver</TableHead>
+                <TableHead className="text-right">Profit</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody className="text-sm">
               {deliveryOrders.map((o) => (
-                <tr key={o.id} className="border-t border-border">
-                  <td className="px-4 py-3">{o.customerName ?? o.customerPhone}<span className="text-text-tertiary text-xs ml-2">#{o.id.slice(-6)}</span></td>
-                  <td className="px-4 py-3">{o.deliveryStatus}</td>
-                  <td className="px-4 py-3">{o.driverName ?? '—'}</td>
-                  <td className="px-4 py-3 text-right font-mono tnum">
+                <TableRow key={o.id}>
+                  <TableCell className="px-4 py-3">{o.customerName ?? o.customerPhone}<span className="text-text-tertiary text-xs ml-2">#{o.id.slice(-6)}</span></TableCell>
+                  <TableCell className="px-4 py-3">{o.deliveryStatus}</TableCell>
+                  <TableCell className="px-4 py-3">{o.driverName ?? '—'}</TableCell>
+                  <TableCell className="px-4 py-3 text-right font-mono tnum">
                     {o.deliveryProfitPesewas == null ? '—' : formatMoney(o.deliveryProfitPesewas)}
-                  </td>
-                  <td className="px-4 py-3 text-right space-x-2">
+                  </TableCell>
+                  <TableCell className="px-4 py-3 text-right space-x-2">
                     {o.deliveryStatus === 'NOT_STARTED' && (
                       <Button variant="link" className="text-accent no-underline hover:underline text-xs" onClick={() => void deliveryAction(o, 'pack')} disabled={busy}>pack</Button>
                     )}
@@ -234,18 +235,18 @@ export default function PendingOrdersScreen({ onExit, onAccept }: { onExit: () =
                         <Button variant="link" className="text-danger no-underline hover:underline text-xs" onClick={() => void deliveryAction(o, 'failed')} disabled={busy}>failed</Button>
                       </>
                     )}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
               {deliveryOrders.length === 0 && (
-                <tr><td colSpan={5} className="px-4 py-6 text-text-tertiary text-center">No delivery orders yet.</td></tr>
+                <TableRow><TableCell colSpan={5} className="px-4 py-6 text-text-tertiary text-center">No delivery orders yet.</TableCell></TableRow>
               )}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
 
         {detail && !rejecting && (
-          <div className="bg-bg-surface border border-border p-6 flex flex-col gap-4">
+          <div className="panel p-6 flex flex-col gap-4">
             <div className="flex items-baseline justify-between">
               <h3 className="text-text-secondary uppercase tracking-wider text-xs">
                 Order #{detail.id.slice(-8)}
@@ -291,7 +292,7 @@ export default function PendingOrdersScreen({ onExit, onAccept }: { onExit: () =
         )}
 
         {detail && rejecting && (
-          <div className="bg-bg-surface border border-border p-6 flex flex-col gap-4">
+          <div className="panel p-6 flex flex-col gap-4">
             <h3 className="text-text-secondary uppercase tracking-wider text-xs">
               Decline order #{detail.id.slice(-8)}
             </h3>
