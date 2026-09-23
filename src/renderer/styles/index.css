@@ -1,6 +1,93 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+/* -----------------------------------------------------------------------
+ * Tailwind token map
+ *
+ * Maps utility names (bg-bg-deep, text-text-primary, border-border, …) onto
+ * the themed --c-* channels defined below. `inline` writes the var() straight
+ * into each utility, so a theme swap on <html> re-resolves every colour.
+ *
+ * Add a colour by:
+ *   1. Adding a `--c-foo` variable to EVERY theme block below.
+ *   2. Mapping `--color-foo: rgb(var(--c-foo));` here.
+ * --------------------------------------------------------------------- */
+@theme inline {
+  --color-bg-deep: rgb(var(--c-bg-deep));
+  --color-bg-surface: rgb(var(--c-bg-surface));
+  --color-bg-elevated: rgb(var(--c-bg-elevated));
+  --color-bg-input: rgb(var(--c-bg-input));
+  --color-bg-modal: rgb(var(--c-bg-modal));
+
+  --color-border: rgb(var(--c-border));
+  --color-border-strong: rgb(var(--c-border-strong));
+  --color-border-subtle: rgb(var(--c-border-subtle));
+
+  --color-text-primary: rgb(var(--c-text-primary));
+  --color-text-secondary: rgb(var(--c-text-secondary));
+  --color-text-tertiary: rgb(var(--c-text-tertiary));
+
+  /* `ink` is a high-contrast foreground for accent/warning/danger/success
+   * surfaces (e.g. "bg-accent text-ink"). Top-level so the class is
+   * `text-ink`, not `text-text-ink`. */
+  --color-ink: rgb(var(--c-text-ink));
+
+  --color-accent: rgb(var(--c-accent));
+  --color-accent-primary: rgb(var(--c-accent));
+  --color-accent-light: rgb(var(--c-accent-light));
+  --color-accent-dim: rgb(var(--c-accent-dim));
+
+  --color-success: rgb(var(--c-success));
+  --color-danger: rgb(var(--c-danger));
+  --color-danger-light: rgb(var(--c-danger-light));
+  --color-warning: rgb(var(--c-warning));
+  /* The modal scrim is the `bg-scrim` utility below, not a colour, so the
+   * alpha can be baked in per theme. */
+}
+
+@theme {
+  --font-sans: Inter, system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Bare `rounded` is square: the sharp default this app has always had.
+   * Opt into a curve explicitly (rounded-lg, rounded-xl, …). */
+  --radius: 0;
+
+  /* v3 line-heights. v4's defaults are ratios, which a child with its own
+   * font size (text-[10px] inside text-xs) inherits as a different height. */
+  --text-xs--line-height: 1rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg--line-height: 1.75rem;
+  --text-xl--line-height: 1.75rem;
+  --text-2xl--line-height: 2rem;
+  --text-3xl--line-height: 2.25rem;
+  --text-4xl--line-height: 2.5rem;
+}
+
+/* Tailwind v3 defaults that v4 changed. Kept so the v4 upgrade is
+ * invisible; drop each once nothing depends on it. */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: #e5e7eb; /* v3 gray-200; v4 uses currentcolor */
+  }
+  input::placeholder,
+  textarea::placeholder {
+    color: #9ca3af; /* v3 gray-400 */
+  }
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer; /* v4 preflight no longer sets it */
+  }
+  option,
+  td,
+  th {
+    padding: revert; /* v4 zeroes every element; v3 kept the browser default */
+  }
+}
 
 /* -----------------------------------------------------------------------
  * Theme tokens
@@ -245,56 +332,65 @@
   .segmented-control button.active { color: rgb(var(--c-text-primary)); background: rgb(var(--c-bg-elevated)); box-shadow: 0 1px 3px rgb(0 0 0 / 0.12); }
 }
 
-@layer utilities {
-  /* Tabular figures: required for any column of money, quantities, dates. */
-  .tnum {
-    font-variant-numeric: tabular-nums;
-    font-feature-settings: 'tnum';
-  }
+/* Custom utilities. `@utility` lets them take variants (hover:, lg:) like
+ * any built-in utility. */
 
-  /* Keyboard shortcut chip used across the UI. Themed. */
-  .kbd {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 1.5rem;
-    padding: 0.05rem 0.4rem;
-    margin: 0 0.15rem;
-    background: rgb(var(--c-bg-elevated));
-    border: 1px solid rgb(var(--c-border-strong));
-    color: rgb(var(--c-text-primary));
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 0.75rem;
-    line-height: 1.3;
-  }
+/* Tabular figures: required for any column of money, quantities, dates. */
+@utility tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
 
-  .input {
-    background: rgb(var(--c-bg-input));
-    border: 1px solid rgb(var(--c-border-strong));
-    color: rgb(var(--c-text-primary));
-    padding: 0.5rem 0.75rem;
-    width: 100%;
-    min-width: 0;
-  }
-  .input:focus {
+/* Keyboard shortcut chip used across the UI. Themed. */
+@utility kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  padding: 0.05rem 0.4rem;
+  margin: 0 0.15rem;
+  background: rgb(var(--c-bg-elevated));
+  border: 1px solid rgb(var(--c-border-strong));
+  color: rgb(var(--c-text-primary));
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+  line-height: 1.3;
+}
+
+@utility input {
+  background: rgb(var(--c-bg-input));
+  border: 1px solid rgb(var(--c-border-strong));
+  color: rgb(var(--c-text-primary));
+  padding: 0.5rem 0.75rem;
+  width: 100%;
+  min-width: 0;
+  &:focus {
     outline: none;
     border-color: rgb(var(--c-accent));
   }
-  .input:disabled {
+  &:disabled {
     opacity: 0.65;
   }
+}
 
-  /* Scrim used by modals — pulls from the themed --c-scrim and applies
-   * a lighter alpha on light theme so modal contents still pop. */
-  .bg-scrim { background-color: rgb(var(--c-scrim) / 0.70); }
-  :root[data-theme='light'] .bg-scrim,
-  :root[data-theme='sea'] .bg-scrim { background-color: rgb(var(--c-scrim) / 0.40); }
+/* Scrim used by modals — pulls from the themed --c-scrim and applies
+ * a lighter alpha on light theme so modal contents still pop. */
+@utility bg-scrim {
+  background-color: rgb(var(--c-scrim) / 0.70);
+  :root[data-theme='light'] &,
+  :root[data-theme='sea'] & {
+    background-color: rgb(var(--c-scrim) / 0.40);
+  }
+}
 
-  /* Counter-PC zoom for the dense sale screen. `zoom` also scales width, so
-   * on phones (LAN browser access) it forces horizontal overflow — drop it
-   * below the lg breakpoint where the layout switches to a single column. */
-  .sale-zoom { zoom: 1.15; }
-  @media (max-width: 1023px) { .sale-zoom { zoom: 1; } }
+/* Counter-PC zoom for the dense sale screen. `zoom` also scales width, so
+ * on phones (LAN browser access) it forces horizontal overflow — drop it
+ * below the lg breakpoint where the layout switches to a single column. */
+@utility sale-zoom {
+  zoom: 1.15;
+  @media (max-width: 1023px) {
+    zoom: 1;
+  }
 }
 
 /* Sale completion feedback flashes — applied briefly to body via JS.

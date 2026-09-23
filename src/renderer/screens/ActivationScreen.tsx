@@ -112,7 +112,7 @@ export default function ActivationScreen({
             spellCheck={false}
             placeholder="XXXXX-XXXXX-XXXXX-…"
             className="w-full bg-bg-deep border border-border-strong rounded p-3 font-mono text-xs
-                       tracking-wide resize-none focus:outline-none focus:border-accent"
+                       tracking-wide resize-none focus:outline-hidden focus:border-accent"
           />
           <p className="text-xs text-text-tertiary">
             Paste the whole thing. Dashes, line breaks and capitals don&apos;t matter.

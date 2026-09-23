@@ -35,7 +35,7 @@ export function ActionTile({
       type="button"
       onClick={onClick}
       aria-label={showBadge ? `${label}, ${badge} waiting` : label}
-      className={`relative w-full flex items-center text-left border-2 rounded-2xl shadow-sm transition-colors ${pad} ${tone}`}
+      className={`relative w-full flex items-center text-left border-2 rounded-2xl shadow-xs transition-colors ${pad} ${tone}`}
     >
       <TaskIllustration name={illustration} size={art} />
       <span className="flex-1 min-w-0">

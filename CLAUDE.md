@@ -474,7 +474,7 @@ below it runs the no-VAT build; a registered shop runs the VAT build.
 
 ### The flag
 
-`COUNTER_VAT=1` at **build time** selects the VAT build. `vite.config.ts` injects
+`COUNTER_VAT=1` at **build time** selects the VAT build. `vite.config.mts` injects
 it as the compile-time constant `__COUNTER_VAT__`; `src/shared/lib/vat.ts` exposes
 it as `VAT_ENABLED`. Dead VAT branches tree-shake out of the no-VAT bundle. Build
 with the `dist:*:vat` scripts (§2). It is **not** a runtime toggle — a shop can't

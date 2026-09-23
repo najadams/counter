@@ -72,7 +72,7 @@ export function SalesTab({ reportAccessToken }: { reportAccessToken: string }) {
             {(['day', 'week', 'month'] as const).map((g) => (
               <button key={g} onClick={() => setGroupBy(g)}
                 className={[
-                  'px-3 py-1.5 border rounded-sm uppercase tracking-wider',
+                  'px-3 py-1.5 border rounded-xs uppercase tracking-wider',
                   groupBy === g
                     ? 'bg-accent text-ink border-accent font-semibold'
                     : 'border-border text-text-secondary hover:text-text-primary',

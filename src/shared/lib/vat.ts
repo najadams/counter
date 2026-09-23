@@ -2,7 +2,7 @@
 //
 // Built as a BUILD-TIME variant: the no-VAT binary and the VAT binary come from
 // the same source. `VAT_ENABLED` is fixed at build time by the Vite `define`
-// that replaces the `__COUNTER_VAT__` token (see vite.config.ts). When the flag
+// that replaces the `__COUNTER_VAT__` token (see vite.config.mts). When the flag
 // is off, dead branches tree-shake out and every sale records zero tax.
 //
 // Current law: Value Added Tax Act, 2025 (Act 1151), effective 1 January 2026.

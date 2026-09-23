@@ -1,6 +1,8 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+// Inter ships inside the bundle: a till with no internet must still render it.
+import 'inter-ui/inter.css';
 import './styles/index.css';
 import { FRIENDLY_UI_ENABLED } from '../shared/lib/buildFlags';
 

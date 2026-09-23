@@ -196,7 +196,7 @@ export function TouchCheckoutSheet(p: TouchCheckoutSheetProps): JSX.Element {
                   onFocus={(e) => e.target.select()}
                   onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); confirmAndComplete(); } }}
                   inputMode="decimal"
-                  className="flex-1 min-w-0 bg-bg-input border-2 border-border-strong rounded-xl px-4 py-3 text-4xl font-mono tnum text-right focus:outline-none focus:border-accent"
+                  className="flex-1 min-w-0 bg-bg-input border-2 border-border-strong rounded-xl px-4 py-3 text-4xl font-mono tnum text-right focus:outline-hidden focus:border-accent"
                 />
                 <button
                   type="button"
@@ -263,7 +263,7 @@ export function TouchCheckoutSheet(p: TouchCheckoutSheetProps): JSX.Element {
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); confirmAndComplete(); } }}
                 inputMode="numeric"
                 placeholder="e.g. 7812345678"
-                className="bg-bg-input border-2 border-border-strong rounded-xl px-4 py-3 font-mono text-3xl focus:outline-none focus:border-accent"
+                className="bg-bg-input border-2 border-border-strong rounded-xl px-4 py-3 font-mono text-3xl focus:outline-hidden focus:border-accent"
               />
               </div>
               <NumberPad label="Transaction number pad" value={refRaw} onChange={setRefRaw} disabled={p.submitting} />
@@ -280,7 +280,7 @@ export function TouchCheckoutSheet(p: TouchCheckoutSheetProps): JSX.Element {
                 value={custQuery}
                 onChange={(e) => setCustQuery(e.target.value)}
                 placeholder="Type a name or phone number"
-                className="bg-bg-input border-2 border-border-strong rounded-xl px-4 py-3 text-2xl focus:outline-none focus:border-accent"
+                className="bg-bg-input border-2 border-border-strong rounded-xl px-4 py-3 text-2xl focus:outline-hidden focus:border-accent"
               />
               <button type="button" onClick={() => setShowCreate(true)} className="self-start min-h-14 px-4 rounded-xl border-2 border-border text-lg font-semibold hover:bg-bg-elevated">+ New customer</button>
               <ul className="flex flex-col gap-2 max-h-72 overflow-y-auto">

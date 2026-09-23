@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 import electron from 'vite-plugin-electron/simple';
 import path from 'node:path';
 
@@ -30,6 +31,8 @@ export default defineConfig({
   },
   plugins: [
     react(),
+    // Renderer only: the electron() sub-builds below are separate configs.
+    tailwindcss(),
     electron({
       main: {
         entry: 'src/main/index.ts',
@@ -61,6 +64,11 @@ export default defineConfig({
   },
   // Applies to the renderer build.
   define: buildFlagDefine,
+  // No PostCSS step: Tailwind runs as the Vite plugin above. An inline config
+  // also stops Vite adopting a postcss.config.* from a parent directory.
+  css: {
+    postcss: {},
+  },
   build: {
     outDir: 'dist',
     emptyOutDir: true,

@@ -365,7 +365,7 @@ export function ReceiptPrintModal({ receipt, onClose, amountPaidPesewas, amountO
   // Nested inside the app tree there is no selector that removes the ancestors'
   // layout without also removing the receipt.
   return createPortal(
-    <div className="fixed inset-0 bg-scrim flex items-center justify-center p-4 z-[70] receipt-print-overlay" onClick={onClose}>
+    <div className="fixed inset-0 bg-scrim flex items-center justify-center p-4 z-70 receipt-print-overlay" onClick={onClose}>
       <style>{printCss}</style>
       <div {...dialog} aria-label="Receipt preview"
         className="receipt-print-card bg-white text-gray-900 rounded-lg shadow-2xl max-h-[90vh] overflow-auto"

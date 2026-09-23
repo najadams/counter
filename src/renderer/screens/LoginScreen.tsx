@@ -99,7 +99,7 @@ export default function LoginScreen() {
                       ].join(' ')}
                     >
                       <TaskIllustration name="person" size={52} />
-                      <span className="min-w-0 text-xl font-semibold leading-tight [overflow-wrap:anywhere]">{c.fullName}</span>
+                      <span className="min-w-0 text-xl font-semibold leading-tight wrap-anywhere">{c.fullName}</span>
                     </button>
                   </li>
                 );
@@ -127,7 +127,7 @@ export default function LoginScreen() {
               disabled={submitting || lockedUntil !== null}
               onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
               onKeyDown={onKeyDown}
-              className="bg-bg-input border-2 border-border-strong rounded-xl px-5 py-4 text-4xl font-mono tnum tracking-[0.5em] text-center focus:outline-none focus:border-accent disabled:opacity-50"
+              className="bg-bg-input border-2 border-border-strong rounded-xl px-5 py-4 text-4xl font-mono tnum tracking-[0.5em] text-center focus:outline-hidden focus:border-accent disabled:opacity-50"
               placeholder="••••"
             />
             <p className="text-lg text-text-secondary">Your PIN has 4 to 6 numbers.</p>
@@ -204,7 +204,7 @@ export default function LoginScreen() {
             disabled={submitting || lockedUntil !== null}
             onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
             onKeyDown={onKeyDown}
-            className="bg-bg-input border border-border-strong px-5 py-4 text-3xl font-mono tnum tracking-[0.5em] text-center focus:outline-none focus:border-accent disabled:opacity-50"
+            className="bg-bg-input border border-border-strong px-5 py-4 text-3xl font-mono tnum tracking-[0.5em] text-center focus:outline-hidden focus:border-accent disabled:opacity-50"
             placeholder="••••"
           />
           <div className="text-text-tertiary text-xs">

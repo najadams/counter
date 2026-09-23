@@ -116,7 +116,7 @@ export function InventoryTab({ reportAccessToken }: { reportAccessToken: string 
               <span className="text-xs uppercase tracking-wider text-text-tertiary">Search</span>
               <input value={search} onChange={(e) => setSearch(e.target.value)}
                 placeholder="name or SKU"
-                className="bg-bg-input border border-border-strong px-3 py-1.5 text-sm min-w-[14rem]" />
+                className="bg-bg-input border border-border-strong px-3 py-1.5 text-sm min-w-56" />
             </label>
           </div>
           <button onClick={exportCsv} disabled={!data || sorted.length === 0}

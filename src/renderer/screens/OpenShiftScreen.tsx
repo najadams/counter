@@ -105,7 +105,7 @@ export default function OpenShiftScreen() {
               disabled={submitting}
               placeholder="0.00"
               aria-invalid={!valid && raw.length > 0}
-              className="w-full min-w-0 bg-bg-input border-2 border-border-strong rounded-xl px-5 py-4 text-5xl font-mono tnum text-right focus:outline-none focus:border-accent"
+              className="w-full min-w-0 bg-bg-input border-2 border-border-strong rounded-xl px-5 py-4 text-5xl font-mono tnum text-right focus:outline-hidden focus:border-accent"
             />
             {!valid && raw.length > 0 && (
               <p className="text-danger text-lg">Enter an amount like 250 or 250.50.</p>
@@ -142,7 +142,7 @@ export default function OpenShiftScreen() {
             onKeyDown={onKeyDown}
             disabled={submitting}
             placeholder="0.00"
-            className="flex-1 min-w-0 bg-bg-input border border-border-strong px-5 py-4 text-4xl font-mono tnum text-right focus:outline-none focus:border-accent"
+            className="flex-1 min-w-0 bg-bg-input border border-border-strong px-5 py-4 text-4xl font-mono tnum text-right focus:outline-hidden focus:border-accent"
           />
         </div>
         {!valid && raw.length > 0 && (

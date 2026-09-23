@@ -138,7 +138,7 @@ export function PricingTiersTab() {
     <div className="flex flex-col lg:flex-row gap-6">
       {/* Left: product picker. Full-width on small windows so the picker
        *  stays usable; collapses to a 18rem sidebar at lg+ widths. */}
-      <div className="w-full lg:w-72 xl:w-80 lg:flex-shrink-0 flex flex-col gap-2">
+      <div className="w-full lg:w-72 xl:w-80 lg:shrink-0 flex flex-col gap-2">
         <input
           autoFocus
           placeholder="Filter SKU or name…"
@@ -349,7 +349,7 @@ export function PricingTiersTab() {
                       className="w-full bg-bg-deep border border-border-subtle px-2 py-2 rounded text-sm font-mono tnum"
                     />
                   </Field>
-                  <Field label="Notes" className="flex-1 min-w-[12rem]">
+                  <Field label="Notes" className="flex-1 min-w-48">
                     <input
                       placeholder="(optional)"
                       value={addNotes}

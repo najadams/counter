@@ -394,7 +394,7 @@ export default function HomeScreen({ onReactivate }: { onReactivate?: () => void
                   onChange={(e) => setCounted(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') void submitCountAndClose(); }}
                   disabled={closing} placeholder="0.00"
-                  className="w-full min-w-0 bg-bg-input border-2 border-border-strong rounded-xl px-5 py-4 text-5xl font-mono tnum text-right focus:outline-none focus:border-accent" />
+                  className="w-full min-w-0 bg-bg-input border-2 border-border-strong rounded-xl px-5 py-4 text-5xl font-mono tnum text-right focus:outline-hidden focus:border-accent" />
                 <p className="text-lg text-text-secondary">You will see the expected amount after you confirm.</p>
                 <div className="max-w-md w-full self-center">
                   <NumberPad label="Cash count number pad" value={counted} onChange={setCounted} allowDecimal disabled={closing} />
@@ -422,7 +422,7 @@ export default function HomeScreen({ onReactivate }: { onReactivate?: () => void
                 onChange={(e) => setCounted(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') void submitCountAndClose(); }}
                 disabled={closing} placeholder="0.00"
-                className="flex-1 min-w-0 bg-bg-input border border-border-strong px-5 py-4 text-4xl font-mono tnum text-right focus:outline-none focus:border-accent" />
+                className="flex-1 min-w-0 bg-bg-input border border-border-strong px-5 py-4 text-4xl font-mono tnum text-right focus:outline-hidden focus:border-accent" />
             </div>
             <div className="flex gap-3">
               <button onClick={() => { setStep('idle'); setCounted(''); setError(null); }}
@@ -580,7 +580,7 @@ function ActionRow({ kind = 'default', label, hot, caption, onClick }: {
   kind?: 'default' | 'primary' | 'warn'; label: string; hot?: string; caption: string; onClick: () => void;
 }) {
   const cls =
-    kind === 'primary' ? 'bg-accent text-ink border border-accent hover:bg-accent-light shadow-sm'
+    kind === 'primary' ? 'bg-accent text-ink border border-accent hover:bg-accent-light shadow-xs'
     : kind === 'warn'  ? 'panel border-warning text-warning hover:bg-bg-elevated'
     : 'panel text-text-primary hover:bg-bg-elevated hover:border-border-strong';
   return (

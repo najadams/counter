@@ -93,16 +93,16 @@ export function CustomerCreateModal({
   const dialog = useDialog({ onClose: onCancel, busy: submitting });
 
   return (
-    <div className="fixed inset-0 bg-scrim flex items-center justify-center z-[60] overflow-y-auto py-8" onClick={() => { if (!submitting) onCancel(); }}>
+    <div className="fixed inset-0 bg-scrim flex items-center justify-center z-60 overflow-y-auto py-8" onClick={() => { if (!submitting) onCancel(); }}>
       <div {...dialog} aria-label="New customer" className="bg-bg-surface border border-border w-full max-w-md max-h-[92vh] flex flex-col my-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="px-8 py-5 border-b border-border-subtle flex items-center justify-between flex-shrink-0">
+        <div className="px-8 py-5 border-b border-border-subtle flex items-center justify-between shrink-0">
           <h3 className="text-text-secondary uppercase tracking-wider text-xs">New customer</h3>
           <button onClick={() => { if (!submitting) onCancel(); }}
             className="text-text-tertiary hover:text-text-primary text-xl leading-none"
             aria-label="Close">x</button>
         </div>
         {error && (
-          <FeedbackBanner className="mx-8 mt-4 flex-shrink-0">
+          <FeedbackBanner className="mx-8 mt-4 shrink-0">
             {error}
           </FeedbackBanner>
         )}
@@ -161,7 +161,7 @@ export function CustomerCreateModal({
             Leave 0 for customers without a formal limit.
           </div>
         </div>
-        <div className="px-8 py-4 border-t border-border-subtle flex gap-3 justify-end flex-shrink-0 bg-bg-deep/30">
+        <div className="px-8 py-4 border-t border-border-subtle flex gap-3 justify-end shrink-0 bg-bg-deep/30">
           <button onClick={() => { if (!submitting) onCancel(); }} className="px-5 py-3 border border-border hover:bg-bg-elevated">Cancel</button>
           <button onClick={() => void submit()}
             disabled={submitting || !displayName.trim() || !phone.trim()}

@@ -227,7 +227,7 @@ export function SupplierPaymentsTab() {
           <label className="block">
             <span className="block text-xs text-text-tertiary mb-1">Filter by supplier</span>
             <select value={filterSupplier} onChange={(e) => setFilterSupplier(e.target.value)}
-              className="px-3 py-1.5 rounded bg-bg-deep border border-border-subtle text-sm min-w-[14rem]">
+              className="px-3 py-1.5 rounded bg-bg-deep border border-border-subtle text-sm min-w-56">
               <option value="">All suppliers</option>
               {suppliers.map((s) => (
                 <option key={s.id} value={s.id}>{s.name}{s.active ? '' : ' (inactive)'}</option>

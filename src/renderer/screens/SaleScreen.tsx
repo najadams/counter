@@ -668,8 +668,8 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
                 onKeyDown={searchKey}
                 placeholder={FRIENDLY_UI_ENABLED ? 'Name or barcode' : 'Search by SKU, name, or barcode...'}
                 className={FRIENDLY_UI_ENABLED
-                  ? 'min-w-0 flex-1 min-h-16 bg-bg-input border-2 border-border-strong rounded-xl px-5 py-3 text-2xl focus:outline-none focus:border-accent'
-                  : 'min-w-0 flex-1 bg-bg-input border border-border-strong px-4 py-3 text-lg focus:outline-none focus:border-accent'}
+                  ? 'min-w-0 flex-1 min-h-16 bg-bg-input border-2 border-border-strong rounded-xl px-5 py-3 text-2xl focus:outline-hidden focus:border-accent'
+                  : 'min-w-0 flex-1 bg-bg-input border border-border-strong px-4 py-3 text-lg focus:outline-hidden focus:border-accent'}
               />
               {isTouch && (
                 <button
@@ -715,7 +715,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
                       ].join(' ')}
                     >
                       <div className="min-w-0 flex-1">
-                        <div className="text-xl font-semibold text-text-primary leading-snug break-words">{p.name}</div>
+                        <div className="text-xl font-semibold text-text-primary leading-snug wrap-break-word">{p.name}</div>
                         <div className="text-lg text-text-secondary">
                           per {p.defaultUnitName.toLowerCase()}
                           <span className={lowStock ? 'text-danger font-semibold' : ''}> · {lowStock ? 'none in stock' : `${p.unitsOnHand} in stock`}</span>
@@ -833,7 +833,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
             {[...lines].reverse().map((l) => FRIENDLY_UI_ENABLED ? (
               <li key={`${l.productId}:${l.unitId}`} className="px-6 py-4 border-b border-border">
                 <div className="flex items-baseline justify-between gap-3">
-                  <span className="text-xl font-semibold text-text-primary break-words min-w-0">{l.name}</span>
+                  <span className="text-xl font-semibold text-text-primary wrap-break-word min-w-0">{l.name}</span>
                   <span className="font-mono tnum text-2xl font-semibold">{formatMoney(l.unitPricePesewas * l.quantity)}</span>
                 </div>
                 <div className="flex flex-wrap items-center gap-3 mt-3">
@@ -1310,7 +1310,7 @@ function BarcodeScannerModal({
 
   const dialog = useDialog({ onClose: onCancel });
   return (
-    <div className="fixed inset-0 bg-scrim/90 flex items-center justify-center z-[70] p-4" onClick={onCancel}>
+    <div className="fixed inset-0 bg-scrim/90 flex items-center justify-center z-70 p-4" onClick={onCancel}>
       <div {...dialog} aria-label="BarcodeScanner"
         className="bg-bg-surface border border-border w-full max-w-lg max-h-[92vh] flex flex-col shadow-2xl"
         onClick={(e) => e.stopPropagation()}
@@ -1431,7 +1431,7 @@ function CustomerPickerModal({
 
   const dialog = useDialog({ onClose: onCancel });
   return (
-    <div className="fixed inset-0 bg-scrim flex items-center justify-center z-[60]" onClick={onCancel}>
+    <div className="fixed inset-0 bg-scrim flex items-center justify-center z-60" onClick={onCancel}>
       <div {...dialog} aria-label="CustomerPicker" className="bg-bg-surface border border-border w-full max-w-lg p-6 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-text-secondary uppercase tracking-wider text-xs">Pick customer</h3>
         <input
@@ -1533,7 +1533,7 @@ function UnitSwapModal({
 
   const dialog = useDialog({ onClose: onCancel });
   return (
-    <div className="fixed inset-0 bg-scrim flex items-center justify-center z-[60]" onClick={onCancel}>
+    <div className="fixed inset-0 bg-scrim flex items-center justify-center z-60" onClick={onCancel}>
       <div {...dialog} aria-label="UnitSwap" className="bg-bg-surface border border-border w-full max-w-md p-6 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-text-secondary uppercase tracking-wider text-xs">Sellable units</h3>
         {units.length === 0 && <div className="text-text-tertiary text-sm">No sellable units defined.</div>}
@@ -1617,8 +1617,8 @@ function QuantityInput({
       }}
       aria-label={label ?? `Quantity for ${productId}`}
       className={large
-        ? 'font-mono tnum text-text-primary w-20 h-14 text-2xl text-center bg-bg-input border-2 border-border-strong rounded-xl focus:border-accent focus:outline-none'
-        : 'font-mono tnum text-text-primary w-14 text-center bg-bg-input border border-border hover:border-border-strong focus:border-accent focus:outline-none px-1 py-0.5'}
+        ? 'font-mono tnum text-text-primary w-20 h-14 text-2xl text-center bg-bg-input border-2 border-border-strong rounded-xl focus:border-accent focus:outline-hidden'
+        : 'font-mono tnum text-text-primary w-14 text-center bg-bg-input border border-border hover:border-border-strong focus:border-accent focus:outline-hidden px-1 py-0.5'}
     />
   );
 }
@@ -1758,7 +1758,7 @@ function PaymentModal(p: PaymentModalProps) {
               onFocus={(e) => e.target.select()}
               onKeyDown={(e) => { if (e.key === 'Enter') confirm(); }}
               inputMode="decimal"
-              className="bg-bg-input border-2 border-border-strong rounded-xl px-4 py-3 text-4xl font-mono tnum text-right focus:outline-none focus:border-accent"
+              className="bg-bg-input border-2 border-border-strong rounded-xl px-4 py-3 text-4xl font-mono tnum text-right focus:outline-hidden focus:border-accent"
             />
             {cashPesewas != null && change != null && change >= 0 && (
               <div className="flex items-baseline justify-between gap-3">

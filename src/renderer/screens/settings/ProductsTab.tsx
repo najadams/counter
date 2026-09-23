@@ -356,7 +356,7 @@ function ProductFormModal({ mode, existing, onCancel, onDone }: {
     <div className="fixed inset-0 bg-scrim flex items-center justify-center z-50 p-4" onClick={onCancel}>
       <div className="bg-bg-surface border border-border w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl" onClick={(e) => e.stopPropagation()}>
         {/* Sticky header */}
-        <div className="px-8 py-5 border-b border-border-subtle flex items-center justify-between flex-shrink-0">
+        <div className="px-8 py-5 border-b border-border-subtle flex items-center justify-between shrink-0">
           <div>
             <h3 className="text-text-secondary uppercase tracking-wider text-xs">
               {mode === 'add' ? 'Add product' : 'Edit product'}
@@ -371,7 +371,7 @@ function ProductFormModal({ mode, existing, onCancel, onDone }: {
         </div>
 
         {modalError && (
-          <FeedbackBanner className="mx-8 mt-4 flex-shrink-0">
+          <FeedbackBanner className="mx-8 mt-4 shrink-0">
             {modalError}
           </FeedbackBanner>
         )}
@@ -602,7 +602,7 @@ function ProductFormModal({ mode, existing, onCancel, onDone }: {
         )}
         </div>
         {/* Sticky footer */}
-        <div className="px-8 py-4 border-t border-border-subtle flex gap-3 justify-end flex-shrink-0 bg-bg-deep/30">
+        <div className="px-8 py-4 border-t border-border-subtle flex gap-3 justify-end shrink-0 bg-bg-deep/30">
           <button onClick={onCancel}
             className="px-5 py-2.5 border border-border hover:bg-bg-elevated text-sm">
             Cancel
