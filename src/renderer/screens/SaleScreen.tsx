@@ -1,4 +1,3 @@
-import { useDialog } from '../hooks/useDialog';
 // SaleScreen: keyboard-first product search + cart + payment.
 //
 // Keyboard map:
@@ -13,6 +12,7 @@ import { useDialog } from '../hooks/useDialog';
 //   F2              complete sale (when payment is ready)
 //   F9              go back to home
 
+import { FlashlightIcon, PlusIcon, XIcon } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   BrowserMultiFormatOneDReader,
@@ -35,6 +35,9 @@ import {
 import { SupervisorPinModal } from '../components/SupervisorPinModal';
 import { TouchCheckoutSheet } from '../components/TouchCheckoutSheet';
 import { FeedbackBanner } from '../components/FeedbackBanner';
+import { Button } from '../components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../components/ui/dialog';
+import { Input } from '../components/ui/input';
 import { useIsTouch } from '../hooks/useIsTouch';
 import { chimeSuccess, chimeWarning, flashBody } from '../lib/feedback';
 import { FRIENDLY_UI_ENABLED } from '../../shared/lib/buildFlags';
@@ -628,6 +631,24 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
     );
   }
 
+
+  // Dialogs that can open on top of another dialog. Base UI stacks dialogs
+  // by React nesting, so each renders inside whichever dialog is under it:
+  // supervisor approval over the checkout, the receipt over Sale complete.
+  const supervisorDialog = needsDiscountSupervisor && (
+    <SupervisorPinModal
+      title={`Approve discount of ${formatMoneyWithCurrency(discount)}`}
+      onCancel={() => setNeedsDiscountSupervisor(false)}
+      onApprove={(supId, pin) => {
+        setPendingSupervisor({ id: supId, pin });
+        setNeedsDiscountSupervisor(false);
+        void submitSale({ id: supId, pin });
+      }}
+    />
+  );
+  const receiptDialog = showReceiptPrint && lastReceipt && (
+    <ReceiptPrintModal receipt={lastReceipt} onClose={() => setShowReceiptPrint(false)} />
+  );
   return (
     // The cashier (often standing, in low warehouse light) reported text was
     // too small to read at a glance. `sale-type` runs this screen's type one
@@ -1063,7 +1084,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
       </main>
 
             {FRIENDLY_UI_ENABLED && completedInfo && (
-              <CompletionDialog onPrint={() => { if (lastReceipt) setShowReceiptPrint(true); }}>
+              <CompletionDialog onPrint={() => { if (lastReceipt) setShowReceiptPrint(true); }} stacked={receiptDialog}>
                 <div className="flex items-center gap-3">
                   <TaskIllustration name="check" size={52} />
                   <span className="text-2xl font-bold text-success">Sale complete</span>
@@ -1077,21 +1098,22 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
                 {completedInfo.printerFailed && (
                   <div className="text-lg text-warning">The receipt did not print ({completedInfo.printerError ?? 'printer offline'}). The sale is saved. Use Print receipt to try again.</div>
                 )}
-                <button type="button" onClick={nextSale} className="min-h-14 rounded-xl bg-accent text-ink text-xl font-semibold">Next sale</button>
+                <Button type="button" variant="primary" size="xl" onClick={nextSale} className="rounded-xl text-xl">Next sale</Button>
                 {lastReceipt && (
-                  <button
+                  <Button
                     type="button"
+                    variant="success"
+                    size="xl"
+                    shortcut="F8"
                     onClick={() => setShowReceiptPrint(true)}
-                    className="min-h-14 rounded-xl border-2 border-success text-lg font-semibold text-text-primary hover:bg-success/20">
-                    Print receipt <span className="kbd">F8</span>
-                  </button>
+                    className="rounded-xl border-2 text-lg text-text-primary">
+                    Print receipt
+                  </Button>
                 )}
               </CompletionDialog>
             )}
 
-      {showReceiptPrint && lastReceipt && (
-        <ReceiptPrintModal receipt={lastReceipt} onClose={() => setShowReceiptPrint(false)} />
-      )}
+      {!(FRIENDLY_UI_ENABLED && completedInfo) && receiptDialog}
 
       {showSplit && (
         <SplitPaymentModal
@@ -1136,7 +1158,9 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
           onSubmit={() => void submitSale()}
           onClose={() => { if (!submitLockRef.current) setShowTouchSheet(false); }}
           onOpenSplit={() => { if (submitLockRef.current) return; setShowTouchSheet(false); if (lines.length > 0) { setSplitError(null); setShowSplit(true); } }}
-        />
+        >
+          {supervisorDialog}
+        </TouchCheckoutSheet>
       )}
       {isTouch && showBarcodeScanner && (
         <BarcodeScannerModal
@@ -1150,17 +1174,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
           }}
         />
       )}
-      {needsDiscountSupervisor && (
-        <SupervisorPinModal
-          title={`Approve discount of ${formatMoneyWithCurrency(discount)}`}
-          onCancel={() => setNeedsDiscountSupervisor(false)}
-          onApprove={(supId, pin) => {
-            setPendingSupervisor({ id: supId, pin });
-            setNeedsDiscountSupervisor(false);
-            void submitSale({ id: supId, pin });
-          }}
-        />
-      )}
+      {!(checkoutSheetAvailable && showTouchSheet) && supervisorDialog}
       {showCustomerPicker && (
         <CustomerPickerModal
           currentId={customer?.id ?? null}
@@ -1306,30 +1320,19 @@ function BarcodeScannerModal({
     onDetectedRef.current(code);
   }
 
-  const dialog = useDialog({ onClose: onCancel });
   return (
-    <div className="fixed inset-0 bg-scrim/90 flex items-center justify-center z-70 p-4" onClick={onCancel}>
-      <div {...dialog} aria-label="BarcodeScanner"
-        className="bg-bg-surface border border-border w-full max-w-lg max-h-[92vh] flex flex-col shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-3">
+    <Dialog onClose={onCancel}>
+      <DialogContent showCloseButton={false} className="w-[min(32rem,calc(100%-2rem))] max-h-[92vh] gap-0 p-0">
+        <header className="px-5 py-4 border-b border-border flex items-center justify-between gap-3">
           <div>
-            <h3 className="text-text-secondary uppercase tracking-wider text-xs">Barcode scanner</h3>
-            <div className="text-text-tertiary text-xs mt-1">{status}</div>
+            <DialogTitle>Barcode scanner</DialogTitle>
+            <DialogDescription className="text-xs mt-1">{status}</DialogDescription>
           </div>
-          <button
-            type="button"
-            onClick={onCancel}
-            className="text-text-tertiary hover:text-text-primary text-xl leading-none"
-            aria-label="Close scanner"
-          >
-            x
-          </button>
-        </div>
+          <Button variant="ghost" size="icon-sm" onClick={onCancel} aria-label="Close scanner"><XIcon aria-hidden="true" /></Button>
+        </header>
 
         <div className="p-4 flex flex-col gap-3 overflow-y-auto">
-          <div className="relative bg-black border border-border aspect-video overflow-hidden">
+          <div className="relative bg-black rounded-lg border border-border aspect-video overflow-hidden">
             <video
               ref={videoRef}
               className="w-full h-full object-cover"
@@ -1344,7 +1347,8 @@ function BarcodeScannerModal({
           )}
 
           <div className="flex gap-2">
-            <input
+            <Input
+              aria-label="Barcode"
               value={manualCode}
               onChange={(e) => setManualCode(e.target.value)}
               onKeyDown={(e) => {
@@ -1355,44 +1359,26 @@ function BarcodeScannerModal({
               }}
               placeholder="Type barcode if camera cannot read it"
               inputMode="numeric"
-              className="min-w-0 flex-1 bg-bg-input border border-border-strong px-3 py-3 font-mono"
+              className="h-12 flex-1 font-mono"
             />
-            <button
-              type="button"
-              onClick={submitManual}
-              disabled={!manualCode.trim()}
-              className="border border-border-strong bg-bg-deep px-4 py-3 text-text-primary hover:bg-bg-elevated disabled:opacity-40"
-            >
-              Add
-            </button>
+            <Button size="lg" onClick={submitManual} disabled={!manualCode.trim()}>Add</Button>
           </div>
 
           <div className="flex justify-between gap-2">
             {hasTorch ? (
-              <button
-                type="button"
+              <Button
+                variant={torchOn ? 'primary' : 'secondary'}
+                aria-pressed={torchOn}
                 onClick={() => void toggleTorch()}
-                className={[
-                  'px-4 py-2 border text-sm',
-                  torchOn
-                    ? 'border-accent bg-accent text-ink'
-                    : 'border-border text-text-primary hover:bg-bg-elevated',
-                ].join(' ')}
               >
-                Torch
-              </button>
+                <FlashlightIcon aria-hidden="true" />Torch
+              </Button>
             ) : <span />}
-            <button
-              type="button"
-              onClick={onCancel}
-              className="px-4 py-2 border border-border text-text-primary hover:bg-bg-elevated text-sm"
-            >
-              Cancel
-            </button>
+            <Button onClick={onCancel}>Cancel</Button>
           </div>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -1427,27 +1413,24 @@ function CustomerPickerModal({
     return () => { cancelled = true; clearTimeout(t); };
   }, [query]);
 
-  const dialog = useDialog({ onClose: onCancel });
   return (
-    <div className="fixed inset-0 bg-scrim flex items-center justify-center z-60" onClick={onCancel}>
-      <div {...dialog} aria-label="CustomerPicker" className="bg-bg-surface border border-border w-full max-w-lg p-6 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-text-secondary uppercase tracking-wider text-xs">Pick customer</h3>
-        <input
+    <Dialog onClose={onCancel}>
+      <DialogContent showCloseButton={false} className="w-[min(32rem,calc(100%-2rem))] gap-3">
+        <DialogTitle>Pick customer</DialogTitle>
+        <Input
           autoFocus
+          aria-label="Search customers"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search by customer, company, or phone…"
-          className="bg-bg-input border border-border-strong px-4 py-3"
+          className="h-12 text-base"
         />
-        <button
-          type="button"
-          onClick={() => setShowCreate(true)}
-          className="self-start text-accent text-sm hover:text-accent-light">
-          + New customer
-        </button>
-        <ul className="flex flex-col max-h-72 overflow-y-auto">
+        <Button variant="link" className="self-start" onClick={() => setShowCreate(true)}>
+          <PlusIcon aria-hidden="true" />New customer
+        </Button>
+        <ul className="flex flex-col max-h-72 overflow-y-auto rounded-lg border border-border">
           {hits.length === 0 && (
-            <li className="text-text-tertiary text-sm px-2 py-2">
+            <li className="text-text-tertiary text-sm px-3 py-3">
               {query.length > 0 ? 'No matches.' : 'Start typing to search.'}
             </li>
           )}
@@ -1455,6 +1438,7 @@ function CustomerPickerModal({
             <li key={c.id}>
               <button
                 type="button"
+                aria-pressed={currentId === c.id}
                 onClick={() => onPick({
                   id: c.id,
                   displayName: c.displayName,
@@ -1465,13 +1449,13 @@ function CustomerPickerModal({
                   preferredChannel: (c as { preferredChannel?: 'WALK_IN' | 'WHOLESALE' | 'ROUTE' | null }).preferredChannel ?? null,
                 })}
                 className={[
-                  'w-full text-left px-4 py-3 border-b border-border',
-                  currentId === c.id ? 'bg-bg-elevated' : 'bg-bg-deep hover:bg-bg-elevated',
+                  'w-full text-left px-4 py-3 border-b border-border-subtle',
+                  currentId === c.id ? 'bg-accent/10' : 'bg-bg-elevated hover:bg-bg-surface',
                 ].join(' ')}>
                 <div className="text-text-primary">{c.displayName}</div>
                 {c.businessName && <div className="text-text-secondary text-xs">{c.businessName}</div>}
                 <div className="text-text-tertiary text-xs">
-                  {c.phone} · balance {formatMoneyWithCurrency(c.currentBalancePesewas)}
+                  {c.phone} · balance <span className="font-mono tnum">{formatMoneyWithCurrency(c.currentBalancePesewas)}</span>
                   {c.cashOnly ? ' · cash only' : ''}
                 </div>
               </button>
@@ -1480,15 +1464,9 @@ function CustomerPickerModal({
         </ul>
         <div className="flex justify-between items-center mt-1">
           {currentId ? (
-            <button
-              type="button"
-              onClick={onClear}
-              className="text-danger text-sm hover:text-text-primary">Remove customer</button>
+            <Button variant="ghost" className="text-danger" onClick={onClear}>Remove customer</Button>
           ) : <span />}
-          <button
-            type="button"
-            onClick={onCancel}
-            className="px-4 py-2 border border-border hover:bg-bg-elevated text-sm">Cancel</button>
+          <Button onClick={onCancel} shortcut="Esc">Cancel</Button>
         </div>
         {showCreate && (
           <CustomerCreateModal
@@ -1508,8 +1486,8 @@ function CustomerPickerModal({
             }}
           />
         )}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -1529,27 +1507,28 @@ function UnitSwapModal({
     })();
   }, [productId]);
 
-  const dialog = useDialog({ onClose: onCancel });
   return (
-    <div className="fixed inset-0 bg-scrim flex items-center justify-center z-60" onClick={onCancel}>
-      <div {...dialog} aria-label="UnitSwap" className="bg-bg-surface border border-border w-full max-w-md p-6 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-text-secondary uppercase tracking-wider text-xs">Sellable units</h3>
+    <Dialog onClose={onCancel}>
+      <DialogContent showCloseButton={false} className="w-[min(28rem,calc(100%-2rem))] gap-3">
+        <DialogTitle>Sellable units</DialogTitle>
         {units.length === 0 && <div className="text-text-tertiary text-sm">No sellable units defined.</div>}
-        <ul className="flex flex-col gap-1">
+        <ul className="flex flex-col gap-1.5">
           {units.map((u) => {
             const active = u.id === currentUnitId;
             return (
               <li key={u.id}>
                 <button
+                  type="button"
                   onClick={() => onPick({ id: u.id, unitName: u.unitName, conversionFactor: u.conversionFactor, pricePesewas: u.pricePesewas })}
                   disabled={active}
+                  aria-current={active ? 'true' : undefined}
                   className={[
-                    'w-full px-4 py-3 text-left border flex items-center justify-between',
-                    active ? 'border-accent bg-bg-elevated' : 'border-border bg-bg-deep hover:bg-bg-elevated',
+                    'w-full rounded-lg px-4 py-3 text-left border flex items-center justify-between',
+                    active ? 'border-accent bg-accent/10' : 'border-border bg-bg-elevated hover:bg-bg-surface',
                   ].join(' ')}>
                   <div>
                     <div className="text-text-primary">{u.unitName}</div>
-                    <div className="text-text-tertiary text-xs">factor × {u.conversionFactor}</div>
+                    <div className="text-text-tertiary text-xs font-mono">× {u.conversionFactor}</div>
                   </div>
                   <span className="font-mono tnum">{formatMoney(u.pricePesewas)}</span>
                 </button>
@@ -1557,9 +1536,9 @@ function UnitSwapModal({
             );
           })}
         </ul>
-        <button onClick={onCancel} className="self-end px-4 py-2 border border-border hover:bg-bg-elevated text-sm">Cancel</button>
-      </div>
-    </div>
+        <Button className="self-end" onClick={onCancel} shortcut="Esc">Cancel</Button>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -1722,23 +1701,22 @@ function PaymentModal(p: PaymentModalProps) {
     p.onConfirm();
   }
 
-  const dialog = useDialog({ onClose: p.onClose });
   return (
-    <div className="fixed inset-0 bg-scrim flex items-center justify-center" onClick={p.onClose}>
-      <div {...dialog} aria-label="Payment" className="bg-bg-surface border border-border w-full max-w-md p-8 flex flex-col gap-5" onClick={(e) => e.stopPropagation()}>
+    <Dialog onClose={p.onClose}>
+      <DialogContent showCloseButton={false} className="w-[min(28rem,calc(100%-2rem))] gap-5 p-8">
         {FRIENDLY_UI_ENABLED ? (
-          <h3 className="flex items-center gap-3 text-2xl font-bold">
+          <DialogTitle className="flex items-center gap-3 text-2xl font-bold">
             <TaskIllustration name={isCash ? 'cash' : isMomo ? 'momo' : 'credit'} size={48} />
             {isCash && 'Cash'}
             {isMomo && 'MoMo'}
             {isCredit && 'Pay later (credit)'}
-          </h3>
+          </DialogTitle>
         ) : (
-        <h3 className="text-text-secondary uppercase tracking-wider text-xs">
+        <DialogTitle className="text-xl">
           {isCash && 'Cash'}
           {isMomo && 'MoMo'}
           {isCredit && 'Credit (on account)'}
-        </h3>
+        </DialogTitle>
         )}
 
         {isCash && FRIENDLY_UI_ENABLED && (
@@ -1748,7 +1726,7 @@ function PaymentModal(p: PaymentModalProps) {
               <span className="font-mono tnum text-3xl font-bold text-accent">{formatMoneyWithCurrency(p.totalPesewas)}</span>
             </div>
             <label htmlFor="payment-cash-received" className="text-xl font-semibold">Money received</label>
-            <input
+            <Input
               id="payment-cash-received"
               autoFocus
               value={cashRaw}
@@ -1756,7 +1734,7 @@ function PaymentModal(p: PaymentModalProps) {
               onFocus={(e) => e.target.select()}
               onKeyDown={(e) => { if (e.key === 'Enter') confirm(); }}
               inputMode="decimal"
-              className="bg-bg-input border-2 border-border-strong rounded-xl px-4 py-3 text-4xl font-mono tnum text-right focus:outline-hidden focus:border-accent"
+              className="h-auto border-2 rounded-xl px-4 py-3 text-4xl font-mono tnum text-right"
             />
             {cashPesewas != null && change != null && change >= 0 && (
               <div className="flex items-baseline justify-between gap-3">
@@ -1773,14 +1751,17 @@ function PaymentModal(p: PaymentModalProps) {
         {isCash && !FRIENDLY_UI_ENABLED && (
           <>
             <div className="text-text-tertiary text-sm">Total due: <span className="font-mono tnum text-text-primary">{formatMoneyWithCurrency(p.totalPesewas)}</span></div>
-            <label className="text-text-secondary text-xs uppercase tracking-wider">Cash given</label>
-            <input
-              autoFocus
-              value={cashRaw}
-              onChange={(e) => setCashRaw(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') confirm(); }}
-              className="bg-bg-input border border-border-strong px-4 py-3 text-2xl font-mono tnum text-right"
-            />
+            <label className="flex flex-col gap-1.5 text-sm text-text-secondary">
+              Cash given
+              <Input
+                autoFocus
+                value={cashRaw}
+                onChange={(e) => setCashRaw(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') confirm(); }}
+                inputMode="decimal"
+                className="h-14 text-2xl font-mono tnum text-right"
+              />
+            </label>
             {cashPesewas != null && change != null && change >= 0 && (
               <div className="text-text-secondary text-sm">Change due: <span className="font-mono tnum text-text-primary">{formatMoneyWithCurrency(change)}</span></div>
             )}
@@ -1792,27 +1773,31 @@ function PaymentModal(p: PaymentModalProps) {
 
         {isMomo && (
           <>
-            <div className="grid grid-cols-3 gap-2">
+            <div role="group" aria-label="MoMo network" className="grid grid-cols-3 gap-2">
               {(['MOMO_MTN', 'MOMO_VODAFONE', 'MOMO_AIRTELTIGO'] as const).map((m) => (
                 <button key={m}
+                  type="button"
+                  aria-pressed={m === momoProvider}
                   onClick={() => setMomoProvider(m)}
                   className={[
-                    'px-3 py-2 border text-sm',
-                    m === momoProvider ? 'bg-bg-elevated border-accent text-accent' : 'border-border bg-bg-deep text-text-primary hover:bg-bg-elevated',
+                    'rounded-lg px-3 py-2 border text-sm font-semibold',
+                    m === momoProvider ? 'bg-accent/10 border-accent text-accent' : 'border-border bg-bg-elevated text-text-primary hover:bg-bg-surface',
                   ].join(' ')}>
                   {m === 'MOMO_MTN' ? 'MTN' : m === 'MOMO_VODAFONE' ? 'Telecel' : 'AirtelTigo'}
                 </button>
               ))}
             </div>
-            <label className="text-text-secondary text-xs uppercase tracking-wider">Transaction reference</label>
-            <input
-              autoFocus
-              value={refRaw}
-              onChange={(e) => setRefRaw(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') confirm(); }}
-              placeholder="e.g. 7812345678"
-              className="bg-bg-input border border-border-strong px-4 py-3 font-mono"
-            />
+            <label className="flex flex-col gap-1.5 text-sm text-text-secondary">
+              Transaction reference
+              <Input
+                autoFocus
+                value={refRaw}
+                onChange={(e) => setRefRaw(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') confirm(); }}
+                placeholder="e.g. 7812345678"
+                className="h-12 font-mono"
+              />
+            </label>
             <div className="text-text-tertiary text-xs">
               Required (invariant 10). Hubtel auto-reconciliation matches this in Week 8.
             </div>
@@ -1821,25 +1806,26 @@ function PaymentModal(p: PaymentModalProps) {
 
         {isCredit && (
           <>
-            <input
+            <Input
               autoFocus
+              aria-label="Find customer"
               value={custQuery}
               onChange={(e) => setCustQuery(e.target.value)}
               placeholder="Search customer, company, or phone"
-              className="bg-bg-input border border-border-strong px-4 py-3"
+              className="h-12"
             />
-            <button
-              onClick={() => setShowCreate(true)}
-              className="self-start text-accent text-sm hover:text-accent-light">
-              + New customer
-            </button>
-            <ul className="flex flex-col max-h-64 overflow-y-auto">
+            <Button variant="link" className="self-start" onClick={() => setShowCreate(true)}>
+              <PlusIcon aria-hidden="true" />New customer
+            </Button>
+            <ul className="flex flex-col max-h-64 overflow-y-auto rounded-lg border border-border">
               {custHits.length === 0 && custQuery.length > 0 && (
                 <li className="text-text-tertiary text-sm px-2 py-2">No matches.</li>
               )}
               {custHits.map((c) => (
                 <li key={c.id}>
                   <button
+                    type="button"
+                    aria-pressed={p.customer?.id === c.id}
                     onClick={() => p.setCustomer({
                       id: c.id, displayName: c.displayName, businessName: c.businessName, phone: c.phone,
                       currentBalancePesewas: c.currentBalancePesewas,
@@ -1847,8 +1833,8 @@ function PaymentModal(p: PaymentModalProps) {
                       preferredChannel: (c as { preferredChannel?: 'WALK_IN' | 'WHOLESALE' | 'ROUTE' | null }).preferredChannel ?? null,
                     })}
                     className={[
-                      'w-full text-left px-4 py-3 border-b border-border',
-                      p.customer?.id === c.id ? 'bg-bg-elevated' : 'bg-bg-deep hover:bg-bg-elevated',
+                      'w-full text-left px-4 py-3 border-b border-border-subtle',
+                      p.customer?.id === c.id ? 'bg-accent/10' : 'bg-bg-elevated hover:bg-bg-surface',
                     ].join(' ')}>
                     <div className="text-text-primary">{c.displayName}</div>
                     {c.businessName && <div className="text-text-secondary text-xs">{c.businessName}</div>}
@@ -1886,35 +1872,48 @@ function PaymentModal(p: PaymentModalProps) {
         )}
 
         <div className="flex gap-3 mt-2">
-          <button onClick={p.onClose} className={FRIENDLY_UI_ENABLED ? 'min-h-14 px-5 rounded-xl border-2 border-border text-lg font-semibold text-text-primary hover:bg-bg-elevated' : 'px-5 py-3 border border-border text-text-primary hover:bg-bg-elevated'}>Cancel</button>
-          <button
+          <Button size={FRIENDLY_UI_ENABLED ? 'xl' : 'lg'} className={FRIENDLY_UI_ENABLED ? 'rounded-xl border-2 border-border text-lg' : undefined} onClick={p.onClose}>Cancel</Button>
+          <Button
+            variant="primary"
+            size={FRIENDLY_UI_ENABLED ? 'xl' : 'lg'}
             onClick={confirm}
             disabled={
               (isCash && (cashPesewas == null || cashPesewas < p.totalPesewas)) ||
               (isMomo && refRaw.trim() === '') ||
               (isCredit && (!p.customer || p.customer.cashOnly))
             }
-            className={FRIENDLY_UI_ENABLED
-              ? 'flex-1 min-h-14 px-5 rounded-xl bg-accent text-ink text-lg font-semibold hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed'
-              : 'bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed'}
+            className={FRIENDLY_UI_ENABLED ? 'flex-1 rounded-xl text-lg' : undefined}
           >
             {FRIENDLY_UI_ENABLED ? 'Use this payment' : 'Confirm'}
-          </button>
+          </Button>
         </div>
         {isCredit && p.customer?.cashOnly && (
           <div className="text-danger text-sm">This customer is cash-only. Use cash, MoMo, or clear the customer.</div>
         )}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
 
-function CompletionDialog({ onPrint, children }: { onPrint: () => void; children: React.ReactNode }) {
-  const dialog = useDialog({ onClose: () => {}, onShortcut: (key) => { if (key === 'F8') onPrint(); } });
-  return <div className="fixed inset-0 bg-scrim z-50 flex items-center justify-center p-4">
-    <div {...dialog} aria-label="Sale complete" className="w-full max-w-lg max-h-[94dvh] overflow-y-auto rounded-2xl border-2 border-success bg-bg-surface p-5 flex flex-col gap-4">
-      {children}
-    </div>
-  </div>;
+/** Stays up until Next sale: Escape and clicks outside do nothing, so the
+ *  change to give can't vanish while the cashier is counting it out. */
+function CompletionDialog({ onPrint, stacked, children }: {
+  onPrint: () => void;
+  /** The receipt preview, stacked on top when open. */
+  stacked?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <Dialog disablePointerDismissal onShortcut={(key) => { if (key === 'F8') onPrint(); }}>
+      <DialogContent
+        aria-label="Sale complete"
+        showCloseButton={false}
+        className="w-[min(32rem,calc(100%-2rem))] max-h-[94dvh] gap-4 border-2 border-success p-5"
+      >
+        {children}
+        {stacked}
+      </DialogContent>
+    </Dialog>
+  );
 }

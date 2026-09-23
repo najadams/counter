@@ -14,6 +14,10 @@
 import { useEffect, useState } from 'react';
 import { counter } from '../lib/ipc';
 import { FeedbackBanner } from './FeedbackBanner';
+import { Button } from './ui/button';
+import { Dialog, DialogContent, DialogTitle } from './ui/dialog';
+import { Field } from './ui/field';
+import { Input } from './ui/input';
 
 interface OwnerRow { id: string; fullName: string; hasCode: boolean }
 
@@ -54,12 +58,15 @@ export function RecoveryResetModal({ onClose }: { onClose: () => void }) {
     setStep('done');
   }
 
+  // The fresh code is shown once: until it is acknowledged, nothing but
+  // "Done" closes this.
+  const locked = step === 'done' && !acknowledged;
   return (
-    <div className="fixed inset-0 bg-scrim flex items-center justify-center p-6 z-50">
-      <div className="bg-bg-elevated rounded-lg shadow-xl w-full max-w-lg p-6 space-y-4">
+    <Dialog onClose={locked ? undefined : onClose} busy={busy} disablePointerDismissal={step === 'done'}>
+      <DialogContent showCloseButton={false} className="w-[min(32rem,calc(100%-2rem))] gap-4">
         {step === 'pick' && (
           <>
-            <h2 className="text-xl font-semibold">Forgot OWNER PIN?</h2>
+            <DialogTitle className="text-xl">Forgot OWNER PIN?</DialogTitle>
             <p className="text-sm text-text-secondary">
               You can reset the PIN with the recovery code that was shown when
               the owner account was first set up. Pick the owner, then continue.
@@ -70,12 +77,12 @@ export function RecoveryResetModal({ onClose }: { onClose: () => void }) {
               <div className="space-y-2">
                 {owners.map((o) => (
                   <label key={o.id}
-                    className={`flex items-center justify-between gap-3 px-4 py-3 rounded border ${
-                      workerId === o.id ? 'border-accent bg-bg-deep' : 'border-border-subtle'
+                    className={`flex items-center justify-between gap-3 px-4 py-3 rounded-lg border ${
+                      workerId === o.id ? 'border-accent bg-accent/8' : 'border-border'
                     } ${o.hasCode ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}>
                     <div className="flex items-center gap-3">
                       <input
-                        type="radio" name="owner" disabled={!o.hasCode}
+                        type="radio" name="owner" disabled={!o.hasCode} className="size-4 accent-accent"
                         checked={workerId === o.id}
                         onChange={() => setWorkerId(o.id)}
                       />
@@ -92,71 +99,61 @@ export function RecoveryResetModal({ onClose }: { onClose: () => void }) {
             )}
             {error && <FeedbackBanner>{error}</FeedbackBanner>}
             <div className="flex justify-end gap-3 pt-2">
-              <button onClick={onClose} className="px-4 py-2 border border-border hover:bg-bg-deep text-sm">Cancel</button>
-              <button
-                disabled={!workerId}
-                onClick={() => setStep('reset')}
-                className="px-4 py-2 bg-accent text-ink font-semibold text-sm disabled:opacity-50">
-                Continue
-              </button>
+              <Button onClick={onClose}>Cancel</Button>
+              <Button variant="primary" disabled={!workerId} onClick={() => setStep('reset')}>Continue</Button>
             </div>
           </>
         )}
 
         {step === 'reset' && (
           <>
-            <h2 className="text-xl font-semibold">Enter recovery code</h2>
+            <DialogTitle className="text-xl">Enter recovery code</DialogTitle>
             <p className="text-sm text-text-secondary">
               Type the recovery code exactly as you wrote it down. Hyphens and
               case don't matter.
             </p>
-            <label className="block">
-              <span className="block text-xs text-text-tertiary mb-1 uppercase tracking-wider">Recovery code</span>
-              <input
+            <Field label="Recovery code">
+              <Input
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
                 placeholder="XXXX-XXXX-XXXX-XXXX"
                 autoFocus
-                className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle font-mono tracking-widest" />
-            </label>
+                className="font-mono tracking-widest" />
+            </Field>
             <div className="grid grid-cols-2 gap-3">
-              <label className="block">
-                <span className="block text-xs text-text-tertiary mb-1 uppercase tracking-wider">New PIN</span>
-                <input
+              <Field label="New PIN">
+                <Input
                   type="password" inputMode="numeric" maxLength={6}
                   value={newPin}
                   onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
-                  className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle font-mono tracking-widest" />
-              </label>
-              <label className="block">
-                <span className="block text-xs text-text-tertiary mb-1 uppercase tracking-wider">Confirm</span>
-                <input
+                  className="font-mono tracking-widest" />
+              </Field>
+              <Field label="Confirm">
+                <Input
                   type="password" inputMode="numeric" maxLength={6}
                   value={confirmPin}
                   onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))}
-                  className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle font-mono tracking-widest" />
-              </label>
+                  className="font-mono tracking-widest" />
+              </Field>
             </div>
             {error && <FeedbackBanner>{error}</FeedbackBanner>}
             <div className="flex justify-end gap-3 pt-2">
-              <button onClick={() => setStep('pick')} disabled={busy}
-                className="px-4 py-2 border border-border hover:bg-bg-deep text-sm">Back</button>
-              <button onClick={() => void submit()} disabled={busy}
-                className="px-4 py-2 bg-accent text-ink font-semibold text-sm disabled:opacity-50">
+              <Button onClick={() => setStep('pick')} disabled={busy}>Back</Button>
+              <Button variant="primary" onClick={() => void submit()} disabled={busy}>
                 {busy ? 'Resetting…' : 'Reset PIN'}
-              </button>
+              </Button>
             </div>
           </>
         )}
 
         {step === 'done' && issued && (
           <>
-            <h2 className="text-xl font-semibold">PIN reset for {issued.fullName}</h2>
+            <DialogTitle className="text-xl">PIN reset for {issued.fullName}</DialogTitle>
             <p className="text-sm text-text-secondary">
               Your new PIN is now active. Below is a fresh recovery code — write
               it down. The old code can no longer be used.
             </p>
-            <div className="bg-bg-deep border-2 border-accent rounded p-6 text-center">
+            <div className="bg-bg-surface border-2 border-accent rounded-xl p-6 text-center">
               <div className="text-xs text-text-tertiary uppercase tracking-wider mb-2">
                 New recovery code
               </div>
@@ -168,19 +165,18 @@ export function RecoveryResetModal({ onClose }: { onClose: () => void }) {
               </div>
             </div>
             <label className="flex items-center gap-3 text-sm">
-              <input type="checkbox" checked={acknowledged}
+              <input type="checkbox" className="size-4 accent-accent" checked={acknowledged}
                 onChange={(e) => setAcknowledged(e.target.checked)} />
               I have written this new code down somewhere safe.
             </label>
             <div className="flex justify-end pt-2">
-              <button onClick={onClose} disabled={!acknowledged}
-                className="px-4 py-2 bg-accent text-ink font-semibold text-sm disabled:opacity-50">
+              <Button variant="primary" onClick={onClose} disabled={!acknowledged}>
                 Done — sign in with new PIN
-              </button>
+              </Button>
             </div>
           </>
         )}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

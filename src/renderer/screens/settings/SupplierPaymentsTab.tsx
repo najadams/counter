@@ -15,6 +15,12 @@ import type {
   SupplierInvoiceRow, SupplierPaymentRow, SupplierStatementRow,
 } from '../../../shared/types/ipc';
 import { FeedbackBanner } from '../../components/FeedbackBanner';
+import { Button } from '../../components/ui/button';
+import { Dialog, DialogContent, DialogFooter, DialogTitle } from '../../components/ui/dialog';
+import { Field } from '../../components/ui/field';
+import { Input } from '../../components/ui/input';
+import { NativeSelect } from '../../components/ui/native-select';
+import { Textarea } from '../../components/ui/textarea';
 
 interface AdminSupplier {
   id: string;
@@ -343,73 +349,54 @@ function RecordPaymentModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-scrim flex items-center justify-center p-6 z-50">
-      <form onSubmit={submit}
-        className="bg-bg-elevated rounded-lg shadow-xl w-full max-w-lg p-6 space-y-4">
-        <h2 className="text-xl font-semibold">Record supplier payment</h2>
+    <Dialog onClose={onClose} busy={busy}>
+      <DialogContent showCloseButton={false} render={<form onSubmit={submit} />} className="w-[min(32rem,calc(100%-2rem))] gap-4">
+        <DialogTitle className="text-xl">Record supplier payment</DialogTitle>
 
-        <label className="block">
-          <span className="block text-sm text-text-secondary mb-1">Supplier</span>
-          <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)}
-            className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle">
+        <Field label="Supplier">
+          <NativeSelect value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
             {suppliers.length === 0 && <option value="">No active suppliers — add one first</option>}
             {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-        </label>
+          </NativeSelect>
+        </Field>
 
         <div className="grid grid-cols-2 gap-3">
-          <label className="block">
-            <span className="block text-sm text-text-secondary mb-1">Amount (₵)</span>
-            <input autoFocus inputMode="decimal" placeholder="0.00"
-              value={amountStr} onChange={(e) => setAmountStr(e.target.value)}
-              className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle tabular-nums" />
-          </label>
-          <label className="block">
-            <span className="block text-sm text-text-secondary mb-1">Date paid</span>
-            <input type="date" value={paidAtDate}
-              onChange={(e) => setPaidAtDate(e.target.value)}
-              className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle" />
-          </label>
+          <Field label="Amount (₵)">
+            <Input autoFocus inputMode="decimal" placeholder="0.00"
+              value={amountStr} onChange={(e) => setAmountStr(e.target.value)} className="font-mono tnum" />
+          </Field>
+          <Field label="Date paid">
+            <Input type="date" value={paidAtDate}
+              onChange={(e) => setPaidAtDate(e.target.value)} />
+          </Field>
         </div>
 
-        <label className="block">
-          <span className="block text-sm text-text-secondary mb-1">Payment method</span>
-          <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}
-            className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle">
+        <Field label="Payment method">
+          <NativeSelect value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
             {PAYMENT_METHODS.map((m) => (
               <option key={m.code} value={m.code}>{m.label}</option>
             ))}
-          </select>
-        </label>
+          </NativeSelect>
+        </Field>
 
-        <label className="block">
-          <span className="block text-sm text-text-secondary mb-1">
-            Reference{needsRef ? '' : ' (optional)'}
-          </span>
-          <input value={reference} onChange={(e) => setReference(e.target.value)}
-            placeholder={needsRef ? 'MoMo transaction ID, cheque #, etc.' : ''}
-            className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle" />
-        </label>
+        <Field label={<>Reference{needsRef ? '' : ' (optional)'}</>}>
+          <Input value={reference} onChange={(e) => setReference(e.target.value)}
+            placeholder={needsRef ? 'MoMo transaction ID, cheque #, etc.' : ''} />
+        </Field>
 
-        <label className="block">
-          <span className="block text-sm text-text-secondary mb-1">Notes</span>
-          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
-            className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle" />
-        </label>
+        <Field label="Notes">
+          <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
+        </Field>
 
         {err && <FeedbackBanner>{err}</FeedbackBanner>}
 
-        <div className="flex justify-end gap-3 pt-2">
-          <button type="button" onClick={onClose} disabled={busy}
-            className="px-4 py-2 border border-border hover:bg-bg-deep text-sm">
-            Cancel
-          </button>
-          <button type="submit" disabled={busy || suppliers.length === 0}
-            className="px-4 py-2 bg-accent text-ink font-semibold hover:bg-accent-light text-sm disabled:opacity-50">
+        <DialogFooter>
+          <Button type="button" onClick={onClose} disabled={busy}>Cancel</Button>
+          <Button type="submit" variant="primary" disabled={busy || suppliers.length === 0}>
             {busy ? 'Saving…' : 'Record payment'}
-          </button>
-        </div>
-      </form>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

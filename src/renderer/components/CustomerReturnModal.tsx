@@ -7,11 +7,18 @@
 //
 // Wave C.3.
 
+import { XIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { counter } from '../lib/ipc';
 import { SupervisorPinModal } from './SupervisorPinModal';
 import { formatMoney, parseCedisToPesewas } from '../../shared/lib/money';
 import { FeedbackBanner } from './FeedbackBanner';
+import { Button } from './ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog';
+import { Field } from './ui/field';
+import { Input } from './ui/input';
+import { NativeSelect } from './ui/native-select';
+import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from './ui/table';
 
 interface Props {
   customerId: string;
@@ -94,129 +101,119 @@ export function CustomerReturnModal({ customerId, customerName, onClose, onRecor
   }
 
   return (
-    <div className="fixed inset-0 bg-scrim flex items-center justify-center p-6 z-50">
-      <div className="bg-bg-surface rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-auto border border-border">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+    <Dialog onClose={onClose}>
+      <DialogContent showCloseButton={false} className="w-[min(48rem,calc(100%-2rem))] max-h-[90vh] gap-0 p-0">
+        <header className="flex items-center justify-between gap-4 px-6 py-4 border-b border-border">
           <div>
-            <h2 className="text-lg font-semibold">Record return</h2>
-            <div className="text-xs text-text-tertiary mt-1">From {customerName}</div>
+            <DialogTitle>Record return</DialogTitle>
+            <DialogDescription className="text-xs mt-1">From {customerName}</DialogDescription>
           </div>
-          <button onClick={onClose} className="text-text-secondary hover:text-text-primary">×</button>
-        </div>
+          <Button variant="ghost" size="icon-sm" aria-label="Close" onClick={onClose}><XIcon aria-hidden="true" /></Button>
+        </header>
 
-        <div className="p-6 space-y-4">
+        <div className="p-6 space-y-4 overflow-y-auto">
           {error && (
             <FeedbackBanner>{error}</FeedbackBanner>
           )}
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-text-secondary">Refund method</label>
-              <select
+            <Field label="Refund method">
+              <NativeSelect
                 value={refundMethod}
-                onChange={(e) => setRefundMethod(e.target.value as 'CASH' | 'CREDIT')}
-                className="w-full bg-bg-deep border border-border px-3 py-2 text-sm">
+                onChange={(e) => setRefundMethod(e.target.value as 'CASH' | 'CREDIT')}>
                 <option value="CREDIT">Reduce balance (CREDIT)</option>
                 <option value="CASH">Cash from till (CASH)</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-text-secondary">Reason</label>
-              <input
+              </NativeSelect>
+            </Field>
+            <Field label="Reason">
+              <Input
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 placeholder="e.g. Wrong order, damaged, unsold stock"
-                className="w-full bg-bg-deep border border-border px-3 py-2 text-sm"
               />
-            </div>
+            </Field>
           </div>
 
           <LinePicker onAdd={addLine} />
 
-          <div className="border border-border rounded">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-text-secondary text-xs uppercase tracking-wider border-b border-border">
-                  <th className="px-3 py-2 text-left">Product</th>
-                  <th className="px-3 py-2 text-left">Unit</th>
-                  <th className="px-3 py-2 text-right">Qty</th>
-                  <th className="px-3 py-2 text-right">Price</th>
-                  <th className="px-3 py-2 text-right">Total</th>
-                  <th className="px-3 py-2"></th>
-                </tr>
-              </thead>
-              <tbody>
+          <div className="rounded-lg border border-border overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="px-3">Product</TableHead>
+                  <TableHead className="px-3">Unit</TableHead>
+                  <TableHead className="px-3 text-right">Qty</TableHead>
+                  <TableHead className="px-3 text-right">Price</TableHead>
+                  <TableHead className="px-3 text-right">Total</TableHead>
+                  <TableHead className="px-3"><span className="sr-only">Actions</span></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {lines.map((l, i) => (
-                  <tr key={i} className="border-b border-border">
-                    <td className="px-3 py-2">{l.productName}</td>
-                    <td className="px-3 py-2">{l.unitName}</td>
-                    <td className="px-3 py-2 text-right">
-                      <input
+                  <TableRow key={i}>
+                    <TableCell className="px-3 py-2">{l.productName}</TableCell>
+                    <TableCell className="px-3 py-2">{l.unitName}</TableCell>
+                    <TableCell className="px-3 py-2 text-right">
+                      <Input
                         type="number"
+                        aria-label={`Quantity of ${l.productName}`}
                         value={l.quantity}
                         onChange={(e) => changeQty(i, parseInt(e.target.value, 10) || 0)}
-                        className="w-20 bg-bg-deep border border-border px-2 py-1 text-sm font-mono text-right"
+                        className="h-8 w-20 px-2 font-mono tnum text-right"
                       />
-                    </td>
-                    <td className="px-3 py-2 text-right font-mono">{formatMoney(l.unitPricePesewas)}</td>
-                    <td className="px-3 py-2 text-right font-mono font-semibold">
+                    </TableCell>
+                    <TableCell className="px-3 py-2 text-right font-mono tnum">{formatMoney(l.unitPricePesewas)}</TableCell>
+                    <TableCell className="px-3 py-2 text-right font-mono tnum font-semibold">
                       {formatMoney(l.unitPricePesewas * l.quantity)}
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      <button onClick={() => removeLine(i)}
-                        className="text-xs underline text-danger hover:text-danger-light">
-                        Remove
-                      </button>
-                    </td>
-                  </tr>
+                    </TableCell>
+                    <TableCell className="px-3 py-2 text-right">
+                      <Button variant="ghost" size="sm" className="text-danger" onClick={() => removeLine(i)}>Remove</Button>
+                    </TableCell>
+                  </TableRow>
                 ))}
                 {lines.length === 0 && (
-                  <tr><td colSpan={6} className="px-3 py-4 text-text-tertiary text-center">
+                  <TableRow><TableCell colSpan={6} className="px-3 py-4 text-text-tertiary text-center">
                     Search a product above and click Add.
-                  </td></tr>
+                  </TableCell></TableRow>
                 )}
-              </tbody>
+              </TableBody>
               {lines.length > 0 && (
-                <tfoot>
-                  <tr className="font-semibold bg-bg-deep">
-                    <td colSpan={4} className="px-3 py-2 text-right">Refund total</td>
-                    <td className="px-3 py-2 text-right font-mono">{formatMoney(total)}</td>
-                    <td></td>
-                  </tr>
-                </tfoot>
+                <TableFooter>
+                  <TableRow>
+                    <TableCell colSpan={4} className="px-3 py-2 text-right">Refund total</TableCell>
+                    <TableCell className="px-3 py-2 text-right font-mono tnum">{formatMoney(total)}</TableCell>
+                    <TableCell />
+                  </TableRow>
+                </TableFooter>
               )}
-            </table>
+            </Table>
           </div>
 
-          <div>
-            <label className="text-xs text-text-secondary">Notes (optional)</label>
-            <input
+          <Field label="Notes (optional)">
+            <Input
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="any extra context"
-              className="w-full bg-bg-deep border border-border px-3 py-2 text-sm"
             />
-          </div>
+          </Field>
 
           <div className="flex justify-end gap-3 pt-2">
-            <button onClick={onClose}
-              className="px-4 py-2 border border-border text-sm hover:bg-bg-elevated">Cancel</button>
-            <button onClick={tryRecord} disabled={lines.length === 0 || !reason.trim()}
-              className="px-4 py-2 bg-accent text-ink font-semibold text-sm disabled:opacity-50">
+            <Button onClick={onClose}>Cancel</Button>
+            <Button variant="primary" onClick={tryRecord} disabled={lines.length === 0 || !reason.trim()}>
               Record return ({formatMoney(total)})
-            </button>
+            </Button>
           </div>
         </div>
-      </div>
 
-      {showSup && (
-        <SupervisorPinModal
-          title="Approve customer return"
-          onCancel={() => setShowSup(false)}
-          onApprove={(id, pin) => void submit(id, pin)}
-        />
-      )}
-    </div>
+        {showSup && (
+          <SupervisorPinModal
+            title="Approve customer return"
+            onCancel={() => setShowSup(false)}
+            onApprove={(id, pin) => void submit(id, pin)}
+          />
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -275,23 +272,23 @@ function LinePicker({ onAdd }: { onAdd: (line: Line) => void }) {
   }
 
   return (
-    <div className="border border-border rounded p-3 bg-bg-deep space-y-2">
-      <div className="text-xs text-text-secondary">Add line</div>
+    <div className="rounded-lg border border-border p-3 bg-bg-surface space-y-2">
+      <div className="text-xs font-semibold text-text-secondary">Add line</div>
       <div className="relative">
-        <input
+        <Input
+          aria-label="Search products"
           value={query}
           onChange={(e) => { setQuery(e.target.value); setPicked(null); }}
           placeholder="search by name or SKU"
-          className="w-full bg-bg-surface border border-border px-3 py-2 text-sm"
         />
         {hits.length > 0 && !picked && (
-          <ul className="absolute left-0 right-0 top-full mt-1 bg-bg-surface border border-border max-h-48 overflow-auto z-10">
+          <ul className="absolute left-0 right-0 top-full mt-1 rounded-lg bg-bg-elevated border border-border shadow-overlay max-h-48 overflow-auto z-10">
             {hits.map((p) => (
               <li key={p.id}>
                 <button onClick={() => void pick(p)}
-                  className="w-full text-left px-3 py-2 hover:bg-bg-elevated text-sm">
+                  className="w-full text-left px-3 py-2 hover:bg-bg-surface text-sm">
                   <div>{p.name}</div>
-                  <div className="text-text-tertiary text-xs">{p.sku} · {formatMoney(p.unitPricePesewas)}</div>
+                  <div className="text-text-tertiary text-xs font-mono">{p.sku} · {formatMoney(p.unitPricePesewas)}</div>
                 </button>
               </li>
             ))}
@@ -301,30 +298,29 @@ function LinePicker({ onAdd }: { onAdd: (line: Line) => void }) {
 
       {picked && (
         <div className="grid grid-cols-4 gap-2 items-end">
-          <select
+          <NativeSelect
+            aria-label="Unit"
             value={unitId}
             onChange={(e) => {
               setUnitId(e.target.value);
               const u = units.find((x) => x.id === e.target.value);
               if (u) setPriceCedis((u.pricePesewas / 100).toFixed(2));
-            }}
-            className="bg-bg-surface border border-border px-2 py-2 text-sm">
+            }}>
             {units.map((u) => (
               <option key={u.id} value={u.id}>{u.unitName}</option>
             ))}
-          </select>
-          <input type="number" value={qty}
+          </NativeSelect>
+          <Input type="number" value={qty} aria-label="Quantity"
             onChange={(e) => setQty(parseInt(e.target.value, 10) || 0)}
             placeholder="qty"
-            className="bg-bg-surface border border-border px-2 py-2 text-sm font-mono text-right" />
-          <input value={priceCedis}
+            className="font-mono tnum text-right" />
+          <Input value={priceCedis} aria-label="Price per unit (cedis)"
             onChange={(e) => setPriceCedis(e.target.value)}
             placeholder="₵ / unit"
-            className="bg-bg-surface border border-border px-2 py-2 text-sm font-mono text-right" />
-          <button onClick={add} disabled={!unitId || qty <= 0 || !priceCedis}
-            className="bg-accent text-ink px-3 py-2 font-semibold text-sm disabled:opacity-50">
+            className="font-mono tnum text-right" />
+          <Button variant="primary" onClick={add} disabled={!unitId || qty <= 0 || !priceCedis}>
             Add
-          </button>
+          </Button>
         </div>
       )}
     </div>

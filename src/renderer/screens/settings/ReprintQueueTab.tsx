@@ -7,6 +7,10 @@ import { counter } from '../../lib/ipc';
 import { useSession } from '../../store/session';
 import { formatMoneyWithCurrency } from '../../../shared/lib/money';
 import { FeedbackBanner } from '../../components/FeedbackBanner';
+import { Button } from '../../components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/dialog';
+import { Field } from '../../components/ui/field';
+import { Input } from '../../components/ui/input';
 
 interface Reprint {
   id: string; saleId: string; reason: string;
@@ -152,32 +156,30 @@ function DiscardModal({ reprint, onCancel, onDone }: {
   }
 
   return (
-    <div className="fixed inset-0 bg-scrim flex items-center justify-center p-6 z-50">
-      <div className="bg-bg-elevated rounded-lg shadow-xl w-full max-w-md p-6 space-y-4">
-        <h2 className="text-lg font-semibold">Discard pending receipt</h2>
-        <p className="text-sm text-text-secondary">
-          Sale <span className="font-mono">{reprint.saleId.slice(-8)}</span> · {formatMoneyWithCurrency(reprint.saleTotalPesewas)} · {reprint.saleWorkerName}
-        </p>
+    <Dialog onClose={onCancel} busy={busy}>
+      <DialogContent showCloseButton={false} className="w-[min(28rem,calc(100%-2rem))] gap-4">
+        <DialogHeader>
+          <DialogTitle>Discard pending receipt</DialogTitle>
+          <DialogDescription>
+            Sale <span className="font-mono">{reprint.saleId.slice(-8)}</span> · <span className="font-mono tnum">{formatMoneyWithCurrency(reprint.saleTotalPesewas)}</span> · {reprint.saleWorkerName}
+          </DialogDescription>
+        </DialogHeader>
         <p className="text-sm text-text-tertiary">
           Discarding removes this from the queue without printing. The sale itself is unaffected. Use this when the customer has already left and the receipt is no longer needed.
         </p>
-        <label className="block">
-          <span className="block text-xs text-text-tertiary mb-1 uppercase tracking-wider">Reason</span>
-          <input autoFocus value={reason} onChange={(e) => setReason(e.target.value)}
-            placeholder="customer left, paper out for hours, etc."
-            className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle" />
-        </label>
+        <Field label="Reason">
+          <Input autoFocus value={reason} onChange={(e) => setReason(e.target.value)}
+            placeholder="customer left, paper out for hours, etc." />
+        </Field>
         {err && <FeedbackBanner>{err}</FeedbackBanner>}
-        <div className="flex justify-end gap-3">
-          <button type="button" onClick={onCancel} disabled={busy}
-            className="px-4 py-2 border border-border hover:bg-bg-deep text-sm">Cancel</button>
-          <button type="button" onClick={() => void submit()} disabled={busy}
-            className="px-4 py-2 bg-danger text-ink font-semibold hover:opacity-90 text-sm disabled:opacity-50">
+        <DialogFooter>
+          <Button onClick={onCancel} disabled={busy}>Cancel</Button>
+          <Button variant="destructive" onClick={() => void submit()} disabled={busy}>
             {busy ? 'Discarding…' : 'Discard'}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

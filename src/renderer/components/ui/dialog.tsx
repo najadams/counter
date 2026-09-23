@@ -2,8 +2,7 @@
 //
 // Base UI owns the parts it does well: focus trapping, the accessible name
 // (from DialogTitle), outside-click dismissal, and hiding the page behind
-// from screen readers. Counter adds the till's rules, the same ones
-// hooks/useDialog.ts enforces for the older hand-built dialogs:
+// from screen readers. Counter adds the till's rules:
 //
 //   - Only the TOPMOST open dialog receives Escape and F1–F12. They are
 //     caught in the capture phase and stopped there, so a screen's own window
@@ -11,6 +10,11 @@
 //     also clear the sale underneath.
 //   - While `busy` (saving), Escape, F-keys and outside clicks do nothing.
 //   - When the dialog goes away, focus returns to whatever had it before.
+//
+// A dialog that opens on top of another must render INSIDE the other's
+// DialogContent (React nesting, not DOM order). Base UI stacks dialogs by
+// that tree; rendered side by side, each one hides the other from screen
+// readers and their focus traps compete.
 //
 // Usage — the app mounts dialogs when they are needed, so `open` defaults to
 // true and closing is the parent's job:
@@ -102,11 +106,16 @@ export function useCounterDialogKeys(): RefObject<HTMLDivElement> {
     window.addEventListener('keydown', onKey, true);
     return () => {
       window.removeEventListener('keydown', onKey, true);
-      // Base UI returns focus on a normal close; this covers the app's
-      // pattern of unmounting the dialog outright.
+      // The app unmounts dialogs outright instead of closing them, so Base
+      // UI's own focus return never runs. Put focus back on the opener now,
+      // while the popup is still in the document: once it is gone, a parent
+      // dialog's focus trap would pull focus to its first field instead.
+      const active = document.activeElement;
+      const holdsFocus = !active || active === document.body || !!popup.current?.contains(active);
+      if (opener?.isConnected && holdsFocus) opener.focus();
       queueMicrotask(() => {
-        const active = document.activeElement;
-        if (opener?.isConnected && (!active || active === document.body)) opener.focus();
+        const now = document.activeElement;
+        if (opener?.isConnected && (!now || now === document.body)) opener.focus();
       });
     };
   }, [handlers, opener]);
@@ -129,16 +138,22 @@ export const overlayClasses =
 export interface DialogContentProps extends DialogPrimitive.Popup.Props {
   /** A corner close button (it answers to Escape too). */
   showCloseButton?: boolean;
+  /**
+   * Props for the portal element. A dialog opened from inside another one is
+   * portaled into its parent's portal; pass `container: document.body` when
+   * something (a print stylesheet) needs this one directly under <body>.
+   */
+  portalProps?: DialogPrimitive.Portal.Props;
 }
 
 export const DialogContent = forwardRef<HTMLDivElement, DialogContentProps>(function DialogContent(
-  { className, children, showCloseButton = true, ...props },
+  { className, children, showCloseButton = true, portalProps, ...props },
   ref,
 ) {
   const popupRef = useCounterDialogKeys();
   const mergedRef = useMemo(() => mergeRefs(ref, popupRef), [ref, popupRef]);
   return (
-    <DialogPrimitive.Portal>
+    <DialogPrimitive.Portal {...portalProps}>
       <DialogPrimitive.Backdrop data-slot="dialog-overlay" className={overlayClasses} />
       <DialogPrimitive.Popup
         ref={mergedRef}

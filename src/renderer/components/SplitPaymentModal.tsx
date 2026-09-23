@@ -4,11 +4,15 @@
 // Confirm is enabled only when remaining balance == 0. Submitted to
 // completeSale as `payments[]`.
 
+import { PlusIcon, XIcon } from 'lucide-react';
 import { useState } from 'react';
-import { useDialog } from '../hooks/useDialog';
 import { FRIENDLY_UI_ENABLED } from '../../shared/lib/buildFlags';
 import { formatMoney, formatMoneyWithCurrency, parseCedisToPesewas } from '../../shared/lib/money';
 import { FeedbackBanner } from './FeedbackBanner';
+import { Button } from './ui/button';
+import { Dialog, DialogContent, DialogFooter, DialogTitle } from './ui/dialog';
+import { Input } from './ui/input';
+import { NativeSelect } from './ui/native-select';
 
 export type TenderMethod = 'CASH' | 'MOMO_MTN' | 'MOMO_VODAFONE' | 'MOMO_AIRTELTIGO' | 'CREDIT' | 'BANK_TRANSFER';
 
@@ -129,125 +133,126 @@ export function SplitPaymentModal({
     onConfirm({ payments: out });
   }
 
-  const dialog = useDialog({ onClose: onCancel, busy: submitting,
-    onShortcut: (key) => { if (key === 'F2') submit(); } });
+  const onShortcut = (key: string) => { if (key === 'F2') submit(); };
 
   if (FRIENDLY_UI_ENABLED) return (
-    <div className="fixed inset-0 bg-scrim flex items-center justify-center p-3 sm:p-6 z-50">
-      <div {...dialog} aria-label="Split payment" className="w-full max-w-3xl max-h-[94dvh] rounded-2xl bg-bg-surface flex flex-col overflow-hidden">
-        <header className="p-4 border-b border-border flex flex-wrap justify-between gap-2">
-          <h2 className="text-2xl font-semibold">Split payment</h2>
-          <span className="text-xl">Total: <strong className="font-mono">{formatMoneyWithCurrency(totalPesewas)}</strong></span>
+    <Dialog onClose={onCancel} busy={submitting} onShortcut={onShortcut}>
+      <DialogContent showCloseButton={false} className="w-[min(48rem,calc(100%-1.5rem))] max-h-[94dvh] gap-0 overflow-hidden p-0">
+        <header className="p-4 border-b border-border flex flex-wrap items-baseline justify-between gap-2">
+          <DialogTitle className="text-2xl">Split payment</DialogTitle>
+          <span className="text-xl">Total: <strong className="font-mono tnum">{formatMoneyWithCurrency(totalPesewas)}</strong></span>
         </header>
         <div className="min-h-0 overflow-y-auto p-4">
         <fieldset disabled={submitting} className="min-w-0 space-y-4">
           <p className="text-lg">Enter how much the customer pays with each method.</p>
           {rows.map((r, index) => (
-            <section key={r.id} aria-label={`Payment ${index + 1}`} className="rounded-xl border-2 border-border p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <section key={r.id} aria-label={`Payment ${index + 1}`} className="rounded-xl border-2 border-border bg-bg-elevated p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label className="flex flex-col gap-1 text-lg">Payment method
-                <select value={r.method} onChange={(e) => update(r.id, { method: e.target.value as TenderMethod })} className="min-h-14 min-w-0 bg-bg-input border border-border rounded-lg px-3">
+                <NativeSelect value={r.method} onChange={(e) => update(r.id, { method: e.target.value as TenderMethod })} className="h-14 rounded-lg text-lg">
                   {METHOD_OPTIONS.map((m) => <option key={m.value} value={m.value}>{m.value === 'CREDIT' ? 'Pay later' : m.value === 'MOMO_VODAFONE' ? 'MoMo (Telecel)' : m.label}</option>)}
-                </select>
+                </NativeSelect>
               </label>
               <label className="flex flex-col gap-1 text-lg">Amount (GHS)
-                <input inputMode="decimal" value={r.amountRaw} onChange={(e) => update(r.id, { amountRaw: e.target.value })} placeholder="0.00" className="min-w-0 w-full min-h-14 bg-bg-input border border-border rounded-lg px-3 text-2xl font-mono" />
+                <Input inputMode="decimal" value={r.amountRaw} onChange={(e) => update(r.id, { amountRaw: e.target.value })} placeholder="0.00" className="h-14 rounded-lg text-2xl font-mono tnum" />
               </label>
               {(r.method.startsWith('MOMO_') || r.method === 'BANK_TRANSFER') && <label className="flex flex-col gap-1 text-lg">Transaction reference
-                <input value={r.reference} onChange={(e) => update(r.id, { reference: e.target.value })} placeholder="ref / txn id" className="min-w-0 w-full min-h-14 bg-bg-input border border-border rounded-lg px-3 text-xl" />
+                <Input value={r.reference} onChange={(e) => update(r.id, { reference: e.target.value })} placeholder="ref / txn id" className="h-14 rounded-lg text-xl" />
               </label>}
               {r.method === 'CASH' && <label className="flex flex-col gap-1 text-lg">Money received (optional)
-                <input inputMode="decimal" value={r.cashGivenRaw} onChange={(e) => update(r.id, { cashGivenRaw: e.target.value })} placeholder="cash given" className="min-w-0 w-full min-h-14 bg-bg-input border border-border rounded-lg px-3 text-2xl font-mono" />
+                <Input inputMode="decimal" value={r.cashGivenRaw} onChange={(e) => update(r.id, { cashGivenRaw: e.target.value })} placeholder="cash given" className="h-14 rounded-lg text-2xl font-mono tnum" />
               </label>}
               <div className="flex flex-wrap gap-2 items-end">
-                <button type="button" onClick={() => autoFillRemaining(r.id)} disabled={remaining <= 0} className="min-h-14 px-3 border border-border rounded-lg text-lg disabled:opacity-40">Use remaining amount</button>
-                <button type="button" onClick={() => removeRow(r.id)} disabled={rows.length === 1} className="min-h-14 px-3 border border-border rounded-lg text-lg disabled:opacity-40">Remove payment {index + 1}</button>
+                <Button type="button" size="xl" className="text-lg" onClick={() => autoFillRemaining(r.id)} disabled={remaining <= 0}>Use remaining amount</Button>
+                <Button type="button" size="xl" className="text-lg" onClick={() => removeRow(r.id)} disabled={rows.length === 1}>Remove payment {index + 1}</Button>
               </div>
             </section>
           ))}
-          <button type="button" onClick={addRow} className="min-h-14 px-4 border-2 border-border rounded-xl text-lg">+ Add another payment</button>
+          <Button type="button" size="xl" className="text-lg" onClick={addRow}><PlusIcon aria-hidden="true" />Add another payment</Button>
           {(error ?? submitError) && <FeedbackBanner className="text-lg">{error ?? submitError}</FeedbackBanner>}
         </fieldset>
         </div>
         <footer className="shrink-0 p-4 border-t border-border space-y-3">
-          <p aria-live="polite" className="text-xl font-semibold">{remaining < 0 ? 'Too much' : 'Remaining'}: {formatMoneyWithCurrency(Math.abs(remaining))}</p>
+          <p aria-live="polite" className="text-xl font-semibold">{remaining < 0 ? 'Too much' : 'Remaining'}: <span className="font-mono tnum">{formatMoneyWithCurrency(Math.abs(remaining))}</span></p>
           <div className="grid grid-cols-2 gap-3">
-            <button type="button" onClick={onCancel} disabled={submitting} className="min-h-14 rounded-xl border-2 border-border text-xl">Back to cart</button>
-            <button type="button" onClick={submit} disabled={remaining !== 0 || submitting} className="min-h-14 rounded-xl bg-accent text-ink text-xl font-semibold disabled:opacity-40">{submitting ? 'Saving the sale…' : 'Complete sale'}</button>
+            <Button type="button" size="xl" onClick={onCancel} disabled={submitting}>Back to cart</Button>
+            <Button type="button" size="xl" variant="primary" onClick={submit} disabled={remaining !== 0 || submitting}>{submitting ? 'Saving the sale…' : 'Complete sale'}</Button>
           </div>
         </footer>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 
   return (
-    <div className="fixed inset-0 bg-scrim flex items-center justify-center p-6 z-50">
-      <div {...dialog} aria-label="Split payment" className="bg-bg-elevated rounded-lg shadow-xl w-full max-w-2xl p-6 space-y-4">
-        <div className="flex items-baseline justify-between">
-          <h2 className="text-xl font-semibold">Split payment</h2>
+    <Dialog onClose={onCancel} busy={submitting} onShortcut={onShortcut}>
+      <DialogContent showCloseButton={false} className="w-[min(42rem,calc(100%-2rem))] gap-4">
+        <div className="flex items-baseline justify-between gap-4">
+          <DialogTitle className="text-xl">Split payment</DialogTitle>
           <div className="text-sm text-text-secondary">
-            Total: <span className="font-mono text-text-primary">{formatMoneyWithCurrency(totalPesewas)}</span>
+            Total: <span className="font-mono tnum text-text-primary">{formatMoneyWithCurrency(totalPesewas)}</span>
           </div>
         </div>
 
         <fieldset disabled={submitting} className="space-y-2">
-          {rows.map((r) => (
+          {rows.map((r, index) => (
             <div key={r.id} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 items-center">
-              <select
+              <NativeSelect
+                aria-label={`Payment ${index + 1} method`}
                 value={r.method}
-                onChange={(e) => update(r.id, { method: e.target.value as TenderMethod })}
-                className="bg-bg-deep border border-border-subtle px-2 py-2 text-sm rounded">
+                onChange={(e) => update(r.id, { method: e.target.value as TenderMethod })}>
                 {METHOD_OPTIONS.map((m) => (
                   <option key={m.value} value={m.value}>{m.label}</option>
                 ))}
-              </select>
+              </NativeSelect>
               <div className="flex items-center gap-1">
-                <input
+                <Input
+                  aria-label={`Payment ${index + 1} amount`}
                   value={r.amountRaw}
                   onChange={(e) => update(r.id, { amountRaw: e.target.value })}
-                  placeholder="0.00"
-                  className="w-28 bg-bg-deep border border-border-subtle px-2 py-2 font-mono tnum text-right text-sm rounded" />
-                <button onClick={() => autoFillRemaining(r.id)}
-                  className="text-xs px-2 py-1 border border-border hover:bg-bg-deep"
+                  placeholder="0.00" inputMode="decimal"
+                  className="w-28 font-mono tnum text-right" />
+                <Button variant="ghost" size="sm" onClick={() => autoFillRemaining(r.id)}
                   disabled={remaining <= 0}
                   title="Fill with remaining balance">
                   fill
-                </button>
+                </Button>
               </div>
               {r.method.startsWith('MOMO_') || r.method === 'BANK_TRANSFER' ? (
-                <input
+                <Input
+                  aria-label={`Payment ${index + 1} reference`}
                   value={r.reference}
                   onChange={(e) => update(r.id, { reference: e.target.value })}
                   placeholder="ref / txn id"
-                  className="w-40 bg-bg-deep border border-border-subtle px-2 py-2 text-sm rounded" />
+                  className="w-40" />
               ) : r.method === 'CASH' ? (
-                <input
+                <Input
+                  aria-label={`Payment ${index + 1} cash given`}
                   value={r.cashGivenRaw}
                   onChange={(e) => update(r.id, { cashGivenRaw: e.target.value })}
-                  placeholder="cash given"
-                  className="w-32 bg-bg-deep border border-border-subtle px-2 py-2 font-mono tnum text-right text-sm rounded" />
+                  placeholder="cash given" inputMode="decimal"
+                  className="w-32 font-mono tnum text-right" />
               ) : (
                 <span className="w-40 text-text-tertiary text-xs">—</span>
               )}
-              <button onClick={() => removeRow(r.id)}
+              <Button variant="ghost" size="icon" onClick={() => removeRow(r.id)}
                 disabled={rows.length === 1}
-                className="text-xs px-2 py-2 border border-border text-text-tertiary hover:text-danger disabled:opacity-30">
-                ✕
-              </button>
+                aria-label={`Remove payment ${index + 1}`}
+                className="hover:not-disabled:text-danger">
+                <XIcon aria-hidden="true" />
+              </Button>
             </div>
           ))}
         </fieldset>
 
-        <div className="flex items-center justify-between">
-          <button disabled={submitting} onClick={addRow}
-            className="text-sm px-3 py-1 border border-border hover:bg-bg-deep">
-            + Add another payment
-          </button>
+        <div className="flex items-center justify-between gap-4">
+          <Button size="sm" disabled={submitting} onClick={addRow}>
+            <PlusIcon aria-hidden="true" />Add another payment
+          </Button>
           <div className="text-sm">
             <span className="text-text-tertiary">Tendered:</span>{' '}
-            <span className="font-mono">{formatMoneyWithCurrency(tenderTotal)}</span>
+            <span className="font-mono tnum">{formatMoneyWithCurrency(tenderTotal)}</span>
             <span className="text-text-tertiary mx-2">·</span>
             <span className="text-text-tertiary">Remaining:</span>{' '}
-            <span className={`font-mono ${remaining === 0 ? 'text-success' : remaining > 0 ? 'text-warning' : 'text-danger'}`}>
+            <span className={`font-mono tnum ${remaining === 0 ? 'text-success' : remaining > 0 ? 'text-warning' : 'text-danger'}`}>
               {formatMoneyWithCurrency(remaining)}
             </span>
           </div>
@@ -255,25 +260,19 @@ export function SplitPaymentModal({
 
         {(error ?? submitError) && <FeedbackBanner>{error ?? submitError}</FeedbackBanner>}
 
-        <div className="flex justify-end gap-3 pt-2">
-          <button onClick={onCancel}
-            disabled={submitting}
-            className="px-4 py-2 border border-border hover:bg-bg-deep text-sm disabled:opacity-40">
-            Cancel
-          </button>
-          <button onClick={submit}
-            disabled={remaining !== 0 || submitting}
-            className="px-4 py-2 bg-accent text-ink font-semibold hover:bg-accent-light text-sm disabled:opacity-40">
+        <DialogFooter>
+          <Button onClick={onCancel} disabled={submitting}>Cancel</Button>
+          <Button variant="primary" shortcut="F2" onClick={submit} disabled={remaining !== 0 || submitting}>
             {submitting ? 'Saving the sale…' : remaining === 0 ? 'Complete sale' : remaining > 0 ? `Need ${formatMoney(remaining)} more` : `${formatMoney(-remaining)} too much`}
-          </button>
-        </div>
+          </Button>
+        </DialogFooter>
 
         <p className="text-xs text-text-tertiary">
           Sum of all tenders must equal the sale total before you can complete the sale.
           Enter the MoMo transaction number. Credit tenders need a customer selected.
           Cash-only customers cannot receive credit tenders.
         </p>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
