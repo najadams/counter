@@ -33,7 +33,7 @@ describe('theme tokens', () => {
   const blocks = themeBlocks();
 
   it('defines every theme the store can resolve to', () => {
-    expect(Object.keys(blocks).sort()).toEqual(['dark', 'light', 'sea', 'violet']);
+    expect(Object.keys(blocks).sort()).toEqual(['contrast', 'dark', 'light']);
   });
 
   it('gives every theme the same token set', () => {
@@ -55,4 +55,50 @@ describe('theme tokens', () => {
       expect(block).toMatch(/color-scheme: (light|dark);/);
     }
   });
+});
+
+// docs/design-system.md promises WCAG AA (4.5:1) for every text/background
+// pairing the UI actually uses. Check it here so a palette edit that breaks
+// legibility fails CI instead of a till in the sun.
+describe('theme contrast', () => {
+  function channels(theme: string): Record<string, number[]> {
+    const block = new RegExp(`:root\\[data-theme='${theme}'\\] \\{([\\s\\S]*?)\\n\\}`).exec(CSS)![1]!;
+    const out: Record<string, number[]> = {};
+    for (const m of block.matchAll(/(--c-[\w-]+):\s*(\d+) (\d+) (\d+);/g)) out[m[1]!] = [+m[2]!, +m[3]!, +m[4]!];
+    return out;
+  }
+  function luminance([r, g, b]: number[]): number {
+    const lin = (c: number) => { const v = c / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
+    return 0.2126 * lin(r!) + 0.7152 * lin(g!) + 0.0722 * lin(b!);
+  }
+  function ratio(a: number[], b: number[]): number {
+    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+    return (hi! + 0.05) / (lo! + 0.05);
+  }
+
+  const BACKGROUNDS = ['--c-bg-deep', '--c-bg-surface', '--c-bg-elevated'];
+  const TEXT = ['--c-text-primary', '--c-text-secondary', '--c-text-tertiary',
+    '--c-accent', '--c-success', '--c-danger', '--c-warning'];
+  const FILLS = ['--c-accent', '--c-success', '--c-danger', '--c-warning'];
+
+  for (const theme of ['light', 'dark', 'contrast']) {
+    it(`${theme}: text and status colours read at 4.5:1 on every surface`, () => {
+      const c = channels(theme);
+      const failures: string[] = [];
+      for (const fg of TEXT) for (const bg of BACKGROUNDS) {
+        const r = ratio(c[fg]!, c[bg]!);
+        if (r < 4.5) failures.push(`${fg} on ${bg}: ${r.toFixed(2)}`);
+      }
+      expect(failures).toEqual([]);
+    });
+
+    it(`${theme}: ink reads at 4.5:1 on accent and status fills`, () => {
+      const c = channels(theme);
+      const failures = FILLS
+        .map((fill) => [fill, ratio(c['--c-text-ink']!, c[fill]!)] as const)
+        .filter(([, r]) => r < 4.5)
+        .map(([fill, r]) => `ink on ${fill}: ${r.toFixed(2)}`);
+      expect(failures).toEqual([]);
+    });
+  }
 });

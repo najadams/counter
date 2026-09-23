@@ -630,11 +630,9 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
 
   return (
     // The cashier (often standing, in low warehouse light) reported text was
-    // too small to read at a glance. Scale the entire SaleScreen up via CSS
-    // zoom — applies uniformly to fonts, icons, and spacing while leaving
-    // every other screen unchanged. 1.15 ≈ a single macOS "Scaled" notch;
-    // bump or lower the factor here if the counter PC needs more/less.
-    <div className={`min-h-screen bg-bg-deep text-text-primary flex flex-col ${FRIENDLY_UI_ENABLED ? '' : 'sale-zoom'}`}>
+    // too small to read at a glance. `sale-type` runs this screen's type one
+    // notch above the fluid scale on counter-PC widths (styles/index.css).
+    <div className={`min-h-screen bg-bg-deep text-text-primary flex flex-col ${FRIENDLY_UI_ENABLED ? '' : 'sale-type'}`}>
       <AppHeader subtitle={FRIENDLY_UI_ENABLED ? 'Sell drinks' : 'sale'} onBack={() => { if (!submitLockRef.current) onExit(); }} backDisabled={submitting} />
       {fulfillingOrderId && (
         <div className="bg-accent/10 border-b border-accent px-4 py-2 text-accent text-sm text-center">

@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import electron from 'vite-plugin-electron/simple';
@@ -19,6 +19,25 @@ const buildFlagDefine = {
   __COUNTER_FRIENDLY__: JSON.stringify(process.env.COUNTER_FRIENDLY === '1'),
 };
 
+// `import 'virtual:friendly-fonts'` (main.tsx) loads Atkinson Hyperlegible in
+// the Friendly build and nothing in the others. A plain import behind the
+// FRIENDLY flag is not enough: Vite emits a stylesheet's font files when it
+// transforms the import, before tree-shaking drops it.
+function friendlyFonts(): Plugin {
+  const id = '\0virtual:friendly-fonts';
+  return {
+    name: 'counter-friendly-fonts',
+    resolveId: (source) => (source === 'virtual:friendly-fonts' ? id : null),
+    load: (resolved) => {
+      if (resolved !== id) return null;
+      return process.env.COUNTER_FRIENDLY === '1'
+        ? "import '@fontsource-variable/atkinson-hyperlegible-next';\n"
+          + "import '@fontsource-variable/atkinson-hyperlegible-mono';\n"
+        : 'export {};\n';
+    },
+  };
+}
+
 // Vite + Electron + React. Single config drives main, preload, and renderer.
 // Renderer is the default Vite app; main and preload bundle to dist-electron/.
 export default defineConfig({
@@ -33,6 +52,7 @@ export default defineConfig({
     react(),
     // Renderer only: the electron() sub-builds below are separate configs.
     tailwindcss(),
+    friendlyFonts(),
     electron({
       main: {
         entry: 'src/main/index.ts',

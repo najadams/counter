@@ -45,23 +45,47 @@
 }
 
 @theme {
-  --font-sans: Inter, system-ui, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* Harbour type: Geist for words; Geist Mono for money, quantities and
+   * keys. Counter Friendly swaps both for Atkinson Hyperlegible (end of file). */
+  --font-sans: 'Geist Variable', system-ui, sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  /* Bare `rounded` is square: the sharp default this app has always had.
-   * Opt into a curve explicitly (rounded-lg, rounded-xl, …). */
-  --radius: 0;
+  /* Corners: controls 8px (bare `rounded`), cards 12px (rounded-xl),
+   * dialogs and sheets 16px (rounded-2xl). rounded-none stays square. */
+  --radius: 0.5rem;
 
-  /* v3 line-heights. v4's defaults are ratios, which a child with its own
-   * font size (text-[10px] inside text-xs) inherits as a different height. */
-  --text-xs--line-height: 1rem;
-  --text-sm--line-height: 1.25rem;
-  --text-base--line-height: 1.5rem;
-  --text-lg--line-height: 1.75rem;
-  --text-xl--line-height: 1.75rem;
-  --text-2xl--line-height: 2rem;
-  --text-3xl--line-height: 2.25rem;
-  --text-4xl--line-height: 2.5rem;
+  /* Fluid type. Each step is its classic size on a 375px phone and grows
+   * linearly to 1.15x at 1920px, so about 1.1x on a 1366px counter PC. The
+   * line-heights scale the same way and stay lengths, not ratios, so a child
+   * with its own font size (text-[10px] inside text-xs) keeps the parent's
+   * line box. docs/design-system.md has the table. */
+  --text-xs: clamp(0.75rem, 0.7227rem + 0.1165vw, 0.8625rem);
+  --text-xs--line-height: clamp(1rem, 0.9636rem + 0.1553vw, 1.15rem);
+  --text-sm: clamp(0.875rem, 0.8431rem + 0.1359vw, 1.0063rem);
+  --text-sm--line-height: clamp(1.25rem, 1.2045rem + 0.1942vw, 1.4375rem);
+  --text-base: clamp(1rem, 0.9636rem + 0.1553vw, 1.15rem);
+  --text-base--line-height: clamp(1.5rem, 1.4454rem + 0.233vw, 1.725rem);
+  --text-lg: clamp(1.125rem, 1.0841rem + 0.1748vw, 1.2938rem);
+  --text-lg--line-height: clamp(1.75rem, 1.6863rem + 0.2718vw, 2.0125rem);
+  --text-xl: clamp(1.25rem, 1.2045rem + 0.1942vw, 1.4375rem);
+  --text-xl--line-height: clamp(1.75rem, 1.6863rem + 0.2718vw, 2.0125rem);
+  --text-2xl: clamp(1.5rem, 1.4454rem + 0.233vw, 1.725rem);
+  --text-2xl--line-height: clamp(2rem, 1.9272rem + 0.3107vw, 2.3rem);
+  --text-3xl: clamp(1.875rem, 1.8067rem + 0.2913vw, 2.1563rem);
+  --text-3xl--line-height: clamp(2.25rem, 2.1681rem + 0.3495vw, 2.5875rem);
+  --text-4xl: clamp(2.25rem, 2.1681rem + 0.3495vw, 2.5875rem);
+  --text-4xl--line-height: clamp(2.5rem, 2.409rem + 0.3884vw, 2.875rem);
+  --text-5xl: clamp(3rem, 2.8908rem + 0.466vw, 3.45rem);
+
+  /* Fluid spacing for page gutters and gaps between sections: p-gutter,
+   * gap-section. 16px on a phone, 32px / 28px at 1920px. */
+  --spacing-gutter: clamp(1rem, 0.7573rem + 1.0356vw, 2rem);
+  --spacing-section: clamp(1rem, 0.818rem + 0.7767vw, 1.75rem);
+
+  /* Motion: short and calm; prefers-reduced-motion switches it off below. */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
 }
 
 /* Tailwind v3 defaults that v4 changed. Kept so the v4 upgrade is
@@ -90,160 +114,120 @@
 }
 
 /* -----------------------------------------------------------------------
- * Theme tokens
+ * Theme tokens — Harbour (docs/design-system.md)
  *
  * Every colour the UI uses resolves through one of these RGB-channel
- * variables. Both dark and light blocks must define the same set or the
- * theme swap will leave holes.
+ * variables. Every theme block must define the same set or the theme swap
+ * leaves holes; tests/theme-tokens.test.ts enforces that, and that each
+ * text/background pairing below clears WCAG AA (4.5:1).
  *
- * The runtime swap is driven by a `data-theme` attribute on <html>:
- *   - no attribute / "light"  -> warm light theme (default)
- *   - "dark"                   -> financial dark theme
- *   - "violet"                 -> cool grey + vivid violet
- *   - "sea"                    -> off-white + sea blue
- *   - "system"                 -> dark or light based on prefers-color-scheme,
- *                                  resolved synchronously by the script in
- *                                  index.html before React mounts.
+ * The runtime swap is driven by a `data-theme` attribute on <html>, set by
+ * src/renderer/store/theme.ts:
+ *   - no attribute / "light"  -> Harbour light (default)
+ *   - "dark"                   -> Harbour dark
+ *   - "contrast"               -> Harbour high contrast
+ *   - "system"                 -> light or dark from prefers-color-scheme
+ *
+ * Surfaces keep their long-standing roles: bg-deep is the page, bg-surface a
+ * recessed panel or bar, bg-elevated a raised card or the hover on a surface.
  * --------------------------------------------------------------------- */
 
+:root,
+:root[data-theme='light'] {
+  /* Harbour light: off-white page with a sea-teal accent. The page recedes
+   * and the accent does the pointing, which suits a till stared at all day
+   * under fluorescent light or daylight glare. */
+  --c-bg-deep:       243 246 247;    /* #F3F6F7 */
+  --c-bg-surface:    234 240 242;    /* #EAF0F2 recessed panels and bars */
+  --c-bg-elevated:   255 255 255;    /* white cards */
+  --c-bg-input:      255 255 255;
+  --c-bg-modal:      255 255 255;
+
+  --c-border:        220 229 232;    /* #DCE5E8 */
+  --c-border-strong: 184 200 205;    /* #B8C8CD */
+  --c-border-subtle: 232 238 240;
+
+  --c-text-primary:  15 42 51;       /* #0F2A33 deep harbour ink */
+  --c-text-secondary: 71 92 100;     /* #475C64 */
+  --c-text-tertiary: 86 112 122;     /* #56707A, still 4.5:1 on bg-surface */
+  --c-text-ink:      255 255 255;    /* WHITE on accent and status fills */
+
+  --c-accent:        11 110 131;     /* #0B6E83 sea teal; 5.9:1 with white */
+  --c-accent-light:  13 128 152;     /* #0D8098 hover; 4.6:1 with white */
+  --c-accent-dim:    8 84 100;       /* #085464 pressed */
+
+  /* Each status colour doubles as a fill under white ink and as plain text,
+   * so all of them clear 4.5:1 both ways. */
+  --c-success:       20 108 60;      /* #146C3C */
+  --c-danger:        180 35 24;      /* #B42318 */
+  --c-danger-light:  140 28 18;      /* darker danger for text on a danger tint */
+  --c-warning:       143 84 0;       /* #8F5400 burnt amber */
+
+  --c-scrim:         12 30 36;       /* used with /40 opacity */
+
+  color-scheme: light;
+}
+
 :root[data-theme='dark'] {
-  /* Dark theme — preserves the original financial/gold aesthetic. */
-  --c-bg-deep:       10 12 16;       /* #0A0C10 */
-  --c-bg-surface:    20 23 29;       /* #14171D */
-  --c-bg-elevated:   28 32 40;       /* #1C2028 */
-  --c-bg-input:      15 18 24;       /* #0F1218 */
-  --c-bg-modal:      28 32 40;       /* same as elevated */
+  /* Harbour dark: the same teal on deep blue-green, for dim shops and night
+   * shifts. Accents turn light and carry dark ink. */
+  --c-bg-deep:       10 19 22;       /* #0A1316 */
+  --c-bg-surface:    16 28 32;       /* #101C20 */
+  --c-bg-elevated:   21 36 41;       /* #152429 */
+  --c-bg-input:      12 23 26;       /* #0C171A */
+  --c-bg-modal:      21 36 41;
 
-  --c-border:        42 47 58;       /* #2A2F3A */
-  --c-border-strong: 58 65 80;       /* #3A4150 */
-  --c-border-subtle: 30 34 42;
+  --c-border:        33 52 57;       /* #213439 */
+  --c-border-strong: 52 73 79;       /* #34494F */
+  --c-border-subtle: 25 41 46;
 
-  --c-text-primary:  237 232 223;    /* #EDE8DF */
-  --c-text-secondary: 139 145 160;   /* #8B91A0 */
-  --c-text-tertiary:  90 96 112;     /* #5A6070 */
-  --c-text-ink:       10 12 16;      /* always dark — sits on accent surfaces */
+  --c-text-primary:  228 237 239;    /* #E4EDEF */
+  --c-text-secondary: 147 167 173;   /* #93A7AD */
+  --c-text-tertiary: 122 142 148;    /* #7A8E94 */
+  --c-text-ink:      3 23 28;        /* DARK on accent and status fills */
 
-  --c-accent:        201 168 76;     /* #C9A84C */
-  --c-accent-light:  226 201 126;    /* #E2C97E */
-  --c-accent-dim:    139 118 55;     /* #8B7637 */
+  --c-accent:        60 179 200;     /* #3CB3C8 */
+  --c-accent-light:  108 203 220;    /* #6CCBDC */
+  --c-accent-dim:    38 128 145;     /* #268091 */
 
-  --c-success:       74 157 110;     /* #4A9D6E */
-  --c-danger:        196 98 58;      /* #C4623A */
-  --c-danger-light:  240 178 144;    /* light terracotta for text on danger bg */
-  --c-warning:       212 160 76;     /* #D4A04C */
+  --c-success:       76 201 138;     /* #4CC98A */
+  --c-danger:        255 122 110;    /* #FF7A6E */
+  --c-danger-light:  255 178 170;    /* light coral for text on a danger tint */
+  --c-warning:       242 180 90;     /* #F2B45A */
 
   --c-scrim:         0 0 0;          /* used with /70 opacity */
 
   color-scheme: dark;
 }
 
-:root,
-:root[data-theme='light'] {
-  /* Light theme — warm parchment background, darker gold for legibility.
-   * Keeps the "financial document" feel: never SaaS pastel. */
-  --c-bg-deep:       246 243 235;    /* warm cream — page background */
-  --c-bg-surface:    236 233 224;    /* slightly recessed panels */
-  --c-bg-elevated:   254 252 247;    /* raised cards / inputs */
-  --c-bg-input:      255 254 250;
-  --c-bg-modal:      255 254 250;
-
-  --c-border:        214 209 196;
-  --c-border-strong: 174 168 150;
-  --c-border-subtle: 226 222 211;
-
-  --c-text-primary:  26 28 32;       /* near-black */
-  --c-text-secondary: 92 96 108;
-  --c-text-tertiary: 134 138 152;
-  --c-text-ink:      10 12 16;       /* unchanged — high-contrast text on accents */
-
-  --c-accent:        178 138 56;     /* darker gold for legibility on cream */
-  --c-accent-light:  204 168 88;
-  --c-accent-dim:    132 100 38;
-
-  --c-success:       46 121 80;
-  --c-danger:        180 82 42;
-  --c-danger-light:  140 56 28;      /* in light theme, this is the *darker* danger
-                                        used for text on subtle danger backgrounds */
-  --c-warning:       170 124 56;
-
-  --c-scrim:         0 0 0;          /* used with /40 opacity in light */
-
-  color-scheme: light;
-}
-
-:root[data-theme='violet'] {
-  /* Violet — inspired by the Sophon screenshots: cool light grey page,
-   * crisp white cards, vivid violet accent, Material-style action colours
-   * with WHITE text on bright surfaces (note --c-text-ink below).
-   *
-   * Unlike Light, this is unapologetically SaaS / Material. Use it when
-   * the operator prefers a modern feel over the financial-document look. */
-  --c-bg-deep:       237 237 243;    /* #EDEDF3 — cool light grey page */
-  --c-bg-surface:    243 243 248;
-  --c-bg-elevated:   255 255 255;    /* white cards */
+:root[data-theme='contrast'] {
+  /* Harbour high contrast: white page, near-black ink, strong borders and
+   * deeper accents (7:1 and up) for bright sunlight or low vision. */
+  --c-bg-deep:       255 255 255;
+  --c-bg-surface:    238 242 243;    /* #EEF2F3 */
+  --c-bg-elevated:   255 255 255;
   --c-bg-input:      255 255 255;
   --c-bg-modal:      255 255 255;
 
-  --c-border:        224 224 232;    /* #E0E0E8 */
-  --c-border-strong: 196 196 210;
-  --c-border-subtle: 238 238 244;
+  --c-border:        94 113 120;     /* #5E7178, 5:1 against white */
+  --c-border-strong: 15 42 51;       /* #0F2A33 */
+  --c-border-subtle: 150 166 172;    /* #96A6AC */
 
-  --c-text-primary:  18 18 24;       /* near-black */
-  --c-text-secondary: 95 99 108;
-  --c-text-tertiary: 136 138 148;
-  --c-text-ink:      255 255 255;    /* WHITE on accents — purple/green/red
-                                        buttons need light text, not dark */
+  --c-text-primary:  6 22 27;        /* #06161B */
+  --c-text-secondary: 45 64 71;      /* #2D4047 */
+  --c-text-tertiary: 58 79 87;       /* #3A4F57 */
+  --c-text-ink:      255 255 255;
 
-  --c-accent:        124 58 237;     /* #7C3AED — vivid violet, tab underline */
-  --c-accent-light:  157 107 250;    /* hover state */
-  --c-accent-dim:    91 33 182;      /* pressed / dim */
+  --c-accent:        0 85 102;       /* #005566 */
+  --c-accent-light:  0 105 125;      /* #00697D */
+  --c-accent-dim:    0 64 77;        /* #00404D */
 
-  --c-success:       46 125 50;      /* #2E7D32 — Material green */
-  --c-danger:        211 47 47;      /* #D32F2F — Material red */
-  --c-danger-light:  239 154 154;
-  --c-warning:       237 137 54;     /* #ED8936 — warm orange */
+  --c-success:       10 90 46;       /* #0A5A2E */
+  --c-danger:        142 27 18;      /* #8E1B12 */
+  --c-danger-light:  110 20 12;
+  --c-warning:       106 62 0;       /* #6A3E00 */
 
   --c-scrim:         0 0 0;          /* used with /40 opacity */
-
-  color-scheme: light;
-}
-
-:root[data-theme='sea'] {
-  /* Sea — off-white page, sea-blue accent. Cooler and quieter than Violet:
-   * the page recedes and the accent does the pointing, which suits a till
-   * stared at all day under fluorescent light or daylight glare.
-   *
-   * Like Violet, accents are saturated enough to need WHITE text on them
-   * (--c-text-ink), unlike the gold themes. */
-  --c-bg-deep:       244 247 248;    /* #F4F7F8 — off-white with a sea tint */
-  --c-bg-surface:    234 240 242;    /* recessed panels */
-  --c-bg-elevated:   255 255 255;    /* white cards */
-  --c-bg-input:      255 255 255;
-  --c-bg-modal:      255 255 255;
-
-  --c-border:        212 224 228;    /* #D4E0E4 */
-  --c-border-strong: 169 192 199;
-  --c-border-subtle: 231 238 240;
-
-  --c-text-primary:  16 35 43;       /* #10232B — deep sea ink */
-  --c-text-secondary: 74 102 112;
-  --c-text-tertiary: 107 133 142;
-  --c-text-ink:      255 255 255;    /* WHITE on accents */
-
-  --c-accent:        14 116 144;     /* #0E7490 — sea blue; 5.4:1 with white */
-  --c-accent-light:  22 152 185;     /* hover */
-  --c-accent-dim:    8 84 105;       /* pressed / dim */
-
-  /* Deliberately darker than the usual Material shades: every one of these
-   * clears 4.5:1 BOTH as text on --c-bg-deep and under white --c-text-ink,
-   * because a badge here is white-on-colour and the same token is also used
-   * as plain text. The stock amber (#D97706) only manages 3.2:1 on white. */
-  --c-success:       19 107 52;      /* green, kept clear of the blue accent */
-  --c-danger:        190 38 38;
-  --c-danger-light:  248 180 180;
-  --c-warning:       171 79 8;       /* burnt amber */
-
-  --c-scrim:         0 0 0;          /* used with /40 opacity, as in light */
 
   color-scheme: light;
 }
@@ -255,10 +239,9 @@
   body {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    font-feature-settings: 'cv11', 'ss03';
   }
   button, input, select, textarea {
-    border-radius: 0.45rem;
+    border-radius: var(--radius);
   }
   button, [role='button'], input, select, textarea, a {
     outline-offset: 3px;
@@ -273,14 +256,15 @@
   .panel {
     background: rgb(var(--c-bg-surface));
     border: 1px solid rgb(var(--c-border));
-    border-radius: 0.85rem;
-    box-shadow: 0 10px 30px rgb(31 26 18 / 0.07), 0 1px 2px rgb(31 26 18 / 0.08);
+    border-radius: var(--radius-xl);
+    box-shadow: 0 1px 2px rgb(15 42 51 / 0.06), 0 6px 20px rgb(15 42 51 / 0.07);
   }
-  :root[data-theme='dark'] .panel { box-shadow: 0 12px 34px rgb(0 0 0 / 0.22); }
+  :root[data-theme='dark'] .panel { box-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px rgb(0 0 0 / 0.35); }
+  :root[data-theme='contrast'] .panel { box-shadow: none; }
   .subpanel {
     background: rgb(var(--c-bg-elevated) / 0.68);
     border: 1px solid rgb(var(--c-border-subtle));
-    border-radius: 0.65rem;
+    border-radius: var(--radius-lg);
     padding: 0.9rem;
   }
   .subpanel > h3 { color: rgb(var(--c-text-secondary)); font-size: 0.82rem; font-weight: 650; margin-bottom: 0.55rem; }
@@ -293,10 +277,10 @@
     gap: 0.45rem;
     padding: 0.55rem 0.9rem;
     border: 1px solid rgb(var(--c-border));
-    border-radius: 0.55rem;
+    border-radius: var(--radius);
     font-size: 0.875rem;
     font-weight: 650;
-    transition: background-color 120ms ease, border-color 120ms ease, transform 120ms ease;
+    transition: background-color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard), transform var(--duration-fast) var(--ease-standard);
   }
   .btn:hover:not(:disabled) { background: rgb(var(--c-bg-elevated)); border-color: rgb(var(--c-border-strong)); }
   .btn:active:not(:disabled) { transform: translateY(1px); }
@@ -320,14 +304,14 @@
   .status-approved { color: rgb(var(--c-success)); background: rgb(var(--c-success) / 0.12); border: 1px solid rgb(var(--c-success) / 0.32); }
   .status-declined, .status-voided { color: rgb(var(--c-danger)); background: rgb(var(--c-danger) / 0.11); border: 1px solid rgb(var(--c-danger) / 0.32); }
   .status-withdrawn { color: rgb(var(--c-text-secondary)); background: rgb(var(--c-bg-elevated)); border: 1px solid rgb(var(--c-border)); }
-  .notice { border: 1px solid rgb(var(--c-border)); border-radius: 0.65rem; background: rgb(var(--c-bg-elevated) / 0.55); padding: 0.9rem 1rem; font-size: 0.875rem; }
+  .notice { border: 1px solid rgb(var(--c-border)); border-radius: var(--radius-lg); background: rgb(var(--c-bg-elevated) / 0.55); padding: 0.9rem 1rem; font-size: 0.875rem; }
   .notice-warning { border-color: rgb(var(--c-warning) / 0.45); background: rgb(var(--c-warning) / 0.09); color: rgb(var(--c-warning)); }
   .empty-state { padding: 2.5rem 1rem; text-align: center; color: rgb(var(--c-text-tertiary)); font-size: 0.875rem; }
   .data-table thead { background: rgb(var(--c-bg-deep) / 0.65); color: rgb(var(--c-text-secondary)); font-size: 0.72rem; }
   .data-table th { padding: 0.7rem 0.9rem; text-align: left; font-weight: 700; white-space: nowrap; }
   .data-table td { padding: 0.75rem 0.9rem; border-top: 1px solid rgb(var(--c-border-subtle)); font-size: 0.82rem; vertical-align: top; }
   .data-table tbody tr:hover { background: rgb(var(--c-bg-elevated) / 0.45); }
-  .segmented-control { display: inline-flex; padding: 0.2rem; gap: 0.2rem; border-radius: 0.65rem; background: rgb(var(--c-bg-surface)); border: 1px solid rgb(var(--c-border)); }
+  .segmented-control { display: inline-flex; padding: 0.2rem; gap: 0.2rem; border-radius: var(--radius-xl); background: rgb(var(--c-bg-surface)); border: 1px solid rgb(var(--c-border)); }
   .segmented-control button { min-height: 2.35rem; padding: 0.4rem 0.9rem; color: rgb(var(--c-text-secondary)); font-size: 0.82rem; }
   .segmented-control button.active { color: rgb(var(--c-text-primary)); background: rgb(var(--c-bg-elevated)); box-shadow: 0 1px 3px rgb(0 0 0 / 0.12); }
 }
@@ -351,8 +335,9 @@
   margin: 0 0.15rem;
   background: rgb(var(--c-bg-elevated));
   border: 1px solid rgb(var(--c-border-strong));
+  border-radius: var(--radius-md);
   color: rgb(var(--c-text-primary));
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 0.75rem;
   line-height: 1.3;
 }
@@ -378,18 +363,34 @@
 @utility bg-scrim {
   background-color: rgb(var(--c-scrim) / 0.70);
   :root[data-theme='light'] &,
-  :root[data-theme='sea'] & {
+  :root[data-theme='contrast'] & {
     background-color: rgb(var(--c-scrim) / 0.40);
   }
 }
 
-/* Counter-PC zoom for the dense sale screen. `zoom` also scales width, so
- * on phones (LAN browser access) it forces horizontal overflow — drop it
- * below the lg breakpoint where the layout switches to a single column. */
-@utility sale-zoom {
-  zoom: 1.15;
-  @media (max-width: 1023px) {
-    zoom: 1;
+/* The sale screen is read from a standing distance, so on counter-PC widths
+ * its type runs one notch (x1.05) above the fluid scale: the same size at
+ * 1366px as the CSS zoom of 1.15 it replaces, without zoom's side effects on
+ * layout. Below the lg breakpoint (phones, LAN) it is the normal scale. */
+@utility sale-type {
+  @media (min-width: 1024px) {
+    --text-xs: clamp(0.7875rem, 0.7588rem + 0.1223vw, 0.9056rem);
+    --text-xs--line-height: clamp(1.05rem, 1.0118rem + 0.1631vw, 1.2075rem);
+    --text-sm: clamp(0.9188rem, 0.8853rem + 0.1427vw, 1.0566rem);
+    --text-sm--line-height: clamp(1.3125rem, 1.2647rem + 0.2039vw, 1.5094rem);
+    --text-base: clamp(1.05rem, 1.0118rem + 0.1631vw, 1.2075rem);
+    --text-base--line-height: clamp(1.575rem, 1.5177rem + 0.2447vw, 1.8113rem);
+    --text-lg: clamp(1.1813rem, 1.1383rem + 0.1835vw, 1.3585rem);
+    --text-lg--line-height: clamp(1.8375rem, 1.7706rem + 0.2854vw, 2.1131rem);
+    --text-xl: clamp(1.3125rem, 1.2647rem + 0.2039vw, 1.5094rem);
+    --text-xl--line-height: clamp(1.8375rem, 1.7706rem + 0.2854vw, 2.1131rem);
+    --text-2xl: clamp(1.575rem, 1.5177rem + 0.2447vw, 1.8113rem);
+    --text-2xl--line-height: clamp(2.1rem, 2.0236rem + 0.3262vw, 2.415rem);
+    --text-3xl: clamp(1.9688rem, 1.897rem + 0.3059vw, 2.2641rem);
+    --text-3xl--line-height: clamp(2.3625rem, 2.2765rem + 0.367vw, 2.7169rem);
+    --text-4xl: clamp(2.3625rem, 2.2765rem + 0.367vw, 2.7169rem);
+    --text-4xl--line-height: clamp(2.625rem, 2.5295rem + 0.4078vw, 3.0188rem);
+    --text-5xl: clamp(3.15rem, 3.0353rem + 0.4893vw, 3.6225rem);
   }
 }
 
@@ -519,7 +520,7 @@ body.flash-warning::after { background: rgb(var(--c-warning) / 0.45); }
    resolve to light-on-light. */
 :root[data-theme='dark'] .task-illustration .il-bg { fill: rgb(238 232 219); }
 :root[data-theme='dark'] .task-illustration .il-line { stroke: rgb(30 26 22); }
-:root[data-theme='dark'] .task-illustration .il-line-accent { stroke: #b28a38; }
+:root[data-theme='dark'] .task-illustration .il-line-accent { stroke: #0b6e83; }
 
 /* Some drawings overhang the plate — a bottle cap, a roof eave, the corner of
    a phone. Those few pixels land on the near-black page with a near-black
@@ -558,12 +559,36 @@ body.flash-warning::after { background: rgb(var(--c-warning) / 0.45); }
 /* Friendly controls keep their explicit larger sizes on small screens. */
 :root[data-ui='friendly'] button:not([class*='min-h-']),
 :root[data-ui='friendly'] button.min-h-12 { min-height: 3.5rem; }
-/* Warning badges use dark ink even in the violet theme. */
-:root[data-ui='friendly'] .bg-warning.text-ink { color: #121218; }
-:root[data-ui='friendly'] .text-warning { color: rgb(var(--c-text-primary)); }
+/* Friendly type: Atkinson Hyperlegible, drawn for low-vision readers, in
+   place of Geist. main.tsx loads these faces in the Friendly build only. */
+:root[data-ui='friendly'] {
+  --font-sans: 'Atkinson Hyperlegible Next Variable', system-ui, sans-serif;
+  --font-mono: 'Atkinson Hyperlegible Mono Variable', ui-monospace, monospace;
+}
 
 @media (max-height: 500px) {
   .friendly-checkout-footer { grid-template-columns: 2fr 1fr; padding: 0.5rem; }
   .friendly-checkout-footer button { min-height: 3.5rem; font-size: 1.125rem; line-height: 1.3; }
   .friendly-checkout-footer .task-illustration { display: none; }
+}
+
+/* High contrast: a solid ink focus ring instead of the tinted accent one. */
+:root[data-theme='contrast'] :focus-visible {
+  outline: 3px solid rgb(var(--c-text-primary));
+  outline-offset: 2px;
+}
+
+/* Reduced motion: transitions and animations finish instantly. The sale
+   flash stays — it is a colour signal the cashier relies on, not movement. */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  body.flash-success::after,
+  body.flash-warning::after {
+    animation-duration: 600ms !important;
+  }
 }

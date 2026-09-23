@@ -6,29 +6,33 @@
 // of the wrong theme. This store is the React-side controller used by
 // the Appearance section in Settings.
 //
-// Values:
-//   'dark'   — financial dark
-//   'light'  — warm parchment light
-//   'violet' — Sophon-inspired cool grey + vivid violet accent
-//   'sea'    — off-white page with a sea-blue accent (default for a new
-//              installation; an existing device keeps whatever it stored)
-//   'system' — follow prefers-color-scheme; resolves to dark or light only
-//              (system follows OS dark/light, not violet or sea)
+// Values (the Harbour design system, docs/design-system.md):
+//   'light'    — Harbour light, the default for a new installation
+//   'dark'     — Harbour dark
+//   'contrast' — Harbour high contrast, for bright sun or low vision
+//   'system'   — follow prefers-color-scheme; resolves to light or dark only
+//                (high contrast is a deliberate pick, not something the OS asks for)
+//
+// Choices from before Harbour ('sea', 'violet') read as 'light', so a device
+// that stored one opens on a theme that still exists.
 
 import { create } from 'zustand';
 
-export type ThemeChoice = 'dark' | 'light' | 'violet' | 'sea' | 'system';
-type ResolvedTheme = 'dark' | 'light' | 'violet' | 'sea';
+export type ThemeChoice = 'light' | 'dark' | 'contrast' | 'system';
+type ResolvedTheme = 'light' | 'dark' | 'contrast';
 
 export const THEME_KEY = 'counter.theme';
 
 /** What a device shows before anyone picks a theme. */
-export const DEFAULT_CHOICE: ThemeChoice = 'sea';
+export const DEFAULT_CHOICE: ThemeChoice = 'light';
+
+const RETIRED: Record<string, ThemeChoice> = { sea: 'light', violet: 'light' };
 
 export function readStoredChoice(): ThemeChoice {
   try {
     const v = window.localStorage.getItem(THEME_KEY);
-    if (v === 'light' || v === 'dark' || v === 'violet' || v === 'sea' || v === 'system') return v;
+    if (v === 'light' || v === 'dark' || v === 'contrast' || v === 'system') return v;
+    if (v && RETIRED[v]) return RETIRED[v]!;
   } catch {
     /* localStorage may be unavailable; fall through to default */
   }
