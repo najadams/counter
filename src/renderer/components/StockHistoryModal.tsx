@@ -52,9 +52,9 @@ export function StockHistoryModal({
           <Button variant="ghost" size="icon-sm" aria-label="Close" onClick={onClose}><XIcon aria-hidden="true" /></Button>
         </header>
 
-        <div className="flex-1 overflow-auto p-4">
+        <div className="flex-1 overflow-auto px-4 pb-4">
           {loading && <div className="text-center text-text-tertiary py-6">Loading…</div>}
-          {error && <FeedbackBanner className="mb-2">{error}</FeedbackBanner>}
+          {error && <FeedbackBanner className="mt-4 mb-2">{error}</FeedbackBanner>}
           {!loading && rows.length === 0 && (
             <div className="text-text-tertiary py-6 text-center">No stock movements recorded yet.</div>
           )}
