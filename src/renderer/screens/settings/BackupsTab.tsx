@@ -19,6 +19,8 @@ import type {
   BackupListHistoryResponse,
   BackupHistoryEntry,
 } from '../../../shared/types/ipc';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
 
 type BannerKind = 'success' | 'warning' | 'danger';
 
@@ -145,13 +147,11 @@ export function BackupsTab() {
         {heartbeat && <HeartbeatCard heartbeat={heartbeat} />}
 
         <div className="flex items-center gap-3 pt-2">
-          <button
+          <Button variant="primary" size="lg"
             onClick={() => void runNow()}
-            disabled={running}
-            className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-50"
-          >
+            disabled={running}>
             {running ? 'Running…' : 'Run backup now'}
-          </button>
+          </Button>
           <div className="text-xs text-text-tertiary">
             Writes to <span className="font-mono">{config?.targetDir ?? '...'}</span>.
           </div>
@@ -162,10 +162,9 @@ export function BackupsTab() {
       <section className="space-y-3 border-t border-border-subtle pt-6">
         <div className="flex items-center justify-between">
           <h2 className="text-text-secondary uppercase tracking-wider text-xs">Recent backups</h2>
-          <button onClick={() => void reveal()}
-            className="text-xs underline text-text-secondary hover:text-text-primary">
+          <Button variant="link" className="text-text-secondary hover:text-text-primary text-xs" onClick={() => void reveal()}>
             Open in {macLike() ? 'Finder' : 'file browser'}
-          </button>
+          </Button>
         </div>
         {revealError && <Inline kind="danger" text={revealError} />}
         {history && <HistoryList history={history} />}
@@ -176,13 +175,13 @@ export function BackupsTab() {
 
         <label className="block text-sm space-y-1">
           <span className="text-text-secondary">Target directory</span>
-          <input
+          <Input
             type="text"
             value={targetDirDraft}
             onChange={(e) => { setTargetDirDraft(e.target.value); setFormDirty(true); }}
             disabled={!isOwner}
             placeholder="/Volumes/Backup or ~/CounterBackups"
-            className="w-full font-mono bg-bg-surface border border-border px-3 py-2 text-text-primary disabled:opacity-60"
+            className="font-mono"
           />
           <span className="text-xs text-text-tertiary">
             Absolute path on this machine. USB sticks on macOS mount under <span className="font-mono">/Volumes/</span>;
@@ -215,20 +214,16 @@ export function BackupsTab() {
         </fieldset>
 
         <div className="flex items-center gap-3 pt-2">
-          <button
+          <Button
             onClick={() => void testTarget()}
-            disabled={testing || !targetDirDraft.trim()}
-            className="border border-border px-4 py-2 hover:bg-bg-elevated disabled:opacity-50"
-          >
+            disabled={testing || !targetDirDraft.trim()}>
             {testing ? 'Testing…' : 'Test target'}
-          </button>
-          <button
+          </Button>
+          <Button variant="primary"
             onClick={() => void save()}
-            disabled={saving || !isOwner || !formDirty}
-            className="bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light disabled:opacity-50"
-          >
+            disabled={saving || !isOwner || !formDirty}>
             {saving ? 'Saving…' : 'Save'}
-          </button>
+          </Button>
           {!isOwner && (
             <span className="text-xs text-text-tertiary">
               Only OWNER or FOUNDER can change these settings.

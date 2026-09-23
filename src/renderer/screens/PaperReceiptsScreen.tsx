@@ -10,6 +10,9 @@ import type {
   PaperReceiptSummary,
   SaleChannel,
 } from '../../shared/types/ipc';
+import { Button } from '../components/ui/button';
+import { NativeSelect } from '../components/ui/native-select';
+import { Input } from '../components/ui/input';
 
 const PAYMENT_METHODS = ['CASH', 'MOMO_MTN', 'MOMO_VODAFONE', 'MOMO_AIRTELTIGO', 'BANK_TRANSFER', 'CREDIT'] as const;
 
@@ -283,7 +286,7 @@ export default function PaperReceiptsScreen({ onExit, onOpenAtTill }: { onExit: 
           <aside className="bg-bg-surface border border-border">
             <div className="px-4 py-3 border-b border-border flex items-center justify-between">
               <span className="text-text-secondary uppercase tracking-wider text-xs">Queue</span>
-              <button onClick={clearSelected} className="text-xs text-accent hover:text-accent-light">New</button>
+              <Button variant="link" className="text-accent hover:text-accent-light no-underline hover:underline text-xs" onClick={clearSelected}>New</Button>
             </div>
             <div className="max-h-[68vh] overflow-y-auto divide-y divide-border">
               {drafts.map((d) => (
@@ -332,25 +335,25 @@ export default function PaperReceiptsScreen({ onExit, onOpenAtTill }: { onExit: 
               <div className="flex flex-col gap-3">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <Field label="Channel">
-                    <select value={channel} disabled={!canEdit} onChange={(e) => setChannel(e.target.value as SaleChannel)} className="input">
+                    <NativeSelect value={channel} disabled={!canEdit} onChange={(e) => setChannel(e.target.value as SaleChannel)}>
                       <option value="WALK_IN">WALK_IN</option>
                       <option value="WHOLESALE">WHOLESALE</option>
                       <option value="ROUTE">ROUTE</option>
-                    </select>
+                    </NativeSelect>
                   </Field>
                   <Field label="Payment">
-                    <select value={paymentMethod} disabled={!canEdit} onChange={(e) => setPaymentMethod(e.target.value)} className="input">
+                    <NativeSelect value={paymentMethod} disabled={!canEdit} onChange={(e) => setPaymentMethod(e.target.value)}>
                       {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
-                    </select>
+                    </NativeSelect>
                   </Field>
                   <Field label="Reference">
-                    <input value={paymentReference} disabled={!canEdit} onChange={(e) => setPaymentReference(e.target.value)} className="input" />
+                    <Input value={paymentReference} disabled={!canEdit} onChange={(e) => setPaymentReference(e.target.value)} />
                   </Field>
                 </div>
                 {!selected && (
-                  <button onClick={() => void createDraft()} disabled={busy || !photoB64} className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40 self-start">
+                  <Button variant="primary" size="lg" className="self-start" onClick={() => void createDraft()} disabled={busy || !photoB64}>
                     {busy ? 'Importing…' : 'Import receipt'}
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>
@@ -364,7 +367,7 @@ export default function PaperReceiptsScreen({ onExit, onOpenAtTill }: { onExit: 
                   </div>
                   {canEdit && (
                     <div className="flex gap-2">
-                      <button onClick={addLine} className="px-3 py-2 border border-border hover:bg-bg-elevated text-sm">Add line</button>
+                      <Button onClick={addLine}>Add line</Button>
                     </div>
                   )}
                 </div>
@@ -387,7 +390,7 @@ export default function PaperReceiptsScreen({ onExit, onOpenAtTill }: { onExit: 
                       {lines.map((line, idx) => (
                         <tr key={line.id}>
                           <td className="px-3 py-2 min-w-44">
-                            <input value={line.rawText} disabled={!canEdit} onChange={(e) => patchLine(idx, { rawText: e.target.value })} className="input text-xs" />
+                            <Input className="text-xs" value={line.rawText} disabled={!canEdit} onChange={(e) => patchLine(idx, { rawText: e.target.value })} />
                           </td>
                           <td className="px-3 py-2 min-w-52">
                             <div className={line.productId ? '' : 'text-danger'}>
@@ -397,14 +400,12 @@ export default function PaperReceiptsScreen({ onExit, onOpenAtTill }: { onExit: 
                             {line.reviewNote && <div className="text-xs text-text-tertiary">{line.reviewNote}</div>}
                           </td>
                           <td className="px-3 py-2 text-right">
-                            <input
+                            <Input className="w-20 text-right font-mono tnum"
                               type="number"
                               min={1}
                               value={line.quantity ?? ''}
                               disabled={!canEdit}
-                              onChange={(e) => patchLine(idx, { quantity: e.target.value ? Number(e.target.value) : null })}
-                              className="input w-20 text-right font-mono tnum"
-                            />
+                              onChange={(e) => patchLine(idx, { quantity: e.target.value ? Number(e.target.value) : null })} />
                           </td>
                           <td className="px-3 py-2 text-left">
                             <span className="text-xs uppercase tracking-wider text-text-tertiary">
@@ -412,12 +413,10 @@ export default function PaperReceiptsScreen({ onExit, onOpenAtTill }: { onExit: 
                             </span>
                           </td>
                           <td className="px-3 py-2 text-right">
-                            <input
+                            <Input className="w-28 text-right font-mono tnum"
                               value={line.unitPricePesewas == null ? '' : formatMoney(line.unitPricePesewas)}
                               disabled={!canEdit}
-                              onChange={(e) => patchLine(idx, { unitPricePesewas: e.target.value ? parseCedisToPesewas(e.target.value) : null })}
-                              className="input w-28 text-right font-mono tnum"
-                            />
+                              onChange={(e) => patchLine(idx, { unitPricePesewas: e.target.value ? parseCedisToPesewas(e.target.value) : null })} />
                           </td>
                           <td className="px-3 py-2 text-right font-mono tnum">
                             {formatMoney((line.quantity ?? 0) * (line.unitPricePesewas ?? 0))}
@@ -425,7 +424,7 @@ export default function PaperReceiptsScreen({ onExit, onOpenAtTill }: { onExit: 
                           <td className="px-3 py-2 text-right font-mono tnum">{line.confidence}</td>
                           <td className="px-3 py-2 text-right">
                             {canEdit && (
-                              <button onClick={() => void chooseProduct(idx)} className="text-xs text-accent hover:text-accent-light">Find</button>
+                              <Button variant="link" className="text-accent hover:text-accent-light no-underline hover:underline text-xs" onClick={() => void chooseProduct(idx)}>Find</Button>
                             )}
                           </td>
                         </tr>
@@ -440,15 +439,15 @@ export default function PaperReceiptsScreen({ onExit, onOpenAtTill }: { onExit: 
                 <div className="flex flex-wrap gap-3">
                   {selected.status === 'REVIEW' && (
                     <>
-                      <button onClick={() => void openAtTill()} disabled={busy || lines.length === 0} className="px-5 py-3 border border-border hover:bg-bg-elevated disabled:opacity-40">
+                      <Button size="lg" onClick={() => void openAtTill()} disabled={busy || lines.length === 0}>
                         {selectedDisplayStatus === 'AT TILL' ? 'Reopen at till' : 'Open at till'}
-                      </button>
+                      </Button>
                       {canEdit && (
                         <>
-                          <button onClick={() => void postDraft()} disabled={busy || lines.length === 0} className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40">
+                          <Button variant="primary" size="lg" onClick={() => void postDraft()} disabled={busy || lines.length === 0}>
                             {busy ? 'Posting…' : 'Post sale'}
-                          </button>
-                          <button onClick={() => void discardDraft()} disabled={busy} className="px-5 py-3 border border-danger text-danger hover:bg-danger/10">Discard</button>
+                          </Button>
+                          <Button variant="danger" size="lg" onClick={() => void discardDraft()} disabled={busy}>Discard</Button>
                         </>
                       )}
                     </>

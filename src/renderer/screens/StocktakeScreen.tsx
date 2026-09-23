@@ -7,6 +7,10 @@ import { AppHeader } from '../components/AppHeader';
 import { SupervisorPinModal } from '../components/SupervisorPinModal';
 import { formatMoney, formatMoneyWithCurrency } from '../../shared/lib/money';
 import { FeedbackBanner } from '../components/FeedbackBanner';
+import { Button } from '../components/ui/button';
+import { Textarea } from '../components/ui/textarea';
+import { NativeSelect } from '../components/ui/native-select';
+import { Input } from '../components/ui/input';
 
 interface ActiveStocktake {
   id: string; status: string; startedAt: string;
@@ -163,17 +167,15 @@ export default function StocktakeScreen({ onExit }: { onExit: () => void }) {
               <div className="text-text-tertiary text-sm mt-1">Start one to capture physical counts and compute shrinkage rate.</div>
             </div>
             <div className="flex items-center gap-3">
-              <select value={startClass} onChange={(e) => setStartClass(e.target.value as 'A' | 'B' | 'C' | '')}
-                className="bg-bg-input border border-border-strong px-3 py-2 text-sm">
+              <NativeSelect value={startClass} onChange={(e) => setStartClass(e.target.value as 'A' | 'B' | 'C' | '')}>
                 <option value="">All products (full count)</option>
                 <option value="A">Class A only (top sellers)</option>
                 <option value="B">Class B only</option>
                 <option value="C">Class C only (long tail)</option>
-              </select>
-              <button onClick={() => void start()}
-                className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light">
+              </NativeSelect>
+              <Button variant="primary" size="lg" onClick={() => void start()}>
                 Start stocktake
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -203,9 +205,8 @@ export default function StocktakeScreen({ onExit }: { onExit: () => void }) {
               </div>
             </div>
 
-            <input value={filter} onChange={(e) => setFilter(e.target.value)}
-              placeholder="Filter products…"
-              className="bg-bg-input border border-border-strong px-4 py-2" />
+            <Input className="px-4" value={filter} onChange={(e) => setFilter(e.target.value)}
+              placeholder="Filter products…" />
 
             <div className="bg-bg-surface border border-border overflow-y-auto" style={{ maxHeight: '50vh' }}>
               <table className="w-full text-sm">
@@ -235,20 +236,18 @@ export default function StocktakeScreen({ onExit }: { onExit: () => void }) {
                         <td className="px-4 py-2 text-right font-mono tnum">{l.expectedQty}</td>
                         <td className="px-4 py-2 text-right">
                           <div className="flex items-center gap-1 justify-end">
-                            <input
+                            <Input className="w-20 font-mono tnum text-right h-8 px-2"
                               value={draft ?? (l.countedQty == null ? '' : String(factor === 1 ? l.countedQty : Math.floor(l.countedQty / factor)))}
                               onChange={(e) => setDraftCounts((p) => ({ ...p, [l.productId]: e.target.value }))}
                               onKeyDown={(e) => { if (e.key === 'Enter') void saveCount(l.productId); }}
-                              onBlur={() => { if (draft != null) void saveCount(l.productId); }}
-                              className="w-20 bg-bg-input border border-border-strong px-2 py-1 font-mono tnum text-right" />
+                              onBlur={() => { if (draft != null) void saveCount(l.productId); }} />
                             {opts.length > 1 && (
-                              <select value={chosen}
-                                onChange={(e) => setUnitChoices((p) => ({ ...p, [l.productId]: e.target.value }))}
-                                className="bg-bg-input border border-border-strong px-1 py-1 text-xs">
+                              <NativeSelect className="text-xs h-8 px-1" value={chosen}
+                                onChange={(e) => setUnitChoices((p) => ({ ...p, [l.productId]: e.target.value }))}>
                                 {opts.map((o) => (
                                   <option key={o.id} value={o.id}>{o.unitName}{o.conversionFactor > 1 ? ` ×${o.conversionFactor}` : ''}</option>
                                 ))}
-                              </select>
+                              </NativeSelect>
                             )}
                           </div>
                         </td>
@@ -265,23 +264,22 @@ export default function StocktakeScreen({ onExit }: { onExit: () => void }) {
               </table>
             </div>
 
-            <textarea value={completionNotes} onChange={(e) => setCompletionNotes(e.target.value)}
+            <Textarea value={completionNotes} onChange={(e) => setCompletionNotes(e.target.value)}
               placeholder="Notes for the completion (optional)"
-              className="bg-bg-input border border-border-strong px-3 py-2 text-sm" rows={2} />
+              rows={2} />
 
             <div className="flex gap-3 items-center justify-between">
-              <button onClick={() => void cancel()} className="px-5 py-3 border border-border hover:bg-bg-elevated text-text-tertiary">
+              <Button size="lg" className="text-text-tertiary" onClick={() => void cancel()}>
                 Cancel stocktake
-              </button>
+              </Button>
               {uncounted > 0 && (
                 <span className="text-warning text-sm">
                   {uncounted} product(s) un-counted — they will be skipped (no variance recorded).
                 </span>
               )}
-              <button onClick={() => setAskingSupervisor(true)}
-                className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light">
+              <Button variant="primary" size="lg" onClick={() => setAskingSupervisor(true)}>
                 Complete with supervisor
-              </button>
+              </Button>
             </div>
             {askingSupervisor && (
               <SupervisorPinModal

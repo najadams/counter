@@ -70,10 +70,9 @@ export function ReprintQueueTab() {
         <div className="text-text-secondary text-sm">
           {reprints.length} pending {reprints.length === 1 ? 'receipt' : 'receipts'}
         </div>
-        <button onClick={() => void refresh()}
-          className="px-4 py-2 border border-border hover:bg-bg-deep text-sm">
+        <Button onClick={() => void refresh()}>
           Refresh
-        </button>
+        </Button>
       </div>
 
       {error && <FeedbackBanner>{error}</FeedbackBanner>}
@@ -112,14 +111,12 @@ export function ReprintQueueTab() {
                 <td className="px-3 py-2 text-text-tertiary">{formatAge(r.ageHours)}</td>
                 <td className="px-3 py-2 text-right">
                   <div className="flex gap-2 justify-end">
-                    <button onClick={() => void retry(r)}
-                      className="text-xs px-3 py-1 bg-accent text-ink font-semibold hover:bg-accent-light">
+                    <Button variant="primary" size="sm" onClick={() => void retry(r)}>
                       Print now
-                    </button>
-                    <button onClick={() => setDiscarding(r)}
-                      className="text-xs px-3 py-1 border border-border hover:bg-bg-elevated text-danger">
+                    </Button>
+                    <Button variant="danger" size="sm" onClick={() => setDiscarding(r)}>
                       Discard
-                    </button>
+                    </Button>
                   </div>
                 </td>
               </tr>

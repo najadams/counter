@@ -5,6 +5,7 @@ import type { ReportsCashflowResponse, ReportsFinancialStatementLine } from '../
 import { DateRangePicker, defaultDateRange, type DateRange } from '../../components/DateRangePicker';
 import { FeedbackBanner } from '../../components/FeedbackBanner';
 import { buildCsvFilename, exportRowsAsCsv, pesewasToCsvNumber } from '../../lib/csv';
+import { Button } from '../../components/ui/button';
 
 export function CashflowTab({ reportAccessToken }: { reportAccessToken: string }) {
   const [range, setRangeState] = useState<DateRange>(defaultDateRange());
@@ -59,14 +60,13 @@ export function CashflowTab({ reportAccessToken }: { reportAccessToken: string }
       <div className="bg-bg-surface border border-border p-4 flex items-end justify-between gap-3 flex-wrap">
         <DateRangePicker value={range} onChange={setRange} />
         <div className="flex items-end gap-3">
-          <button onClick={() => void load()} disabled={loading}
-            className="px-4 py-2 border border-border hover:bg-bg-elevated text-sm disabled:opacity-40">
+          <Button onClick={() => void load()} disabled={loading}>
             {loading ? 'Loading...' : 'Refresh'}
-          </button>
+          </Button>
           {data && (
-            <button onClick={() => void exportCsv()} className="px-4 py-2 border border-border hover:bg-bg-elevated text-sm">
+            <Button onClick={() => void exportCsv()}>
               Export CSV
-            </button>
+            </Button>
           )}
         </div>
       </div>

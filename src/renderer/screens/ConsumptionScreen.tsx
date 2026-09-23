@@ -7,6 +7,8 @@ import { AppHeader } from '../components/AppHeader';
 import { SupervisorPinModal } from '../components/SupervisorPinModal';
 import { formatMoney, formatMoneyWithCurrency } from '../../shared/lib/money';
 import { FeedbackBanner } from '../components/FeedbackBanner';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
 
 interface ProductHit {
   id: string; sku: string; name: string;
@@ -104,11 +106,9 @@ export default function ConsumptionScreen({ onExit }: { onExit: () => void }) {
 
         {info && <div className="bg-bg-surface border border-success px-5 py-3 text-success text-sm">{info}</div>}
 
-        <input
+        <Input className="h-12 px-4"
           ref={searchRef} type="text" value={query} onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search product…"
-          className="bg-bg-input border border-border-strong px-4 py-3"
-        />
+          placeholder="Search product…" />
         <ul className="bg-bg-surface border border-border max-h-48 overflow-y-auto">
           {hits.map((p) => (
             <li key={p.id}>
@@ -128,9 +128,9 @@ export default function ConsumptionScreen({ onExit }: { onExit: () => void }) {
             <div className="text-text-primary">{selected.name}</div>
             <div className="flex items-center gap-3">
               <span className="text-text-secondary text-xs uppercase tracking-wider">Quantity</span>
-              <button onClick={() => setQuantity((q) => Math.max(1, q - 1))} className="px-3 py-2 border border-border">−</button>
+              <Button onClick={() => setQuantity((q) => Math.max(1, q - 1))}>−</Button>
               <span className="font-mono tnum text-2xl w-12 text-center">{quantity}</span>
-              <button onClick={() => setQuantity((q) => q + 1)} className="px-3 py-2 border border-border">+</button>
+              <Button onClick={() => setQuantity((q) => q + 1)}>+</Button>
             </div>
             {willCrossThreshold && (
               <div className="bg-bg-deep border border-warning px-4 py-2 text-warning text-sm">
@@ -141,13 +141,12 @@ export default function ConsumptionScreen({ onExit }: { onExit: () => void }) {
             )}
             {error && <FeedbackBanner>{error}</FeedbackBanner>}
             <div className="flex gap-3">
-              <button onClick={() => setSelected(null)} className="px-5 py-3 border border-border hover:bg-bg-elevated">Cancel</button>
-              <button
+              <Button size="lg" onClick={() => setSelected(null)}>Cancel</Button>
+              <Button variant="primary" size="lg"
                 onClick={() => void submit()}
-                disabled={submitting}
-                className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40">
+                disabled={submitting}>
                 {submitting ? 'Logging…' : willCrossThreshold ? 'Get supervisor approval' : 'Log consumption'}
-              </button>
+              </Button>
             </div>
           </div>
         )}

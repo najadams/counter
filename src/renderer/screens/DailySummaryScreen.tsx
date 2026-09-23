@@ -9,6 +9,8 @@ import { formatMoney, formatMoneyWithCurrency } from '../../shared/lib/money';
 import type { DailySummaryGenerateResponse } from '../../shared/types/ipc';
 import { FeedbackBanner } from '../components/FeedbackBanner';
 import { PinUnlockPanel } from '../components/PinUnlockPanel';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
 
 interface SummaryRow { date: string; locationId: string; revenuePesewas: number; numSales: number;
   shrinkageRate: number | null; generatedAt: string; whatsappSentAt: string | null }
@@ -128,28 +130,24 @@ export default function DailySummaryScreen({ onExit }: { onExit: () => void }) {
 
         <section className="flex flex-col gap-4">
           <div className="flex items-center gap-3">
-            <input type="date" value={selectedDate} onChange={(e) => void loadDetail(e.target.value)}
-              className="bg-bg-input border border-border-strong px-3 py-2 font-mono tnum" />
-            <button onClick={() => void generate()}
-              className="bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light">
+            <Input className="font-mono tnum" type="date" value={selectedDate} onChange={(e) => void loadDetail(e.target.value)} />
+            <Button variant="primary" onClick={() => void generate()}>
               Generate / refresh
-            </button>
+            </Button>
             {activeClose ? (
               <span className="ml-auto inline-flex items-center gap-2 px-3 py-1 bg-success/10 border border-success/40 text-success text-xs">
                 Sealed by {activeClose.sealedByName} · {new Date(activeClose.sealedAt).toLocaleString()}
                 {isOwner && (
-                  <button onClick={() => setShowReopen(true)}
-                    className="ml-2 underline hover:text-success">
+                  <Button variant="link" className="ml-2 hover:text-success text-inherit" onClick={() => setShowReopen(true)}>
                     Reopen
-                  </button>
+                  </Button>
                 )}
               </span>
             ) : (
               isOwner && (
-                <button onClick={() => void sealDay()}
-                  className="ml-auto px-3 py-1 border border-border hover:bg-bg-elevated text-sm">
+                <Button size="sm" className="ml-auto" onClick={() => void sealDay()}>
                   Seal day (lock {selectedDate})
-                </button>
+                </Button>
               )
             )}
           </div>
@@ -157,16 +155,13 @@ export default function DailySummaryScreen({ onExit }: { onExit: () => void }) {
           {showReopen && (
             <div className="bg-bg-elevated border border-border-subtle rounded p-4 space-y-2">
               <div className="text-sm text-text-secondary">Reopen {selectedDate}. This is logged.</div>
-              <input
+              <Input
                 value={reopenReason}
                 onChange={(e) => setReopenReason(e.target.value)}
-                placeholder="reason — e.g. forgot a sale, wrong cash count"
-                className="w-full bg-bg-deep border border-border-subtle px-3 py-2 text-sm rounded" />
+                placeholder="reason — e.g. forgot a sale, wrong cash count" />
               <div className="flex justify-end gap-2">
-                <button onClick={() => { setShowReopen(false); setReopenReason(''); }}
-                  className="px-3 py-1 border border-border text-sm">Cancel</button>
-                <button onClick={() => void reopenDay()}
-                  className="px-3 py-1 bg-warning text-ink font-semibold text-sm">Reopen</button>
+                <Button size="sm" onClick={() => { setShowReopen(false); setReopenReason(''); }}>Cancel</Button>
+                <Button variant="warning" size="sm" onClick={() => void reopenDay()}>Reopen</Button>
               </div>
             </div>
           )}

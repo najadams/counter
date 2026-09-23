@@ -11,6 +11,7 @@
 import { useEffect, useState } from 'react';
 import { counter } from '../lib/ipc';
 import type { ActivationStatusResponse } from '../../shared/types/ipc';
+import { Button } from './ui/button';
 
 const DISMISS_KEY = 'counter.activationBanner.dismissedUntil';
 
@@ -96,22 +97,18 @@ export function ActivationHealthBanner({
       </div>
       <div className="flex flex-col gap-2 items-end">
         {onReactivate && (
-          <button
+          <Button variant="link" className="whitespace-nowrap text-inherit text-xs"
             type="button"
-            onClick={onReactivate}
-            className="text-xs font-semibold underline whitespace-nowrap"
-          >
+            onClick={onReactivate}>
             Enter new key
-          </button>
+          </Button>
         )}
         {dismissible && (
-          <button
+          <Button variant="link" className="text-text-secondary hover:text-text-primary whitespace-nowrap text-xs"
             type="button"
-            onClick={() => { dismissUntilTomorrow(); setHidden(true); }}
-            className="text-xs underline text-text-secondary hover:text-text-primary whitespace-nowrap"
-          >
+            onClick={() => { dismissUntilTomorrow(); setHidden(true); }}>
             Remind tomorrow
-          </button>
+          </Button>
         )}
       </div>
     </div>

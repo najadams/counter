@@ -12,6 +12,7 @@ import { FRIENDLY_UI_ENABLED } from '../../shared/lib/buildFlags';
 import { NumberPad } from '../components/friendly/NumberPad';
 import { TaskIllustration } from '../components/friendly/TaskIllustration';
 import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
 
 interface Candidate { id: string; fullName: string; role: string }
 
@@ -117,7 +118,7 @@ export default function LoginScreen() {
               </div>
             </div>
             <label htmlFor="friendly-pin" className="sr-only">PIN</label>
-            <input
+            <Input className="border-2 rounded-xl text-4xl font-mono tnum tracking-[0.5em] text-center h-auto py-4 px-5"
               id="friendly-pin"
               ref={pinInputRef}
               type="password"
@@ -128,9 +129,8 @@ export default function LoginScreen() {
               disabled={submitting || lockedUntil !== null}
               onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
               onKeyDown={onKeyDown}
-              className="bg-bg-input border-2 border-border-strong rounded-xl px-5 py-4 text-4xl font-mono tnum tracking-[0.5em] text-center focus:outline-hidden focus:border-accent disabled:opacity-50"
-              placeholder="••••"
-            />
+             
+              placeholder="••••" />
             <p className="text-lg text-text-secondary">Your PIN has 4 to 6 numbers.</p>
             <NumberPad
               label="PIN number pad"
@@ -143,12 +143,11 @@ export default function LoginScreen() {
               enterDisabled={pin.length < 4 || !selected}
             />
             {error && <FeedbackBanner className="text-lg">{error}</FeedbackBanner>}
-            <button
+            <Button variant="link" className="self-start min-h-12 text-lg text-text-secondary hover:text-accent"
               type="button"
-              onClick={() => setShowRecovery(true)}
-              className="self-start min-h-12 text-lg text-text-secondary underline hover:text-accent">
+              onClick={() => setShowRecovery(true)}>
               Owner forgot their PIN?
-            </button>
+            </Button>
           </section>
         </main>
         {showRecovery && <RecoveryResetModal onClose={() => setShowRecovery(false)} />}
@@ -195,7 +194,7 @@ export default function LoginScreen() {
 
         <section className="panel p-5 sm:p-6 flex flex-col gap-4">
           <div><div className="eyebrow">Secure sign in</div><h2 className="text-xl font-semibold mt-1">Enter your PIN</h2></div>
-          <input
+          <Input className="text-3xl font-mono tnum tracking-[0.5em] text-center h-auto py-4 px-5"
             ref={pinInputRef}
             type="password"
             inputMode="numeric"
@@ -205,9 +204,8 @@ export default function LoginScreen() {
             disabled={submitting || lockedUntil !== null}
             onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
             onKeyDown={onKeyDown}
-            className="bg-bg-input border border-border-strong px-5 py-4 text-3xl font-mono tnum tracking-[0.5em] text-center focus:outline-hidden focus:border-accent disabled:opacity-50"
-            placeholder="••••"
-          />
+           
+            placeholder="••••" />
           <div className="text-text-tertiary text-xs">
             4–6 digits. <span className="kbd">Enter</span> to submit.
           </div>
@@ -222,12 +220,11 @@ export default function LoginScreen() {
           {error && (
             <FeedbackBanner>{error}</FeedbackBanner>
           )}
-          <button
+          <Button variant="link" className="text-text-tertiary hover:text-accent self-start mt-2 text-xs"
             type="button"
-            onClick={() => setShowRecovery(true)}
-            className="text-text-tertiary hover:text-accent text-xs underline self-start mt-2">
+            onClick={() => setShowRecovery(true)}>
             Forgot OWNER PIN?
-          </button>
+          </Button>
         </section>
       </main>
       {showRecovery && <RecoveryResetModal onClose={() => setShowRecovery(false)} />}

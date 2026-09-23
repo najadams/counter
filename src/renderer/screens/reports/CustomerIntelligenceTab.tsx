@@ -3,6 +3,7 @@ import { counter } from '../../lib/ipc';
 import { formatMoney, formatMoneyWithCurrency } from '../../../shared/lib/money';
 import type { ReportsCustomerIntelligenceResponse } from '../../../shared/types/ipc';
 import { FeedbackBanner } from '../../components/FeedbackBanner';
+import { Input } from '../../components/ui/input';
 
 export function CustomerIntelligenceTab({ reportAccessToken }: { reportAccessToken: string }) {
   const [data, setData] = useState<ReportsCustomerIntelligenceResponse | null>(null);
@@ -34,13 +35,11 @@ export function CustomerIntelligenceTab({ reportAccessToken }: { reportAccessTok
         </div>
         <label className="text-text-secondary text-xs uppercase tracking-wider">
           Inactive days
-          <input
+          <Input className="mt-1 w-24"
             type="number"
             min={1}
             value={inactiveDays}
-            onChange={(e) => setInactiveDays(Math.max(1, Number(e.target.value) || 30))}
-            className="block mt-1 w-24 bg-bg-input border border-border-strong px-3 py-2 text-text-primary"
-          />
+            onChange={(e) => setInactiveDays(Math.max(1, Number(e.target.value) || 30))} />
         </label>
       </section>
 

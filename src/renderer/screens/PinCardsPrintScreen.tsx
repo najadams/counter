@@ -9,6 +9,7 @@
 import { useEffect, useState } from 'react';
 import { counter } from '../lib/ipc';
 import { FeedbackBanner } from '../components/FeedbackBanner';
+import { Button } from '../components/ui/button';
 
 interface Worker {
   id: string; fullName: string; phone: string; role: string; active: boolean;
@@ -90,14 +91,12 @@ export function PinCardsPrintScreen({ onExit }: { onExit: () => void }) {
         <div className="max-w-3xl mx-auto px-12 py-6 flex items-center justify-between">
           <h1 className="text-text-secondary uppercase tracking-wider text-xs">PIN cards — {workers.length} active worker(s)</h1>
           <div className="flex gap-3">
-            <button onClick={() => window.print()}
-              className="bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light text-sm">
+            <Button variant="primary" onClick={() => window.print()}>
               Print
-            </button>
-            <button onClick={onExit}
-              className="px-4 py-2 border border-border hover:bg-bg-elevated text-sm">
+            </Button>
+            <Button onClick={onExit}>
               Close
-            </button>
+            </Button>
           </div>
         </div>
         {error && (

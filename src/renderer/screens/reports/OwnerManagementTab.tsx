@@ -22,6 +22,10 @@ import type {
 import { FeedbackBanner } from '../../components/FeedbackBanner';
 import { DateRangePicker, defaultDateRange, type DateRange } from '../../components/DateRangePicker';
 import { buildCsvFilename, exportRowsAsCsv, pesewasToCsvNumber } from '../../lib/csv';
+import { Button } from '../../components/ui/button';
+import { Textarea } from '../../components/ui/textarea';
+import { NativeSelect } from '../../components/ui/native-select';
+import { Input } from '../../components/ui/input';
 
 export type OwnerManagementView =
   | 'summary' | 'profit' | 'position' | 'cash'
@@ -215,33 +219,30 @@ export function OwnerManagementTab({ view, reportAccessToken }: { view: OwnerMan
         {(view === 'summary' || view === 'position' || view === 'obligations' || view === 'downside') && (
           <label>
             <span className="block text-text-secondary text-xs uppercase tracking-wider mb-1">As of</span>
-            <input type="date" value={asOfDate}
-              onChange={(e) => { setAsOfDate(e.target.value); setData(null); }}
-              className="bg-bg-input border border-border-strong px-3 py-2 font-mono" />
+            <Input className="font-mono" type="date" value={asOfDate}
+              onChange={(e) => { setAsOfDate(e.target.value); setData(null); }} />
           </label>
         )}
         {(view === 'summary' || view === 'downside') && (
           <>
             <label>
               <span className="block text-text-secondary text-xs uppercase tracking-wider mb-1">Scenario</span>
-              <select value={preset} onChange={(e) => setPreset(e.target.value as typeof preset)}
-                className="bg-bg-input border border-border-strong px-3 py-2">
+              <NativeSelect value={preset} onChange={(e) => setPreset(e.target.value as typeof preset)}>
                 <option value="BASELINE">Baseline</option>
                 <option value="MILD">Mild stress</option>
                 <option value="SEVERE">Severe stress</option>
                 <option value="TOP_DEPENDENCY">Top dependency loss</option>
                 <option value="CUSTOM">Custom drivers</option>
-              </select>
+              </NativeSelect>
             </label>
             <label>
               <span className="block text-text-secondary text-xs uppercase tracking-wider mb-1">Horizon</span>
-              <select value={horizonDays}
-                onChange={(e) => setHorizonDays(Number(e.target.value) as 30 | 90 | 180)}
-                className="bg-bg-input border border-border-strong px-3 py-2">
+              <NativeSelect value={horizonDays}
+                onChange={(e) => setHorizonDays(Number(e.target.value) as 30 | 90 | 180)}>
                 <option value={30}>30 days</option>
                 <option value={90}>90 days</option>
                 <option value={180}>180 days</option>
-              </select>
+              </NativeSelect>
             </label>
           </>
         )}
@@ -259,36 +260,31 @@ export function OwnerManagementTab({ view, reportAccessToken }: { view: OwnerMan
             ] as const).map(([key, label]) => (
               <label key={key} className="text-xs text-text-secondary">
                 {label}
-                <input type="number" step="0.1" value={customDrivers[key] / 100}
+                <Input className="mt-1 px-2" type="number" step="0.1" value={customDrivers[key] / 100}
                   onChange={(e) => setCustomDrivers((current) => ({
                     ...current, [key]: Math.round(Number(e.target.value) * 100),
-                  }))}
-                  className="block w-full mt-1 bg-bg-input border border-border px-2 py-2 text-text-primary" />
+                  }))} />
               </label>
             ))}
           </div>
         )}
         <label>
           <span className="block text-text-secondary text-xs mb-1">Fresh PIN for changes</span>
-          <input type="password" inputMode="numeric" value={pin} maxLength={6}
+          <Input className="font-mono tnum w-64" type="password" inputMode="numeric" value={pin} maxLength={6}
             onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-            placeholder="Required only to change financial records"
-            className="bg-bg-input border border-border-strong px-3 py-2 font-mono tnum w-64" />
+            placeholder="Required only to change financial records" />
         </label>
-        <button onClick={() => void load()} disabled={loading}
-          className="px-4 py-2 bg-accent text-ink font-semibold disabled:opacity-40">
+        <Button variant="primary" onClick={() => void load()} disabled={loading}>
           {loading ? 'Building pack…' : 'Refresh'}
-        </button>
+        </Button>
         {data && (
           <>
-            <button onClick={() => void exportCurrentPack()}
-              className="px-4 py-2 border border-border hover:bg-bg-elevated text-sm">
+            <Button onClick={() => void exportCurrentPack()}>
               Export CSV
-            </button>
-            <button onClick={() => void printMonthlyPack()}
-              className="px-4 py-2 border border-border hover:bg-bg-elevated text-sm">
+            </Button>
+            <Button onClick={() => void printMonthlyPack()}>
               Print monthly pack
-            </button>
+            </Button>
           </>
         )}
       </section>
@@ -658,187 +654,157 @@ function FinancialControls({ pin, reportAccessToken, data, fixedAssets, shadow, 
             ))}
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <input value={accountName} onChange={(e) => setAccountName(e.target.value)}
-              placeholder="Account name" className="bg-bg-input border border-border px-2 py-2" />
-            <select value={accountKind} onChange={(e) => setAccountKind(e.target.value as typeof accountKind)}
-              className="bg-bg-input border border-border px-2 py-2">
+            <Input className="px-2" value={accountName} onChange={(e) => setAccountName(e.target.value)}
+              placeholder="Account name" />
+            <NativeSelect className="px-2" value={accountKind} onChange={(e) => setAccountKind(e.target.value as typeof accountKind)}>
               <option value="TILL">Till</option><option value="SAFE">Safe</option>
               <option value="BANK">Bank</option><option value="MOMO">MoMo</option>
               <option value="OTHER_CASH">Other cash</option>
-            </select>
-            <input value={provider} onChange={(e) => setProvider(e.target.value)}
-              placeholder="Provider" className="bg-bg-input border border-border px-2 py-2" />
-            <input value={masked} onChange={(e) => setMasked(e.target.value)}
-              placeholder="Masked ID ••••1234" className="bg-bg-input border border-border px-2 py-2" />
+            </NativeSelect>
+            <Input className="px-2" value={provider} onChange={(e) => setProvider(e.target.value)}
+              placeholder="Provider" />
+            <Input className="px-2" value={masked} onChange={(e) => setMasked(e.target.value)}
+              placeholder="Masked ID ••••1234" />
           </div>
-          <button onClick={() => void createAccount()} disabled={!accountName.trim()}
-            className="mt-2 px-3 py-2 border border-border disabled:opacity-40">Add account</button>
+          <Button className="mt-2" onClick={() => void createAccount()} disabled={!accountName.trim()}>Add account</Button>
         </ControlBox>
 
         <ControlBox title="Edit or deactivate account">
           <div className="grid grid-cols-2 gap-2">
-            <select value={editAccountId} onChange={(e) => {
+            <NativeSelect className="col-span-2 px-2" value={editAccountId} onChange={(e) => {
               const next = data.accounts.find((account) => account.id === e.target.value);
               setEditAccountId(e.target.value);
               setEditAccountName(next?.name ?? '');
               setEditProvider(next?.provider ?? '');
               setEditMasked(next?.maskedIdentifier ?? '');
               setEditActive(next?.active ?? true);
-            }} className="col-span-2 bg-bg-input border border-border px-2 py-2">
+            }}>
               {data.accounts.map((account) => <option key={account.id} value={account.id}>{account.name}{account.active ? '' : ' — inactive'}</option>)}
-            </select>
-            <input value={editAccountName} onChange={(e) => setEditAccountName(e.target.value)}
-              placeholder="Account name" className="bg-bg-input border border-border px-2 py-2" />
-            <input value={editProvider} onChange={(e) => setEditProvider(e.target.value)}
-              placeholder="Provider" className="bg-bg-input border border-border px-2 py-2" />
-            <input value={editMasked} onChange={(e) => setEditMasked(e.target.value)}
-              placeholder="Masked identifier" className="bg-bg-input border border-border px-2 py-2" />
+            </NativeSelect>
+            <Input className="px-2" value={editAccountName} onChange={(e) => setEditAccountName(e.target.value)}
+              placeholder="Account name" />
+            <Input className="px-2" value={editProvider} onChange={(e) => setEditProvider(e.target.value)}
+              placeholder="Provider" />
+            <Input className="px-2" value={editMasked} onChange={(e) => setEditMasked(e.target.value)}
+              placeholder="Masked identifier" />
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={editActive} onChange={(e) => setEditActive(e.target.checked)} /> Active
             </label>
           </div>
-          <button onClick={() => void saveAccount()} disabled={!editAccount || !editAccountName.trim()}
-            className="mt-2 px-3 py-2 border border-border disabled:opacity-40">Save account</button>
+          <Button className="mt-2" onClick={() => void saveAccount()} disabled={!editAccount || !editAccountName.trim()}>Save account</Button>
           <p className="text-xs text-text-tertiary mt-2">An account must be unmapped, unused by an open shift and at zero before deactivation.</p>
         </ControlBox>
 
         <ControlBox title="Payment-method mapping">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <select value={mapMethod} onChange={(e) => setMapMethod(e.target.value)}
-              className="bg-bg-input border border-border px-2 py-2">
+            <NativeSelect className="px-2" value={mapMethod} onChange={(e) => setMapMethod(e.target.value)}>
               {['CASH', 'MOMO_MTN', 'MOMO_VODAFONE', 'MOMO_AIRTELTIGO', 'BANK_TRANSFER']
                 .map((method) => <option key={method}>{method}</option>)}
-            </select>
-            <select value={mapDirection} onChange={(e) => setMapDirection(e.target.value as 'IN' | 'OUT')}
-              className="bg-bg-input border border-border px-2 py-2">
+            </NativeSelect>
+            <NativeSelect className="px-2" value={mapDirection} onChange={(e) => setMapDirection(e.target.value as 'IN' | 'OUT')}>
               <option value="IN">Incoming</option><option value="OUT">Outgoing</option>
-            </select>
-            <select value={mapAccountId} onChange={(e) => setMapAccountId(e.target.value)}
-              className="bg-bg-input border border-border px-2 py-2">
+            </NativeSelect>
+            <NativeSelect className="px-2" value={mapAccountId} onChange={(e) => setMapAccountId(e.target.value)}>
               {data.accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
-            </select>
+            </NativeSelect>
           </div>
-          <button onClick={() => void saveMapping()} className="mt-2 px-3 py-2 border border-border">Save mapping</button>
+          <Button className="mt-2" onClick={() => void saveMapping()}>Save mapping</Button>
         </ControlBox>
 
         <ControlBox title="Internal transfer">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <select value={fromId} onChange={(e) => setFromId(e.target.value)}
-              className="bg-bg-input border border-border px-2 py-2">
+            <NativeSelect className="px-2" value={fromId} onChange={(e) => setFromId(e.target.value)}>
               {data.accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
-            </select>
-            <select value={toId} onChange={(e) => setToId(e.target.value)}
-              className="bg-bg-input border border-border px-2 py-2">
+            </NativeSelect>
+            <NativeSelect className="px-2" value={toId} onChange={(e) => setToId(e.target.value)}>
               {data.accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
-            </select>
-            <input value={transferAmount} onChange={(e) => setTransferAmount(e.target.value)}
-              inputMode="decimal" placeholder="GH¢ amount"
-              className="bg-bg-input border border-border px-2 py-2" />
+            </NativeSelect>
+            <Input className="px-2" value={transferAmount} onChange={(e) => setTransferAmount(e.target.value)}
+              inputMode="decimal" placeholder="GH¢ amount" />
           </div>
-          <button onClick={() => void transfer()}
-            disabled={fromId === toId || !(Number(transferAmount) > 0)}
-            className="mt-2 px-3 py-2 border border-border disabled:opacity-40">Post transfer</button>
+          <Button className="mt-2" onClick={() => void transfer()}
+            disabled={fromId === toId || !(Number(transferAmount) > 0)}>Post transfer</Button>
         </ControlBox>
 
         <ControlBox title="Reconcile account">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <select value={reconcileId} onChange={(e) => setReconcileId(e.target.value)}
-              className="bg-bg-input border border-border px-2 py-2">
+            <NativeSelect className="px-2" value={reconcileId} onChange={(e) => setReconcileId(e.target.value)}>
               {data.accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
-            </select>
-            <input value={observed} onChange={(e) => setObserved(e.target.value)}
-              inputMode="decimal" placeholder="Counted/statement GH¢"
-              className="bg-bg-input border border-border px-2 py-2" />
+            </NativeSelect>
+            <Input className="px-2" value={observed} onChange={(e) => setObserved(e.target.value)}
+              inputMode="decimal" placeholder="Counted/statement GH¢" />
           </div>
-          <button onClick={() => void reconcile()} disabled={!(Number(observed) >= 0)}
-            className="mt-2 px-3 py-2 border border-border disabled:opacity-40">Reconcile and post variance</button>
+          <Button className="mt-2" onClick={() => void reconcile()} disabled={!(Number(observed) >= 0)}>Reconcile and post variance</Button>
         </ControlBox>
 
         <ControlBox title="Expense or unpaid bill">
           <div className="grid grid-cols-2 gap-2">
-            <select value={expenseCategory} onChange={(e) => setExpenseCategory(e.target.value)}
-              className="bg-bg-input border border-border px-2 py-2">
+            <NativeSelect className="px-2" value={expenseCategory} onChange={(e) => setExpenseCategory(e.target.value)}>
               {['RENT', 'UTILITIES', 'TRANSPORT', 'SUPPLIES', 'COMMS', 'REPAIRS',
                 'BANK_FEES', 'STAFF_WAGES', 'STAFF_ADVANCE', 'COMMISSION',
                 'STAFF_WELFARE', 'OTHER', 'INTEREST', 'INCOME_TAX']
                 .map((category) => <option key={category}>{category}</option>)}
-            </select>
-            <input value={expensePayee} onChange={(e) => setExpensePayee(e.target.value)}
-              placeholder="Payee" className="bg-bg-input border border-border px-2 py-2" />
-            <input value={expenseAmount} onChange={(e) => setExpenseAmount(e.target.value)}
-              placeholder="GH¢ amount" inputMode="decimal"
-              className="bg-bg-input border border-border px-2 py-2" />
-            <input type="date" value={expenseDueDate} onChange={(e) => setExpenseDueDate(e.target.value)}
-              className="bg-bg-input border border-border px-2 py-2" />
-            <select value={expenseAccountId} onChange={(e) => setExpenseAccountId(e.target.value)}
-              className="col-span-2 bg-bg-input border border-border px-2 py-2">
+            </NativeSelect>
+            <Input className="px-2" value={expensePayee} onChange={(e) => setExpensePayee(e.target.value)}
+              placeholder="Payee" />
+            <Input className="px-2" value={expenseAmount} onChange={(e) => setExpenseAmount(e.target.value)}
+              placeholder="GH¢ amount" inputMode="decimal" />
+            <Input className="px-2" type="date" value={expenseDueDate} onChange={(e) => setExpenseDueDate(e.target.value)} />
+            <NativeSelect className="col-span-2 px-2" value={expenseAccountId} onChange={(e) => setExpenseAccountId(e.target.value)}>
               <option value="">Unpaid — create obligation</option>
               {data.accounts.map((account) => <option key={account.id} value={account.id}>Paid from {account.name}</option>)}
-            </select>
+            </NativeSelect>
           </div>
-          <button onClick={() => void createExpense()} disabled={!(Number(expenseAmount) > 0)}
-            className="mt-2 px-3 py-2 border border-border disabled:opacity-40">Record expense</button>
+          <Button className="mt-2" onClick={() => void createExpense()} disabled={!(Number(expenseAmount) > 0)}>Record expense</Button>
         </ControlBox>
 
         <ControlBox title="Loan with explicit schedule">
           <div className="grid grid-cols-2 gap-2">
-            <select value={loanKind} onChange={(e) => setLoanKind(e.target.value as typeof loanKind)}
-              className="bg-bg-input border border-border px-2 py-2">
+            <NativeSelect className="px-2" value={loanKind} onChange={(e) => setLoanKind(e.target.value as typeof loanKind)}>
               <option value="BANK_LOAN">Bank loan</option><option value="OWNER_LOAN">Owner/director loan</option>
               <option value="LEASE">Lease</option><option value="OTHER">Other financing</option>
-            </select>
-            <input value={loanCreditor} onChange={(e) => setLoanCreditor(e.target.value)}
-              placeholder="Creditor" className="bg-bg-input border border-border px-2 py-2" />
-            <input value={loanPrincipal} onChange={(e) => setLoanPrincipal(e.target.value)}
-              placeholder="Principal GH¢" inputMode="decimal"
-              className="bg-bg-input border border-border px-2 py-2" />
-            <input type="date" value={loanStartDate} onChange={(e) => setLoanStartDate(e.target.value)}
-              className="bg-bg-input border border-border px-2 py-2" />
-            <select value={loanReceivedAccountId} onChange={(e) => setLoanReceivedAccountId(e.target.value)}
-              className="col-span-2 bg-bg-input border border-border px-2 py-2">
+            </NativeSelect>
+            <Input className="px-2" value={loanCreditor} onChange={(e) => setLoanCreditor(e.target.value)}
+              placeholder="Creditor" />
+            <Input className="px-2" value={loanPrincipal} onChange={(e) => setLoanPrincipal(e.target.value)}
+              placeholder="Principal GH¢" inputMode="decimal" />
+            <Input className="px-2" type="date" value={loanStartDate} onChange={(e) => setLoanStartDate(e.target.value)} />
+            <NativeSelect className="col-span-2 px-2" value={loanReceivedAccountId} onChange={(e) => setLoanReceivedAccountId(e.target.value)}>
               <option value="">Opening/existing loan — no cash receipt</option>
               {data.accounts.map((account) => <option key={account.id} value={account.id}>Receive into {account.name}</option>)}
-            </select>
-            <textarea value={loanScheduleCsv} onChange={(e) => setLoanScheduleCsv(e.target.value)}
-              placeholder={'One installment per line:\n2026-08-31, 1000.00, 75.00'}
-              className="col-span-2 min-h-24 bg-bg-input border border-border px-2 py-2 font-mono text-xs" />
+            </NativeSelect>
+            <Textarea className="col-span-2 min-h-24 font-mono text-xs px-2" value={loanScheduleCsv} onChange={(e) => setLoanScheduleCsv(e.target.value)}
+              placeholder={'One installment per line:\n2026-08-31, 1000.00, 75.00'} />
           </div>
-          <button onClick={() => void createLoan()}
-            disabled={!loanCreditor.trim() || !(Number(loanPrincipal) > 0) || !loanScheduleCsv.trim()}
-            className="mt-2 px-3 py-2 border border-border disabled:opacity-40">Record loan and schedule</button>
+          <Button className="mt-2" onClick={() => void createLoan()}
+            disabled={!loanCreditor.trim() || !(Number(loanPrincipal) > 0) || !loanScheduleCsv.trim()}>Record loan and schedule</Button>
         </ControlBox>
 
         <ControlBox title="Fixed asset acquisition">
           <div className="grid grid-cols-2 gap-2">
-            <input value={assetName} onChange={(e) => setAssetName(e.target.value)}
-              placeholder="Asset name" className="bg-bg-input border border-border px-2 py-2" />
-            <input value={assetClass} onChange={(e) => setAssetClass(e.target.value)}
-              placeholder="Asset class" className="bg-bg-input border border-border px-2 py-2" />
-            <input value={assetCost} onChange={(e) => setAssetCost(e.target.value)}
-              placeholder="Cost GH¢" inputMode="decimal"
-              className="bg-bg-input border border-border px-2 py-2" />
-            <input type="date" value={assetDate} onChange={(e) => setAssetDate(e.target.value)}
-              className="bg-bg-input border border-border px-2 py-2" />
-            <input value={assetLife} onChange={(e) => setAssetLife(e.target.value)}
-              placeholder="Useful life, months" inputMode="numeric"
-              className="bg-bg-input border border-border px-2 py-2" />
-            <select value={assetAccountId} onChange={(e) => setAssetAccountId(e.target.value)}
-              className="bg-bg-input border border-border px-2 py-2">
+            <Input className="px-2" value={assetName} onChange={(e) => setAssetName(e.target.value)}
+              placeholder="Asset name" />
+            <Input className="px-2" value={assetClass} onChange={(e) => setAssetClass(e.target.value)}
+              placeholder="Asset class" />
+            <Input className="px-2" value={assetCost} onChange={(e) => setAssetCost(e.target.value)}
+              placeholder="Cost GH¢" inputMode="decimal" />
+            <Input className="px-2" type="date" value={assetDate} onChange={(e) => setAssetDate(e.target.value)} />
+            <Input className="px-2" value={assetLife} onChange={(e) => setAssetLife(e.target.value)}
+              placeholder="Useful life, months" inputMode="numeric" />
+            <NativeSelect className="px-2" value={assetAccountId} onChange={(e) => setAssetAccountId(e.target.value)}>
               <option value="">Unpaid asset bill</option>
               {data.accounts.map((account) => <option key={account.id} value={account.id}>Pay from {account.name}</option>)}
-            </select>
+            </NativeSelect>
             {!assetAccountId && (
               <>
-                <input value={assetVendor} onChange={(e) => setAssetVendor(e.target.value)}
-                  placeholder="Vendor/creditor" className="bg-bg-input border border-border px-2 py-2" />
-                <input type="date" value={assetDueDate} onChange={(e) => setAssetDueDate(e.target.value)}
-                  className="bg-bg-input border border-border px-2 py-2" />
+                <Input className="px-2" value={assetVendor} onChange={(e) => setAssetVendor(e.target.value)}
+                  placeholder="Vendor/creditor" />
+                <Input className="px-2" type="date" value={assetDueDate} onChange={(e) => setAssetDueDate(e.target.value)} />
               </>
             )}
           </div>
-          <button onClick={() => void createAsset()}
-            disabled={!assetName.trim() || !(Number(assetCost) > 0) || (!assetAccountId && !assetDueDate)}
-            className="mt-2 px-3 py-2 border border-border disabled:opacity-40">Record fixed asset</button>
+          <Button className="mt-2" onClick={() => void createAsset()}
+            disabled={!assetName.trim() || !(Number(assetCost) > 0) || (!assetAccountId && !assetDueDate)}>Record fixed asset</Button>
         </ControlBox>
 
         <ControlBox title="Depreciate or dispose fixed asset">
@@ -847,33 +813,29 @@ function FinancialControls({ pin, reportAccessToken, data, fixedAssets, shadow, 
           ) : (
             <>
               <div className="grid grid-cols-2 gap-2">
-                <select value={manageAssetId} onChange={(e) => setManageAssetId(e.target.value)}
-                  className="col-span-2 bg-bg-input border border-border px-2 py-2">
+                <NativeSelect className="col-span-2 px-2" value={manageAssetId} onChange={(e) => setManageAssetId(e.target.value)}>
                   {activeAssets.map((asset) => (
                     <option key={asset.id} value={asset.id}>
                       {asset.name} — carrying {formatMoneyWithCurrency(asset.carryingValuePesewas)}
                     </option>
                   ))}
-                </select>
-                <input type="date" value={assetActionDate} onChange={(e) => setAssetActionDate(e.target.value)}
-                  className="bg-bg-input border border-border px-2 py-2" />
-                <input value={assetProceeds} onChange={(e) => setAssetProceeds(e.target.value)}
-                  placeholder="Disposal proceeds GH¢" inputMode="decimal"
-                  className="bg-bg-input border border-border px-2 py-2" />
-                <select value={assetProceedsAccountId} onChange={(e) => setAssetProceedsAccountId(e.target.value)}
-                  className="col-span-2 bg-bg-input border border-border px-2 py-2">
+                </NativeSelect>
+                <Input className="px-2" type="date" value={assetActionDate} onChange={(e) => setAssetActionDate(e.target.value)} />
+                <Input className="px-2" value={assetProceeds} onChange={(e) => setAssetProceeds(e.target.value)}
+                  placeholder="Disposal proceeds GH¢" inputMode="decimal" />
+                <NativeSelect className="col-span-2 px-2" value={assetProceedsAccountId} onChange={(e) => setAssetProceedsAccountId(e.target.value)}>
                   {data.accounts.filter((account) => account.active).map((account) => (
                     <option key={account.id} value={account.id}>Receive proceeds into {account.name}</option>
                   ))}
-                </select>
+                </NativeSelect>
               </div>
               <div className="flex gap-2 mt-2">
-                <button onClick={() => void depreciateAsset()} className="px-3 py-2 border border-border">
+                <Button onClick={() => void depreciateAsset()}>
                   Post straight-line depreciation
-                </button>
-                <button onClick={() => void disposeAsset()} className="px-3 py-2 border border-danger/60 text-danger">
+                </Button>
+                <Button variant="danger" onClick={() => void disposeAsset()}>
                   Dispose asset
-                </button>
+                </Button>
               </div>
             </>
           )}
@@ -881,16 +843,13 @@ function FinancialControls({ pin, reportAccessToken, data, fixedAssets, shadow, 
 
         <ControlBox title="Owner capital contribution">
           <div className="grid grid-cols-2 gap-2">
-            <select value={capitalAccountId} onChange={(e) => setCapitalAccountId(e.target.value)}
-              className="bg-bg-input border border-border px-2 py-2">
+            <NativeSelect className="px-2" value={capitalAccountId} onChange={(e) => setCapitalAccountId(e.target.value)}>
               {data.accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
-            </select>
-            <input value={capitalAmount} onChange={(e) => setCapitalAmount(e.target.value)}
-              inputMode="decimal" placeholder="GH¢ amount"
-              className="bg-bg-input border border-border px-2 py-2" />
+            </NativeSelect>
+            <Input className="px-2" value={capitalAmount} onChange={(e) => setCapitalAmount(e.target.value)}
+              inputMode="decimal" placeholder="GH¢ amount" />
           </div>
-          <button onClick={() => void addOwnerCapital()} disabled={!(Number(capitalAmount) > 0)}
-            className="mt-2 px-3 py-2 border border-border disabled:opacity-40">Record contribution</button>
+          <Button className="mt-2" onClick={() => void addOwnerCapital()} disabled={!(Number(capitalAmount) > 0)}>Record contribution</Button>
         </ControlBox>
       </div>
 
@@ -912,29 +871,26 @@ function FinancialControls({ pin, reportAccessToken, data, fixedAssets, shadow, 
           {shadow?.issues.map((issue) => (
             <div key={issue.code} className="text-xs text-danger">{issue.message}</div>
           ))}
-          <button onClick={() => void toggleShadow(!shadow?.enabled)}
-            className="mt-2 px-3 py-2 border border-border">
+          <Button className="mt-2" onClick={() => void toggleShadow(!shadow?.enabled)}>
             {shadow?.enabled ? 'Stop shadow run' : 'Start shadow run'}
-          </button>
+          </Button>
         </ControlBox>
         <ControlBox title="Controlled cutover">
           <p className="text-sm text-text-secondary mb-3">
             Close all shifts, seal the prior day, complete a recent stocktake, then enter verified opening balances.
             Counter will use opening equity only as the balancing equity account.
           </p>
-          <input type="date" value={cutoverDate} onChange={(e) => { setCutoverDate(e.target.value); setPreview(null); }}
-            className="bg-bg-input border border-border px-2 py-2 mb-3" />
+          <Input className="mb-3 px-2" type="date" value={cutoverDate} onChange={(e) => { setCutoverDate(e.target.value); setPreview(null); }} />
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
             {balanceAccounts.map((account) => (
               <label key={account.id} className="text-xs text-text-secondary">
                 {account.name} <span className="text-text-tertiary">({account.code})</span>
-                <input value={balances[account.id] ?? ''}
+                <Input className="mt-1 px-2" value={balances[account.id] ?? ''}
                   onChange={(e) => {
                     setBalances((current) => ({ ...current, [account.id]: e.target.value }));
                     setPreview(null);
                   }}
-                  inputMode="decimal" placeholder="GH¢ 0.00"
-                  className="block w-full mt-1 bg-bg-input border border-border px-2 py-2 text-text-primary" />
+                  inputMode="decimal" placeholder="GH¢ 0.00" />
               </label>
             ))}
           </div>
@@ -950,11 +906,11 @@ function FinancialControls({ pin, reportAccessToken, data, fixedAssets, shadow, 
             </div>
           )}
           <div className="flex gap-2 mt-3">
-            <button onClick={() => void previewCutover()} className="px-3 py-2 border border-border">Preview opening position</button>
+            <Button onClick={() => void previewCutover()}>Preview opening position</Button>
             {preview && !preview.issues.some((issue) => issue.severity === 'BLOCKING') && (
-              <button onClick={() => void activateCutover()} className="px-3 py-2 bg-accent text-ink font-semibold">
+              <Button variant="primary" onClick={() => void activateCutover()}>
                 Activate balanced ledger
-              </button>
+              </Button>
             )}
           </div>
         </ControlBox>
@@ -1006,7 +962,7 @@ function DrilldownPanel({ data, error, onClose }: {
           <h2 className="font-semibold">Source events</h2>
           {data?.legacyUnavailable && <p className="text-xs text-warning">Pre-cutover source detail remains in legacy operational reports.</p>}
         </div>
-        <button onClick={onClose} className="px-3 py-1 border border-border">Close</button>
+        <Button size="sm" onClick={onClose}>Close</Button>
       </div>
       {error && <FeedbackBanner>{error}</FeedbackBanner>}
       {data && (
@@ -1161,9 +1117,9 @@ function ObligationsView({ data, compact, pin, accounts, onPaid, onPinConsumed, 
                 <td className="py-2 font-mono">{row.dueDate ?? 'MISSING'}</td>
                 <td>{row.creditorName}</td><td>{row.obligationType.replace(/_/g, ' ')}</td><td>{row.status}</td>
                 <td className="text-right font-mono">{formatMoneyWithCurrency(row.outstandingPesewas)}</td>
-                <td className="text-right"><button onClick={() => void onDrilldown({
+                <td className="text-right"><Button variant="link" className="text-inherit text-xs" onClick={() => void onDrilldown({
                   sourceType: row.sourceType, sourceId: row.sourceId, asOfDate: data.asOfDate,
-                })} className="underline text-xs">Source</button></td>
+                })}>Source</Button></td>
               </tr>
             ))}</tbody>
           </table>
@@ -1173,41 +1129,35 @@ function ObligationsView({ data, compact, pin, accounts, onPaid, onPinConsumed, 
             <div className="text-xs uppercase text-text-tertiary mb-2">Pay an obligation</div>
             {message && <div className="text-sm mb-2">{message}</div>}
             <div className="grid sm:grid-cols-3 gap-2">
-              <select value={obligationId} onChange={(e) => {
+              <NativeSelect className="px-2" value={obligationId} onChange={(e) => {
                 const row = data.rows.find((item) => item.id === e.target.value);
                 setObligationId(e.target.value); setDueDate(row?.dueDate ?? '');
                 setDisputed(row?.disputed ?? false); setObligationNotes('');
-              }}
-                className="bg-bg-input border border-border px-2 py-2">
+              }}>
                 {data.rows.map((row) => (
                   <option key={row.id} value={row.id}>
                     {row.creditorName} — {formatMoneyWithCurrency(row.outstandingPesewas)}
                   </option>
                 ))}
-              </select>
-              <select value={accountId} onChange={(e) => setAccountId(e.target.value)}
-                className="bg-bg-input border border-border px-2 py-2">
+              </NativeSelect>
+              <NativeSelect className="px-2" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
                 {accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
-              </select>
-              <input value={amount} onChange={(e) => setAmount(e.target.value)}
-                placeholder="GH¢ amount" inputMode="decimal"
-                className="bg-bg-input border border-border px-2 py-2" />
+              </NativeSelect>
+              <Input className="px-2" value={amount} onChange={(e) => setAmount(e.target.value)}
+                placeholder="GH¢ amount" inputMode="decimal" />
             </div>
-            <button onClick={() => void pay()} disabled={!(Number(amount) > 0)}
-              className="mt-2 px-3 py-2 border border-border disabled:opacity-40">
+            <Button className="mt-2" onClick={() => void pay()} disabled={!(Number(amount) > 0)}>
               Allocate payment
-            </button>
+            </Button>
             <div className="grid sm:grid-cols-3 gap-2 mt-3 pt-3 border-t border-border-subtle">
-              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)}
-                className="bg-bg-input border border-border px-2 py-2" />
+              <Input className="px-2" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={disputed} onChange={(e) => setDisputed(e.target.checked)} /> Disputed
               </label>
-              <input value={obligationNotes} onChange={(e) => setObligationNotes(e.target.value)}
-                placeholder="Maintenance note" className="bg-bg-input border border-border px-2 py-2" />
+              <Input className="px-2" value={obligationNotes} onChange={(e) => setObligationNotes(e.target.value)}
+                placeholder="Maintenance note" />
             </div>
-            <button onClick={() => void maintain()} disabled={!dueDate}
-              className="mt-2 px-3 py-2 border border-border disabled:opacity-40">Save due date/status</button>
+            <Button className="mt-2" onClick={() => void maintain()} disabled={!dueDate}>Save due date/status</Button>
           </div>
         )}
         </>
@@ -1277,14 +1227,11 @@ function ThresholdInputs({ warningBps, dangerBps, onSave }: {
   const [danger, setDanger] = useState(String(dangerBps / 100));
   return (
     <div className="mt-3 grid grid-cols-2 gap-1">
-      <input value={warning} onChange={(e) => setWarning(e.target.value)}
-        aria-label="Warning threshold percent"
-        className="min-w-0 bg-bg-input border border-border px-1 py-1 text-xs" />
-      <input value={danger} onChange={(e) => setDanger(e.target.value)}
-        aria-label="Danger threshold percent"
-        className="min-w-0 bg-bg-input border border-border px-1 py-1 text-xs" />
-      <button onClick={() => onSave(Number(warning), Number(danger))}
-        className="col-span-2 border border-border py-1 text-xs">Save thresholds</button>
+      <Input className="text-xs h-8 px-1" value={warning} onChange={(e) => setWarning(e.target.value)}
+        aria-label="Warning threshold percent" />
+      <Input className="text-xs h-8 px-1" value={danger} onChange={(e) => setDanger(e.target.value)}
+        aria-label="Danger threshold percent" />
+      <Button size="sm" className="col-span-2" onClick={() => onSave(Number(warning), Number(danger))}>Save thresholds</Button>
     </div>
   );
 }
@@ -1350,15 +1297,14 @@ function DownsideView({ data, compact, pin, riskConfig, onRefresh, onPinConsumed
                 {(riskConfig?.scenarios ?? []).map((scenario) => (
                   <div key={scenario.id} className="flex justify-between items-center gap-2 text-sm">
                     <span>{scenario.name} · {scenario.horizonDays} days</span>
-                    <button onClick={() => onUseScenario(scenario)} className="underline text-xs">Use</button>
+                    <Button variant="link" className="text-inherit text-xs" onClick={() => onUseScenario(scenario)}>Use</Button>
                   </div>
                 ))}
               </div>
               <div className="flex gap-2">
-                <input value={scenarioName} onChange={(e) => setScenarioName(e.target.value)}
-                  placeholder="Scenario name" className="flex-1 bg-bg-input border border-border px-2 py-2" />
-                <button onClick={() => void saveCurrentScenario()} disabled={!scenarioName.trim()}
-                  className="px-3 py-2 border border-border disabled:opacity-40">Save current</button>
+                <Input className="flex-1 px-2" value={scenarioName} onChange={(e) => setScenarioName(e.target.value)}
+                  placeholder="Scenario name" />
+                <Button onClick={() => void saveCurrentScenario()} disabled={!scenarioName.trim()}>Save current</Button>
               </div>
             </ControlBox>
             <ControlBox title="Risk assumption register">
@@ -1372,19 +1318,17 @@ function DownsideView({ data, compact, pin, riskConfig, onRefresh, onPinConsumed
                 ))}
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <select value={assumptionDriver} onChange={(e) => setAssumptionDriver(e.target.value)}
-                  className="col-span-2 bg-bg-input border border-border px-2 py-2">
+                <NativeSelect className="col-span-2 px-2" value={assumptionDriver} onChange={(e) => setAssumptionDriver(e.target.value)}>
                   {Object.keys(data.drivers).map((driver) => <option key={driver}>{driver}</option>)}
-                </select>
-                <input value={assumptionBaseline} onChange={(e) => setAssumptionBaseline(e.target.value)}
-                  placeholder="Baseline %" className="bg-bg-input border border-border px-2 py-2" />
-                <input value={assumptionDownside} onChange={(e) => setAssumptionDownside(e.target.value)}
-                  placeholder="Downside %" className="bg-bg-input border border-border px-2 py-2" />
-                <input value={assumptionRationale} onChange={(e) => setAssumptionRationale(e.target.value)}
-                  placeholder="Rationale" className="col-span-2 bg-bg-input border border-border px-2 py-2" />
-                <input type="date" value={assumptionReviewDate} onChange={(e) => setAssumptionReviewDate(e.target.value)}
-                  className="bg-bg-input border border-border px-2 py-2" />
-                <button onClick={() => void saveAssumption()} className="px-3 py-2 border border-border">Save assumption</button>
+                </NativeSelect>
+                <Input className="px-2" value={assumptionBaseline} onChange={(e) => setAssumptionBaseline(e.target.value)}
+                  placeholder="Baseline %" />
+                <Input className="px-2" value={assumptionDownside} onChange={(e) => setAssumptionDownside(e.target.value)}
+                  placeholder="Downside %" />
+                <Input className="col-span-2 px-2" value={assumptionRationale} onChange={(e) => setAssumptionRationale(e.target.value)}
+                  placeholder="Rationale" />
+                <Input className="px-2" type="date" value={assumptionReviewDate} onChange={(e) => setAssumptionReviewDate(e.target.value)} />
+                <Button onClick={() => void saveAssumption()}>Save assumption</Button>
               </div>
             </ControlBox>
           </div>
@@ -1437,7 +1381,7 @@ function LineTable({ title, lines, onDrilldown }: {
             <td className="px-3 py-2">{line.label}{line.note && <div className="text-xs text-text-tertiary">{line.note}</div>}</td>
             <td className="px-3 py-2 text-right font-mono tnum">{formatMoneyWithCurrency(line.amountPesewas)}</td>
             {onDrilldown && <td className="px-3 py-2 text-right print:hidden">
-              <button onClick={() => void onDrilldown(line)} className="underline text-xs">Source</button>
+              <Button variant="link" className="text-inherit text-xs" onClick={() => void onDrilldown(line)}>Source</Button>
             </td>}
           </tr>
         ))}

@@ -7,6 +7,7 @@ import { counter } from '../../lib/ipc';
 import { formatMoney, formatMoneyWithCurrency } from '../../../shared/lib/money';
 import type { ReportsOverviewResponse } from '../../../shared/types/ipc';
 import { FeedbackBanner } from '../../components/FeedbackBanner';
+import { Button } from '../../components/ui/button';
 
 interface Props {
   reportAccessToken: string;
@@ -101,10 +102,9 @@ export function OverviewTab({
           footer={
             <div className="flex gap-3 text-xs">
               {data.inventory.belowReorderCount > 0 && (
-                <button onClick={onOpenReorder}
-                  className="inline-flex items-center gap-1 text-warning hover:underline">
+                <Button variant="link" className="text-warning no-underline hover:underline" onClick={onOpenReorder}>
                   {data.inventory.belowReorderCount} below reorder <ArrowRightIcon aria-hidden="true" className="size-3.5" />
-                </button>
+                </Button>
               )}
               {data.inventory.stockoutCount > 0 && (
                 <span className="text-danger">
@@ -209,9 +209,9 @@ export function OverviewTab({
         <div className="flex items-center justify-between">
           <h3 className="text-text-secondary uppercase tracking-wider text-xs">Recent stocktake variance</h3>
           {onOpenStocktake && (
-            <button onClick={onOpenStocktake} className="inline-flex items-center gap-1 text-accent text-xs hover:underline">
+            <Button variant="link" className="text-accent no-underline hover:underline text-xs" onClick={onOpenStocktake}>
               Open stocktake <ArrowRightIcon aria-hidden="true" className="size-3.5" />
-            </button>
+            </Button>
           )}
         </div>
         {data.recentVarianceEvents.length === 0 ? (

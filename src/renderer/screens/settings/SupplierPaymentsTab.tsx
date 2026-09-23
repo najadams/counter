@@ -93,13 +93,12 @@ export function SupplierPaymentsTab() {
             {formatMoneyWithCurrency(totalOwed)}
           </span>
         </div>
-        <button
+        <Button variant="primary"
           onClick={() => isAdmin && setShowRecord({})}
           disabled={!isAdmin}
-          title={isAdmin ? '' : 'OWNER or FOUNDER role required to record payments'}
-          className="bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light text-sm disabled:opacity-40 disabled:cursor-not-allowed">
+          title={isAdmin ? '' : 'OWNER or FOUNDER role required to record payments'}>
           + Record payment
-        </button>
+        </Button>
       </div>
 
       {error && <FeedbackBanner>{error}</FeedbackBanner>}
@@ -162,12 +161,11 @@ export function SupplierPaymentsTab() {
                       {r.lastPaidAt ? new Date(r.lastPaidAt).toLocaleDateString() : '—'}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <button
+                      <Button size="sm"
                         onClick={() => isAdmin && setShowRecord({ presetSupplierId: r.supplierId })}
-                        disabled={!isAdmin}
-                        className="text-xs px-3 py-1 border border-border hover:bg-bg-elevated disabled:opacity-40 disabled:cursor-not-allowed">
+                        disabled={!isAdmin}>
                         Pay
-                      </button>
+                      </Button>
                     </td>
                   </tr>
                 );
@@ -232,13 +230,12 @@ export function SupplierPaymentsTab() {
           <h3 className="text-xs uppercase tracking-wider text-text-tertiary">Recent payments</h3>
           <label className="block">
             <span className="block text-xs text-text-tertiary mb-1">Filter by supplier</span>
-            <select value={filterSupplier} onChange={(e) => setFilterSupplier(e.target.value)}
-              className="px-3 py-1.5 rounded bg-bg-deep border border-border-subtle text-sm min-w-56">
+            <NativeSelect className="min-w-56 h-9" value={filterSupplier} onChange={(e) => setFilterSupplier(e.target.value)}>
               <option value="">All suppliers</option>
               {suppliers.map((s) => (
                 <option key={s.id} value={s.id}>{s.name}{s.active ? '' : ' (inactive)'}</option>
               ))}
-            </select>
+            </NativeSelect>
           </label>
         </div>
 

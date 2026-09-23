@@ -9,6 +9,7 @@ import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { reviewStatusTone } from '../lib/tones';
 import { Segmented } from '../components/ui/segmented';
+import { Textarea } from '../components/ui/textarea';
 
 type Tab = 'PENDING' | 'HISTORY';
 
@@ -172,7 +173,7 @@ function ReviewPanel({ request, note, setNote, deciding, onClose, onDecide }: {
       </div>
       {request.status === 'PENDING' ? <>
         <label className="text-sm text-text-secondary">Review note <span className="text-text-tertiary">(required when declining)</span>
-          <textarea value={note} onChange={(event) => setNote(event.target.value)} maxLength={200} rows={3} className="input mt-1 w-full" placeholder="Why are you approving or declining?" />
+          <Textarea className="mt-1" value={note} onChange={(event) => setNote(event.target.value)} maxLength={200} rows={3} placeholder="Why are you approving or declining?" />
         </label>
         <div className="flex flex-wrap gap-3">
           <Button variant="secondary" onClick={onClose}>Cancel</Button>

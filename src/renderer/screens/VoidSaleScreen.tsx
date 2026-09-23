@@ -13,6 +13,7 @@ import { useSession } from '../store/session';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { reviewStatusTone } from '../lib/tones';
+import { Input } from '../components/ui/input';
 
 interface RecentSale {
   id: string; createdAt: string; channel: string; totalPesewas: number;
@@ -159,17 +160,15 @@ export default function VoidSaleScreen({ onExit, onDuplicate }: { onExit: () => 
                   <td className="px-4 py-3 text-right font-mono tnum">{formatMoney(s.totalPesewas)}</td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex gap-2 justify-end">
-                      <button
+                      <Button size="sm" className="text-text-tertiary"
                         onClick={() => void reprint(s.id)}
-                        disabled={loadingReceiptId === s.id}
-                        className="px-3 py-1 border border-border text-text-tertiary hover:text-accent hover:border-accent text-xs disabled:opacity-50">
+                        disabled={loadingReceiptId === s.id}>
                         {loadingReceiptId === s.id ? 'Loading…' : 'Print receipt'}
-                      </button>
-                      <button
-                        onClick={() => void duplicate(s.id)}
-                        className="px-3 py-1 border border-border text-text-tertiary hover:text-accent hover:border-accent text-xs">
+                      </Button>
+                      <Button size="sm" className="text-text-tertiary"
+                        onClick={() => void duplicate(s.id)}>
                         Duplicate
-                      </button>
+                      </Button>
                       {s.voided
                         ? <Badge tone="danger">Voided</Badge>
                         : s.voidRequest?.status === 'PENDING'
@@ -180,16 +179,14 @@ export default function VoidSaleScreen({ onExit, onDuplicate }: { onExit: () => 
                             )}
                           </>
                         : <>
-                            <button
-                              onClick={() => { setCorrecting(s); setError(null); setInfo(null); }}
-                              className="px-3 py-1 border border-border text-text-tertiary hover:text-accent hover:border-accent text-xs">
+                            <Button size="sm" className="text-text-tertiary"
+                              onClick={() => { setCorrecting(s); setError(null); setInfo(null); }}>
                               Correct
-                            </button>
-                            <button
-                              onClick={() => { setSelected(s); setReason(''); setError(null); setInfo(null); }}
-                              className="px-3 py-1 border border-danger text-danger hover:bg-danger hover:text-ink text-xs">
+                            </Button>
+                            <Button variant="danger" size="sm"
+                              onClick={() => { setSelected(s); setReason(''); setError(null); setInfo(null); }}>
                               Submit void request
-                            </button>
+                            </Button>
                           </>}
                     </div>
                   </td>
@@ -218,14 +215,12 @@ export default function VoidSaleScreen({ onExit, onDuplicate }: { onExit: () => 
               <span className="ml-2 font-mono tnum text-text-primary">{formatMoneyWithCurrency(selected.totalPesewas)}</span>
             </div>
             <label className="text-text-secondary text-xs uppercase tracking-wider">Reason (required)</label>
-            <input
+            <Input className="h-12 px-4"
               autoFocus value={reason} onChange={(e) => setReason(e.target.value)}
-              placeholder="e.g. customer changed mind, wrong product, accidental double-scan"
-              className="bg-bg-input border border-border-strong px-4 py-3"
-            />
+              placeholder="e.g. customer changed mind, wrong product, accidental double-scan" />
             {error && <FeedbackBanner>{error}</FeedbackBanner>}
             <div className="flex gap-3">
-              <button onClick={() => setSelected(null)} className="px-5 py-3 border border-border hover:bg-bg-elevated">Cancel</button>
+              <Button size="lg" onClick={() => setSelected(null)}>Cancel</Button>
               <Button variant="primary"
                 onClick={() => void submitRequest()}
                 disabled={reason.trim().length < 3 || reason.trim().length > 200}

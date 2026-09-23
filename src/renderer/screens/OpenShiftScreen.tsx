@@ -15,6 +15,7 @@ import VoidApprovalsScreen from './VoidApprovalsScreen';
 import VarianceCasesScreen from './VarianceCasesScreen';
 import StockReceiptApprovalsScreen from './StockReceiptApprovalsScreen';
 import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
 
 export default function OpenShiftScreen() {
   const [raw, setRaw] = useState('');
@@ -96,7 +97,7 @@ export default function OpenShiftScreen() {
               </div>
             </div>
             <label htmlFor="friendly-opening-cash" className="text-lg font-semibold">Money in the drawer (GHS)</label>
-            <input
+            <Input className="border-2 rounded-xl text-5xl font-mono tnum text-right h-auto py-4 px-5"
               id="friendly-opening-cash"
               ref={inputRef}
               type="text"
@@ -106,9 +107,7 @@ export default function OpenShiftScreen() {
               onKeyDown={onKeyDown}
               disabled={submitting}
               placeholder="0.00"
-              aria-invalid={!valid && raw.length > 0}
-              className="w-full min-w-0 bg-bg-input border-2 border-border-strong rounded-xl px-5 py-4 text-5xl font-mono tnum text-right focus:outline-hidden focus:border-accent"
-            />
+              aria-invalid={!valid && raw.length > 0} />
             {!valid && raw.length > 0 && (
               <p className="text-danger text-lg">Enter an amount like 250 or 250.50.</p>
             )}
@@ -135,7 +134,7 @@ export default function OpenShiftScreen() {
         </p>
         <div className="flex items-baseline gap-3">
           <span className="text-text-secondary text-xl">GHS</span>
-          <input
+          <Input className="flex-1 text-4xl font-mono tnum text-right h-auto py-4 px-5"
             ref={inputRef}
             type="text"
             inputMode="decimal"
@@ -143,9 +142,7 @@ export default function OpenShiftScreen() {
             onChange={(e) => setRaw(e.target.value)}
             onKeyDown={onKeyDown}
             disabled={submitting}
-            placeholder="0.00"
-            className="flex-1 min-w-0 bg-bg-input border border-border-strong px-5 py-4 text-4xl font-mono tnum text-right focus:outline-hidden focus:border-accent"
-          />
+            placeholder="0.00" />
         </div>
         {!valid && raw.length > 0 && (
           <div className="text-danger text-xs">

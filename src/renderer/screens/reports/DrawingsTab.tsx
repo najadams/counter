@@ -3,6 +3,9 @@ import { counter } from '../../lib/ipc';
 import { formatMoneyWithCurrency } from '../../../shared/lib/money';
 import type { DrawingReportResponse } from '../../../shared/types/ipc';
 import { FeedbackBanner } from '../../components/FeedbackBanner';
+import { Button } from '../../components/ui/button';
+import { NativeSelect } from '../../components/ui/native-select';
+import { Input } from '../../components/ui/input';
 
 type Period = 'DAILY' | 'WEEKLY' | 'MONTHLY';
 
@@ -41,26 +44,23 @@ export function DrawingsTab({ reportAccessToken }: { reportAccessToken: string }
       <div className="bg-bg-surface border border-border p-4 flex flex-wrap items-end gap-3">
         <label>
           <span className="block text-text-secondary text-xs uppercase tracking-wider mb-1">Group</span>
-          <select value={period} onChange={(e) => setPeriod(e.target.value as Period)}
-            className="bg-bg-input border border-border-strong px-3 py-2">
+          <NativeSelect value={period} onChange={(e) => setPeriod(e.target.value as Period)}>
             <option value="DAILY">Daily</option>
             <option value="WEEKLY">Weekly</option>
             <option value="MONTHLY">Monthly</option>
-          </select>
+          </NativeSelect>
         </label>
         <label>
           <span className="block text-text-secondary text-xs uppercase tracking-wider mb-1">From</span>
-          <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)}
-            className="bg-bg-input border border-border-strong px-3 py-2" />
+          <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
         </label>
         <label>
           <span className="block text-text-secondary text-xs uppercase tracking-wider mb-1">To</span>
-          <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)}
-            className="bg-bg-input border border-border-strong px-3 py-2" />
+          <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
         </label>
-        <button onClick={() => void refresh()} className="px-4 py-2 border border-border hover:bg-bg-elevated">
+        <Button onClick={() => void refresh()}>
           {loading ? 'Loading…' : 'Refresh'}
-        </button>
+        </Button>
         <div className="ml-auto text-text-tertiary text-sm">
           Total drawings <span className="text-text-primary font-mono tnum">{formatMoneyWithCurrency(total)}</span>
         </div>

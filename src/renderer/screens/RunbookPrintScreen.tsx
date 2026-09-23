@@ -1,6 +1,8 @@
 // RunbookPrintScreen — printable worker handbook in plain English.
 // One double-sided A4 ideally; cashier reference behind the till.
 
+import { Button } from '../components/ui/button';
+
 export function RunbookPrintScreen({ onExit }: { onExit: () => void }) {
   return (
     <>
@@ -46,14 +48,12 @@ export function RunbookPrintScreen({ onExit }: { onExit: () => void }) {
         <div className="max-w-3xl mx-auto px-12 py-6 flex items-center justify-between">
           <h1 className="text-text-secondary uppercase tracking-wider text-xs">Worker handbook — printable</h1>
           <div className="flex gap-3">
-            <button onClick={() => window.print()}
-              className="bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light text-sm">
+            <Button variant="primary" onClick={() => window.print()}>
               Print
-            </button>
-            <button onClick={onExit}
-              className="px-4 py-2 border border-border hover:bg-bg-elevated text-sm">
+            </Button>
+            <Button onClick={onExit}>
               Close
-            </button>
+            </Button>
           </div>
         </div>
       </div>

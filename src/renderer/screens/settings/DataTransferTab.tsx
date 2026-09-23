@@ -18,6 +18,7 @@ import { useSession } from '../../store/session';
 import type {
   CatalogImportPickResponse, CatalogImportTableReport, CatalogTable,
 } from '../../../shared/types/ipc';
+import { Button } from '../../components/ui/button';
 
 type BannerKind = 'success' | 'warning' | 'danger' | 'info';
 interface InlineMessage { kind: BannerKind; text: string }
@@ -186,13 +187,11 @@ export function DataTransferTab() {
         </label>
 
         <div className="flex items-center gap-3 pt-1">
-          <button
+          <Button variant="primary" size="lg"
             onClick={() => void runExport()}
-            disabled={exporting || selected.size === 0}
-            className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-50"
-          >
+            disabled={exporting || selected.size === 0}>
             {exporting ? 'Exporting…' : 'Export to file'}
-          </button>
+          </Button>
           <span className="text-xs text-text-tertiary">
             You'll be prompted for a location to save the .json file.
           </span>
@@ -212,13 +211,11 @@ export function DataTransferTab() {
         </p>
 
         <div className="flex items-center gap-3">
-          <button
+          <Button
             onClick={() => void runPick()}
-            disabled={importing}
-            className="border border-border px-4 py-2 hover:bg-bg-elevated disabled:opacity-50"
-          >
+            disabled={importing}>
             {importing ? 'Reading…' : 'Pick file to import'}
-          </button>
+          </Button>
         </div>
 
         {pickResult && pickResult.header && pickResult.report && (
@@ -248,20 +245,16 @@ export function DataTransferTab() {
             </label>
 
             <div className="flex items-center gap-3 pt-1">
-              <button
+              <Button variant="primary" size="lg"
                 onClick={() => void runApply()}
-                disabled={applying}
-                className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-50"
-              >
+                disabled={applying}>
                 {applying ? 'Applying…' : updateExisting ? 'Apply (insert + update)' : 'Apply (insert only)'}
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={() => { setPickResult(null); setImportMessage(null); }}
-                disabled={applying}
-                className="border border-border px-4 py-2 hover:bg-bg-elevated disabled:opacity-50"
-              >
+                disabled={applying}>
                 Cancel
-              </button>
+              </Button>
             </div>
           </div>
         )}

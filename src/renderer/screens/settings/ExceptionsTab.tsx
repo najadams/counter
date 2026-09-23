@@ -6,6 +6,8 @@ import { counter } from '../../lib/ipc';
 import { useSession } from '../../store/session';
 import { formatMoneyWithCurrency } from '../../../shared/lib/money';
 import { FeedbackBanner } from '../../components/FeedbackBanner';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
 
 function todayIso(): string { return new Date().toISOString().slice(0, 10); }
 function daysAgoIso(n: number): string {
@@ -71,22 +73,19 @@ export function ExceptionsTab() {
       <div className="flex items-center gap-3">
         <label className="block">
           <span className="block text-xs text-text-tertiary mb-1 uppercase tracking-wider">From</span>
-          <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)}
-            className="px-3 py-2 rounded bg-bg-deep border border-border-subtle text-sm" />
+          <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
         </label>
         <label className="block">
           <span className="block text-xs text-text-tertiary mb-1 uppercase tracking-wider">To</span>
-          <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)}
-            className="px-3 py-2 rounded bg-bg-deep border border-border-subtle text-sm" />
+          <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
         </label>
-        <button onClick={() => void refresh()}
-          className="self-end bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light text-sm">
+        <Button variant="primary" className="self-end" onClick={() => void refresh()}>
           {loading ? 'Loading…' : 'Refresh'}
-        </button>
+        </Button>
         <div className="self-end ml-auto flex gap-2">
-          <button className="px-3 py-2 border border-border text-sm" onClick={() => { setFromDate(daysAgoIso(0)); setToDate(todayIso()); setTimeout(() => void refresh(), 0); }}>Today</button>
-          <button className="px-3 py-2 border border-border text-sm" onClick={() => { setFromDate(daysAgoIso(7)); setToDate(todayIso()); setTimeout(() => void refresh(), 0); }}>7d</button>
-          <button className="px-3 py-2 border border-border text-sm" onClick={() => { setFromDate(daysAgoIso(30)); setToDate(todayIso()); setTimeout(() => void refresh(), 0); }}>30d</button>
+          <Button onClick={() => { setFromDate(daysAgoIso(0)); setToDate(todayIso()); setTimeout(() => void refresh(), 0); }}>Today</Button>
+          <Button onClick={() => { setFromDate(daysAgoIso(7)); setToDate(todayIso()); setTimeout(() => void refresh(), 0); }}>7d</Button>
+          <Button onClick={() => { setFromDate(daysAgoIso(30)); setToDate(todayIso()); setTimeout(() => void refresh(), 0); }}>30d</Button>
         </div>
       </div>
       {error && <FeedbackBanner>{error}</FeedbackBanner>}

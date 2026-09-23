@@ -7,6 +7,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { counter } from '../../lib/ipc';
 import type { HttpStatusResponse } from '../../../shared/types/ipc';
 import { FeedbackBanner } from '../../components/FeedbackBanner';
+import { Button } from '../../components/ui/button';
 
 export function PhoneAccessTab() {
   const [status, setStatus] = useState<HttpStatusResponse | null>(null);
@@ -42,12 +43,11 @@ export function PhoneAccessTab() {
       </div>
 
       {!on ? (
-        <button
+        <Button variant="primary" size="lg" className="self-start"
           onClick={() => void toggle(true)}
-          disabled={busy}
-          className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40 self-start">
+          disabled={busy}>
           {busy ? 'Starting…' : 'Enable phone access'}
-        </button>
+        </Button>
       ) : (
         <>
           <div className="flex gap-4 items-start border border-border p-4">
@@ -69,12 +69,11 @@ export function PhoneAccessTab() {
               )}
             </div>
           </div>
-          <button
+          <Button size="lg" className="self-start"
             onClick={() => void toggle(false)}
-            disabled={busy}
-            className="border border-border px-5 py-2 text-text-primary hover:bg-bg-elevated disabled:opacity-40 self-start">
+            disabled={busy}>
             {busy ? 'Stopping…' : 'Disable'}
-          </button>
+          </Button>
         </>
       )}
 

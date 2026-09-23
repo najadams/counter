@@ -9,6 +9,7 @@ import CustomerDetailScreen from './CustomerDetailScreen';
 import { RecordPaymentModal } from '../components/RecordPaymentModal';
 import { CustomerCreateModal } from '../components/CustomerCreateModal';
 import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
 
 interface Row {
   id: string; displayName: string; businessName: string | null; phone: string; customerType: string;
@@ -82,11 +83,10 @@ export default function CustomersScreen({ onExit }: { onExit: () => void }) {
         <div className="flex items-center justify-between">
           <h2 className="text-text-secondary uppercase tracking-wider text-xs">Open balances</h2>
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => setShowAdd(true)}
-              className="bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light text-sm">
+            <Button variant="primary"
+              onClick={() => setShowAdd(true)}>
               + Add customer
-            </button>
+            </Button>
             <span className="text-text-tertiary text-xs"><span className="kbd">F9</span> back</span>
           </div>
         </div>
@@ -110,9 +110,8 @@ export default function CustomersScreen({ onExit }: { onExit: () => void }) {
         )}
 
         <div className="flex items-center gap-3">
-          <input value={filter} onChange={(e) => setFilter(e.target.value)}
-            placeholder="Filter by customer, company, or phone…"
-            className="bg-bg-input border border-border-strong px-3 py-2 flex-1" />
+          <Input className="flex-1" value={filter} onChange={(e) => setFilter(e.target.value)}
+            placeholder="Filter by customer, company, or phone…" />
           <label className="flex items-center gap-2 text-text-secondary text-sm">
             <input type="checkbox" checked={includeBlocked} onChange={(e) => setIncludeBlocked(e.target.checked)} />
             include blocked
@@ -174,11 +173,10 @@ export default function CustomersScreen({ onExit }: { onExit: () => void }) {
                         : <span className="text-success">ok</span>}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setShowPay({ customerId: r.id, displayName: r.displayName }); }}
-                        className="bg-accent text-ink px-3 py-1 hover:bg-accent-light text-xs font-semibold">
+                      <Button variant="primary" size="sm"
+                        onClick={(e) => { e.stopPropagation(); setShowPay({ customerId: r.id, displayName: r.displayName }); }}>
                         Take payment
-                      </button>
+                      </Button>
                     </td>
                   </tr>
                 );

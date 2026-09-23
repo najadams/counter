@@ -10,6 +10,7 @@ import { useSession } from '../store/session';
 import { formatMoneyWithCurrency } from '../../shared/lib/money';
 import { FRIENDLY_UI_ENABLED } from '../../shared/lib/buildFlags';
 import { TaskIllustration } from './friendly/TaskIllustration';
+import { Button } from './ui/button';
 
 export function AppHeader({ subtitle, onBack, backLabel = 'Home', backDisabled = false }: {
   subtitle?: string;
@@ -69,17 +70,15 @@ export function AppHeader({ subtitle, onBack, backLabel = 'Home', backDisabled =
     <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 border-b border-border px-5 py-3 sm:px-8 sm:py-5 bg-bg-surface">
       <div className="flex items-center gap-3 sm:gap-4 min-w-0">
         {onBack && (
-          <button
+          <Button size="sm" className="shrink-0 text-text-secondary"
             onClick={onBack}
               disabled={backDisabled}
             aria-label={goesHome ? 'Back to home' : backLabel}
-            title={`${goesHome ? 'Back to home' : backLabel} (F9)`}
-            className="flex items-center gap-1.5 shrink-0 border border-border text-text-secondary hover:text-text-primary hover:bg-bg-elevated px-2.5 py-1.5 text-sm"
-          >
+            title={`${goesHome ? 'Back to home' : backLabel} (F9)`}>
             <ArrowLeftIcon aria-hidden="true" className="size-4" />
             <span className="hidden sm:inline">{goesHome ? 'Back' : backLabel}</span>
             <span className="kbd hidden sm:inline">F9</span>
-          </button>
+          </Button>
         )}
         <div className="flex flex-wrap items-baseline gap-3 min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight text-accent">Counter</h1>

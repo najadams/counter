@@ -8,6 +8,8 @@ import { DateRangePicker, defaultDateRange, type DateRange } from '../../compone
 import { buildCsvFilename, exportRowsAsCsv, pesewasToCsvNumber } from '../../lib/csv';
 import type { ReportsSalesResponse, ReportGroupBy } from '../../../shared/types/ipc';
 import { FeedbackBanner } from '../../components/FeedbackBanner';
+import { Button } from '../../components/ui/button';
+import { Segmented } from '../../components/ui/segmented';
 
 export function SalesTab({ reportAccessToken }: { reportAccessToken: string }) {
   const [range, setRange] = useState<DateRange>(defaultDateRange());
@@ -68,23 +70,11 @@ export function SalesTab({ reportAccessToken }: { reportAccessToken: string }) {
       <div className="bg-bg-surface border border-border p-4 flex flex-col gap-3">
         <DateRangePicker value={range} onChange={setRange} />
         <div className="flex items-center justify-between gap-3">
-          <div className="flex gap-1 text-xs">
-            {(['day', 'week', 'month'] as const).map((g) => (
-              <button key={g} onClick={() => setGroupBy(g)}
-                className={[
-                  'px-3 py-1.5 border rounded-xs uppercase tracking-wider',
-                  groupBy === g
-                    ? 'bg-accent text-ink border-accent font-semibold'
-                    : 'border-border text-text-secondary hover:text-text-primary',
-                ].join(' ')}>
-                Per {g}
-              </button>
-            ))}
-          </div>
-          <button onClick={exportBuckets} disabled={!data || data.buckets.length === 0}
-            className="px-3 py-1.5 border border-border text-xs hover:bg-bg-elevated disabled:opacity-40">
+          <Segmented label="Group by" size="sm" value={groupBy} onChange={setGroupBy}
+            options={(['day', 'week', 'month'] as const).map((g) => ({ value: g, label: `Per ${g}` }))} />
+          <Button size="sm" onClick={exportBuckets} disabled={!data || data.buckets.length === 0}>
             Export CSV
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -178,10 +168,9 @@ export function SalesTab({ reportAccessToken }: { reportAccessToken: string }) {
             <div className="bg-bg-surface border border-border flex flex-col">
               <div className="px-4 py-3 border-b border-border-subtle flex items-center justify-between">
                 <h3 className="text-text-secondary uppercase tracking-wider text-xs">By cashier</h3>
-                <button onClick={exportCashiers} disabled={data.byCashier.length === 0}
-                  className="text-text-tertiary hover:text-accent text-xs disabled:opacity-40">
+                <Button variant="link" className="text-text-tertiary hover:text-accent no-underline hover:underline text-xs" onClick={exportCashiers} disabled={data.byCashier.length === 0}>
                   CSV
-                </button>
+                </Button>
               </div>
               {data.byCashier.length === 0 ? (
                 <div className="px-4 py-4 text-text-tertiary text-sm">No sales by cashier yet.</div>

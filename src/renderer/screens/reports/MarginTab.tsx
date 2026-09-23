@@ -9,6 +9,7 @@ import { DateRangePicker, defaultDateRange, type DateRange } from '../../compone
 import { bpsToCsvPercent, buildCsvFilename, exportRowsAsCsv, pesewasToCsvNumber } from '../../lib/csv';
 import type { ReportsMarginResponse } from '../../../shared/types/ipc';
 import { FeedbackBanner } from '../../components/FeedbackBanner';
+import { Button } from '../../components/ui/button';
 
 type ProductSort = 'margin' | 'revenue' | 'marginBps' | 'units';
 
@@ -162,10 +163,9 @@ export function MarginTab({ reportAccessToken }: { reportAccessToken: string }) 
               <h3 className="text-text-secondary uppercase tracking-wider text-xs">By product</h3>
               <div className="flex gap-3 items-center">
                 <span className="text-text-tertiary text-xs">click a column to sort</span>
-                <button onClick={exportProducts} disabled={sortedProducts.length === 0}
-                  className="px-3 py-1 border border-border text-xs hover:bg-bg-elevated disabled:opacity-40">
+                <Button size="sm" onClick={exportProducts} disabled={sortedProducts.length === 0}>
                   Export CSV
-                </button>
+                </Button>
               </div>
             </div>
             {sortedProducts.length === 0 ? (
@@ -215,10 +215,9 @@ export function MarginTab({ reportAccessToken }: { reportAccessToken: string }) 
           <section className="bg-bg-surface border border-border">
             <div className="px-4 py-3 border-b border-border-subtle flex items-center justify-between">
               <h3 className="text-text-secondary uppercase tracking-wider text-xs">By category</h3>
-              <button onClick={exportCategories} disabled={data.byCategory.length === 0}
-                className="px-3 py-1 border border-border text-xs hover:bg-bg-elevated disabled:opacity-40">
+              <Button size="sm" onClick={exportCategories} disabled={data.byCategory.length === 0}>
                 Export CSV
-              </button>
+              </Button>
             </div>
             {data.byCategory.length === 0 ? (
               <div className="px-4 py-6 text-text-tertiary text-sm text-center">No category data.</div>

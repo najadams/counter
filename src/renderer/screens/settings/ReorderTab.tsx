@@ -6,6 +6,9 @@ import { counter } from '../../lib/ipc';
 import { useSession } from '../../store/session';
 import { formatMoneyWithCurrency } from '../../../shared/lib/money';
 import { FeedbackBanner } from '../../components/FeedbackBanner';
+import { Button } from '../../components/ui/button';
+import { NativeSelect } from '../../components/ui/native-select';
+import { Input } from '../../components/ui/input';
 
 interface Suggestion {
   productId: string; sku: string; productName: string;
@@ -110,17 +113,15 @@ export function ReorderTab() {
       <div className="flex items-center gap-3">
         <label className="block">
           <span className="block text-xs text-text-tertiary mb-1 uppercase tracking-wider">Supplier filter</span>
-          <select value={filter} onChange={(e) => setFilter(e.target.value as SupplierFilter)}
-            className="px-3 py-2 rounded bg-bg-deep border border-border-subtle text-sm">
+          <NativeSelect value={filter} onChange={(e) => setFilter(e.target.value as SupplierFilter)}>
             <option value="all">— all suppliers —</option>
             <option value="unassigned">— no primary supplier —</option>
             {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
+          </NativeSelect>
         </label>
-        <button onClick={() => void refresh()}
-          className="self-end bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light text-sm">
+        <Button variant="primary" className="self-end" onClick={() => void refresh()}>
           {loading ? 'Loading…' : 'Refresh suggestions'}
-        </button>
+        </Button>
         <div className="self-end text-text-tertiary text-xs ml-auto">
           {suggestions.length} item(s) at or below reorder threshold
         </div>
@@ -144,10 +145,9 @@ export function ReorderTab() {
               <div className="text-xs text-text-tertiary">{g.rows.length} product(s) low</div>
             </div>
             {isOwner && g.supplierId && (
-              <button onClick={() => void createPOForSupplier(g.supplierId, g.rows)}
-                className="px-4 py-2 bg-accent text-ink font-semibold text-sm hover:bg-accent-light">
+              <Button variant="primary" onClick={() => void createPOForSupplier(g.supplierId, g.rows)}>
                 Create draft PO
-              </button>
+              </Button>
             )}
           </div>
           <div className="overflow-x-auto">
@@ -185,9 +185,8 @@ export function ReorderTab() {
                         {r.suggestedQty}
                       </td>
                       <td className="px-3 py-2 text-right">
-                        <input type="number" min={0} value={qty}
-                          onChange={(e) => setOrderQty((prev) => ({ ...prev, [r.productId]: parseInt(e.target.value || '0', 10) }))}
-                          className="w-20 px-2 py-1 rounded bg-bg-deep border border-border-subtle text-sm text-right tabular-nums" />
+                        <Input className="w-20 text-right tabular-nums h-8 px-2" type="number" min={0} value={qty}
+                          onChange={(e) => setOrderQty((prev) => ({ ...prev, [r.productId]: parseInt(e.target.value || '0', 10) }))} />
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums text-text-tertiary">
                         {formatMoneyWithCurrency(r.lastCostPesewas)}

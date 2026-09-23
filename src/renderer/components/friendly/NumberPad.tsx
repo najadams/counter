@@ -6,6 +6,7 @@
 // digits and carry on typing without clicking back into the field.
 
 import { DeleteIcon } from 'lucide-react';
+import { Button } from '../ui/button';
 
 export function applyNumberPadKey(
   current: string,
@@ -50,29 +51,25 @@ export function NumberPad({
     <div role="group" aria-label={label} className="flex flex-col gap-2">
       <div className="grid grid-cols-3 gap-2">
         {keys.map((k) => (
-          <button
+          <Button size="xl" className="min-h-16 rounded-xl border-2 text-3xl tnum"
             key={k}
             type="button"
             disabled={disabled}
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => press(k)}
-            aria-label={k === 'back' ? 'Delete last digit' : k === 'clear' ? 'Clear' : k === '.' ? 'Decimal point' : k}
-            className="min-h-16 rounded-xl border-2 border-border bg-bg-elevated text-text-primary text-3xl font-semibold tnum hover:border-border-strong active:bg-bg-surface disabled:opacity-40"
-          >
+            aria-label={k === 'back' ? 'Delete last digit' : k === 'clear' ? 'Clear' : k === '.' ? 'Decimal point' : k}>
             {k === 'back' ? <DeleteIcon aria-hidden="true" className="mx-auto size-8" /> : k === 'clear' ? <span className="text-lg">Clear</span> : k}
-          </button>
+          </Button>
         ))}
       </div>
       {onEnter && (
-        <button
+        <Button variant="primary" size="xl" className="min-h-16 rounded-xl text-xl"
           type="button"
           disabled={disabled || enterDisabled}
           onMouseDown={(e) => e.preventDefault()}
-          onClick={onEnter}
-          className="min-h-16 rounded-xl bg-accent text-ink text-xl font-semibold hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed"
-        >
+          onClick={onEnter}>
           {enterLabel ?? 'OK'}
-        </button>
+        </Button>
       )}
     </div>
   );

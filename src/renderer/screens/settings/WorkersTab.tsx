@@ -75,30 +75,26 @@ export function WorkersTab() {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-end gap-3">
-        <button onClick={() => setShowChangeMyPin(true)}
-          className="px-4 py-2 border border-border hover:bg-bg-elevated text-sm">
+        <Button onClick={() => setShowChangeMyPin(true)}>
           Change my PIN
-        </button>
+        </Button>
         {isOwner && (
-          <button onClick={() => void regenerateRecoveryCode()}
-            className="px-4 py-2 border border-border hover:bg-bg-elevated text-sm">
+          <Button onClick={() => void regenerateRecoveryCode()}>
             Regenerate recovery code
-          </button>
+          </Button>
         )}
-        <button
+        <Button
           onClick={() => isAdmin && setShowPrint(true)}
           disabled={!isAdmin}
-          title={isAdmin ? '' : 'OWNER or FOUNDER role required'}
-          className="px-4 py-2 border border-border hover:bg-bg-elevated text-sm disabled:opacity-40 disabled:cursor-not-allowed">
+          title={isAdmin ? '' : 'OWNER or FOUNDER role required'}>
           Print PIN cards
-        </button>
-        <button
+        </Button>
+        <Button variant="primary"
           onClick={() => isAdmin && setShowAdd(true)}
           disabled={!isAdmin}
-          title={isAdmin ? '' : 'OWNER or FOUNDER role required to add workers'}
-          className="bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light text-sm disabled:opacity-40 disabled:cursor-not-allowed">
+          title={isAdmin ? '' : 'OWNER or FOUNDER role required to add workers'}>
           + Add worker
-        </button>
+        </Button>
       </div>
 
       {info && <div className="bg-bg-surface border border-success px-5 py-3 text-success text-sm">{info}</div>}
@@ -139,14 +135,14 @@ export function WorkersTab() {
                   ) : isAdmin ? (
                     <>
                       {!w.terminatedAt && w.active && (
-                        <button onClick={() => deactivate(w.id)} className="text-text-tertiary hover:text-warning text-xs">deactivate</button>
+                        <Button variant="link" className="text-text-tertiary hover:text-warning no-underline hover:underline text-xs" onClick={() => deactivate(w.id)}>deactivate</Button>
                       )}
                       {!w.terminatedAt && !w.active && (
-                        <button onClick={() => reactivate(w.id)} className="text-text-tertiary hover:text-success text-xs">reactivate</button>
+                        <Button variant="link" className="text-text-tertiary hover:text-success no-underline hover:underline text-xs" onClick={() => reactivate(w.id)}>reactivate</Button>
                       )}
-                      <button onClick={() => setResetPinFor(w)} className="text-text-tertiary hover:text-accent text-xs">reset PIN</button>
+                      <Button variant="link" className="text-text-tertiary hover:text-accent no-underline hover:underline text-xs" onClick={() => setResetPinFor(w)}>reset PIN</Button>
                       {!w.terminatedAt && (
-                        <button onClick={() => setTerminateFor(w)} className="text-text-tertiary hover:text-danger text-xs">terminate</button>
+                        <Button variant="link" className="text-text-tertiary hover:text-danger no-underline hover:underline text-xs" onClick={() => setTerminateFor(w)}>terminate</Button>
                       )}
                     </>
                   ) : (

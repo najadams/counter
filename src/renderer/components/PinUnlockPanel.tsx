@@ -2,6 +2,8 @@ import { useState, type FormEvent, type ReactNode } from 'react';
 import { counter } from '../lib/ipc';
 import { FeedbackBanner } from './FeedbackBanner';
 import type { WorkerVerifyCurrentPinResponse } from '../../shared/types/ipc';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
 
 interface Props {
   title: string;
@@ -59,23 +61,19 @@ export function PinUnlockPanel({
       </div>
       {error && <FeedbackBanner>{error}</FeedbackBanner>}
       <div className="flex flex-wrap items-center gap-3">
-        <input
+        <Input className="font-mono tnum w-32"
           autoFocus
           type="password"
           inputMode="numeric"
           maxLength={6}
           value={pin}
           onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-          placeholder="PIN"
-          className="bg-bg-input border border-border-strong px-3 py-2 font-mono tnum w-32"
-        />
-        <button
+          placeholder="PIN" />
+        <Button variant="primary"
           type="submit"
-          disabled={busy || pin.length < 4}
-          className="bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light disabled:opacity-50"
-        >
+          disabled={busy || pin.length < 4}>
           {busy ? 'Checking...' : buttonLabel}
-        </button>
+        </Button>
       </div>
     </form>
   );

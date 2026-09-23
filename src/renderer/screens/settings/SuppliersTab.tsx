@@ -62,13 +62,12 @@ export function SuppliersTab() {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-end gap-3">
-        <button
+        <Button variant="primary"
           onClick={() => isAdmin && setShowAdd(true)}
           disabled={!isAdmin}
-          title={isAdmin ? '' : 'OWNER or FOUNDER role required to add suppliers'}
-          className="bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light text-sm disabled:opacity-40 disabled:cursor-not-allowed">
+          title={isAdmin ? '' : 'OWNER or FOUNDER role required to add suppliers'}>
           + Add supplier
-        </button>
+        </Button>
       </div>
 
       {error && <FeedbackBanner>{error}</FeedbackBanner>}
@@ -114,19 +113,16 @@ export function SuppliersTab() {
                 <td className="px-4 py-3 text-right">
                   {isAdmin ? (
                     <div className="flex gap-2 justify-end">
-                      <button onClick={() => setEditing(s)}
-                        className="text-xs px-3 py-1 border border-border hover:bg-bg-elevated">
+                      <Button size="sm" onClick={() => setEditing(s)}>
                         Edit
-                      </button>
+                      </Button>
                       {s.active
-                        ? <button onClick={() => deactivate(s.id)}
-                            className="text-xs px-3 py-1 border border-border hover:bg-bg-elevated text-danger">
+                        ? <Button variant="danger" size="sm" onClick={() => deactivate(s.id)}>
                             Deactivate
-                          </button>
-                        : <button onClick={() => reactivate(s.id)}
-                            className="text-xs px-3 py-1 border border-border hover:bg-bg-elevated text-success">
+                          </Button>
+                        : <Button variant="success" size="sm" onClick={() => reactivate(s.id)}>
                             Reactivate
-                          </button>}
+                          </Button>}
                     </div>
                   ) : (
                     <span className="text-text-tertiary text-xs" title="OWNER or FOUNDER role required">admin only</span>

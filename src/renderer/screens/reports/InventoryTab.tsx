@@ -12,6 +12,9 @@ import { formatMoney, formatMoneyWithCurrency } from '../../../shared/lib/money'
 import { buildCsvFilename, exportRowsAsCsv, pesewasToCsvNumber } from '../../lib/csv';
 import type { ReportsInventoryResponse } from '../../../shared/types/ipc';
 import { FeedbackBanner } from '../../components/FeedbackBanner';
+import { Button } from '../../components/ui/button';
+import { NativeSelect } from '../../components/ui/native-select';
+import { Input } from '../../components/ui/input';
 
 type Filter = 'all' | 'belowReorder' | 'stockout' | 'inStock';
 type Sort =
@@ -108,22 +111,19 @@ export function InventoryTab({ reportAccessToken }: { reportAccessToken: string 
           <div className="flex gap-2 items-end">
             <label className="flex flex-col gap-1">
               <span className="text-xs uppercase tracking-wider text-text-tertiary">Velocity window</span>
-              <select value={velocityWindow} onChange={(e) => setVelocityWindow(Number(e.target.value))}
-                className="bg-bg-input border border-border-strong px-3 py-1.5 text-sm">
+              <NativeSelect className="h-9" value={velocityWindow} onChange={(e) => setVelocityWindow(Number(e.target.value))}>
                 {[7, 14, 30, 60, 90].map((d) => <option key={d} value={d}>last {d} days</option>)}
-              </select>
+              </NativeSelect>
             </label>
             <label className="flex flex-col gap-1">
               <span className="text-xs uppercase tracking-wider text-text-tertiary">Search</span>
-              <input value={search} onChange={(e) => setSearch(e.target.value)}
-                placeholder="name or SKU"
-                className="bg-bg-input border border-border-strong px-3 py-1.5 text-sm min-w-56" />
+              <Input className="min-w-56 h-9" value={search} onChange={(e) => setSearch(e.target.value)}
+                placeholder="name or SKU" />
             </label>
           </div>
-          <button onClick={exportCsv} disabled={!data || sorted.length === 0}
-            className="px-3 py-1.5 border border-border text-xs hover:bg-bg-elevated disabled:opacity-40">
+          <Button size="sm" onClick={exportCsv} disabled={!data || sorted.length === 0}>
             Export CSV
-          </button>
+          </Button>
         </div>
         <div className="text-text-tertiary text-xs">
           Days-of-supply = on-hand ÷ (units sold in window ÷ {velocityWindow}). NULL when there are no sales in window.

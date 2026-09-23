@@ -11,6 +11,8 @@
 import { useEffect, useState } from 'react';
 import { counter } from '../lib/ipc';
 import { FeedbackBanner } from '../components/FeedbackBanner';
+import { Button } from '../components/ui/button';
+import { Textarea } from '../components/ui/textarea';
 
 export default function ActivationScreen({
   onActivated,
@@ -86,14 +88,12 @@ export default function ActivationScreen({
               {machineCode ?? '····-····-····-····'}
             </div>
           </div>
-          <button
+          <Button variant="link" className="text-accent no-underline hover:underline text-xs"
             type="button"
             onClick={() => void copyMachineCode()}
-            disabled={!machineCode}
-            className="text-xs text-accent hover:underline disabled:opacity-50"
-          >
+            disabled={!machineCode}>
             {copied ? 'Copied' : 'Copy machine code'}
-          </button>
+          </Button>
           <p className="text-xs text-text-tertiary">
             Send it by WhatsApp or SMS. It identifies this PC only — it contains
             no sales, customer or worker information.
@@ -104,39 +104,31 @@ export default function ActivationScreen({
           <div className="text-xs text-text-tertiary uppercase tracking-wider">
             Step 2 — paste the key you get back
           </div>
-          <textarea
+          <Textarea className="p-3 font-mono text-xs tracking-wide resize-none"
             value={key}
             onChange={(e) => setKey(e.target.value)}
             rows={5}
             autoFocus
             spellCheck={false}
-            placeholder="XXXXX-XXXXX-XXXXX-…"
-            className="w-full bg-bg-deep border border-border-strong rounded p-3 font-mono text-xs
-                       tracking-wide resize-none focus:outline-hidden focus:border-accent"
-          />
+            placeholder="XXXXX-XXXXX-XXXXX-…" />
           <p className="text-xs text-text-tertiary">
             Paste the whole thing. Dashes, line breaks and capitals don&apos;t matter.
           </p>
 
           {err && <FeedbackBanner tone="error">{err}</FeedbackBanner>}
 
-          <button
+          <Button variant="primary" size="lg" className="w-full mt-2"
             type="submit"
-            disabled={busy || !key.trim()}
-            className="w-full bg-accent text-bg-deep font-bold rounded py-3 mt-2
-                       disabled:opacity-50 disabled:cursor-not-allowed"
-          >
+            disabled={busy || !key.trim()}>
             {busy ? 'Checking…' : mode === 'reactivate' ? 'Re-activate' : 'Activate'}
-          </button>
+          </Button>
 
           {mode === 'reactivate' && onCancel && (
-            <button
+            <Button variant="link" className="w-full text-text-tertiary text-xs"
               type="button"
-              onClick={onCancel}
-              className="w-full text-xs text-text-tertiary underline py-2"
-            >
+              onClick={onCancel}>
               Back — shift close, reports and export still work
-            </button>
+            </Button>
           )}
         </form>
 

@@ -4,6 +4,10 @@ import { formatMoney, formatMoneyWithCurrency, parseCedisToPesewas } from '../..
 import type { ReportsTaxesResponse, ReportsTaxPaymentRecordRequest } from '../../../shared/types/ipc';
 import { DateRangePicker, defaultDateRange, type DateRange } from '../../components/DateRangePicker';
 import { FeedbackBanner } from '../../components/FeedbackBanner';
+import { Button } from '../../components/ui/button';
+import { Textarea } from '../../components/ui/textarea';
+import { NativeSelect } from '../../components/ui/native-select';
+import { Input } from '../../components/ui/input';
 
 type TaxPaymentMethod = ReportsTaxPaymentRecordRequest['paymentMethod'];
 
@@ -91,14 +95,12 @@ export function TaxesTab({ reportAccessToken }: { reportAccessToken: string }) {
     <div className="flex flex-col gap-5">
       <div className="bg-bg-surface border border-border p-4 flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
         <DateRangePicker value={range} onChange={setRange} />
-        <button
+        <Button variant="primary" size="lg"
           type="button"
           onClick={openPaymentForm}
-          disabled={!data || loading}
-          className="bg-accent text-white px-5 py-2 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-        >
+          disabled={!data || loading}>
           Record tax payment
-        </button>
+        </Button>
       </div>
 
       {error && <FeedbackBanner>{error}</FeedbackBanner>}
@@ -127,75 +129,65 @@ export function TaxesTab({ reportAccessToken }: { reportAccessToken: string }) {
             <section className="bg-bg-surface border border-border p-4">
               <div className="flex items-center justify-between gap-3 mb-4">
                 <h3 className="text-text-secondary uppercase tracking-wider text-xs">Record tax payment</h3>
-                <button type="button" onClick={() => setShowPaymentForm(false)} className="text-text-tertiary hover:text-text-primary text-sm">
+                <Button variant="link" className="text-text-tertiary hover:text-text-primary no-underline hover:underline text-sm" type="button" onClick={() => setShowPaymentForm(false)}>
                   Cancel
-                </button>
+                </Button>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[1fr_1fr_1fr_1.4fr] gap-3">
                 <label className="flex flex-col gap-1">
                   <span className="text-text-tertiary uppercase tracking-wider text-xs">Amount (cedis)</span>
-                  <input
+                  <Input className="font-mono tnum"
                     value={paymentAmount}
                     onChange={(e) => setPaymentAmount(e.target.value)}
-                    className="bg-bg-input border border-border px-3 py-2 font-mono tnum"
+                   
                     inputMode="decimal"
-                    placeholder="0.00"
-                  />
+                    placeholder="0.00" />
                 </label>
                 <label className="flex flex-col gap-1">
                   <span className="text-text-tertiary uppercase tracking-wider text-xs">Paid by</span>
-                  <select
+                  <NativeSelect
                     value={paymentMethod}
-                    onChange={(e) => setPaymentMethod(e.target.value as TaxPaymentMethod)}
-                    className="bg-bg-input border border-border px-3 py-2"
-                  >
+                    onChange={(e) => setPaymentMethod(e.target.value as TaxPaymentMethod)}>
                     {PAYMENT_METHODS.map((method) => (
                       <option key={method.code} value={method.code}>{method.label}</option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </label>
                 <label className="flex flex-col gap-1">
                   <span className="text-text-tertiary uppercase tracking-wider text-xs">Paid date</span>
-                  <input
+                  <Input
                     value={paymentDate}
                     onChange={(e) => setPaymentDate(e.target.value)}
-                    className="bg-bg-input border border-border px-3 py-2"
-                    type="date"
-                  />
+                   
+                    type="date" />
                 </label>
                 <label className="flex flex-col gap-1">
                   <span className="text-text-tertiary uppercase tracking-wider text-xs">Reference</span>
-                  <input
+                  <Input
                     value={paymentReference}
                     onChange={(e) => setPaymentReference(e.target.value)}
-                    className="bg-bg-input border border-border px-3 py-2"
-                    placeholder={paymentMethod === 'CASH' ? 'Optional' : 'Required'}
-                  />
+                   
+                    placeholder={paymentMethod === 'CASH' ? 'Optional' : 'Required'} />
                 </label>
               </div>
               <label className="flex flex-col gap-1 mt-3">
                 <span className="text-text-tertiary uppercase tracking-wider text-xs">Notes</span>
-                <textarea
+                <Textarea className="min-h-20"
                   value={paymentNotes}
-                  onChange={(e) => setPaymentNotes(e.target.value)}
-                  className="bg-bg-input border border-border px-3 py-2 min-h-20"
-                />
+                  onChange={(e) => setPaymentNotes(e.target.value)} />
               </label>
               <label className="flex flex-col gap-1 mt-3 max-w-xs">
                 <span className="text-text-tertiary text-xs">Fresh PIN to record this payment</span>
-                <input type="password" inputMode="numeric" maxLength={6} value={paymentPin}
-                  onChange={(e) => setPaymentPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  className="bg-bg-input border border-border px-3 py-2 font-mono" />
+                <Input className="font-mono" type="password" inputMode="numeric" maxLength={6} value={paymentPin}
+                  onChange={(e) => setPaymentPin(e.target.value.replace(/\D/g, '').slice(0, 6))} />
               </label>
               <div className="mt-4 flex justify-end">
-                <button
+                <Button variant="primary" size="lg"
                   type="button"
                   onClick={() => void submitTaxPayment()}
-                  disabled={savingPayment || paymentPin.length < 4}
-                  className="bg-accent text-white px-5 py-2 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-                >
+                  disabled={savingPayment || paymentPin.length < 4}>
                   {savingPayment ? 'Saving…' : 'Save tax payment'}
-                </button>
+                </Button>
               </div>
             </section>
           )}

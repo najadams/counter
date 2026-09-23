@@ -18,6 +18,8 @@ import type {
 } from '../../../shared/types/ipc';
 import type { SaleReceipt } from '../../../shared/lib/receipt';
 import { VAT_ENABLED, extractInclusiveVat } from '../../../shared/lib/vat';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
 
 export function AppearanceTab() {
   const choice = useTheme((s) => s.choice);
@@ -361,20 +363,16 @@ function ReceiptSection(): JSX.Element {
           </FormGroup>
 
           <div className="flex items-center gap-3 pt-2">
-            <button
+            <Button variant="primary"
               onClick={() => void save()}
-              disabled={!isOwner || !dirty || saving}
-              className="bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light disabled:opacity-50"
-            >
+              disabled={!isOwner || !dirty || saving}>
               {saving ? 'Saving…' : 'Save receipt settings'}
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={reset}
-              disabled={!dirty || saving}
-              className="border border-border px-4 py-2 hover:bg-bg-elevated disabled:opacity-50"
-            >
+              disabled={!dirty || saving}>
               Revert
-            </button>
+            </Button>
             {!isOwner && (
               <span className="text-xs text-text-tertiary">
                 Only OWNER or FOUNDER can change receipt settings.
@@ -440,12 +438,12 @@ function TextField({
   return (
     <label className="block text-sm">
       <span className="text-text-secondary">{label}</span>
-      <input
+      <Input
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="mt-1 w-full bg-bg-surface border border-border px-3 py-2 text-text-primary disabled:opacity-60"
+        className="mt-1"
       />
       {hint && <span className="block text-xs text-text-tertiary mt-1">{hint}</span>}
     </label>
@@ -520,14 +518,12 @@ function PrinterSetupField({
             {station === 'door' ? 'Phone sales print here.' : 'Desktop sales print here.'}
           </div>
         </div>
-        <button
+        <Button size="sm"
           type="button"
           onClick={onTest}
-          disabled={disabled || testing || !value.trim()}
-          className="border border-border px-3 py-1.5 text-sm hover:bg-bg-elevated disabled:opacity-50"
-        >
+          disabled={disabled || testing || !value.trim()}>
           {testing ? 'Testing…' : 'Test print'}
-        </button>
+        </Button>
       </div>
 
       <RadioRow
@@ -602,7 +598,7 @@ function NumberField({
     <label className="block text-sm">
       <span className="text-text-secondary">{label}</span>
       <div className="mt-1 flex items-center gap-2">
-        <input
+        <Input
           type="number"
           min={min}
           max={max}
@@ -611,7 +607,7 @@ function NumberField({
             const n = Number(e.target.value);
             if (Number.isFinite(n)) onChange(Math.max(min, Math.min(max, n)));
           }}
-          className="w-24 bg-bg-surface border border-border px-3 py-2 text-text-primary disabled:opacity-60"
+          className="w-24 font-mono tnum"
         />
         {suffix && <span className="text-text-tertiary">{suffix}</span>}
       </div>

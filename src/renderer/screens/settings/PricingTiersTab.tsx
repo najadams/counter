@@ -13,6 +13,9 @@ import { useSession } from '../../store/session';
 import { formatMoney, parseCedisToPesewas } from '../../../shared/lib/money';
 import type { PricingTierRow, PricingChannel } from '../../../shared/types/ipc';
 import { FeedbackBanner } from '../../components/FeedbackBanner';
+import { Button } from '../../components/ui/button';
+import { NativeSelect } from '../../components/ui/native-select';
+import { Input } from '../../components/ui/input';
 
 interface AdminProduct {
   id: string; sku: string; name: string;
@@ -139,13 +142,11 @@ export function PricingTiersTab() {
       {/* Left: product picker. Full-width on small windows so the picker
        *  stays usable; collapses to a 18rem sidebar at lg+ widths. */}
       <div className="w-full lg:w-72 xl:w-80 lg:shrink-0 flex flex-col gap-2">
-        <input
+        <Input
           autoFocus
           placeholder="Filter SKU or name…"
           value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          className="bg-bg-deep border border-border-subtle px-3 py-2 text-sm rounded"
-        />
+          onChange={(e) => setFilter(e.target.value)} />
         <div className="border border-border-subtle rounded max-h-[40vh] lg:max-h-[70vh] overflow-auto">
           {filteredProducts.map((p) => (
             <button
@@ -220,11 +221,9 @@ export function PricingTiersTab() {
                       <td className="px-3 py-2 text-right font-mono tnum">{t.minQuantity}</td>
                       <td className="px-3 py-2 text-right font-mono tnum">
                         {isEditing ? (
-                          <input
+                          <Input className="text-right w-20 h-8 px-2"
                             value={editPriceRaw}
-                            onChange={(e) => setEditPriceRaw(e.target.value)}
-                            className="bg-bg-deep border border-border-subtle px-2 py-1 text-right w-20 rounded"
-                          />
+                            onChange={(e) => setEditPriceRaw(e.target.value)} />
                         ) : (
                           formatMoney(t.unitPricePesewas)
                         )}
@@ -232,11 +231,9 @@ export function PricingTiersTab() {
                       <td className="px-3 py-2">{unitName}</td>
                       <td className="px-3 py-2 text-right font-mono tnum">
                         {isEditing ? (
-                          <input
+                          <Input className="text-right w-12 h-8 px-2"
                             value={editPriority}
-                            onChange={(e) => setEditPriority(e.target.value)}
-                            className="bg-bg-deep border border-border-subtle px-2 py-1 text-right w-12 rounded"
-                          />
+                            onChange={(e) => setEditPriority(e.target.value)} />
                         ) : (
                           t.priority
                         )}
@@ -246,34 +243,26 @@ export function PricingTiersTab() {
                       <td className="px-3 py-2 text-right">
                         {isAdmin && isEditing && (
                           <div className="flex gap-1 justify-end">
-                            <button
-                              onClick={() => saveEdit(t)}
-                              className="bg-accent text-ink px-2 py-1 text-xs rounded hover:bg-accent-light"
-                            >
+                            <Button variant="primary" size="sm"
+                              onClick={() => saveEdit(t)}>
                               Save
-                            </button>
-                            <button
-                              onClick={() => setEditingId(null)}
-                              className="border border-border px-2 py-1 text-xs rounded hover:bg-bg-elevated"
-                            >
+                            </Button>
+                            <Button size="sm"
+                              onClick={() => setEditingId(null)}>
                               Cancel
-                            </button>
+                            </Button>
                           </div>
                         )}
                         {isAdmin && !isEditing && (
                           <div className="flex gap-1 justify-end">
-                            <button
-                              onClick={() => startEdit(t)}
-                              className="border border-border px-2 py-1 text-xs rounded hover:bg-bg-elevated"
-                            >
+                            <Button size="sm"
+                              onClick={() => startEdit(t)}>
                               Edit
-                            </button>
-                            <button
-                              onClick={() => toggle(t)}
-                              className="border border-border px-2 py-1 text-xs rounded hover:bg-bg-elevated"
-                            >
+                            </Button>
+                            <Button size="sm"
+                              onClick={() => toggle(t)}>
                               {t.active ? 'Deactivate' : 'Reactivate'}
-                            </button>
+                            </Button>
                           </div>
                         )}
                       </td>
@@ -300,69 +289,55 @@ export function PricingTiersTab() {
                 <div className="text-text-secondary uppercase tracking-wider text-xs">Add tier</div>
                 <div className="flex flex-wrap gap-3 items-end">
                   <Field label="Channel" className="w-32">
-                    <select
+                    <NativeSelect className="px-2"
                       value={addChannel}
-                      onChange={(e) => setAddChannel(e.target.value as PricingChannel)}
-                      className="w-full bg-bg-deep border border-border-subtle px-2 py-2 rounded text-sm"
-                    >
+                      onChange={(e) => setAddChannel(e.target.value as PricingChannel)}>
                       {CHANNELS.map((c) => (
                         <option key={c} value={c}>{c}</option>
                       ))}
-                    </select>
+                    </NativeSelect>
                   </Field>
                   <Field label="Min qty" className="w-24">
-                    <input
+                    <Input className="font-mono tnum px-2"
                       type="number"
                       min={1}
                       placeholder="0"
                       value={addMinQty}
-                      onChange={(e) => setAddMinQty(e.target.value)}
-                      className="w-full bg-bg-deep border border-border-subtle px-2 py-2 rounded text-sm font-mono tnum"
-                    />
+                      onChange={(e) => setAddMinQty(e.target.value)} />
                   </Field>
                   <Field label="Unit price (GHS)" className="w-32">
-                    <input
+                    <Input className="font-mono tnum px-2"
                       placeholder="0.00"
                       value={addPriceRaw}
-                      onChange={(e) => setAddPriceRaw(e.target.value)}
-                      className="w-full bg-bg-deep border border-border-subtle px-2 py-2 rounded text-sm font-mono tnum"
-                    />
+                      onChange={(e) => setAddPriceRaw(e.target.value)} />
                   </Field>
                   <Field label="Unit scope" className="w-44">
-                    <select
+                    <NativeSelect className="px-2"
                       value={addUnitId}
-                      onChange={(e) => setAddUnitId(e.target.value)}
-                      className="w-full bg-bg-deep border border-border-subtle px-2 py-2 rounded text-sm"
-                    >
+                      onChange={(e) => setAddUnitId(e.target.value)}>
                       <option value="">Any unit</option>
                       {selected.units.map((u) => (
                         <option key={u.id} value={u.id}>{u.unitName} (×{u.conversionFactor})</option>
                       ))}
-                    </select>
+                    </NativeSelect>
                   </Field>
                   <Field label="Priority" className="w-20">
-                    <input
+                    <Input className="font-mono tnum px-2"
                       type="number"
                       placeholder="0"
                       value={addPriority}
-                      onChange={(e) => setAddPriority(e.target.value)}
-                      className="w-full bg-bg-deep border border-border-subtle px-2 py-2 rounded text-sm font-mono tnum"
-                    />
+                      onChange={(e) => setAddPriority(e.target.value)} />
                   </Field>
                   <Field label="Notes" className="flex-1 min-w-48">
-                    <input
+                    <Input className="px-2"
                       placeholder="(optional)"
                       value={addNotes}
-                      onChange={(e) => setAddNotes(e.target.value)}
-                      className="w-full bg-bg-deep border border-border-subtle px-2 py-2 rounded text-sm"
-                    />
+                      onChange={(e) => setAddNotes(e.target.value)} />
                   </Field>
-                  <button
-                    onClick={add}
-                    className="bg-accent text-ink px-5 py-2 rounded text-sm font-semibold hover:bg-accent-light h-[38px]"
-                  >
+                  <Button variant="primary" size="lg" className="h-[38px]"
+                    onClick={add}>
                     Add
-                  </button>
+                  </Button>
                 </div>
                 <div className="text-text-tertiary text-xs">
                   Channel <strong>ALL</strong> applies to walk-in, wholesale, and route. Higher priority wins ties.

@@ -4,6 +4,8 @@ import { formatMoneyWithCurrency } from '../../../shared/lib/money';
 import type { ReportsBalanceSheetResponse, ReportsFinancialStatementLine } from '../../../shared/types/ipc';
 import { FeedbackBanner } from '../../components/FeedbackBanner';
 import { buildCsvFilename, exportRowsAsCsv, pesewasToCsvNumber } from '../../lib/csv';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
 
 function today(): string {
   const d = new Date();
@@ -62,17 +64,15 @@ export function BalanceSheetTab({ reportAccessToken }: { reportAccessToken: stri
       <div className="bg-bg-surface border border-border p-4 flex flex-wrap items-end gap-3">
         <label>
           <span className="block text-text-secondary text-xs uppercase tracking-wider mb-1">As of</span>
-          <input type="date" value={asOfDate} onChange={(e) => changeDate(e.target.value)}
-            className="bg-bg-input border border-border-strong px-3 py-2 font-mono" />
+          <Input className="font-mono" type="date" value={asOfDate} onChange={(e) => changeDate(e.target.value)} />
         </label>
-        <button onClick={() => void load()} disabled={loading}
-          className="px-4 py-2 border border-border hover:bg-bg-elevated text-sm disabled:opacity-40">
+        <Button onClick={() => void load()} disabled={loading}>
           {loading ? 'Loading...' : 'Refresh'}
-        </button>
+        </Button>
         {data && (
-          <button onClick={() => void exportCsv()} className="px-4 py-2 border border-border hover:bg-bg-elevated text-sm">
+          <Button onClick={() => void exportCsv()}>
             Export CSV
-          </button>
+          </Button>
         )}
       </div>
 

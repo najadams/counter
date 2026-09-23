@@ -14,6 +14,11 @@ import type {
 import { SupplierPaymentsTab } from './settings/SupplierPaymentsTab';
 import { AppHeader } from '../components/AppHeader';
 import { FRIENDLY_UI_ENABLED } from '../../shared/lib/buildFlags';
+import { Button } from '../components/ui/button';
+import { NavTab } from '../components/ui/nav-tab';
+import { Textarea } from '../components/ui/textarea';
+import { NativeSelect } from '../components/ui/native-select';
+import { Input } from '../components/ui/input';
 
 type Tab = 'expenses' | 'drawings' | 'suppliers' | 'taxes';
 type CashDropCategory = CashDropListResponse['drops'][number]['category'];
@@ -64,14 +69,14 @@ export default function MoneyOutScreen({ shiftId, onExit }: { shiftId: string; o
           <div className="text-text-tertiary uppercase tracking-wider text-xs">Money out</div>
           <h1 className="text-2xl font-semibold">Expenses, drawings, suppliers, tax</h1>
         </div>
-        <button onClick={onExit} className="border border-border px-4 py-2 hover:bg-bg-elevated">
+        <Button onClick={onExit}>
           Back <span className="ml-2 text-xs border border-border-subtle px-1">F9</span>
-        </button>
+        </Button>
       </header>
       )}
 
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 py-6 flex flex-col gap-5">
-        <nav className="bg-bg-surface border border-border p-2 flex flex-wrap gap-2">
+        <nav aria-label="Money out" className="flex overflow-x-auto border-b border-border">
           <TabButton active={tab === 'expenses'} onClick={() => setTab('expenses')}>Expenses</TabButton>
           <TabButton active={tab === 'drawings'} onClick={() => setTab('drawings')}>Drawings & cash</TabButton>
           <TabButton active={tab === 'suppliers'} onClick={() => setTab('suppliers')}>Supplier payments</TabButton>
@@ -189,27 +194,23 @@ function ExpensesPanel({ shiftId }: { shiftId: string }) {
         <SectionTitle title="Record expense" subtitle="Bills, transport, repairs, staff wages, bank fees." />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
           <Field label="Amount">
-            <input
+            <Input className="font-mono tnum text-right"
               value={amountRaw}
               onChange={(e) => setAmountRaw(e.target.value)}
               autoFocus
               placeholder="0.00"
-              inputMode="decimal"
-              className="w-full bg-bg-input border border-border px-3 py-2 font-mono tnum text-right"
-            />
+              inputMode="decimal" />
           </Field>
           <Field label="Category">
-            <select value={category} onChange={(e) => setCategory(e.target.value as ExpenseCategory)}
-              className="w-full bg-bg-input border border-border px-3 py-2">
+            <NativeSelect value={category} onChange={(e) => setCategory(e.target.value as ExpenseCategory)}>
               {EXPENSE_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-            </select>
+            </NativeSelect>
           </Field>
         </div>
 
         <Field label="Paid to" className="mt-3">
-          <input value={payee} onChange={(e) => setPayee(e.target.value)}
-            placeholder="Worker, utility company, driver, vendor"
-            className="w-full bg-bg-input border border-border px-3 py-2" />
+          <Input value={payee} onChange={(e) => setPayee(e.target.value)}
+            placeholder="Worker, utility company, driver, vendor" />
         </Field>
 
         {needsPhoto && (
@@ -231,41 +232,36 @@ function ExpensesPanel({ shiftId }: { shiftId: string }) {
               </div>
             )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <select
+              <NativeSelect
                 value={supervisorWorkerId}
                 onFocus={() => void ensureSupervisors()}
-                onChange={(e) => setSupervisorWorkerId(e.target.value)}
-                className="bg-bg-input border border-border px-3 py-2">
+                onChange={(e) => setSupervisorWorkerId(e.target.value)}>
                 <option value="">Pick supervisor</option>
                 {supervisors.map((s) => <option key={s.id} value={s.id}>{s.fullName} ({s.role})</option>)}
-              </select>
-              <input
+              </NativeSelect>
+              <Input
                 value={supervisorPin}
                 onChange={(e) => setSupervisorPin(e.target.value.replace(/\D/g, ''))}
                 type="password"
                 inputMode="numeric"
                 maxLength={6}
-                placeholder="PIN"
-                className="bg-bg-input border border-border px-3 py-2"
-              />
+                placeholder="PIN" />
             </div>
           </div>
         )}
 
         <Field label="Notes" className="mt-3">
-          <textarea value={notes} onChange={(e) => setNotes(e.target.value)}
-            className="w-full bg-bg-input border border-border px-3 py-2 min-h-20" />
+          <Textarea className="min-h-20" value={notes} onChange={(e) => setNotes(e.target.value)} />
         </Field>
 
         {error && <div className="mt-3"><FeedbackBanner>{error}</FeedbackBanner></div>}
         {info && <div className="mt-3 border border-success/40 bg-success/10 text-success px-3 py-2 text-sm">{info}</div>}
 
-        <button
+        <Button variant="primary" size="lg" className="mt-4"
           onClick={() => void submit()}
-          disabled={saving || amount == null || amount <= 0}
-          className="mt-4 bg-accent text-white px-5 py-2 font-semibold disabled:opacity-50 disabled:cursor-not-allowed">
+          disabled={saving || amount == null || amount <= 0}>
           {saving ? 'Recording...' : amount != null && amount > 0 ? `Record ${formatMoney(amount)}` : 'Record expense'}
-        </button>
+        </Button>
       </section>
 
       <section className="bg-bg-surface border border-border">
@@ -364,47 +360,41 @@ function DrawingsPanel({ shiftId }: { shiftId: string }) {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
           <Field label="Amount">
-            <input value={amountRaw} onChange={(e) => setAmountRaw(e.target.value)}
-              placeholder="0.00" inputMode="decimal"
-              className="w-full bg-bg-input border border-border px-3 py-2 font-mono tnum text-right" />
+            <Input className="font-mono tnum text-right" value={amountRaw} onChange={(e) => setAmountRaw(e.target.value)}
+              placeholder="0.00" inputMode="decimal" />
           </Field>
           <Field label="Category">
-            <select value={category} onChange={(e) => { setCategory(e.target.value as CashDropCategory); setDrawingPolicyId(''); }}
-              className="w-full bg-bg-input border border-border px-3 py-2">
+            <NativeSelect value={category} onChange={(e) => { setCategory(e.target.value as CashDropCategory); setDrawingPolicyId(''); }}>
               {CASH_DROP_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-            </select>
+            </NativeSelect>
           </Field>
         </div>
 
         {category !== 'GENERIC_DROP' && (
           <Field label="Drawing policy" className="mt-3">
-            <select value={drawingPolicyId} onChange={(e) => setDrawingPolicyId(e.target.value)}
-              className="w-full bg-bg-input border border-border px-3 py-2">
+            <NativeSelect value={drawingPolicyId} onChange={(e) => setDrawingPolicyId(e.target.value)}>
               <option value="">No recurring policy</option>
               {selectedPolicies.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.beneficiaryName} - {p.cadence.toLowerCase()} cap {formatMoneyWithCurrency(p.limitPesewas)}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </Field>
         )}
 
         <Field label="Recipient" className="mt-3">
-          <select value={recipient} onChange={(e) => setRecipient(e.target.value)}
-            className="w-full bg-bg-input border border-border px-3 py-2">
+          <NativeSelect value={recipient} onChange={(e) => setRecipient(e.target.value)}>
             {COMMON_RECIPIENTS.map((r) => <option key={r}>{r}</option>)}
-          </select>
+          </NativeSelect>
         </Field>
         {recipient === 'Other' && (
-          <input value={customRecipient} onChange={(e) => setCustomRecipient(e.target.value)}
-            placeholder="Recipient name"
-            className="mt-3 w-full bg-bg-input border border-border px-3 py-2" />
+          <Input className="mt-3" value={customRecipient} onChange={(e) => setCustomRecipient(e.target.value)}
+            placeholder="Recipient name" />
         )}
 
         <Field label="Notes" className="mt-3">
-          <textarea value={notes} onChange={(e) => setNotes(e.target.value)}
-            className="w-full bg-bg-input border border-border px-3 py-2 min-h-20" />
+          <Textarea className="min-h-20" value={notes} onChange={(e) => setNotes(e.target.value)} />
         </Field>
 
         {amount != null && expected != null && amount > expected && (
@@ -415,12 +405,11 @@ function DrawingsPanel({ shiftId }: { shiftId: string }) {
         {error && <div className="mt-3"><FeedbackBanner>{error}</FeedbackBanner></div>}
         {info && <div className="mt-3 border border-success/40 bg-success/10 text-success px-3 py-2 text-sm">{info}</div>}
 
-        <button
+        <Button variant="primary" size="lg" className="mt-4"
           onClick={() => valid && setAskingSupervisor(true)}
-          disabled={!valid}
-          className="mt-4 bg-accent text-white px-5 py-2 font-semibold disabled:opacity-50 disabled:cursor-not-allowed">
+          disabled={!valid}>
           Get supervisor approval
-        </button>
+        </Button>
       </section>
 
       <section className="bg-bg-surface border border-border">
@@ -452,13 +441,7 @@ function DrawingsPanel({ shiftId }: { shiftId: string }) {
 }
 
 function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`px-4 py-2 text-sm border ${active ? 'bg-accent text-white border-accent' : 'border-border hover:bg-bg-elevated text-text-secondary'}`}>
-      {children}
-    </button>
-  );
+  return <NavTab active={active} onClick={onClick}>{children}</NavTab>;
 }
 
 function SectionTitle({ title, subtitle }: { title: string; subtitle: string }) {

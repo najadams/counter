@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
 import { counter } from '../lib/ipc';
 import { describeSyncHealth } from '../../shared/lib/syncHealth';
 import type { Banner } from '../../shared/lib/backupHeartbeat';
+import { Button } from './ui/button';
 
 const DISMISS_KEY = 'counter.syncBanner.dismissedUntil';
 
@@ -59,13 +60,11 @@ export function SyncHealthBanner(): JSX.Element | null {
         <div className="font-semibold text-sm">{banner.headline}</div>
         <div className="text-xs text-text-secondary mt-1">{banner.detail}</div>
       </div>
-      <button
+      <Button variant="link" className="text-text-secondary hover:text-text-primary whitespace-nowrap text-xs"
         type="button"
-        onClick={() => { dismissUntilTomorrow(); setHidden(true); }}
-        className="text-xs underline text-text-secondary hover:text-text-primary whitespace-nowrap"
-      >
+        onClick={() => { dismissUntilTomorrow(); setHidden(true); }}>
         Remind tomorrow
-      </button>
+      </Button>
     </div>
   );
 }

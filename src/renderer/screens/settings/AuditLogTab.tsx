@@ -7,6 +7,9 @@ import { useEffect, useState } from 'react';
 import { counter } from '../../lib/ipc';
 import { useSession } from '../../store/session';
 import { FeedbackBanner } from '../../components/FeedbackBanner';
+import { Button } from '../../components/ui/button';
+import { NativeSelect } from '../../components/ui/native-select';
+import { Input } from '../../components/ui/input';
 
 interface Entry {
   id: string; workerId: string; workerName: string; workerRole: string;
@@ -93,74 +96,64 @@ export function AuditLogTab() {
       <div className="grid grid-cols-6 gap-3">
         <label className="block">
           <span className="block text-xs text-text-tertiary mb-1 uppercase tracking-wider">Worker</span>
-          <select value={filterWorker} onChange={(e) => setFilterWorker(e.target.value)}
-            className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle text-sm">
+          <NativeSelect value={filterWorker} onChange={(e) => setFilterWorker(e.target.value)}>
             <option value="">— anyone —</option>
             <option value="sys-system">SYSTEM</option>
             {workers.map((w) => <option key={w.id} value={w.id}>{w.fullName} ({w.role})</option>)}
-          </select>
+          </NativeSelect>
         </label>
         <label className="block">
           <span className="block text-xs text-text-tertiary mb-1 uppercase tracking-wider">Action</span>
-          <select value={filterAction} onChange={(e) => setFilterAction(e.target.value)}
-            className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle text-sm">
+          <NativeSelect value={filterAction} onChange={(e) => setFilterAction(e.target.value)}>
             <option value="">— any action —</option>
             {actions.map((a) => <option key={a} value={a}>{a}</option>)}
-          </select>
+          </NativeSelect>
         </label>
         <label className="block">
           <span className="block text-xs text-text-tertiary mb-1 uppercase tracking-wider">Entity</span>
-          <select value={filterEntityType} onChange={(e) => setFilterEntityType(e.target.value)}
-            className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle text-sm">
+          <NativeSelect value={filterEntityType} onChange={(e) => setFilterEntityType(e.target.value)}>
             <option value="">— any —</option>
             {entityTypes.map((t) => <option key={t} value={t}>{t}</option>)}
-          </select>
+          </NativeSelect>
         </label>
         <label className="block">
           <span className="block text-xs text-text-tertiary mb-1 uppercase tracking-wider">From</span>
-          <input type="date" value={filterFromDate} onChange={(e) => setFilterFromDate(e.target.value)}
-            className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle text-sm" />
+          <Input type="date" value={filterFromDate} onChange={(e) => setFilterFromDate(e.target.value)} />
         </label>
         <label className="block">
           <span className="block text-xs text-text-tertiary mb-1 uppercase tracking-wider">To</span>
-          <input type="date" value={filterToDate} onChange={(e) => setFilterToDate(e.target.value)}
-            className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle text-sm" />
+          <Input type="date" value={filterToDate} onChange={(e) => setFilterToDate(e.target.value)} />
         </label>
         <label className="block">
           <span className="block text-xs text-text-tertiary mb-1 uppercase tracking-wider">Search</span>
-          <input value={filterSearch} onChange={(e) => setFilterSearch(e.target.value)}
-            placeholder="text in notes/JSON…"
-            className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle text-sm" />
+          <Input value={filterSearch} onChange={(e) => setFilterSearch(e.target.value)}
+            placeholder="text in notes/JSON…" />
         </label>
       </div>
 
       <div className="flex items-center justify-between">
         <div className="flex gap-2">
-          <button onClick={() => { setPage(0); void refresh(); }}
-            className="bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light text-sm">
+          <Button variant="primary" onClick={() => { setPage(0); void refresh(); }}>
             Apply filters
-          </button>
-          <button onClick={() => {
+          </Button>
+          <Button onClick={() => {
             setFilterWorker(''); setFilterAction(''); setFilterEntityType('');
             setFilterFromDate(''); setFilterToDate(''); setFilterSearch('');
             setPage(0);
             setTimeout(() => void refresh(), 0);
-          }}
-            className="px-4 py-2 border border-border hover:bg-bg-deep text-sm">
+          }}>
             Reset
-          </button>
+          </Button>
         </div>
         <div className="flex items-center gap-3 text-sm text-text-tertiary">
           <span>{totalCount.toLocaleString()} entries</span>
           {totalPages > 1 && (
             <>
-              <button disabled={page === 0}
-                onClick={() => { setPage(p => Math.max(0, p - 1)); setTimeout(() => void refresh(), 0); }}
-                className="px-3 py-1 border border-border disabled:opacity-30">prev</button>
+              <Button size="sm" disabled={page === 0}
+                onClick={() => { setPage(p => Math.max(0, p - 1)); setTimeout(() => void refresh(), 0); }}>prev</Button>
               <span>page {page + 1} / {totalPages}</span>
-              <button disabled={page + 1 >= totalPages}
-                onClick={() => { setPage(p => p + 1); setTimeout(() => void refresh(), 0); }}
-                className="px-3 py-1 border border-border disabled:opacity-30">next</button>
+              <Button size="sm" disabled={page + 1 >= totalPages}
+                onClick={() => { setPage(p => p + 1); setTimeout(() => void refresh(), 0); }}>next</Button>
             </>
           )}
         </div>

@@ -199,16 +199,14 @@ export function TouchCheckoutSheet(p: TouchCheckoutSheetProps): JSX.Element {
               <div className="flex flex-col gap-3">
               <label htmlFor="checkout-cash" className="text-xl font-semibold">Money received</label>
               <div className="flex flex-col items-stretch gap-3">
-                <input
+                <Input className="flex-1 border-2 rounded-xl text-4xl font-mono tnum text-right h-auto py-3 px-4"
                   id="checkout-cash"
                   autoFocus
                   value={cashRaw}
                   onChange={(e) => { setCashPristine(false); setCashRaw(e.target.value); }}
                   onFocus={(e) => e.target.select()}
                   onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); confirmAndComplete(); } }}
-                  inputMode="decimal"
-                  className="flex-1 min-w-0 bg-bg-input border-2 border-border-strong rounded-xl px-4 py-3 text-4xl font-mono tnum text-right focus:outline-hidden focus:border-accent"
-                />
+                  inputMode="decimal" />
                 <Button
                   type="button"
                   size="xl"
@@ -267,16 +265,14 @@ export function TouchCheckoutSheet(p: TouchCheckoutSheetProps): JSX.Element {
               </div>
               <label htmlFor="checkout-momo-ref" className="text-xl font-semibold">MoMo transaction number</label>
               <p className="text-lg text-text-secondary -mt-2">Copy it from the payment message on the phone.</p>
-              <input
+              <Input className="border-2 rounded-xl font-mono text-3xl h-auto py-3 px-4"
                 id="checkout-momo-ref"
                 autoFocus
                 value={refRaw}
                 onChange={(e) => setRefRaw(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); confirmAndComplete(); } }}
                 inputMode="numeric"
-                placeholder="e.g. 7812345678"
-                className="bg-bg-input border-2 border-border-strong rounded-xl px-4 py-3 font-mono text-3xl focus:outline-hidden focus:border-accent"
-              />
+                placeholder="e.g. 7812345678" />
               </div>
               <NumberPad label="Transaction number pad" value={refRaw} onChange={setRefRaw} disabled={p.submitting} />
             </div>
@@ -286,14 +282,12 @@ export function TouchCheckoutSheet(p: TouchCheckoutSheetProps): JSX.Element {
             <>
               <p className="text-xl">The customer takes the drinks now and pays later. Choose who.</p>
               <label htmlFor="checkout-customer" className="sr-only">Find customer</label>
-              <input
+              <Input className="border-2 rounded-xl text-2xl h-auto py-3 px-4"
                 id="checkout-customer"
                 autoFocus
                 value={custQuery}
                 onChange={(e) => setCustQuery(e.target.value)}
-                placeholder="Type a name or phone number"
-                className="bg-bg-input border-2 border-border-strong rounded-xl px-4 py-3 text-2xl focus:outline-hidden focus:border-accent"
-              />
+                placeholder="Type a name or phone number" />
               <Button type="button" size="xl" onClick={() => setShowCreate(true)} className="self-start rounded-xl border-2 border-border text-lg">+ New customer</Button>
               <ul className="flex flex-col gap-2 max-h-72 overflow-y-auto">
                 {custHits.length === 0 && custQuery.length > 0 && (
@@ -428,15 +422,13 @@ export function TouchCheckoutSheet(p: TouchCheckoutSheetProps): JSX.Element {
             )}
             <div className="grid grid-cols-3 gap-2">
               {['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫'].map((k) => (
-                <button
+                <Button size="xl" className="rounded-lg text-2xl font-mono"
                   key={k}
                   type="button"
                   onClick={() => pressKey(k)}
-                  aria-label={k === '⌫' ? 'Delete' : undefined}
-                  className="flex items-center justify-center rounded-lg py-4 text-2xl font-mono border border-border bg-bg-elevated text-text-primary hover:bg-bg-surface active:bg-bg-surface"
-                >
+                  aria-label={k === '⌫' ? 'Delete' : undefined}>
                   {k === '⌫' ? <DeleteIcon aria-hidden="true" className="size-6" /> : k}
-                </button>
+                </Button>
               ))}
             </div>
           </>

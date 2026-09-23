@@ -88,21 +88,19 @@ export function ProductsTab() {
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 flex-1">
-          <input value={filter} onChange={(e) => setFilter(e.target.value)}
-            placeholder="Filter by name or SKU…"
-            className="bg-bg-input border border-border-strong px-4 py-2 flex-1" />
+          <Input className="flex-1 px-4" value={filter} onChange={(e) => setFilter(e.target.value)}
+            placeholder="Filter by name or SKU…" />
           <label className="flex items-center gap-2 text-text-secondary text-sm">
             <input type="checkbox" checked={includeInactive} onChange={(e) => setIncludeInactive(e.target.checked)} />
             show inactive
           </label>
         </div>
-        <button
+        <Button variant="primary"
           onClick={() => isAdmin && setShowAdd(true)}
           disabled={!isAdmin}
-          title={isAdmin ? '' : 'OWNER or FOUNDER role required to add products'}
-          className="bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light text-sm disabled:opacity-40 disabled:cursor-not-allowed">
+          title={isAdmin ? '' : 'OWNER or FOUNDER role required to add products'}>
           + Add product
-        </button>
+        </Button>
       </div>
 
       {info && <div className="bg-bg-surface border border-success px-5 py-3 text-success text-sm">{info}</div>}
@@ -149,13 +147,13 @@ export function ProductsTab() {
                   </td>
                   <td className="px-3 py-2">{p.active ? <span className="text-success">active</span> : <span className="text-text-tertiary">inactive</span>}</td>
                   <td className="px-3 py-2 text-right space-x-2">
-                    <button onClick={() => setHistoryFor(p)} className="text-text-tertiary hover:text-accent text-xs">history</button>
+                    <Button variant="link" className="text-text-tertiary hover:text-accent no-underline hover:underline text-xs" onClick={() => setHistoryFor(p)}>history</Button>
                     {isAdmin ? (
                       <>
-                        <button onClick={() => setEditing(p)} className="text-text-tertiary hover:text-accent text-xs">edit</button>
+                        <Button variant="link" className="text-text-tertiary hover:text-accent no-underline hover:underline text-xs" onClick={() => setEditing(p)}>edit</Button>
                         {p.active
-                          ? <button onClick={() => deactivate(p.id)} className="text-text-tertiary hover:text-warning text-xs">deactivate</button>
-                          : <button onClick={() => reactivate(p.id)} className="text-text-tertiary hover:text-success text-xs">reactivate</button>}
+                          ? <Button variant="link" className="text-text-tertiary hover:text-warning no-underline hover:underline text-xs" onClick={() => deactivate(p.id)}>deactivate</Button>
+                          : <Button variant="link" className="text-text-tertiary hover:text-success no-underline hover:underline text-xs" onClick={() => reactivate(p.id)}>reactivate</Button>}
                       </>
                     ) : (
                       <span className="text-text-tertiary text-xs" title="OWNER or FOUNDER role required to edit or deactivate">edit/deactivate: admin only</span>
@@ -681,8 +679,8 @@ function PricingTiersEditor({ productId, onError }: { productId: string; onError
               <td className="px-3 py-2">{t.active ? <span className="text-success">active</span> : <span className="text-text-tertiary">inactive</span>}</td>
               <td className="text-right px-3 py-2">
                 {t.active
-                  ? <button onClick={() => void deactivate(t)} className="text-text-tertiary hover:text-warning text-xs">deactivate</button>
-                  : <button onClick={() => void reactivate(t)} className="text-text-tertiary hover:text-success text-xs">reactivate</button>}
+                  ? <Button variant="link" className="text-text-tertiary hover:text-warning no-underline hover:underline text-xs" onClick={() => void deactivate(t)}>deactivate</Button>
+                  : <Button variant="link" className="text-text-tertiary hover:text-success no-underline hover:underline text-xs" onClick={() => void reactivate(t)}>reactivate</Button>}
               </td>
             </tr>
           ))}
@@ -695,39 +693,34 @@ function PricingTiersEditor({ productId, onError }: { productId: string; onError
         <div className="grid grid-cols-4 gap-3">
           <div className="flex flex-col gap-1">
             <span className="text-text-secondary text-xs uppercase tracking-wider">Channel</span>
-            <select value={draftChannel} onChange={(e) => setDraftChannel(e.target.value as TierRow['channel'])}
-              className="bg-bg-input border border-border-strong px-3 py-2">
+            <NativeSelect value={draftChannel} onChange={(e) => setDraftChannel(e.target.value as TierRow['channel'])}>
               {(['ALL', 'WALK_IN', 'WHOLESALE', 'ROUTE'] as const).map((c) => <option key={c}>{c}</option>)}
-            </select>
+            </NativeSelect>
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-text-secondary text-xs uppercase tracking-wider">Applies to</span>
-            <select value={draftUnitId} onChange={(e) => setDraftUnitId(e.target.value)}
-              className="bg-bg-input border border-border-strong px-3 py-2">
+            <NativeSelect value={draftUnitId} onChange={(e) => setDraftUnitId(e.target.value)}>
               <option value="">any unit</option>
               {units.map((u) => (
                 <option key={u.id} value={u.id}>{u.unitName}{u.conversionFactor > 1 ? ` ×${u.conversionFactor}` : ''}</option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-text-secondary text-xs uppercase tracking-wider">Min qty</span>
-            <input value={draftMinQty} onChange={(e) => setDraftMinQty(e.target.value.replace(/\D/g, ''))}
-              placeholder="e.g. 12"
-              className="bg-bg-input border border-border-strong px-3 py-2 font-mono tnum text-right" />
+            <Input className="font-mono tnum text-right" value={draftMinQty} onChange={(e) => setDraftMinQty(e.target.value.replace(/\D/g, ''))}
+              placeholder="e.g. 12" />
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-text-secondary text-xs uppercase tracking-wider">Unit price (cedis)</span>
-            <input value={draftPrice} onChange={(e) => setDraftPrice(e.target.value)}
-              placeholder="e.g. 14.50"
-              className="bg-bg-input border border-border-strong px-3 py-2 font-mono tnum text-right" />
+            <Input className="font-mono tnum text-right" value={draftPrice} onChange={(e) => setDraftPrice(e.target.value)}
+              placeholder="e.g. 14.50" />
           </div>
         </div>
         <div className="flex justify-end">
-          <button onClick={() => void addOne()}
-            className="bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light text-sm whitespace-nowrap">
+          <Button variant="primary" className="whitespace-nowrap" onClick={() => void addOne()}>
             + Add tier
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -888,16 +881,13 @@ function ProductUnitsEditor({
             editId === u.id ? (
               <tr key={u.id} className="border-t border-border-subtle bg-bg-deep/40">
                 <td className="px-2 py-1.5">
-                  <input value={editName} onChange={(e) => setEditName(e.target.value.toUpperCase())}
-                    className="w-full bg-bg-input border border-border-strong px-2 py-1 font-mono text-sm" />
+                  <Input className="font-mono h-8 px-2" value={editName} onChange={(e) => setEditName(e.target.value.toUpperCase())} />
                 </td>
                 <td className="px-2 py-1.5">
-                  <input value={editFactor} onChange={(e) => setEditFactor(e.target.value.replace(/\D/g, ''))}
-                    className="w-full bg-bg-input border border-border-strong px-2 py-1 font-mono tnum text-sm text-right" />
+                  <Input className="font-mono tnum text-right h-8 px-2" value={editFactor} onChange={(e) => setEditFactor(e.target.value.replace(/\D/g, ''))} />
                 </td>
                 <td className="px-2 py-1.5">
-                  <input value={editPrice} onChange={(e) => setEditPrice(e.target.value)}
-                    className="w-full bg-bg-input border border-border-strong px-2 py-1 font-mono tnum text-sm text-right" />
+                  <Input className="font-mono tnum text-right h-8 px-2" value={editPrice} onChange={(e) => setEditPrice(e.target.value)} />
                 </td>
                 <td className="text-center px-2 py-1.5">
                   <input type="checkbox" checked={editSale} onChange={(e) => setEditSale(e.target.checked)} />
@@ -907,8 +897,8 @@ function ProductUnitsEditor({
                 </td>
                 <td className="px-3 py-1.5">{u.active ? <span className="text-success">active</span> : <span className="text-text-tertiary">inactive</span>}</td>
                 <td className="text-right px-3 py-1.5 whitespace-nowrap">
-                  <button onClick={() => void saveEdit(u)} className="text-accent hover:text-accent-light text-xs">save</button>
-                  <button onClick={cancelEdit} className="text-text-tertiary hover:text-text-primary text-xs ml-3">cancel</button>
+                  <Button variant="link" className="text-accent hover:text-accent-light no-underline hover:underline text-xs" onClick={() => void saveEdit(u)}>save</Button>
+                  <Button variant="link" className="text-text-tertiary hover:text-text-primary ml-3 no-underline hover:underline text-xs" onClick={cancelEdit}>cancel</Button>
                 </td>
               </tr>
             ) : (
@@ -920,10 +910,10 @@ function ProductUnitsEditor({
               <td className="text-center px-3 py-2"><YesNo value={u.isPurchaseUnit} /></td>
               <td className="px-3 py-2">{u.active ? <span className="text-success">active</span> : <span className="text-text-tertiary">inactive</span>}</td>
               <td className="text-right px-3 py-2 whitespace-nowrap">
-                <button onClick={() => startEdit(u)} className="text-text-tertiary hover:text-text-primary text-xs">edit</button>
+                <Button variant="link" className="text-text-tertiary hover:text-text-primary no-underline hover:underline text-xs" onClick={() => startEdit(u)}>edit</Button>
                 {u.active
-                  ? <button onClick={() => void deactivate(u)} className="text-text-tertiary hover:text-warning text-xs ml-3">deactivate</button>
-                  : <button onClick={() => void reactivate(u)} className="text-text-tertiary hover:text-success text-xs ml-3">reactivate</button>}
+                  ? <Button variant="link" className="text-text-tertiary hover:text-warning ml-3 no-underline hover:underline text-xs" onClick={() => void deactivate(u)}>deactivate</Button>
+                  : <Button variant="link" className="text-text-tertiary hover:text-success ml-3 no-underline hover:underline text-xs" onClick={() => void reactivate(u)}>reactivate</Button>}
               </td>
             </tr>
             )
@@ -937,21 +927,18 @@ function ProductUnitsEditor({
         <div className="grid grid-cols-[1fr_7rem_9rem] gap-3">
           <div className="flex flex-col gap-1">
             <span className="text-text-secondary text-xs uppercase tracking-wider">Unit name</span>
-            <input value={draftName} onChange={(e) => setDraftName(e.target.value.toUpperCase())}
-              placeholder="CRATE, PACK, BAG_50KG…"
-              className="bg-bg-input border border-border-strong px-3 py-2 font-mono" />
+            <Input className="font-mono" value={draftName} onChange={(e) => setDraftName(e.target.value.toUpperCase())}
+              placeholder="CRATE, PACK, BAG_50KG…" />
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-text-secondary text-xs uppercase tracking-wider">Factor</span>
-            <input value={draftFactor} onChange={(e) => setDraftFactor(e.target.value.replace(/\D/g, ''))}
-              placeholder="24"
-              className="bg-bg-input border border-border-strong px-3 py-2 font-mono tnum text-right" />
+            <Input className="font-mono tnum text-right" value={draftFactor} onChange={(e) => setDraftFactor(e.target.value.replace(/\D/g, ''))}
+              placeholder="24" />
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-text-secondary text-xs uppercase tracking-wider">Price (cedis)</span>
-            <input value={draftPrice} onChange={(e) => setDraftPrice(e.target.value)}
-              placeholder="180.00"
-              className="bg-bg-input border border-border-strong px-3 py-2 font-mono tnum text-right" />
+            <Input className="font-mono tnum text-right" value={draftPrice} onChange={(e) => setDraftPrice(e.target.value)}
+              placeholder="180.00" />
           </div>
         </div>
         <div className="flex items-center justify-between gap-4">
@@ -965,10 +952,9 @@ function ProductUnitsEditor({
               Purchasable
             </label>
           </div>
-          <button onClick={() => void addOne()}
-            className="bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light text-sm whitespace-nowrap">
+          <Button variant="primary" className="whitespace-nowrap" onClick={() => void addOne()}>
             + Add unit
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -982,37 +968,34 @@ function ProductUnitsEditor({
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1">
               <span className="text-text-secondary text-xs uppercase tracking-wider">Default at the till</span>
-              <select value={primarySaleUnitId} onChange={(e) => setPrimarySaleUnitId(e.target.value)}
-                className="bg-bg-input border border-border-strong px-3 py-2">
+              <NativeSelect value={primarySaleUnitId} onChange={(e) => setPrimarySaleUnitId(e.target.value)}>
                 <option value="">— smallest (canonical)</option>
                 {units.filter((u) => u.isSaleUnit && u.active).map((u) => (
                   <option key={u.id} value={u.id}>
                     {u.unitName}{u.conversionFactor > 1 ? ` (× ${u.conversionFactor})` : ''}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </label>
             <label className="flex flex-col gap-1">
               <span className="text-text-secondary text-xs uppercase tracking-wider">Default on receive</span>
-              <select value={primaryPurchaseUnitId} onChange={(e) => setPrimaryPurchaseUnitId(e.target.value)}
-                className="bg-bg-input border border-border-strong px-3 py-2">
+              <NativeSelect value={primaryPurchaseUnitId} onChange={(e) => setPrimaryPurchaseUnitId(e.target.value)}>
                 <option value="">— smallest (canonical)</option>
                 {units.filter((u) => u.isPurchaseUnit && u.active).map((u) => (
                   <option key={u.id} value={u.id}>
                     {u.unitName}{u.conversionFactor > 1 ? ` (× ${u.conversionFactor})` : ''}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </label>
           </div>
           <div className="flex justify-end items-center gap-3">
             {primarySaved && (
               <span className="inline-flex items-center gap-1 text-success text-xs"><CheckIcon aria-hidden="true" className="size-3.5" />Saved</span>
             )}
-            <button onClick={() => void savePrimaryUnits()} disabled={savingPrimary}
-              className="px-4 py-2 border border-border hover:bg-bg-elevated text-xs disabled:opacity-40">
+            <Button size="sm" onClick={() => void savePrimaryUnits()} disabled={savingPrimary}>
               {savingPrimary ? 'Saving…' : 'Save default units'}
-            </button>
+            </Button>
           </div>
         </div>
       )}

@@ -14,6 +14,8 @@ import { AppHeader } from '../components/AppHeader';
 import { formatMoney, formatMoneyWithCurrency } from '../../shared/lib/money';
 import type { PendingOrderDetail, PendingOrderSummary } from '../../shared/types/ipc';
 import { FeedbackBanner } from '../components/FeedbackBanner';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
 
 export default function PendingOrdersScreen({ onExit, onAccept }: { onExit: () => void; onAccept: () => void }) {
   const loadLines = useCart((s) => s.loadLines);
@@ -182,11 +184,9 @@ export default function PendingOrdersScreen({ onExit, onAccept }: { onExit: () =
                   <td className="px-4 py-3 text-right font-mono tnum">{o.lineCount}</td>
                   <td className="px-4 py-3 text-right font-mono tnum">{formatMoney(o.totalPesewas)}</td>
                   <td className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => { setSelectedId(o.id); setError(null); setInfo(null); }}
-                      className="px-3 py-1 border border-accent text-accent hover:bg-accent hover:text-ink text-xs">
+                    <Button size="sm" className="text-accent" onClick={() => { setSelectedId(o.id); setError(null); setInfo(null); }}>
                       Review
-                    </button>
+                    </Button>
                   </td>
                 </tr>
               ))}
@@ -223,15 +223,15 @@ export default function PendingOrdersScreen({ onExit, onAccept }: { onExit: () =
                   </td>
                   <td className="px-4 py-3 text-right space-x-2">
                     {o.deliveryStatus === 'NOT_STARTED' && (
-                      <button onClick={() => void deliveryAction(o, 'pack')} disabled={busy} className="text-accent text-xs">pack</button>
+                      <Button variant="link" className="text-accent no-underline hover:underline text-xs" onClick={() => void deliveryAction(o, 'pack')} disabled={busy}>pack</Button>
                     )}
                     {o.deliveryStatus === 'PACKED' && (
-                      <button onClick={() => void deliveryAction(o, 'dispatch')} disabled={busy} className="text-accent text-xs">dispatch</button>
+                      <Button variant="link" className="text-accent no-underline hover:underline text-xs" onClick={() => void deliveryAction(o, 'dispatch')} disabled={busy}>dispatch</Button>
                     )}
                     {o.deliveryStatus === 'DISPATCHED' && (
                       <>
-                        <button onClick={() => void deliveryAction(o, 'delivered')} disabled={busy} className="text-success text-xs">delivered</button>
-                        <button onClick={() => void deliveryAction(o, 'failed')} disabled={busy} className="text-danger text-xs">failed</button>
+                        <Button variant="link" className="text-success no-underline hover:underline text-xs" onClick={() => void deliveryAction(o, 'delivered')} disabled={busy}>delivered</Button>
+                        <Button variant="link" className="text-danger no-underline hover:underline text-xs" onClick={() => void deliveryAction(o, 'failed')} disabled={busy}>failed</Button>
                       </>
                     )}
                   </td>
@@ -273,21 +273,19 @@ export default function PendingOrdersScreen({ onExit, onAccept }: { onExit: () =
             {error && <FeedbackBanner>{error}</FeedbackBanner>}
 
             <div className="flex gap-3">
-              <button onClick={() => setSelectedId(null)} className="px-5 py-3 border border-border hover:bg-bg-elevated">
+              <Button size="lg" onClick={() => setSelectedId(null)}>
                 Close
-              </button>
-              <button
+              </Button>
+              <Button variant="danger" size="lg"
                 onClick={() => { setRejecting(true); setReason(''); setError(null); }}
-                disabled={busy}
-                className="px-5 py-3 border border-danger text-danger hover:bg-danger hover:text-ink disabled:opacity-40">
+                disabled={busy}>
                 Decline
-              </button>
-              <button
+              </Button>
+              <Button variant="primary" size="lg" className="flex-1"
                 onClick={() => void accept(detail.id)}
-                disabled={busy}
-                className="flex-1 bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40">
+                disabled={busy}>
                 {busy ? 'Loading…' : 'Accept & ring up'}
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -298,25 +296,22 @@ export default function PendingOrdersScreen({ onExit, onAccept }: { onExit: () =
               Decline order #{detail.id.slice(-8)}
             </h3>
             <label className="text-text-secondary text-xs uppercase tracking-wider">Reason (required)</label>
-            <input
+            <Input className="h-12 px-4"
               autoFocus value={reason} onChange={(e) => setReason(e.target.value)}
-              placeholder="e.g. out of stock, closing early, can't deliver to that area"
-              className="bg-bg-input border border-border-strong px-4 py-3"
-            />
+              placeholder="e.g. out of stock, closing early, can't deliver to that area" />
             <p className="text-text-tertiary text-xs">
               The customer will see this reason from the WhatsApp agent. No stock or payment is affected.
             </p>
             {error && <FeedbackBanner>{error}</FeedbackBanner>}
             <div className="flex gap-3">
-              <button onClick={() => setRejecting(false)} className="px-5 py-3 border border-border hover:bg-bg-elevated">
+              <Button size="lg" onClick={() => setRejecting(false)}>
                 Back
-              </button>
-              <button
+              </Button>
+              <Button variant="destructive" size="lg"
                 onClick={() => void reject(detail.id)}
-                disabled={busy || reason.trim().length < 3}
-                className="bg-danger text-ink px-5 py-3 font-semibold hover:opacity-90 disabled:opacity-40">
+                disabled={busy || reason.trim().length < 3}>
                 {busy ? 'Declining…' : 'Confirm decline'}
-              </button>
+              </Button>
             </div>
           </div>
         )}
