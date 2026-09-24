@@ -6,7 +6,7 @@
 // public key is baked into the build and never rotates, so this vector stays
 // valid without the private key being present at test time.
 
-import { describe, expect, it, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
 import crypto from 'node:crypto';
 import os from 'node:os';
@@ -227,6 +227,8 @@ describe('enforcement: grace then read-only', () => {
   const t0 = new Date('2026-09-13T08:00:00.000Z');
 
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(t0);
     db = new Database(':memory:');
     db.pragma('foreign_keys = ON');
     runMigrations(db, migrationsDir);
@@ -234,7 +236,7 @@ describe('enforcement: grace then read-only', () => {
     activate(db, FIXTURE_KEY, DEVICE, TMP, osId(FIXTURE_FP));
   });
 
-  afterEach(() => db.close());
+  afterEach(() => { db.close(); vi.useRealTimers(); });
 
   it('opens a grace period on the first real mismatch, still selling', () => {
     const st = getActivationStatus(db, TMP, osId(OTHER_FP), t0);
