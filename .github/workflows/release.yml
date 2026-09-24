@@ -164,6 +164,13 @@ jobs:
             attempt=$((attempt + 1))
           done
 
+      # v0.4.0 shipped arm64 DMGs holding an x86_64 better_sqlite3.node (the
+      # app opened no window on Apple Silicon). Fail the job before upload if
+      # any native module doesn't match its image's architecture.
+      - name: Verify native module architecture (macOS)
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        run: bash scripts/verify-mac-native-arch.sh release/*/*.dmg
       - name: List build output
         shell: bash
         run: |
