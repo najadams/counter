@@ -636,6 +636,12 @@ export function voidSaleCore(
   db: DB,
   p: VoidSaleCoreParams,
 ): { reversalMovementCount: number; customerBalanceDelta: number } {
+  if (db.prepare('SELECT 1 FROM customer_returns WHERE original_sale_id = ? LIMIT 1').get(p.sale.id)) {
+    throw new Error('This sale has customer returns. Return the remaining items instead of cancelling the whole sale.');
+  }
+  if ((db.prepare('SELECT voided FROM sales WHERE id = ?').get(p.sale.id) as { voided: number } | undefined)?.voided) {
+    throw new Error('Sale is already cancelled.');
+  }
   const now = new Date().toISOString();
   let customerDelta = 0;
   let reversalMovementCount = 0;

@@ -211,61 +211,20 @@ export function submitClosingCount(
   return { cashCountId };
 }
 
-export interface CloseShiftResult {
-  shiftId: string;
-  countedPesewas: number;
-  expectedPesewas: number;
-  variancePesewas: number;
-  totalSalesPesewas: number;
-  totalBreakageValuePesewas: number;
-}
-
 /**
- * Step 2 of close: compute expected cash, write variance, finalize the shift.
- * Expected = opening cash + cash sales + cash debt payments - cash refunds
- *            - cash drops - petty cash - cash tax payments.
- * (Cash sales and refunds: drawerCash.ts.)
+ * Cash the books expect in the drawer at the end of a shift:
+ *   opening + cash sales + cash debt payments - cash refunds - drops
+ *   - petty cash - cash tax. (Cash sales and refunds: drawerCash.ts.)
  *
- * Audits SHIFT_CLOSED with full reconciliation snapshot.
+ * Extracted so the owner close-out can show the same number the close will
+ * reconcile against — a preview computed any other way would disagree with
+ * the variance it produces.
  */
-export function computeAndCloseShift(
+export function expectedCashForShift(
   db: DB,
   shiftId: string,
-  workerId: string,
-  deviceId: string,
-): CloseShiftResult {
-  const shift = db
-    .prepare(
-      `SELECT id, location_id, worker_id, opening_cash_pesewas, closed_at FROM shifts WHERE id = ?`,
-    )
-    .get(shiftId) as
-    | { id: string; location_id: string; worker_id: string; opening_cash_pesewas: number; closed_at: string | null }
-    | undefined;
-  if (!shift) throw new Error(`computeAndCloseShift: shift ${shiftId} not found`);
-  if (shift.closed_at) throw new Error(`computeAndCloseShift: shift already closed`);
-  assertNoPendingVoidRequestsForShift(db, shiftId);
-
-  const closeCount = db
-    .prepare(
-      `SELECT id, counted_pesewas, expected_pesewas
-         FROM cash_counts
-         WHERE shift_id = ? AND count_type = 'SHIFT_CLOSE'
-         LIMIT 1`,
-    )
-    .get(shiftId) as
-    | { id: string; counted_pesewas: number; expected_pesewas: number | null }
-    | undefined;
-  if (!closeCount) {
-    throw new Error(
-      `computeAndCloseShift: closing count not yet submitted (call submitClosingCount first)`,
-    );
-  }
-  if (closeCount.expected_pesewas !== null) {
-    throw new Error(
-      `computeAndCloseShift: shift already reconciled — cannot recompute`,
-    );
-  }
-
+  openingCashPesewas: number,
+): number {
   // CASH tenders this drawer took from sales (a split sale counts only its
   // cash part), and cash it paid back to customers. See drawerCash.ts for
   // how voids are counted.
@@ -310,13 +269,70 @@ export function computeAndCloseShift(
     .get(shiftId) as { total: number };
 
   const expected =
-    shift.opening_cash_pesewas
+    openingCashPesewas
     + cashSales
     + debtPaymentsCashRow.total
     - refunds
     - cashDropsRow.total
     - expensesRow.total
     - taxPaymentsCashRow.total;
+  return expected;
+}
+
+export interface CloseShiftResult {
+  shiftId: string;
+  countedPesewas: number;
+  expectedPesewas: number;
+  variancePesewas: number;
+  totalSalesPesewas: number;
+  totalBreakageValuePesewas: number;
+}
+
+/**
+ * Step 2 of close: compute expected cash (expectedCashForShift), write the
+ * variance, finalize the shift.
+ *
+ * Audits SHIFT_CLOSED with full reconciliation snapshot.
+ */
+export function computeAndCloseShift(
+  db: DB,
+  shiftId: string,
+  workerId: string,
+  deviceId: string,
+): CloseShiftResult {
+  const shift = db
+    .prepare(
+      `SELECT id, location_id, worker_id, opening_cash_pesewas, closed_at FROM shifts WHERE id = ?`,
+    )
+    .get(shiftId) as
+    | { id: string; location_id: string; worker_id: string; opening_cash_pesewas: number; closed_at: string | null }
+    | undefined;
+  if (!shift) throw new Error(`computeAndCloseShift: shift ${shiftId} not found`);
+  if (shift.closed_at) throw new Error(`computeAndCloseShift: shift already closed`);
+  assertNoPendingVoidRequestsForShift(db, shiftId);
+
+  const closeCount = db
+    .prepare(
+      `SELECT id, counted_pesewas, expected_pesewas
+         FROM cash_counts
+         WHERE shift_id = ? AND count_type = 'SHIFT_CLOSE'
+         LIMIT 1`,
+    )
+    .get(shiftId) as
+    | { id: string; counted_pesewas: number; expected_pesewas: number | null }
+    | undefined;
+  if (!closeCount) {
+    throw new Error(
+      `computeAndCloseShift: closing count not yet submitted (call submitClosingCount first)`,
+    );
+  }
+  if (closeCount.expected_pesewas !== null) {
+    throw new Error(
+      `computeAndCloseShift: shift already reconciled — cannot recompute`,
+    );
+  }
+
+  const expected = expectedCashForShift(db, shiftId, shift.opening_cash_pesewas);
   const variance = closeCount.counted_pesewas - expected;
 
   // Total breakage value during this shift (negative pesewas in stock_movements).
@@ -408,4 +424,135 @@ export function computeAndCloseShift(
     totalSalesPesewas: allSalesRow.total,
     totalBreakageValuePesewas: breakageRow.total,
   };
+}
+
+// --- owner close-out of abandoned shifts ---------------------------------
+//
+// A shift left open overnight blocks the day from being sealed, and the
+// cashier who opened it may be long gone. sealDay() refuses on purpose: an
+// open shift means no blind count has happened, and sealing would lock the
+// day while cash evidence is still missing.
+//
+// The answer is not to let the seal skip the count — that would quietly
+// destroy the control. It is to let an OWNER perform the count themselves.
+// The money path is identical to a normal close: the owner enters what is
+// actually in the drawer, expected is computed the same way, and the variance
+// lands in the same place. What differs is who counted, which is recorded on
+// the cash count (supervisor_id + notes) and in the audit log, so a variance
+// is never silently attributed to a cashier who never counted.
+
+const OWNER_CLOSE_ROLES = new Set(['OWNER', 'FOUNDER']);
+
+function requireOwnerActor(db: DB, actorId: string): string {
+  const w = db
+    .prepare('SELECT role, active, deleted_at, terminated_at FROM workers WHERE id = ?')
+    .get(actorId) as
+    | { role: string; active: number; deleted_at: string | null; terminated_at: string | null }
+    | undefined;
+  if (!w || w.active !== 1 || w.deleted_at || w.terminated_at) {
+    throw new Error('actor worker not found or inactive');
+  }
+  if (!OWNER_CLOSE_ROLES.has(w.role)) {
+    throw new Error(`closing another worker's shift requires OWNER or FOUNDER — your role is ${w.role}`);
+  }
+  return w.role;
+}
+
+export interface OpenShiftRow {
+  shiftId: string;
+  workerId: string;
+  workerName: string;
+  openedAt: string;
+  shiftType: string;
+  openingCashPesewas: number;
+  /** Cash the books expect in the drawer (expectedCashForShift). */
+  expectedPesewas: number;
+}
+
+/** Every shift still open at this location on or before `businessDate`. */
+export function listOpenShiftsOnOrBefore(
+  db: DB,
+  locationId: string,
+  businessDate: string,
+): OpenShiftRow[] {
+  const rows = db.prepare(
+    `SELECT s.id AS shiftId, s.worker_id AS workerId, w.full_name AS workerName,
+            s.opened_at AS openedAt, s.shift_type AS shiftType,
+            s.opening_cash_pesewas AS openingCashPesewas
+       FROM shifts s
+       JOIN workers w ON w.id = s.worker_id
+      WHERE s.location_id = ? AND date(s.opened_at) <= ? AND s.closed_at IS NULL
+      ORDER BY s.opened_at ASC`,
+  ).all(locationId, businessDate) as Array<Omit<OpenShiftRow, 'expectedPesewas'>>;
+
+  return rows.map((row) => ({
+    ...row,
+    expectedPesewas: expectedCashForShift(db, row.shiftId, row.openingCashPesewas),
+  }));
+}
+
+export interface OwnerCloseShiftInput {
+  shiftId: string;
+  /** What the owner actually found in the drawer, in pesewas. */
+  countedPesewas: number;
+  /** Why the owner is closing someone else's shift. Required, audited. */
+  reason: string;
+  actorWorkerId: string;
+  deviceId: string;
+}
+
+/**
+ * Close a shift on behalf of the worker who opened it. OWNER/FOUNDER only.
+ * Runs the same two-step close as the cashier's own flow, so expected and
+ * variance are computed identically.
+ */
+export function ownerCloseShift(db: DB, input: OwnerCloseShiftInput): CloseShiftResult {
+  requireOwnerActor(db, input.actorWorkerId);
+  const reason = input.reason.trim();
+  if (reason.length < 3) {
+    throw new Error('ownerCloseShift: a reason is required to close another worker\'s shift');
+  }
+
+  const shift = db.prepare(
+    `SELECT id, worker_id AS workerId, opened_at AS openedAt, closed_at AS closedAt
+       FROM shifts WHERE id = ?`,
+  ).get(input.shiftId) as
+    | { id: string; workerId: string; openedAt: string; closedAt: string | null }
+    | undefined;
+  if (!shift) throw new Error(`ownerCloseShift: shift ${input.shiftId} not found`);
+  if (shift.closedAt) throw new Error('ownerCloseShift: shift already closed');
+
+  const run = db.transaction((): CloseShiftResult => {
+    const { cashCountId } = submitClosingCount(
+      db, input.shiftId, input.countedPesewas, input.actorWorkerId, input.deviceId,
+    );
+    // Mark on the count itself that the owner did this, not the cashier.
+    db.prepare(
+      `UPDATE cash_counts SET supervisor_id = ?, notes = ? WHERE id = ?`,
+    ).run(input.actorWorkerId, `Closed by owner: ${reason}`, cashCountId);
+
+    const closed = computeAndCloseShift(
+      db, input.shiftId, input.actorWorkerId, input.deviceId,
+    );
+
+    logAudit(db, {
+      workerId: input.actorWorkerId,
+      action: 'SHIFT_FORCE_CLOSED',
+      entityType: 'shifts',
+      entityId: input.shiftId,
+      afterValue: {
+        openedByWorkerId: shift.workerId,
+        openedAt: shift.openedAt,
+        countedPesewas: closed.countedPesewas,
+        expectedPesewas: closed.expectedPesewas,
+        variancePesewas: closed.variancePesewas,
+        reason,
+      },
+      deviceId: input.deviceId,
+    });
+
+    return closed;
+  });
+
+  return run();
 }

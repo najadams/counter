@@ -347,16 +347,66 @@ describe('owner management ledger foundation', () => {
       .toBe(cash.endingCashPesewas);
   });
 
-  it('marks stale reconciliations provisional but treats invariant failures as incomplete', () => {
+  it('flags an account holding money that nobody has counted, and only that one', () => {
     activate();
+    // The cutover stamps the till as reconciled. Clear it so the till looks
+    // like what we care about: an account with cash in it that nobody has
+    // counted. Every other seeded account is dormant and must stay quiet —
+    // an account that has never held a cedi cannot be out of balance.
+    db.prepare(
+      'UPDATE financial_accounts SET last_reconciled_at = NULL WHERE ledger_account_id = ?',
+    ).run(ledgerAccountId('CASH_TILL_DEFAULT'));
+
     const quality = getFinancialDataQuality(db, {
       locationId: LOCATION,
       asOfDate: cutoverDate,
       reportKind: 'POSITION',
     });
     expect(quality.status).toBe('PROVISIONAL');
-    expect(quality.issues.some((issue) => issue.code === 'STALE_ACCOUNT_RECONCILIATION'))
-      .toBe(true);
+    const stale = quality.issues.filter((issue) => issue.code === 'STALE_ACCOUNT_RECONCILIATION');
+    expect(stale).toHaveLength(1);
+    expect(stale[0]!.amountPesewas).toBe(10_000);
+  });
+
+  // A warning nobody can ever clear is a warning nobody reads. These three
+  // keep the list to things the shop can actually act on.
+  it('does not report today still being open as something to put right', () => {
+    activate();
+    const today = new Date().toISOString().slice(0, 10);
+    const quality = getFinancialDataQuality(db, {
+      locationId: LOCATION, toDate: today, reportKind: 'PROFIT',
+    });
+    expect(quality.issues.some((issue) => issue.code === 'PERIOD_NOT_SEALED')).toBe(false);
+    // Still not COMPLETE — the day is unfinished — just not an open item.
+    expect(quality.status).not.toBe('COMPLETE');
+  });
+
+  it('does report a day that finished and was never sealed', () => {
+    activate();
+    // The cutover seals the day before it, so reach further back for a day
+    // that simply finished without anyone sealing it.
+    const unsealed = addDays(new Date().toISOString().slice(0, 10), -3);
+    const quality = getFinancialDataQuality(db, {
+      locationId: LOCATION, toDate: unsealed, reportKind: 'PROFIT',
+    });
+    expect(quality.issues.some((issue) => issue.code === 'PERIOD_NOT_SEALED')).toBe(true);
+  });
+
+  it('stays quiet about an account that has never held money', () => {
+    activate();
+    const staleCount = (q: ReturnType<typeof getFinancialDataQuality>) =>
+      q.issues.filter((issue) => issue.code === 'STALE_ACCOUNT_RECONCILIATION').length;
+    const before = staleCount(getFinancialDataQuality(db, {
+      locationId: LOCATION, reportKind: 'POSITION',
+    }));
+    createFinancialAccount(db, {
+      locationId: LOCATION, name: 'Never used wallet', kind: 'MOMO', provider: 'TEST',
+      actorWorkerId: OWNER, deviceId: DEVICE,
+    });
+    const after = staleCount(getFinancialDataQuality(db, {
+      locationId: LOCATION, reportKind: 'POSITION',
+    }));
+    expect(after).toBe(before);
   });
 
   it('maintains accounts and obligations without bypassing structured controls', () => {

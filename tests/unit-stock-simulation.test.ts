@@ -74,13 +74,30 @@ for (const ledger of [false, true]) {
       if (ledger) {
         expect(db.prepare('SELECT balance_quantity AS q, balance_value_pesewas AS v FROM inventory_valuation_movements ORDER BY rowid DESC LIMIT 1').get()).toEqual({ q: 0, v: 0 });
       }
-      // Document the existing policy difference: legacy sales can oversell;
-      // ledger mode rejects it and rolls the transaction back.
+      // Both modes reject an unacknowledged shortfall and roll back.
       const oversell = () => completeSaleCore(db, { shiftId, workerId: W, workerName: 'Test', locationId: L,
         channel: 'WALK_IN', lines: [{ productId, unitId: bottle, quantity: 1, unitPricePesewas: 800 }],
         paymentMethod: 'CASH', cashGivenPesewas: 800, deviceId: D, shopName: 'Simulation' });
-      if (ledger) { expect(oversell).toThrow(/negative/); check(); }
-      else { oversell(); expectedStock = -1; check(); }
+      expect(oversell).toThrow(/Restock not recorded yet/); check();
+      // Explicit exception: a late receipt offsets the sale, never deducts it twice.
+      db.prepare('UPDATE products SET cost_price_pesewas = 500 WHERE id = ?').run(productId);
+      const pending = completeSaleCore(db, { shiftId, workerId: W, workerName: 'Test', locationId: L,
+        channel: 'WALK_IN', lines: [{ productId, unitId: bottle, quantity: 6, unitPricePesewas: 800 }],
+        allowUnrecordedStock: true, paymentMethod: 'CASH', cashGivenPesewas: 4800, deviceId: D, shopName: 'Simulation' });
+      expectedStock = -6; check();
+      expect(db.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action = 'SALE_UNRECORDED_STOCK' AND entity_id = ?").get(pending.saleId)).toEqual({ n: 1 });
+      receive(2, units[0]); // Partial entry: two delivered bottles, four still pending.
+      expect(expectedStock).toBe(-4);
+      receive(1, units[2]);
+      expect(expectedStock).toBe(20);
+      if (ledger) {
+        const pool = db.prepare('SELECT balance_value_pesewas AS v FROM inventory_valuation_movements ORDER BY rowid DESC LIMIT 1').get() as { v: number };
+        expect(pool.v).toBe(8333); // 20/24 of the exact GHS 100 crate.
+        const account = db.prepare(`SELECT SUM(jl.debit_pesewas-jl.credit_pesewas) AS v FROM journal_lines jl
+          JOIN journal_entries je ON je.id=jl.journal_entry_id JOIN ledger_accounts a ON a.id=jl.ledger_account_id
+          WHERE a.code='INVENTORY' AND je.status='POSTED'`).get() as { v: number };
+        expect(account.v).toBe(pool.v);
+      }
       // Channel scaling is rounded per sellable unit, then multiplied by quantity.
       db.prepare('UPDATE products SET walk_in_price_pesewas = 800, wholesale_price_pesewas = 733 WHERE id = ?').run(productId);
       expect(priceForUnit(db, productId, units[1].id, 'WHOLESALE')).toBe(4123); // 4500 × 733 / 800 = 4123.125

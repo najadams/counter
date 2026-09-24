@@ -38,6 +38,7 @@ import { QUICK_PICK_COUNT, QuickPicks, quickPickIndex } from '../components/Quic
 import { SaleKeysDialog } from '../components/SaleKeysDialog';
 import { FeedbackBanner } from '../components/FeedbackBanner';
 import { Button } from '../components/ui/button';
+import { Checkbox } from '../components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
 import { useIsTouch } from '../hooks/useIsTouch';
@@ -165,6 +166,8 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
   // Reset when a new line is added to start the next sale.
   const [lastReceipt, setLastReceipt] = useState<SaleReceipt | null>(null);
   const [showReceiptPrint, setShowReceiptPrint] = useState(false);
+  const [allowUnrecordedStock, setAllowUnrecordedStock] = useState(false);
+  useEffect(() => { if (lines.length === 0) setAllowUnrecordedStock(false); }, [lines.length]);
   const [discountRaw, setDiscountRaw] = useState('');
   const [discountReason, setDiscountReason] = useState('');
   const setDiscount = useCart((s) => s.setDiscount);
@@ -408,7 +411,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showPaymentModal, showTouchSheet, showSplit, showCustomerPicker, swapUnitFor, needsDiscountSupervisor, showReceiptPrint, showBarcodeScanner, submitting, paymentMethod, paymentReference, cashGiven, customer, lines.length, lastReceipt]);
+  }, [showPaymentModal, showTouchSheet, showSplit, showCustomerPicker, swapUnitFor, needsDiscountSupervisor, showReceiptPrint, showBarcodeScanner, submitting, paymentMethod, paymentReference, cashGiven, customer, lines.length, lastReceipt, allowUnrecordedStock]);
 
   useEffect(() => {
     if (!scrollHitIntoView.current) return;
@@ -467,6 +470,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
         productId: l.productId, quantity: l.quantity, unitPricePesewas: l.unitPricePesewas,
         unitId: l.unitId,
       })),
+      allowUnrecordedStock,
       discountPesewas: discount,
       discountReason: discount > 0 ? discountReason : null,
       supervisorWorkerId: sup?.id ?? null,
@@ -556,6 +560,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
         productId: l.productId, quantity: l.quantity, unitPricePesewas: l.unitPricePesewas,
         unitId: l.unitId,
       })),
+      allowUnrecordedStock,
       discountPesewas: discount,
       discountReason: discount > 0 ? discountReason : null,
       supervisorWorkerId: sup?.id ?? null,
@@ -802,7 +807,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
                         <div className="text-lg font-semibold text-text-primary leading-snug wrap-break-word">{p.name}</div>
                         <div className="text-base text-text-secondary">
                           per {p.defaultUnitName.toLowerCase()}
-                          <span className={lowStock ? 'text-danger font-semibold' : ''}> · {lowStock ? 'none in stock' : `${p.unitsOnHand} in stock`}</span>
+                          <span className={lowStock ? 'text-danger font-semibold' : ''}> · {p.unitsOnHand < 0 ? `${-p.unitsOnHand} units awaiting restock entry` : `${p.unitsOnHand} recorded in stock`}</span>
                         </div>
                       </div>
                       <div className="font-mono tnum text-xl font-semibold text-text-primary">{formatMoney(p.unitPricePesewas)}</div>
@@ -1001,6 +1006,16 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
                   placeholder="why? (e.g. regular customer)" />
               </div>
             )}
+            {/* A sale may take recorded stock below zero only when staff say
+                the goods are physically here and the delivery isn't entered
+                yet. Per sale; it clears for the next one. */}
+            <label className={`flex items-start gap-3 ${FRIENDLY_UI_ENABLED ? 'py-2 text-base' : 'py-1 text-sm'}`}>
+              <Checkbox className={FRIENDLY_UI_ENABLED ? 'mt-0.5 size-6' : 'mt-0.5'} checked={allowUnrecordedStock}
+                disabled={submitting} onCheckedChange={(checked) => setAllowUnrecordedStock(checked === true)} />
+              <span>Restock not recorded yet
+                <small className="block text-xs text-text-secondary">The goods are here. Record the full delivery later; earlier sales will already be deducted.</small>
+              </span>
+            </label>
             {discount > 0 && (() => {
               const limit = Math.max(Math.floor((subtotal * DISCOUNT_PERCENT_THRESHOLD_BPS) / 10000), DISCOUNT_ABS_THRESHOLD_PESEWAS);
               return discount > limit ? (

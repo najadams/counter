@@ -201,14 +201,17 @@ describe('valuation balance with movements in the same millisecond', () => {
   });
 });
 
-it('documents the remaining rounding drift when a crate is returned in three parts', async () => {
+it('restores exact cost when a crate is returned in three parts', async () => {
   const sale = await sellCrate();
   for (let i = 0; i < 3; i++) {
     recordCustomerReturn(db, { customerId: CUSTOMER, originalSaleId: sale.saleId, locationId: L,
       workerId: W, shiftId, supervisorWorkerId: OWNER, supervisorPin: PIN, refundMethod: 'CASH',
       reason: 'partial return audit', lines: [{ productId: starId, quantity: 8, unitPricePesewas: 750 }], deviceId: D });
   }
-  // Known limitation: 3 × round(10000 × 8 / 24) = 9999, not 10000.
-  // Counts are exact, but value is one pesewa short. Keep visible in the audit.
-  expect(pool()).toEqual({ quantity: 240, value: 99999 });
+  // Cumulative allocation assigns the remaining pesewa without drift.
+  expect(pool()).toEqual({ quantity: 240, value: 100000 });
+  const originalNet = (db.prepare(`SELECT SUM(jl.debit_pesewas-jl.credit_pesewas) AS n
+    FROM journal_lines jl JOIN journal_entries je ON je.id=jl.journal_entry_id
+    JOIN ledger_accounts a ON a.id=jl.ledger_account_id WHERE a.code='COGS' AND je.status='POSTED'`).get() as { n: number }).n;
+  expect(originalNet).toBe(0); // Net cost and input VAT also reconcile in the VAT build.
 });

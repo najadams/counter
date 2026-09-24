@@ -2,6 +2,8 @@
 
 Date: 15 September 2026
 
+**Follow-up, 20 September:** stock checks with an explicit late-restock exception, return limits, cancellation protection and cumulative gross/net return-cost allocation have now been implemented. See [implementation and operator notes](2026-09-20-restock-and-return-safety.md). The findings below record the original audit; legacy cost reporting and general numeric limits remain separate work.
+
 ## Assessment
 
 Ordinary whole-unit sales and supplier receipts convert correctly in the tested cases. The core design is sound: quantities use a product's smallest unit and money uses integer pesewas. This is not yet an unconditional clean bill of health. Cart editing and customer-return defects were fixed during this review; other stock-control and return-value risks remain below.

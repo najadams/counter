@@ -3,11 +3,7 @@
 // cash_counts (for CASH refunds) and customer_payments (for CREDIT) —
 // these tests pin those paths down.
 //
-// Two gaps surfaced while writing this and tracked separately:
-//   - Task #34: recordCustomerReturn does NOT call logAudit (every other
-//     state-changing service does). Tests for the audit row are .todo here.
-//   - Task #35: no quantity cap against the original sale. Tests for the
-//     cap behavior are .todo here.
+// Covers cumulative quantity/value limits, exact unit costs, audit and rollback.
 
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import Database from 'better-sqlite3';
@@ -190,17 +186,53 @@ describe('recordCustomerReturn — atomicity', () => {
     expect(sm.quantity).toBe(24);
   });
 
-  it.todo(
-    'writes an audit_log entry per return — see task #34 (currently no audit_log row is created)',
-  );
+  function linkedReturn(quantity: number, price = 800) {
+    return recordCustomerReturn(db, { customerId, originalSaleId: creditSaleId, locationId: L,
+      workerId: W, shiftId, supervisorWorkerId: SUP, supervisorPin: '9999', refundMethod: 'CREDIT',
+      reason: 'linked return', lines: [{ productId: starId, quantity, unitPricePesewas: price }], deviceId: D });
+  }
+  it('audits the return and its supervisor', () => {
+    const result = linkedReturn(1);
+    expect(db.prepare("SELECT action FROM audit_log WHERE entity_id = ?").get(result.returnId))
+      .toEqual({ action: 'CUSTOMER_RETURN_RECORDED' });
+  });
+  it('rejects quantity exceeding the original even with a small refund', () => {
+    const before = unitsOnHand(db, starId, L);
+    expect(() => linkedReturn(4, 1)).toThrow(/more than was sold/);
+    expect(unitsOnHand(db, starId, L)).toBe(before);
+    expect(db.prepare('SELECT COUNT(*) AS n FROM customer_returns').get()).toEqual({ n: 0 });
+  });
+  it('rejects a second return beyond the cumulative quantity cap', () => {
+    linkedReturn(2, 1);
+    expect(() => linkedReturn(2, 1)).toThrow(/more than was sold/);
+    linkedReturn(1, 1);
+    expect(() => linkedReturn(1, 1)).toThrow(/more than was sold/);
+  });
+  it('blocks cancellation after a partial return and returns after cancellation', async () => {
+    const { voidSale } = await import('../src/main/services/voids');
+    linkedReturn(1);
+    expect(() => voidSale(db, { saleId: creditSaleId, reason: 'test', supervisorWorkerId: SUP,
+      supervisorPin: '9999', workerId: W, deviceId: D })).toThrow(/customer returns/);
 
-  it.todo(
-    'rejects quantity exceeding the original sale — see task #35 (no cap today)',
-  );
+  });
+  it('rejects a return after the original sale was cancelled', async () => {
+    const { voidSale } = await import('../src/main/services/voids');
+    voidSale(db, { saleId: creditSaleId, reason: 'test cancellation', supervisorWorkerId: SUP,
+      supervisorPin: '9999', workerId: W, deviceId: D });
+    expect(() => linkedReturn(1)).toThrow(/cancelled/);
+  });
+  it('rejects duplicate product rows that jointly exceed the sale', () => {
+    expect(() => recordCustomerReturn(db, { customerId, originalSaleId: creditSaleId, locationId: L,
+      workerId: W, shiftId, supervisorWorkerId: SUP, supervisorPin: '9999', refundMethod: 'CREDIT',
+      reason: 'duplicate rows', lines: [1, 2].map(() => ({ productId: starId, quantity: 2, unitPricePesewas: 1 })), deviceId: D,
+    })).toThrow(/more than was sold/);
+    expect(db.prepare('SELECT COUNT(*) AS n FROM customer_returns').get()).toEqual({ n: 0 });
+  });
+  it('rejects a refund above the remaining original payment', () => {
+    linkedReturn(1, 2000);
+    expect(() => linkedReturn(1, 800)).toThrow(/Refund exceeds/);
+  });
 
-  it.todo(
-    'rejects a second return that pushes cumulative quantity beyond the original — see task #35',
-  );
 });
 
 it('rejects a return unit belonging to a different product without changing stock', async () => {

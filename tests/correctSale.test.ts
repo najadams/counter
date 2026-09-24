@@ -282,3 +282,27 @@ describe('correctSale keeps what the customer already paid', () => {
     })).rejects.toThrow(/already paid towards/);
   });
 });
+
+describe('correctSale and stock not yet recorded', () => {
+  it('asks for the same acknowledgement as the sale screen when the goods outrun recorded stock', async () => {
+    const star = product('STAR-330');
+    // 24 recorded; 30 sold because the delivery wasn't entered yet.
+    const orig = await completeSale(db, {
+      shiftId, workerId: W, workerName: 'Naj', locationId: L, channel: 'WALK_IN',
+      lines: [{ productId: star.id, quantity: 30, unitPricePesewas: 800 }],
+      paymentMethod: 'CASH', cashGivenPesewas: 24000, allowUnrecordedStock: true, deviceId: D, shopName: 'TEST',
+    });
+    const add = [{ productId: star.id, quantity: 1, unitPricePesewas: 800 }];
+    await expect(correctSale(db, {
+      originalSaleId: orig.saleId, addedLines: add, extraPayment: { method: 'CASH' }, correctorShiftId: shiftId,
+      workerId: W, workerName: 'Naj', deviceId: D, shopName: 'TEST',
+    })).rejects.toThrow(/Restock not recorded yet/);
+
+    const res = await correctSale(db, {
+      originalSaleId: orig.saleId, addedLines: add, extraPayment: { method: 'CASH' }, correctorShiftId: shiftId,
+      allowUnrecordedStock: true, workerId: W, workerName: 'Naj', deviceId: D, shopName: 'TEST',
+    });
+    expect(res.totalPesewas).toBe(24800);
+    expect(unitsOnHand(db, star.id, L)).toBe(24 - 31);
+  });
+});
