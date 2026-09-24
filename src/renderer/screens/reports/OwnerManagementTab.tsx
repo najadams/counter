@@ -27,6 +27,7 @@ import { Textarea } from '../../components/ui/textarea';
 import { NativeSelect } from '../../components/ui/native-select';
 import { Input } from '../../components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
+import { ReportSkeleton } from '../../components/ReportSkeleton';
 
 export type OwnerManagementView =
   | 'summary' | 'profit' | 'position' | 'cash'
@@ -297,6 +298,7 @@ export function OwnerManagementTab({ view, reportAccessToken }: { view: OwnerMan
           setDrilldown(null); setDrilldownError(null);
         }} />
       )}
+      {loading && !data && <ReportSkeleton label="Building pack…" />}
       {!data && !loading && (
         <section className="panel p-6 text-text-tertiary text-sm">
           No management data is available for this selection.

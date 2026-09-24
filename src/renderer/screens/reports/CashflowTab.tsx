@@ -7,6 +7,7 @@ import { FeedbackBanner } from '../../components/FeedbackBanner';
 import { buildCsvFilename, exportRowsAsCsv, pesewasToCsvNumber } from '../../lib/csv';
 import { Button } from '../../components/ui/button';
 import { Table, TableBody, TableCell, TableRow } from '../../components/ui/table';
+import { ReportSkeleton } from '../../components/ReportSkeleton';
 
 export function CashflowTab({ reportAccessToken }: { reportAccessToken: string }) {
   const [range, setRangeState] = useState<DateRange>(defaultDateRange());
@@ -74,6 +75,7 @@ export function CashflowTab({ reportAccessToken }: { reportAccessToken: string }
 
       {error && <FeedbackBanner>{error}</FeedbackBanner>}
 
+      {loading && !data && <ReportSkeleton />}
       {!data && !loading && !error && <div className="panel p-6 text-text-tertiary text-sm">No cashflow data is available for this range.</div>}
 
       {data && (

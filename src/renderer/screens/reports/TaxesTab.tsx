@@ -9,6 +9,7 @@ import { Textarea } from '../../components/ui/textarea';
 import { NativeSelect } from '../../components/ui/native-select';
 import { Input } from '../../components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
+import { ReportSkeleton } from '../../components/ReportSkeleton';
 
 type TaxPaymentMethod = ReportsTaxPaymentRecordRequest['paymentMethod'];
 
@@ -105,7 +106,7 @@ export function TaxesTab({ reportAccessToken }: { reportAccessToken: string }) {
       </div>
 
       {error && <FeedbackBanner>{error}</FeedbackBanner>}
-      {loading && !data && <div className="text-text-tertiary text-sm">Loading…</div>}
+      {loading && !data && <ReportSkeleton />}
 
       {data && (
         <>

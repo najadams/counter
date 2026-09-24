@@ -879,10 +879,10 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
             {/* LIFO: newest line at the top. Visual only — submit/receipt keep
                 scan order. Reverse a copy so the store array isn't mutated. */}
             {[...lines].reverse().map((l) => FRIENDLY_UI_ENABLED ? (
-              <li key={`${l.productId}:${l.unitId}`} className="px-6 py-4 border-b border-border">
+              <li key={`${l.productId}:${l.unitId}`} className="px-6 py-4 border-b border-border animate-cart-line-in">
                 <div className="flex items-baseline justify-between gap-3">
                   <span className="text-xl font-semibold text-text-primary wrap-break-word min-w-0">{l.name}</span>
-                  <span className="font-mono tnum text-2xl font-semibold">{formatMoney(l.unitPricePesewas * l.quantity)}</span>
+                  <span key={l.quantity} className="inline-block font-mono tnum text-2xl font-semibold animate-value-bump">{formatMoney(l.unitPricePesewas * l.quantity)}</span>
                 </div>
                 <div className="flex flex-wrap items-center gap-3 mt-3">
                   <Button className="w-14 h-14 rounded-xl border-2 text-3xl"
@@ -918,10 +918,10 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
                 </div>
               </li>
             ) : (
-              <li key={`${l.productId}:${l.unitId}`} className="px-6 py-3 border-b border-border">
+              <li key={`${l.productId}:${l.unitId}`} className="px-6 py-3 border-b border-border animate-cart-line-in">
                 <div className="flex items-baseline justify-between">
                   <span className="text-text-primary truncate">{l.name}</span>
-                  <span className="font-mono tnum">{formatMoney(l.unitPricePesewas * l.quantity)}</span>
+                  <span key={l.quantity} className="inline-block font-mono tnum animate-value-bump">{formatMoney(l.unitPricePesewas * l.quantity)}</span>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 mt-1 text-text-tertiary text-xs">
                   <Button size="icon-sm" className="size-7"
@@ -985,7 +985,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
             {FRIENDLY_UI_ENABLED ? (
               <div className="flex flex-wrap items-baseline justify-between gap-x-3 mt-2 pt-3 border-t-2 border-border">
                 <span className="text-2xl font-semibold">Total</span>
-                <span className="font-mono tnum text-4xl font-bold text-accent whitespace-nowrap">{formatMoneyWithCurrency(total)}</span>
+                <span key={total} className="inline-block font-mono tnum text-4xl font-bold text-accent whitespace-nowrap animate-value-bump">{formatMoneyWithCurrency(total)}</span>
               </div>
             ) : (
             <Row label="TOTAL" value={formatMoney(total)} large />
@@ -1615,7 +1615,8 @@ function Row({ label, value, large }: { label: string; value: string; large?: bo
   return (
     <div className="flex items-baseline justify-between">
       <span className={`text-text-secondary uppercase tracking-wider ${large ? 'text-sm' : 'text-xs'}`}>{label}</span>
-      <span className={`font-mono tnum ${large ? 'text-2xl text-accent' : 'text-text-primary'}`}>{value}</span>
+      {/* The large figure (the total) bumps when it changes. */}
+      <span key={large ? value : undefined} className={`font-mono tnum ${large ? 'inline-block text-2xl text-accent animate-value-bump' : 'text-text-primary'}`}>{value}</span>
     </div>
   );
 }

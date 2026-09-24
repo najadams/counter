@@ -26,6 +26,7 @@ import { FeedbackBanner } from '../../components/FeedbackBanner';
 import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
 import { useChartTheme, type ChartTheme } from '../../lib/chartTheme';
+import { ReportSkeleton } from '../../components/ReportSkeleton';
 
 /** Which themed series colour each measure uses, so it keeps one colour
  *  across every chart (revenue is always the accent, profit always green). */
@@ -195,7 +196,7 @@ export function GraphsTab({ reportAccessToken }: { reportAccessToken: string }) 
       </Card>
 
       {error && <FeedbackBanner>{error}</FeedbackBanner>}
-      {loading && !data && <div className="text-text-tertiary text-sm">Loading...</div>}
+      {loading && !data && <ReportSkeleton stats={6} />}
 
       {data && (
         <>

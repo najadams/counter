@@ -94,6 +94,46 @@
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --duration-fast: 120ms;
   --duration-base: 200ms;
+
+  /* animate-cart-line-in: a new cart line eases in with a brief accent
+   * wash, so the cashier sees what the scan or tap just added.
+   * animate-value-bump: a figure that just changed (a line total after +)
+   * pops once in the accent, so a second press visibly registered. */
+  --animate-cart-line-in: cart-line-in 480ms var(--ease-standard);
+  --animate-value-bump: value-bump 320ms var(--ease-standard);
+  /* animate-reveal: content that a disclosure just showed. */
+  --animate-reveal: reveal var(--duration-base) var(--ease-standard);
+}
+
+/* Motion never waits on the cashier and never makes them wait: every
+ * animation here starts after the new element is already in the DOM,
+ * focused and taking keys. Only opacity, translate, scale and colour move,
+ * which the GPU handles even on a modest till PC. */
+
+/* A new screen fades up into place. Every screen is a direct child of
+ * #root (App and HomeScreen return one screen at a time), and React
+ * creates a new root element whenever the screen changes, so this plays
+ * on each change and never on a re-render. Deliberately not the View
+ * Transitions API: that applies the change a frame late, after
+ * snapshotting the old screen, so an F1 followed at once by typing could
+ * send the first key to the old screen; and its overlay blocks clicks
+ * while it runs. */
+@keyframes screen-in {
+  from { opacity: 0; translate: 0 6px; }
+}
+#root > * {
+  animation: screen-in var(--duration-base) var(--ease-standard);
+}
+
+@keyframes cart-line-in {
+  from { opacity: 0; translate: 0 -6px; background-color: rgb(var(--c-accent) / 0.16); }
+  35% { opacity: 1; translate: 0 0; background-color: rgb(var(--c-accent) / 0.16); }
+}
+@keyframes value-bump {
+  from { color: rgb(var(--c-accent)); scale: 1.12; }
+}
+@keyframes reveal {
+  from { opacity: 0; translate: 0 -4px; }
 }
 
 /* Tailwind v3 defaults that v4 changed. Kept so the v4 upgrade is

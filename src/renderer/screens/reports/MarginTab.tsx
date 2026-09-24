@@ -11,6 +11,7 @@ import type { ReportsMarginResponse } from '../../../shared/types/ipc';
 import { FeedbackBanner } from '../../components/FeedbackBanner';
 import { Button } from '../../components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
+import { ReportSkeleton } from '../../components/ReportSkeleton';
 
 type ProductSort = 'margin' | 'revenue' | 'marginBps' | 'units';
 
@@ -95,7 +96,7 @@ export function MarginTab({ reportAccessToken }: { reportAccessToken: string }) 
       </div>
 
       {error && <FeedbackBanner>{error}</FeedbackBanner>}
-      {loading && !data && <div className="text-text-tertiary text-sm">Loading…</div>}
+      {loading && !data && <ReportSkeleton />}
 
       {data && (
         <>

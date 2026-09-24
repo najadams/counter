@@ -801,3 +801,8 @@ The sale screen's **quick picks** — the eight best sellers at this shop over
 `topSellingProducts()` in `src/main/services/sales.ts` over
 `product:top-sellers`. They are fetched once per shift, so positions don't
 move mid-shift; a shop with no sales shows no strip.
+
+Motion is CSS only and never makes the cashier wait: a new screen fades in
+after it is already taking keys, dialogs animate in but close instantly, and
+`prefers-reduced-motion` switches it all off ("Motion rules" in the design
+doc; `tests/motion.test.tsx`).

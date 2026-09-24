@@ -5,6 +5,7 @@ import type { ReportsCustomerIntelligenceResponse } from '../../../shared/types/
 import { FeedbackBanner } from '../../components/FeedbackBanner';
 import { Input } from '../../components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
+import { ReportSkeleton } from '../../components/ReportSkeleton';
 
 export function CustomerIntelligenceTab({ reportAccessToken }: { reportAccessToken: string }) {
   const [data, setData] = useState<ReportsCustomerIntelligenceResponse | null>(null);
@@ -20,7 +21,7 @@ export function CustomerIntelligenceTab({ reportAccessToken }: { reportAccessTok
   }, [inactiveDays, reportAccessToken]);
 
   if (error) return <FeedbackBanner>{error}</FeedbackBanner>;
-  if (!data) return <div className="text-text-tertiary text-sm">Loading…</div>;
+  if (!data) return <ReportSkeleton />;
 
   const totalValue = data.rows.reduce((sum, r) => sum + r.totalValuePesewas, 0);
   const monthlyValue = data.rows.reduce((sum, r) => sum + r.monthlyValuePesewas, 0);

@@ -160,7 +160,7 @@ export const DialogContent = forwardRef<HTMLDivElement, DialogContentProps>(func
         data-slot="dialog-content"
         data-counter-dialog=""
         className={cn(
-          'fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100dvh-2rem)] w-[min(32rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col gap-4 overflow-y-auto rounded-2xl border border-border bg-bg-modal p-6 text-text-primary shadow-overlay outline-none transition-[opacity,scale] duration-(--duration-base) ease-(--ease-standard) data-starting-style:scale-95 data-starting-style:opacity-0 data-ending-style:scale-95 data-ending-style:opacity-0',
+          'fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100dvh-2rem)] w-[min(32rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col gap-4 overflow-y-auto rounded-2xl border border-border bg-bg-modal p-6 text-text-primary shadow-overlay outline-none transition-[opacity,scale,translate] duration-(--duration-base) ease-(--ease-standard) data-starting-style:scale-95 data-starting-style:opacity-0 data-ending-style:scale-95 data-ending-style:opacity-0',
           className,
         )}
         {...props}

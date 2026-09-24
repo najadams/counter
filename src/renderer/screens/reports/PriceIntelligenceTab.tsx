@@ -8,6 +8,7 @@ import type {
 } from '../../../shared/types/ipc';
 import { FeedbackBanner } from '../../components/FeedbackBanner';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
+import { ReportSkeleton } from '../../components/ReportSkeleton';
 
 export function PriceIntelligenceTab({ reportAccessToken }: { reportAccessToken: string }) {
   const [prices, setPrices] = useState<ReportsPriceIntelligenceResponse | null>(null);
@@ -30,7 +31,7 @@ export function PriceIntelligenceTab({ reportAccessToken }: { reportAccessToken:
   }, [reportAccessToken]);
 
   if (error) return <FeedbackBanner>{error}</FeedbackBanner>;
-  if (!prices || !history || !landed) return <div className="text-text-tertiary text-sm">Loading…</div>;
+  if (!prices || !history || !landed) return <ReportSkeleton stats={0} />;
 
   const pricierThanCompetitor = prices.rows.filter((r) => (r.walkInVsCompetitorPesewas ?? 0) > 0).length;
   const landedTotal = landed.rows.reduce((sum, r) => sum + r.landedLineTotalPesewas, 0);

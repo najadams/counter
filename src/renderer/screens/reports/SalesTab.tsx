@@ -11,6 +11,7 @@ import { FeedbackBanner } from '../../components/FeedbackBanner';
 import { Button } from '../../components/ui/button';
 import { Segmented } from '../../components/ui/segmented';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
+import { ReportSkeleton } from '../../components/ReportSkeleton';
 
 export function SalesTab({ reportAccessToken }: { reportAccessToken: string }) {
   const [range, setRange] = useState<DateRange>(defaultDateRange());
@@ -80,7 +81,7 @@ export function SalesTab({ reportAccessToken }: { reportAccessToken: string }) {
       </div>
 
       {error && <FeedbackBanner>{error}</FeedbackBanner>}
-      {loading && !data && <div className="text-text-tertiary text-sm">Loading…</div>}
+      {loading && !data && <ReportSkeleton />}
 
       {data && (
         <>
