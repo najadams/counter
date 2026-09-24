@@ -12,7 +12,7 @@
 //   F2              complete sale (when payment is ready)
 //   F9              go back to home
 
-import { ChevronDownIcon, CircleCheckIcon, FlashlightIcon, PlusIcon, TriangleAlertIcon, XIcon } from 'lucide-react';
+import { ChevronDownIcon, CircleCheckIcon, FlashlightIcon, KeyboardIcon, PlusIcon, TriangleAlertIcon, XIcon } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   BrowserMultiFormatOneDReader,
@@ -35,6 +35,7 @@ import {
 import { SupervisorPinModal } from '../components/SupervisorPinModal';
 import { TouchCheckoutSheet } from '../components/TouchCheckoutSheet';
 import { QUICK_PICK_COUNT, QuickPicks, quickPickIndex } from '../components/QuickPicks';
+import { SaleKeysDialog } from '../components/SaleKeysDialog';
 import { FeedbackBanner } from '../components/FeedbackBanner';
 import { Button } from '../components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../components/ui/dialog';
@@ -207,6 +208,13 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
   }, [customer, channel]);
   const [showPaymentModal, setShowPaymentModal] = useState<PaymentMethod | null>(null);
   const isTouch = useIsTouch();
+  // The key list behind the header's Help button (F1).
+  const [showKeys, setShowKeys] = useState(false);
+  // The search side's scroll area; arrow keys keep the highlighted result in
+  // view inside it (set by searchKey, so a first render never scrolls the
+  // quick picks away).
+  const resultsRef = useRef<HTMLDivElement>(null);
+  const scrollHitIntoView = useRef(false);
   const [showTouchSheet, setShowTouchSheet] = useState(false);
   const [checkoutInitialMethod, setCheckoutInitialMethod] = useState<PaymentMethod>('CASH');
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
@@ -390,6 +398,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
       else if (e.key === 'F2') { e.preventDefault(); if (FRIENDLY_UI_ENABLED) openPayment(paymentMethod ?? 'CASH'); else void submitSale(); }
       else if (e.key === 'F8') { e.preventDefault(); if (lastReceipt) setShowReceiptPrint(true); }
       else if (e.key === 'F9') { e.preventDefault(); onExit(); }
+      else if (e.key === 'F1') { e.preventDefault(); setShowKeys(true); }
       else if (e.key === 'Escape') {
         e.preventDefault();
         if (showPaymentModal) setShowPaymentModal(null);
@@ -400,6 +409,12 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
     return () => window.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showPaymentModal, showTouchSheet, showSplit, showCustomerPicker, swapUnitFor, needsDiscountSupervisor, showReceiptPrint, showBarcodeScanner, submitting, paymentMethod, paymentReference, cashGiven, customer, lines.length, lastReceipt]);
+
+  useEffect(() => {
+    if (!scrollHitIntoView.current) return;
+    scrollHitIntoView.current = false;
+    resultsRef.current?.querySelector('[data-active]')?.scrollIntoView?.({ block: 'nearest' });
+  }, [hitIdx]);
 
   function openPayment(method: PaymentMethod) {
     if (submitLockRef.current) return;
@@ -602,9 +617,11 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
     }
     if (e.key === 'ArrowDown') {
       e.preventDefault();
+      scrollHitIntoView.current = true;
       setHitIdx((i) => Math.min(i + 1, hits.length - 1));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
+      scrollHitIntoView.current = true;
       setHitIdx((i) => Math.max(i - 1, 0));
     } else if (e.key === 'Enter') {
       e.preventDefault();
@@ -692,8 +709,26 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
     // The cashier (often standing, in low warehouse light) reported text was
     // too small to read at a glance. `sale-type` runs this screen's type one
     // notch above the fluid scale on counter-PC widths (styles/index.css).
-    <div className={`min-h-screen bg-bg-deep text-text-primary flex flex-col ${FRIENDLY_UI_ENABLED ? '' : 'sale-type'}`}>
-      <AppHeader subtitle={FRIENDLY_UI_ENABLED ? 'Sell drinks' : 'sale'} onBack={() => { if (!submitLockRef.current) onExit(); }} backDisabled={submitting} />
+    // From lg up the screen is exactly the window's height and the search
+    // side and the cart scroll separately; on a phone it is one long page.
+    <div className={`min-h-screen lg:h-dvh lg:overflow-hidden bg-bg-deep text-text-primary flex flex-col ${FRIENDLY_UI_ENABLED ? '' : 'sale-type'}`}>
+      <AppHeader
+        subtitle={FRIENDLY_UI_ENABLED ? 'Sell drinks' : 'sale'}
+        onBack={() => { if (!submitLockRef.current) onExit(); }}
+        backDisabled={submitting}
+        actions={(FRIENDLY_UI_ENABLED || !isTouch) && (
+          <Button
+            size={FRIENDLY_UI_ENABLED ? 'lg' : 'sm'}
+            shortcut="F1"
+            className={FRIENDLY_UI_ENABLED ? 'hidden sm:inline-flex rounded-xl border-2 text-lg' : 'hidden sm:inline-flex text-text-secondary'}
+            onClick={() => setShowKeys(true)}
+            title="Keyboard shortcuts (F1)"
+          >
+            <KeyboardIcon aria-hidden="true" className={FRIENDLY_UI_ENABLED ? 'size-6' : 'size-4'} />
+            Help
+          </Button>
+        )}
+      />
       {fulfillingOrderId && (
         <div className="bg-accent/10 border-b border-accent px-4 py-2 text-accent text-sm text-center">
           Ringing WhatsApp order #{fulfillingOrderId.slice(-8)} — quoted prices loaded
@@ -705,15 +740,15 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
         </div>
       )}
       {/* One column on phones (LAN access), two panes on desktop. */}
-      <main className={`flex-1 grid grid-cols-1 gap-0 ${FRIENDLY_UI_ENABLED ? "lg:grid-cols-[3fr_2fr]" : "lg:grid-cols-[2fr_1fr]"}`}>
+      <main className={`flex-1 grid grid-cols-1 gap-0 lg:min-h-0 lg:grid-rows-[minmax(0,1fr)] ${FRIENDLY_UI_ENABLED ? "lg:grid-cols-[3fr_2fr]" : "lg:grid-cols-[2fr_1fr]"}`}>
         <fieldset disabled={submitting} className="contents">
         {/* Left: search + results */}
-        <section className="@container border-b lg:border-b-0 lg:border-r border-border flex flex-col">
-          <div className="px-6 py-4 border-b border-border bg-bg-surface">
+        <section className="@container border-b lg:border-b-0 lg:border-r border-border flex flex-col lg:min-h-0">
+          <div className={`${FRIENDLY_UI_ENABLED ? 'px-5 py-3' : 'px-6 py-4'} border-b border-border bg-bg-surface`}>
             {FRIENDLY_UI_ENABLED && (
-              <label htmlFor="sale-search" className="flex items-center gap-3 mb-3">
-                <TaskIllustration name="sell" size={48} />
-                <span className="text-2xl font-semibold">Find a drink</span>
+              <label htmlFor="sale-search" className="flex items-center gap-2.5 mb-2">
+                <TaskIllustration name="sell" size={40} />
+                <span className="text-xl font-semibold">Find a drink</span>
               </label>
             )}
             <div className="flex gap-2">
@@ -726,7 +761,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
                 onKeyDown={searchKey}
                 placeholder={FRIENDLY_UI_ENABLED ? 'Name or barcode' : 'Search by SKU, name, or barcode...'}
                 className={FRIENDLY_UI_ENABLED
-                  ? 'flex-1 h-16 border-2 rounded-xl px-5 text-2xl'
+                  ? 'flex-1 h-14 border-2 rounded-xl px-4 text-xl'
                   : 'flex-1 h-12 px-4 text-lg'}
               />
               {isTouch && (
@@ -740,48 +775,38 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
                 </Button>
               )}
             </div>
-            <div className={FRIENDLY_UI_ENABLED ? 'hidden sm:block text-text-secondary text-sm mt-3' : `${isTouch ? 'hidden' : 'hidden sm:block'} text-text-tertiary text-xs mt-2`}>
-              <span className="kbd">↑</span><span className="kbd">↓</span> move ·
-              <span className="kbd">Enter</span> add ·
-              <span className="kbd">F4</span> Cash ·
-              <span className="kbd">F5</span> MoMo ·
-              <span className="kbd">F6</span> Credit ·
-              <span className="kbd">F2</span> {FRIENDLY_UI_ENABLED ? "Take payment" : "Complete"} ·
-              <span className="kbd">F8</span> Print ·
-              <span className="kbd">F9</span> {FRIENDLY_UI_ENABLED ? 'Home' : 'Back'} ·
-              <span className="kbd">Esc</span> Clear
-              {quickPicks.length > 0 && <> · <span className="whitespace-nowrap"><span className="kbd">Alt+1–{Math.min(quickPicks.length, QUICK_PICK_COUNT)}</span> Quick pick</span></>}
-            </div>
           </div>
+          {/* Quick picks and results scroll together under the search box. */}
+          <div ref={resultsRef} className="flex flex-col lg:flex-1 lg:min-h-0 lg:overflow-y-auto">
           <QuickPicks picks={quickPicks} onPick={(i) => addQuickPick.current(i)} announceKeys={!isTouch} />
-          <ul className="flex-1 overflow-y-auto max-h-[45vh] lg:max-h-none">
+          <ul className="overflow-y-auto max-h-[45vh] lg:max-h-none lg:overflow-visible">
             {hits.length === 0 && (
-              <li className={FRIENDLY_UI_ENABLED ? 'px-6 py-6 text-xl text-text-secondary' : 'px-6 py-4 text-text-tertiary'}>{FRIENDLY_UI_ENABLED ? (query.trim() === '' ? 'Type a drink name above to find it.' : 'No drinks match. Check the spelling, or try fewer letters.') : 'No products match.'}</li>
+              <li className={FRIENDLY_UI_ENABLED ? 'px-5 py-5 text-lg text-text-secondary' : 'px-6 py-4 text-text-tertiary'}>{FRIENDLY_UI_ENABLED ? (query.trim() === '' ? 'Type a drink name above to find it.' : 'No drinks match. Check the spelling, or try fewer letters.') : 'No products match.'}</li>
             )}
             {hits.map((p, i) => {
               const active = i === hitIdx;
               const lowStock = p.unitsOnHand <= 0;
               return (
-                <li key={p.id}>
+                <li key={p.id} data-active={active || undefined}>
                   {FRIENDLY_UI_ENABLED ? (
                     <button
                       type="button"
                       onClick={() => { setHitIdx(i); addHitToCart(i); }}
                       aria-label={`Add ${p.name}, per ${p.defaultUnitName.toLowerCase()}, ${formatMoneyWithCurrency(p.unitPricePesewas)}`}
                       className={[
-                        'w-full min-h-20 text-left px-6 py-3 flex items-center gap-4 border-b border-border',
+                        'w-full min-h-16 text-left px-5 py-2.5 flex items-center gap-3 border-b border-border',
                         active ? 'bg-bg-elevated shadow-[inset_4px_0_0_rgb(var(--c-accent))]' : 'bg-bg-surface hover:bg-bg-elevated',
                       ].join(' ')}
                     >
                       <div className="min-w-0 flex-1">
-                        <div className="text-xl font-semibold text-text-primary leading-snug wrap-break-word">{p.name}</div>
-                        <div className="text-lg text-text-secondary">
+                        <div className="text-lg font-semibold text-text-primary leading-snug wrap-break-word">{p.name}</div>
+                        <div className="text-base text-text-secondary">
                           per {p.defaultUnitName.toLowerCase()}
                           <span className={lowStock ? 'text-danger font-semibold' : ''}> · {lowStock ? 'none in stock' : `${p.unitsOnHand} in stock`}</span>
                         </div>
                       </div>
-                      <div className="font-mono tnum text-2xl font-semibold text-text-primary">{formatMoney(p.unitPricePesewas)}</div>
-                      <span aria-hidden className="shrink-0 w-12 h-12 rounded-full bg-accent text-ink text-3xl leading-none flex items-center justify-center">+</span>
+                      <div className="font-mono tnum text-xl font-semibold text-text-primary">{formatMoney(p.unitPricePesewas)}</div>
+                      <span aria-hidden className="shrink-0 size-10 rounded-full bg-accent text-ink text-2xl leading-none flex items-center justify-center">+</span>
                     </button>
                   ) : (
                   <button
@@ -806,14 +831,15 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
               );
             })}
           </ul>
+          </div>
         </section>
 
-        {/* Right: cart + totals + payment */}
-        <section className="flex flex-col bg-bg-surface">
-          <div className="px-6 py-4 border-b border-border flex flex-col gap-3">
-            <div className={FRIENDLY_UI_ENABLED ? 'text-2xl font-semibold' : 'text-text-secondary uppercase tracking-wider text-xs'}>Cart</div>
+        {/* Right: cart + totals + payment. One scroll area of its own. */}
+        <section className="flex flex-col bg-bg-surface lg:min-h-0 lg:overflow-y-auto">
+          <div className={`${FRIENDLY_UI_ENABLED ? 'px-5 py-3 gap-2.5' : 'px-6 py-4 gap-3'} border-b border-border flex flex-col`}>
+            <div className={FRIENDLY_UI_ENABLED ? 'text-xl font-semibold' : 'text-text-secondary uppercase tracking-wider text-xs'}>Cart</div>
             <div>
-              <div className={FRIENDLY_UI_ENABLED ? 'text-base text-text-secondary mb-1' : 'text-text-tertiary uppercase tracking-wider text-[10px] mb-1'}>{FRIENDLY_UI_ENABLED ? 'Price type' : 'Channel'}</div>
+              <div className={FRIENDLY_UI_ENABLED ? 'text-sm text-text-secondary mb-1' : 'text-text-tertiary uppercase tracking-wider text-[10px] mb-1'}>{FRIENDLY_UI_ENABLED ? 'Price type' : 'Channel'}</div>
               <Segmented
                 label={FRIENDLY_UI_ENABLED ? 'Price type' : 'Channel'}
                 size={FRIENDLY_UI_ENABLED ? 'lg' : 'md'}
@@ -828,7 +854,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
               />
             </div>
             <div>
-              <div className={FRIENDLY_UI_ENABLED ? 'text-base text-text-secondary mb-1' : 'text-text-tertiary uppercase tracking-wider text-[10px] mb-1'}>Customer</div>
+              <div className={FRIENDLY_UI_ENABLED ? 'text-sm text-text-secondary mb-1' : 'text-text-tertiary uppercase tracking-wider text-[10px] mb-1'}>Customer</div>
               {customer ? (
                 <div className="flex items-baseline justify-between gap-2 bg-bg-deep border border-border px-3 py-1.5">
                   <div className="min-w-0">
@@ -852,7 +878,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
                   type="button"
                   onClick={() => setShowCustomerPicker(true)}
                   className={FRIENDLY_UI_ENABLED
-                    ? 'w-full min-h-12 px-4 py-2 border-2 border-border rounded-xl bg-bg-deep text-text-primary hover:bg-bg-elevated text-lg text-left'
+                    ? 'w-full min-h-11 px-4 py-2 border-2 border-border rounded-xl bg-bg-deep text-text-primary hover:bg-bg-elevated text-base text-left'
                     : 'w-full px-3 py-1.5 border border-border bg-bg-deep text-text-primary hover:bg-bg-elevated text-xs text-left'}>
                   {FRIENDLY_UI_ENABLED ? '+ Add a customer (optional)' : '+ Attach customer (optional)'}
                 </button>
@@ -873,20 +899,20 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
               </FeedbackBanner>
             )}
           </div>
-          <ul className="flex-1 overflow-y-auto max-h-[40vh] lg:max-h-none">
+          <ul className="flex-1 overflow-y-auto max-h-[40vh] lg:max-h-none lg:overflow-visible">
             {lines.length === 0 && (
-              <li className={FRIENDLY_UI_ENABLED ? 'px-6 py-6 text-xl text-text-secondary' : 'px-6 py-6 text-text-tertiary'}>{FRIENDLY_UI_ENABLED ? 'The cart is empty. Tap a drink to add it.' : 'Empty.'}</li>
+              <li className={FRIENDLY_UI_ENABLED ? 'px-5 py-5 text-lg text-text-secondary' : 'px-6 py-6 text-text-tertiary'}>{FRIENDLY_UI_ENABLED ? 'The cart is empty. Tap a drink to add it.' : 'Empty.'}</li>
             )}
             {/* LIFO: newest line at the top. Visual only — submit/receipt keep
                 scan order. Reverse a copy so the store array isn't mutated. */}
             {[...lines].reverse().map((l) => FRIENDLY_UI_ENABLED ? (
-              <li key={`${l.productId}:${l.unitId}`} className="px-6 py-4 border-b border-border animate-cart-line-in">
+              <li key={`${l.productId}:${l.unitId}`} className="px-5 py-3 border-b border-border animate-cart-line-in">
                 <div className="flex items-baseline justify-between gap-3">
-                  <span className="text-xl font-semibold text-text-primary wrap-break-word min-w-0">{l.name}</span>
-                  <span key={l.quantity} className="inline-block font-mono tnum text-2xl font-semibold animate-value-bump">{formatMoney(l.unitPricePesewas * l.quantity)}</span>
+                  <span className="text-lg font-semibold text-text-primary wrap-break-word min-w-0">{l.name}</span>
+                  <span key={l.quantity} className="inline-block font-mono tnum text-xl font-semibold animate-value-bump">{formatMoney(l.unitPricePesewas * l.quantity)}</span>
                 </div>
-                <div className="flex flex-wrap items-center gap-3 mt-3">
-                  <Button className="w-14 h-14 rounded-xl border-2 text-3xl"
+                <div className="flex flex-wrap items-center gap-2 mt-2">
+                  <Button className="size-12 rounded-xl border-2 text-2xl"
                     type="button"
                     onClick={() => bumpQuantity(l.productId, -1, l.unitId)}
                    
@@ -899,21 +925,21 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
                     label={`How many ${l.name}`}
                     large
                   />
-                  <Button className="w-14 h-14 rounded-xl border-2 text-3xl"
+                  <Button className="size-12 rounded-xl border-2 text-2xl"
                     type="button"
                     onClick={() => bumpQuantity(l.productId, +1, l.unitId)}
                    
                     aria-label={`One more ${l.name}`}>+</Button>
-                  <Button size="xl" className="min-h-14 rounded-xl border-2 text-lg"
+                  <Button size="lg" className="min-h-12 rounded-xl border-2 px-4"
                     type="button"
                     onClick={() => setSwapUnitFor({ productId: l.productId, unitId: l.unitId })}
                    
-                    title="Change unit">{l.unitName.toLowerCase()} <ChevronDownIcon aria-hidden="true" className="inline size-5 align-middle" /></Button>
-                  <span className="text-lg text-text-secondary">× {formatMoney(l.unitPricePesewas)}</span>
+                    title="Change unit">{l.unitName.toLowerCase()} <ChevronDownIcon aria-hidden="true" className="inline size-4 align-middle" /></Button>
+                  <span className="text-base text-text-secondary">× {formatMoney(l.unitPricePesewas)}</span>
                   {l.appliedTierId && l.appliedTierMinQuantity != null && (
-                    <span className="bg-accent-dim text-ink px-2 py-1 rounded text-base">bulk price</span>
+                    <span className="bg-accent-dim text-ink px-2 py-0.5 rounded text-sm">bulk price</span>
                   )}
-                  <Button variant="link" className="ml-auto min-h-14 rounded-xl text-lg text-text-secondary hover:text-danger"
+                  <Button variant="link" className="ml-auto min-h-12 rounded-xl text-base text-text-secondary hover:text-danger"
                     type="button"
                     onClick={() => removeLine(l.productId, l.unitId)}>Remove</Button>
                 </div>
@@ -956,7 +982,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
             ))}
           </ul>
 
-          <div className="border-t border-border px-6 py-4 flex flex-col gap-2">
+          <div className={`border-t border-border ${FRIENDLY_UI_ENABLED ? 'px-5 py-3' : 'px-6 py-4'} flex flex-col gap-2`}>
             <Row label="Subtotal" value={formatMoney(subtotal)} />
 
             <div className="grid grid-cols-[1fr_2fr] gap-2 items-baseline">
@@ -984,9 +1010,9 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
               ) : null;
             })()}
             {FRIENDLY_UI_ENABLED ? (
-              <div className="flex flex-wrap items-baseline justify-between gap-x-3 mt-2 pt-3 border-t-2 border-border">
-                <span className="text-2xl font-semibold">Total</span>
-                <span key={total} className="inline-block font-mono tnum text-4xl font-bold text-accent whitespace-nowrap animate-value-bump">{formatMoneyWithCurrency(total)}</span>
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 mt-1 pt-2 border-t-2 border-border">
+                <span className="text-xl font-semibold">Total</span>
+                <span key={total} className="inline-block font-mono tnum text-3xl font-bold text-accent whitespace-nowrap animate-value-bump">{formatMoneyWithCurrency(total)}</span>
               </div>
             ) : (
             <Row label="TOTAL" value={formatMoney(total)} large />
@@ -1021,22 +1047,22 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
                   type="button"
                   onClick={() => { if (FRIENDLY_UI_ENABLED) openPayment('CASH'); else if (lines.length > 0) setShowTouchSheet(true); }}
                   disabled={lines.length === 0 || submitting}
-                  className="mt-3 min-h-20 w-full flex items-center justify-center gap-3 rounded-2xl bg-accent text-ink text-2xl font-bold whitespace-nowrap px-3 hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="mt-2 min-h-16 w-full flex items-center justify-center gap-3 rounded-2xl bg-accent text-ink text-xl font-bold whitespace-nowrap px-3 hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  <TaskIllustration name="cash" size={48} />
+                  <TaskIllustration name="cash" size={40} />
                   Take payment
                 </button>
-                <div className="mt-2 text-base text-text-secondary">Or choose with the keyboard:</div>
+                <div className="mt-1 text-sm text-text-secondary">Or choose with the keyboard:</div>
                 <div className="grid grid-cols-3 gap-2">
                   <PayBtn label="Cash" hot="F4" illustration="cash" onClick={() => openPayment('CASH')} active={paymentMethod === 'CASH'} />
                   <PayBtn label="MoMo" hot="F5" illustration="momo" onClick={() => openPayment('MOMO_MTN')} active={paymentMethod?.startsWith('MOMO_') ?? false} />
                   <PayBtn label="Credit" hot="F6" illustration="credit" onClick={() => openPayment('CREDIT')} active={paymentMethod === 'CREDIT'} />
                 </div>
-                <Button size="xl" className="min-h-14 gap-3 rounded-xl border-2 text-lg"
+                <Button size="lg" className="min-h-12 gap-2.5 rounded-xl border-2"
                   type="button"
                   onClick={() => { if (lines.length > 0) { setSplitError(null); setShowSplit(true); } }}
                   disabled={lines.length === 0}>
-                  <TaskIllustration name="split" size={36} />
+                  <TaskIllustration name="split" size={28} />
                   Split payment
                 </Button>
 
@@ -1094,6 +1120,10 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
         </section>
         </fieldset>
       </main>
+
+      {showKeys && (
+        <SaleKeysDialog quickPickCount={Math.min(quickPicks.length, QUICK_PICK_COUNT)} onClose={() => setShowKeys(false)} />
+      )}
 
             {FRIENDLY_UI_ENABLED && completedInfo && (
               <CompletionDialog onPrint={() => { if (lastReceipt) setShowReceiptPrint(true); }} stacked={receiptDialog}>
@@ -1606,7 +1636,7 @@ function QuantityInput({
       }}
       aria-label={label ?? `Quantity for ${productId}`}
       className={large
-        ? 'font-mono tnum text-text-primary w-20 h-14 text-2xl text-center bg-bg-input border-2 border-border-strong rounded-xl focus:border-accent focus:outline-hidden'
+        ? 'font-mono tnum text-text-primary w-16 h-12 text-xl text-center bg-bg-input border-2 border-border-strong rounded-xl focus:border-accent focus:outline-hidden'
         : 'font-mono tnum text-text-primary w-14 text-center bg-bg-input border border-border hover:border-border-strong focus:border-accent focus:outline-hidden px-1 py-0.5'}
     />
   );
@@ -1634,11 +1664,11 @@ function PayBtn({ label, hot, onClick, active, illustration }: {
         aria-pressed={active}
         aria-label={`${label} (${hot})`}
         className={[
-          'min-h-14 px-2 py-2 rounded-xl border-2 flex flex-col items-center gap-1 text-lg font-semibold',
+          'min-h-12 px-2 py-1.5 rounded-xl border-2 flex flex-col items-center gap-0.5 text-base font-semibold',
           active ? 'bg-bg-elevated border-accent text-text-primary' : 'border-border bg-bg-deep hover:bg-bg-elevated text-text-primary',
         ].join(' ')}
       >
-        <TaskIllustration name={illustration} size={36} />
+        <TaskIllustration name={illustration} size={28} />
         <span>{label}</span>
         <span className="kbd">{hot}</span>
       </button>

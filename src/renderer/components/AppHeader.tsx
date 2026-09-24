@@ -4,7 +4,11 @@
 // the default is "Home" (every HomeScreen child); callers that return
 // somewhere else pass `backLabel` (e.g. "Back to customers"). F9 stays the
 // keyboard shortcut either way — the screens own that handler.
+//
+// `actions` sits at the right, before the worker and shift (the sale
+// screen's Help button).
 
+import type { ReactNode } from 'react';
 import { ArrowLeftIcon } from 'lucide-react';
 import { useSession } from '../store/session';
 import { formatMoneyWithCurrency } from '../../shared/lib/money';
@@ -12,12 +16,14 @@ import { FRIENDLY_UI_ENABLED } from '../../shared/lib/buildFlags';
 import { TaskIllustration } from './friendly/TaskIllustration';
 import { Button } from './ui/button';
 
-export function AppHeader({ subtitle, onBack, backLabel = 'Home', backDisabled = false }: {
+export function AppHeader({ subtitle, onBack, backLabel = 'Home', backDisabled = false, actions }: {
   subtitle?: string;
   onBack?: () => void;
   /** Where the return button goes. Defaults to "Home". */
   backLabel?: string;
   backDisabled?: boolean;
+  /** Buttons for this screen, shown at the right of the header. */
+  actions?: ReactNode;
 }) {
   const worker = useSession((s) => s.workerName);
   const role = useSession((s) => s.workerRole);
@@ -49,17 +55,20 @@ export function AppHeader({ subtitle, onBack, backLabel = 'Home', backDisabled =
             {subtitle && <span className="text-text-secondary text-lg first-letter:uppercase">{subtitle}</span>}
           </div>
         </div>
-        {worker && (
+        {(worker || actions) && (
           <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-base">
-            {shiftOpened && (
+            {actions}
+            {worker && shiftOpened && (
               <span className="text-text-secondary">
                 Shift open since <span className="text-text-primary tnum">{new Date(shiftOpened).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
               </span>
             )}
-            <span className="flex items-center gap-2 text-text-primary font-semibold">
-              <TaskIllustration name="person" size={32} />
-              {worker}
-            </span>
+            {worker && (
+              <span className="flex items-center gap-2 text-text-primary font-semibold">
+                <TaskIllustration name="person" size={32} />
+                {worker}
+              </span>
+            )}
           </div>
         )}
       </header>
@@ -85,9 +94,10 @@ export function AppHeader({ subtitle, onBack, backLabel = 'Home', backDisabled =
           {subtitle && <span className="text-text-tertiary text-sm">{subtitle}</span>}
         </div>
       </div>
-      {worker && (
+      {(worker || actions) && (
         <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
-          {shiftOpened && opening !== null && (
+          {actions}
+          {worker && shiftOpened && opening !== null && (
             <div className="flex items-baseline gap-2">
               <span className="text-text-secondary uppercase tracking-wider text-xs">Shift</span>
               <span className="font-mono tnum text-text-primary">
@@ -95,10 +105,12 @@ export function AppHeader({ subtitle, onBack, backLabel = 'Home', backDisabled =
               </span>
             </div>
           )}
-          <div className="flex items-baseline gap-2">
-            <span className="text-text-primary">{worker}</span>
-            <span className="text-text-tertiary text-xs uppercase tracking-wider">{role}</span>
-          </div>
+          {worker && (
+            <div className="flex items-baseline gap-2">
+              <span className="text-text-primary">{worker}</span>
+              <span className="text-text-tertiary text-xs uppercase tracking-wider">{role}</span>
+            </div>
+          )}
         </div>
       )}
     </header>

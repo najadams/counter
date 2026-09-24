@@ -3,8 +3,8 @@
 //
 // The eight drinks sold most at this shop over the last 30 days, by units,
 // each in its default sale unit. Alt+1 … Alt+8 add them from the keyboard
-// (digits alone would type into search); the sale screen's key hints list
-// that once, so the tiles stay clean. The list is fetched once per shift
+// (digits alone would type into search); the sale screen's key list (Help,
+// F1) names them once, so the tiles stay clean. The list is fetched once per shift
 // and channel and then held, so a tile never moves under a cashier's finger
 // mid-shift and the Alt keys stay learnable.
 
@@ -43,7 +43,7 @@ export function QuickPicks({ picks, onPick, announceKeys }: {
   // A new shop with no sales yet shows no strip at all.
   if (picks.length === 0) return null;
   return (
-    <div role="group" aria-label="Quick picks" className="border-b border-border px-6 py-3">
+    <div role="group" aria-label="Quick picks" className={cn('border-b border-border', FRIENDLY_UI_ENABLED ? 'px-5 py-2.5' : 'px-6 py-3')}>
       <div className="eyebrow mb-2">Quick picks</div>
       {/* Sized by the search pane it sits in (the sale screen makes that pane
           a container): a scrolling row of chips when it's phone-narrow,
