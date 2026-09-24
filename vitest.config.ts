@@ -11,10 +11,9 @@ export default defineConfig({
       'tests/**/*.test.ts', 'tests/**/*.test.tsx',
     ],
   },
-  // Node-only tests never touch CSS, but vitest auto-loads postcss.config.js
-  // on startup. That file is ESM (`export default {...}`); under Node 18
-  // without "type":"module" in package.json the load crashes the runner.
-  // Override here so the project-level postcss config stays untouched.
+  // No PostCSS: Tailwind runs as a Vite plugin (vite.config.mts) and tests
+  // never need it. An inline config stops vitest searching for a
+  // postcss.config.* file, including one in a parent directory.
   css: {
     postcss: { plugins: [] },
   },

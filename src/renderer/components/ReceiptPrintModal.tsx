@@ -1,3 +1,4 @@
+import { useDialog } from '../hooks/useDialog';
 // ReceiptPrintModal — on-screen receipt preview with a Print button that
 // opens the OS print dialog via window.print().
 //
@@ -317,27 +318,7 @@ export function ReceiptPrintModal({ receipt, onClose, amountPaidPesewas, amountO
   const printBtnRef = useRef<HTMLButtonElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
 
-  useEffect(() => {
-    printBtnRef.current?.focus();
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') { e.preventDefault(); onClose(); return; }
-      if (e.key === 'F8') { e.preventDefault(); doPrint(); return; }
-      if (e.key === 'Tab') {
-        const first = printBtnRef.current;
-        const last = closeBtnRef.current;
-        if (!first || !last) return;
-        if (e.shiftKey && document.activeElement === first) {
-          e.preventDefault();
-          last.focus();
-        } else if (!e.shiftKey && document.activeElement === last) {
-          e.preventDefault();
-          first.focus();
-        }
-      }
-    }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  const dialog = useDialog({ onClose, onShortcut: (key) => { if (key === 'F8') doPrint(); } });
 
   // Print CSS — continuous-roll page sized to the paper width, zero
   // margin so the OS doesn't break the receipt into separate pages.
@@ -384,9 +365,9 @@ export function ReceiptPrintModal({ receipt, onClose, amountPaidPesewas, amountO
   // Nested inside the app tree there is no selector that removes the ancestors'
   // layout without also removing the receipt.
   return createPortal(
-    <div className="fixed inset-0 bg-scrim flex items-center justify-center p-4 z-[70] receipt-print-overlay" onClick={onClose}>
+    <div className="fixed inset-0 bg-scrim flex items-center justify-center p-4 z-70 receipt-print-overlay" onClick={onClose}>
       <style>{printCss}</style>
-      <div
+      <div {...dialog} aria-label="Receipt preview"
         className="receipt-print-card bg-white text-gray-900 rounded-lg shadow-2xl max-h-[90vh] overflow-auto"
         style={{ width: `${previewPx + 20}px` }}
         onClick={(e) => e.stopPropagation()}

@@ -200,3 +200,31 @@ describe('recordCustomerReturn — atomicity', () => {
     'rejects a second return that pushes cumulative quantity beyond the original — see task #35',
   );
 });
+
+it('rejects a return unit belonging to a different product without changing stock', async () => {
+  const { addUnit } = await import('../src/main/services/productUnits');
+  db.prepare("UPDATE workers SET role = 'OWNER' WHERE id = ?").run(SUP);
+  const other = (db.prepare('SELECT id FROM products WHERE id != ? LIMIT 1').get(starId) as { id: string }).id;
+  const unitId = addUnit(db, { productId: other, unitName: 'OTHER_CRATE', conversionFactor: 24,
+    pricePesewas: 18000, isPurchaseUnit: true, isSaleUnit: true, actorWorkerId: SUP, deviceId: D }).unitId;
+  const before = unitsOnHand(db, starId, L);
+  expect(() => recordCustomerReturn(db, { customerId, locationId: L, workerId: W, shiftId,
+    supervisorWorkerId: SUP, supervisorPin: '9999', refundMethod: 'CASH', reason: 'wrong unit',
+    lines: [{ productId: starId, unitId, quantity: 1, unitPricePesewas: 18000 }], deviceId: D,
+  })).toThrow(/does not belong/);
+  expect(unitsOnHand(db, starId, L)).toBe(before);
+});
+
+it('values a returned crate using canonical cost without dividing by its factor twice', async () => {
+  const { addUnit } = await import('../src/main/services/productUnits');
+  db.prepare("UPDATE workers SET role = 'OWNER' WHERE id = ?").run(SUP);
+  const unitId = addUnit(db, { productId: starId, unitName: 'RETURN_CRATE', conversionFactor: 24,
+    pricePesewas: 18000, isPurchaseUnit: true, isSaleUnit: true, actorWorkerId: SUP, deviceId: D }).unitId;
+  const before = unitsOnHand(db, starId, L);
+  recordCustomerReturn(db, { customerId, locationId: L, workerId: W, shiftId,
+    supervisorWorkerId: SUP, supervisorPin: '9999', refundMethod: 'CASH', reason: 'crate returned',
+    lines: [{ productId: starId, unitId, quantity: 1, unitPricePesewas: 18000 }], deviceId: D,
+  });
+  expect(unitsOnHand(db, starId, L)).toBe(before + 24);
+  expect(db.prepare("SELECT unit_cost_pesewas AS cost, total_value_pesewas AS value FROM stock_movements WHERE reason_code = 'RETURN_FROM_CUSTOMER' ORDER BY rowid DESC LIMIT 1").get()).toEqual({ cost: 600, value: 14400 });
+});

@@ -112,7 +112,7 @@ export function DateRangePicker({ value, onChange }: Props) {
             key={p.key}
             onClick={() => pick(p.key)}
             className={[
-              'px-3 py-1.5 text-xs border rounded-sm',
+              'px-3 py-1.5 text-xs border rounded-xs',
               value.presetKey === p.key
                 ? 'bg-accent text-ink border-accent font-semibold'
                 : 'border-border text-text-secondary hover:text-text-primary hover:border-border-strong',

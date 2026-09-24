@@ -447,7 +447,7 @@ below it runs the no-VAT build; a registered shop runs the VAT build.
 
 ### The flag
 
-`COUNTER_VAT=1` at **build time** selects the VAT build. `vite.config.ts` injects
+`COUNTER_VAT=1` at **build time** selects the VAT build. `vite.config.mts` injects
 it as the compile-time constant `__COUNTER_VAT__`; `src/shared/lib/vat.ts` exposes
 it as `VAT_ENABLED`. Dead VAT branches tree-shake out of the no-VAT bundle. Build
 with the `dist:*:vat` scripts (§2). It is **not** a runtime toggle — a shop can't
@@ -492,3 +492,23 @@ self-skips), so the no-VAT receipt assertions stay valid.
 > `NODE_MODULE_VERSION`, run `npm rebuild better-sqlite3` to test, then
 > `npx electron-builder install-app-deps` to restore the Electron build before
 > `npm run dev`.
+
+## 12. Counter Friendly
+
+Counter Friendly is a separate **no-VAT** installer, with its own production data
+folder (`Counter Friendly`) and no automatic migration from Counter. Build with
+`npm run dist:win:friendly` on Windows (or CI), `dist:mac:friendly`, or
+`dist:linux:friendly`. Develop with `npm run dev:friendly`; development variants
+share `dev.db`, so run only one at a time.
+
+Run `npm run backup -- --variant friendly` for this installation. Defaults:
+source `%APPDATA%\Counter Friendly` (Windows),
+`~/Library/Application Support/Counter Friendly` (macOS), or
+`$XDG_CONFIG_HOME/Counter Friendly` / `~/.config/Counter Friendly` (Linux);
+destination `~/CounterFriendlyBackups`. Standard Counter keeps its own paths.
+Use separate custom target folders. See CLAUDE.md §13 for recovery instructions.
+
+Friendly payment shortcuts open one illustrated checkout. Only the topmost
+dialog owns navigation keys; saving locks edits and closing. Never automatically
+retry an uncertain sale. Keep change and receipt status visible until Next sale.
+Renderer-only layout changes must preserve the standard and VAT interfaces.

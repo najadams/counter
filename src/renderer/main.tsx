@@ -1,7 +1,13 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+// Inter ships inside the bundle: a till with no internet must still render it.
+import 'inter-ui/inter.css';
 import './styles/index.css';
+import { FRIENDLY_UI_ENABLED } from '../shared/lib/buildFlags';
+
+// The Friendly build restyles focus rings and illustrations through this hook.
+if (FRIENDLY_UI_ENABLED) document.documentElement.dataset.ui = 'friendly';
 
 const rootEl = document.getElementById('root');
 if (!rootEl) {

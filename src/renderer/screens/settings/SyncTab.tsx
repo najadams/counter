@@ -200,7 +200,7 @@ function Field({ label, value, onChange, placeholder, type = 'text' }: {
       <label className="block text-xs uppercase tracking-wider text-text-secondary mb-1">{label}</label>
       <input type={type} value={value} placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full bg-bg-input border border-border px-3 py-2 text-sm focus:outline-none focus:border-accent" />
+        className="w-full bg-bg-input border border-border px-3 py-2 text-sm focus:outline-hidden focus:border-accent" />
     </div>
   );
 }

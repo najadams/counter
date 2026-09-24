@@ -5,7 +5,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import log from 'electron-log/main';
-import { COUNTERS_DECOY_ENABLED } from '../shared/lib/buildFlags.js';
+import { COUNTERS_DECOY_ENABLED, FRIENDLY_UI_ENABLED } from '../shared/lib/buildFlags.js';
 
 log.initialize();
 log.transports.file.level = 'info';
@@ -19,6 +19,12 @@ let countersDecoyRefreshTimer: ReturnType<typeof setInterval> | null = null;
 
 if (COUNTERS_DECOY_ENABLED) {
   app.setName('Counters');
+} else if (FRIENDLY_UI_ENABLED && app.isPackaged) {
+  // The packaged app's package.json carries only `name: "counter"`, so without
+  // this Electron resolves userData to the same folder as a development run —
+  // the installed Friendly till would open the dev database. Must run before
+  // anything calls app.getPath('userData'). Dev runs keep the dev database.
+  app.setName('Counter Friendly');
 }
 
 function resolveMigrationsDir(defaultMigrationsDir: () => string): string {
@@ -131,7 +137,16 @@ app.whenReady().then(async () => {
   const db = connection.connect({ filePath: dbPath, verbose: isDev });
   const migrationsDir = resolveMigrationsDir(connection.defaultMigrationsDir);
   log.info(`[main] migrations dir: ${migrationsDir}`);
-  const result = migrations.runMigrations(db, migrationsDir);
+  const result = migrations.runMigrations(db, migrationsDir, {
+    snapshotDir: path.join(userData, 'pre-migration-backups'),
+  });
+  if (result.snapshot?.ok) {
+    log.info(`[main] pre-migration snapshot: ${result.snapshot.path} (${result.snapshot.sizeBytes} bytes, pruned ${result.snapshot.pruned})`);
+  } else if (result.snapshot) {
+    // Migrate anyway: refusing to start would stop the shop trading, and this
+    // is no worse than before snapshots existed.
+    log.error(`[main] pre-migration snapshot FAILED, migrating without one: ${result.snapshot.error}`);
+  }
   log.info(`[main] migrations applied: ${result.applied.length}, already applied: ${result.alreadyApplied.length}`);
 
   const deviceId = device.getDeviceId(db);

@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 import electron from 'vite-plugin-electron/simple';
 import path from 'node:path';
 
@@ -15,6 +16,7 @@ import path from 'node:path';
 const buildFlagDefine = {
   __COUNTER_VAT__: JSON.stringify(process.env.COUNTER_VAT === '1'),
   __COUNTERS_DECOY__: JSON.stringify(process.env.COUNTERS_DECOY === '1'),
+  __COUNTER_FRIENDLY__: JSON.stringify(process.env.COUNTER_FRIENDLY === '1'),
 };
 
 // Vite + Electron + React. Single config drives main, preload, and renderer.
@@ -29,6 +31,8 @@ export default defineConfig({
   },
   plugins: [
     react(),
+    // Renderer only: the electron() sub-builds below are separate configs.
+    tailwindcss(),
     electron({
       main: {
         entry: 'src/main/index.ts',
@@ -55,11 +59,16 @@ export default defineConfig({
     }),
   ],
   server: {
-    port: process.env.COUNTERS_DECOY === '1' ? 5174 : 5173,
+    port: process.env.COUNTERS_DECOY === '1' ? 5174 : process.env.COUNTER_FRIENDLY === '1' ? 5175 : 5173,
     strictPort: true,
   },
   // Applies to the renderer build.
   define: buildFlagDefine,
+  // No PostCSS step: Tailwind runs as the Vite plugin above. An inline config
+  // also stops Vite adopting a postcss.config.* from a parent directory.
+  css: {
+    postcss: {},
+  },
   build: {
     outDir: 'dist',
     emptyOutDir: true,

@@ -161,3 +161,32 @@ describe('runner integrity check', () => {
     expect(fs.existsSync(path.join(userDataDir, 'last_backup.json.tmp'))).toBe(false);
   });
 });
+
+describe('Friendly backup isolation', () => {
+  it('backs up the Friendly database and writes only its heartbeat', () => {
+    const friendlySource = path.join(path.dirname(userDataDir), 'Counter Friendly');
+    fs.mkdirSync(friendlySource, { recursive: true });
+    const db = new Database(path.join(friendlySource, 'counter.db'));
+    db.exec("CREATE TABLE marker(value TEXT); INSERT INTO marker VALUES ('friendly');");
+    db.close();
+    const friendlyTarget = path.join(tmp, 'friendly-backups');
+    execFileSync('node', [path.join(repoRoot, 'scripts/backup.cjs'), '--variant', 'friendly', friendlyTarget], { env, stdio: 'pipe' });
+    expect(fs.existsSync(path.join(friendlySource, 'last_backup.json'))).toBe(true);
+    expect(fs.existsSync(path.join(userDataDir, 'last_backup.json'))).toBe(false);
+    const file = fs.readdirSync(friendlyTarget).find((name) => name.endsWith('.db'))!;
+    const backup = new Database(path.join(friendlyTarget, file), { readonly: true });
+    expect(backup.prepare('SELECT value FROM marker').get()).toEqual({ value: 'friendly' });
+    backup.close();
+  });
+
+  it('uses distinct default destinations and rejects unknown variants', () => {
+    const modulePath = path.join(repoRoot, 'scripts/lib/backup-runner.cjs');
+    const output = execFileSync('node', ['-e', 'const b = require(process.argv[1]); console.log(JSON.stringify([b.defaultBackupTarget(), b.defaultBackupTarget("friendly"), b.defaultUserDataDir("friendly")]));', modulePath], { env, encoding: 'utf8' });
+    const [standard, friendly, source] = JSON.parse(output) as string[];
+    expect(standard).not.toBe(friendly);
+    expect(path.basename(friendly!)).toBe('CounterFriendlyBackups');
+    expect(path.basename(source!)).toBe('Counter Friendly');
+    expect(() => execFileSync('node', [path.join(repoRoot, 'scripts/backup.cjs'), '--variant', 'unknown', target], { env, stdio: 'pipe' })).toThrow();
+    expect(fs.existsSync(path.join(userDataDir, 'last_backup.json'))).toBe(false);
+  });
+});

@@ -82,7 +82,7 @@ export function CustomerEditModal({ customer, canEditCreditPolicy, onCancel, onS
     onSaved();
   }
 
-  return <div className="fixed inset-0 bg-scrim flex items-center justify-center z-[70] overflow-y-auto py-6" onClick={onCancel}>
+  return <div className="fixed inset-0 bg-scrim flex items-center justify-center z-70 overflow-y-auto py-6" onClick={onCancel}>
     <div className="panel w-full max-w-2xl max-h-[94vh] flex flex-col my-auto" onClick={(event) => event.stopPropagation()}>
       <header className="px-6 py-5 border-b border-border-subtle flex items-center justify-between gap-4">
         <div><div className="eyebrow">Customer record</div><h2 className="text-xl font-semibold mt-1">Edit customer information</h2></div>

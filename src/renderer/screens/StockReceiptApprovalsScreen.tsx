@@ -5,7 +5,7 @@ import { counter } from '../lib/ipc';
 import { formatMoneyWithCurrency } from '../../shared/lib/money';
 import type { StockReceiptRequestDetail, StockReceiptRequestSummary } from '../../shared/types/ipc';
 
-export default function StockReceiptApprovalsScreen({ onExit }: { onExit: () => void }) {
+export default function StockReceiptApprovalsScreen({ onExit, backLabel }: { onExit: () => void; backLabel?: string }) {
   const [tab, setTab] = useState<'PENDING' | 'HISTORY'>('PENDING');
   const [rows, setRows] = useState<StockReceiptRequestSummary[]>([]);
   const [selected, setSelected] = useState<StockReceiptRequestDetail | null>(null);
@@ -67,7 +67,7 @@ export default function StockReceiptApprovalsScreen({ onExit }: { onExit: () => 
   }
 
   return <div className="min-h-screen bg-bg-deep text-text-primary flex flex-col">
-    <AppHeader subtitle="stock approvals" onBack={onExit} />
+    <AppHeader subtitle="stock approvals" onBack={onExit} backLabel={backLabel} />
     <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-8 py-6 flex flex-col gap-5">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div><div className="eyebrow">Senior review queue</div><h1 className="text-2xl font-semibold mt-1">Stock receipt approvals</h1><p className="text-sm text-text-secondary mt-1">Verify the delivery, quantities, purchase units, costs, invoice, PO, and payable before stock is posted.</p></div>

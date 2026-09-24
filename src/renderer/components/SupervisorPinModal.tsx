@@ -1,3 +1,4 @@
+import { useDialog } from '../hooks/useDialog';
 // Reusable supervisor PIN approval modal.
 // Used by void-sale and stock-receive flows.
 
@@ -38,9 +39,11 @@ export function SupervisorPinModal({
     onApprove(supervisorId, pin);
   }
 
+  const dialog = useDialog({ onClose: onCancel, busy: false });
+
   return (
     <div className="fixed inset-0 bg-scrim flex items-center justify-center z-50" onClick={onCancel}>
-      <div className="bg-bg-surface border border-border w-full max-w-md p-8 flex flex-col gap-5" onClick={(e) => e.stopPropagation()}>
+      <div {...dialog} aria-label="Supervisor approval" className="bg-bg-surface border border-border w-full max-w-md p-8 flex flex-col gap-5" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-text-secondary uppercase tracking-wider text-xs">{title}</h3>
         {candidates.length === 0 && (
           <div className="text-text-tertiary text-sm">

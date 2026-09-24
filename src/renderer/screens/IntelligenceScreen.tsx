@@ -244,7 +244,7 @@ function IntelligenceCard({ item, onTransition, onNavigate }: {
             {Object.keys(item.rationale).length > 0 && (
               <dl className="grid sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-2 mt-3 text-xs">
                 {Object.entries(item.rationale).filter(([key]) => key !== 'family').map(([key, value]) => (
-                  <div key={key}><dt className="text-text-tertiary">{humanLabel(key)}</dt><dd className="font-mono tnum break-words">{displayRationale(value)}</dd></div>
+                  <div key={key}><dt className="text-text-tertiary">{humanLabel(key)}</dt><dd className="font-mono tnum wrap-break-word">{displayRationale(value)}</dd></div>
                 ))}
               </dl>
             )}

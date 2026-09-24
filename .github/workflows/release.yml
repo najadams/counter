@@ -29,8 +29,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Two production variants per OS from the SAME commit, plus the
-        # isolated Windows Counters camouflage build. Seven jobs total.
+        # Three production variants per OS from the SAME commit (no-VAT, VAT,
+        # Friendly), plus the isolated Windows Counters camouflage build.
+        # Ten jobs total.
         include:
           # --- no-VAT (default) ---
           - os: windows-latest
@@ -58,6 +59,19 @@ jobs:
             dist_script: dist:linux:vat
             artifact_glob: 'release/*/Counter-VAT-*.AppImage'
             artifact_name: counter-linux-vat
+          # --- Friendly (illustrated, touch + keyboard UI; no-VAT) ---
+          - os: windows-latest
+            dist_script: dist:win:friendly
+            artifact_glob: 'release/*/Counter-Friendly-Setup-*.exe'
+            artifact_name: counter-windows-friendly
+          - os: macos-latest
+            dist_script: dist:mac:friendly
+            artifact_glob: 'release/*/Counter-Friendly-*.dmg'
+            artifact_name: counter-macos-friendly
+          - os: ubuntu-latest
+            dist_script: dist:linux:friendly
+            artifact_glob: 'release/*/Counter-Friendly-*.AppImage'
+            artifact_name: counter-linux-friendly
           # --- isolated camouflage application ---
           - os: windows-latest
             dist_script: dist:win:counters
@@ -200,6 +214,7 @@ jobs:
             dist/**/Counter-*.dmg
             dist/**/Counter-*.AppImage
             dist/**/Counter-VAT-Setup-*.exe
+            dist/**/Counter-Friendly-Setup-*.exe
             dist/**/Counters-Setup-*.exe
           body: |
             ## Counter ${{ github.ref_name }}
@@ -217,6 +232,11 @@ jobs:
             (15% + 2.5% NHIL + 2.5% GETFund, inclusive); the plain `Counter-*`
             installers do not. They install side by side with separate data — pick
             the one matching the shop's VAT registration.
+
+            **Friendly:** the `Counter-Friendly-*` installers are the no-VAT build
+            with large illustrated buttons, simple wording and on-screen number
+            pads for touchscreen, mouse and keyboard. Same sales, stock and audit
+            rules; installs beside Counter with its own data.
 
             See [CLAUDE.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/CLAUDE.md) for setup, backup, and runbook.
         env:

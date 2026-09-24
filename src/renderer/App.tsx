@@ -100,7 +100,7 @@ export default function App() {
       <div className="min-h-screen bg-bg-deep text-text-primary flex items-center justify-center p-6">
         <div className="max-w-2xl bg-danger/10 border border-danger/40 rounded p-6">
           <h1 className="text-xl font-semibold text-danger mb-3">Boot failed</h1>
-          <pre className="text-sm text-danger-light whitespace-pre-wrap break-words font-mono">
+          <pre className="text-sm text-danger-light whitespace-pre-wrap wrap-break-word font-mono">
             {bootError}
           </pre>
           <p className="text-xs text-text-tertiary mt-4">

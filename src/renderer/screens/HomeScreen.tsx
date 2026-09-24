@@ -42,6 +42,11 @@ import StockReceiptApprovalsScreen from './StockReceiptApprovalsScreen';
 import { FeedbackBanner } from '../components/FeedbackBanner';
 import { IntelligenceBriefPanel } from '../components/IntelligenceBriefPanel';
 import IntelligenceScreen from './IntelligenceScreen';
+import { useCart } from '../store/cart';
+import { FRIENDLY_UI_ENABLED } from '../../shared/lib/buildFlags';
+import { FriendlyHomeMenu } from '../components/friendly/FriendlyHomeMenu';
+import { NumberPad } from '../components/friendly/NumberPad';
+import { TaskIllustration } from '../components/friendly/TaskIllustration';
 
 type View = 'home' | 'sale' | 'void' | 'voidApprovals' | 'varianceCases' | 'stockApprovals' | 'breakage' | 'consumption' | 'stock' | 'settings' | 'stocktake' | 'summary' | 'customers' | 'reports' | 'intelligence' | 'pendingOrders' | 'moneyOut' | 'paperReceipts';
 
@@ -63,6 +68,9 @@ export default function HomeScreen({ onReactivate }: { onReactivate?: () => void
   const [varianceCounts, setVarianceCounts] = useState({ openCount: 0, overdueCount: 0, unresolvedPesewas: 0 });
   const [stockRequestCounts, setStockRequestCounts] = useState({ minePendingCount: 0, reviewablePendingCount: 0 });
   const isSenior = workerRole === 'SUPERVISOR' || workerRole === 'OWNER' || workerRole === 'FOUNDER';
+  // The cart store outlives SaleScreen, so leaving for home keeps an unfinished
+  // sale. The Friendly menu offers "Continue sale" while lines remain.
+  const cartItemCount = useCart((s) => s.lines.reduce((n, l) => n + l.quantity, 0));
 
   useEffect(() => {
     let cancelled = false;
@@ -244,13 +252,13 @@ export default function HomeScreen({ onReactivate }: { onReactivate?: () => void
   return (
     <div className="min-h-screen bg-bg-deep text-text-primary flex flex-col">
       <AppHeader subtitle="home" />
-      <main className="flex-1 max-w-4xl w-full mx-auto px-4 py-6 sm:px-12 sm:py-10 flex flex-col gap-4">
+      <main className={`flex-1 ${FRIENDLY_UI_ENABLED ? "max-w-6xl" : "max-w-4xl"} w-full mx-auto px-4 py-6 sm:px-12 sm:py-10 flex flex-col gap-4`}>
         {step === 'idle' && (
           <>
             <BackupHealthBanner />
             <SyncHealthBanner />
             <ActivationHealthBanner onReactivate={onReactivate} />
-            {isSenior && <IntelligenceBriefPanel onOpen={() => setView('intelligence')} />}
+            {!FRIENDLY_UI_ENABLED && isSenior && <IntelligenceBriefPanel onOpen={() => setView('intelligence')} />}
             {obligationWarnings
               && (obligationWarnings.overdueCount > 0
                 || obligationWarnings.dueNext7DaysCount > 0
@@ -267,6 +275,29 @@ export default function HomeScreen({ onReactivate }: { onReactivate?: () => void
                   : ''}
               </FeedbackBanner>
             )}
+            {FRIENDLY_UI_ENABLED ? (
+              <>
+                <FriendlyHomeMenu
+                  isSenior={isSenior}
+                  cartItemCount={cartItemCount}
+                  counts={{
+                    pendingOrders: pendingOrderCount,
+                    myVoidRequests: voidCounts.minePendingCount,
+                    reviewableVoidRequests: voidCounts.reviewablePendingCount,
+                    myStockRequests: stockRequestCounts.minePendingCount,
+                    reviewableStockRequests: stockRequestCounts.reviewablePendingCount,
+                    openVarianceCases: varianceCounts.openCount,
+                    overdueVarianceCases: varianceCounts.overdueCount,
+                    unresolvedVariancePesewas: varianceCounts.unresolvedPesewas,
+                  }}
+                  onNavigate={setView}
+                  onCloseShift={() => { setStep('count'); setError(null); }}
+                />
+                {isSenior && <IntelligenceBriefPanel onOpen={() => setView('intelligence')} />}
+                <LanJoinCard />
+              </>
+            ) : (
+            <>
             <LanJoinCard />
 
             <ActionRow kind="primary" label="Sale" hot="F1" caption="Search SKUs, build cart, take payment." onClick={() => setView('sale')} />
@@ -295,11 +326,13 @@ export default function HomeScreen({ onReactivate }: { onReactivate?: () => void
               <ActionRow label="Settings" hot="F12" caption="Workers admin, change PIN." onClick={() => setView('settings')} />
             </div>
             <ActionRow kind="warn" label="Close shift" hot="F10" caption="Two-step blind cash count." onClick={() => { setStep('count'); setError(null); }} />
+            </>
+            )}
 
             <div className="mt-auto pt-6 border-t border-border flex justify-between items-center">
-              <button onClick={() => void logout()} className="text-text-tertiary hover:text-text-primary text-sm">Sign out</button>
+              <button onClick={() => void logout()} className={FRIENDLY_UI_ENABLED ? 'min-h-14 px-5 rounded-xl border-2 border-border text-lg font-semibold text-text-primary hover:bg-bg-elevated' : 'text-text-tertiary hover:text-text-primary text-sm'}>Sign out</button>
               {opening !== null && (
-                <span className="text-text-tertiary text-xs">Opening cash: {formatMoneyWithCurrency(opening)}</span>
+                <span className={FRIENDLY_UI_ENABLED ? 'text-text-secondary text-base' : 'text-text-tertiary text-xs'}>{FRIENDLY_UI_ENABLED ? 'Money in drawer at start' : 'Opening cash'}: {formatMoneyWithCurrency(opening)}</span>
               )}
             </div>
           </>
@@ -347,6 +380,38 @@ export default function HomeScreen({ onReactivate }: { onReactivate?: () => void
                 </label>
               </div>
             )}
+            {FRIENDLY_UI_ENABLED ? (
+              <section className="panel p-5 sm:p-8 flex flex-col gap-5">
+                <div className="flex items-center gap-4">
+                  <TaskIllustration name="close-shift" size={72} />
+                  <div>
+                    <h2 className="text-3xl font-semibold">Close shift</h2>
+                    <p className="text-xl text-text-secondary mt-1">Count the money in the drawer. Enter the amount.</p>
+                  </div>
+                </div>
+                <label htmlFor="friendly-closing-count" className="text-lg font-semibold">Money in the drawer (GHS)</label>
+                <input id="friendly-closing-count" type="text" inputMode="decimal" autoFocus value={counted}
+                  onChange={(e) => setCounted(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') void submitCountAndClose(); }}
+                  disabled={closing} placeholder="0.00"
+                  className="w-full min-w-0 bg-bg-input border-2 border-border-strong rounded-xl px-5 py-4 text-5xl font-mono tnum text-right focus:outline-hidden focus:border-accent" />
+                <p className="text-lg text-text-secondary">You will see the expected amount after you confirm.</p>
+                <div className="max-w-md w-full self-center">
+                  <NumberPad label="Cash count number pad" value={counted} onChange={setCounted} allowDecimal disabled={closing} />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button type="button" onClick={() => { setStep('idle'); setCounted(''); setError(null); }}
+                    className="min-h-16 rounded-xl border-2 border-border text-xl font-semibold hover:bg-bg-elevated">Cancel</button>
+                  <button type="button" onClick={() => void submitCountAndClose()}
+                    disabled={closing || voidCounts.currentShiftPendingCount > 0 || (pendingReprints.length > 0 && !reprintAck)}
+                    title={pendingReprints.length > 0 && !reprintAck ? 'Resolve pending receipts or acknowledge first' : ''}
+                    className="min-h-16 rounded-xl bg-accent text-ink text-xl font-semibold hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed">
+                    {closing ? 'Checking the count…' : 'Confirm count'}
+                  </button>
+                </div>
+              </section>
+            ) : (
+            <>
             <h2 className="text-text-secondary uppercase tracking-wider text-xs">Closing cash count (blind)</h2>
             <p className="text-text-tertiary text-sm">
               Count the cash in the till. Type the total. You will not see the expected amount until you confirm — invariant 9.
@@ -357,7 +422,7 @@ export default function HomeScreen({ onReactivate }: { onReactivate?: () => void
                 onChange={(e) => setCounted(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') void submitCountAndClose(); }}
                 disabled={closing} placeholder="0.00"
-                className="flex-1 min-w-0 bg-bg-input border border-border-strong px-5 py-4 text-4xl font-mono tnum text-right focus:outline-none focus:border-accent" />
+                className="flex-1 min-w-0 bg-bg-input border border-border-strong px-5 py-4 text-4xl font-mono tnum text-right focus:outline-hidden focus:border-accent" />
             </div>
             <div className="flex gap-3">
               <button onClick={() => { setStep('idle'); setCounted(''); setError(null); }}
@@ -369,13 +434,15 @@ export default function HomeScreen({ onReactivate }: { onReactivate?: () => void
                 {closing ? 'Reconciling…' : 'Confirm count'}
               </button>
             </div>
+            </>
+            )}
             {error && <FeedbackBanner>{error}</FeedbackBanner>}
           </div>
         )}
 
         {step === 'reconciled' && reconciled && (
           <div className="flex flex-col gap-4">
-            <h2 className="text-text-secondary uppercase tracking-wider text-xs">Reconciliation</h2>
+            <h2 className={FRIENDLY_UI_ENABLED ? "text-3xl font-semibold" : "text-text-secondary uppercase tracking-wider text-xs"}>{FRIENDLY_UI_ENABLED ? "Shift closed" : "Reconciliation"}</h2>
             <div className="bg-bg-surface border border-border divide-y divide-border">
               <Row label="Counted"  value={formatMoneyWithCurrency(reconciled.countedPesewas)} />
               <Row label="Expected" value={formatMoneyWithCurrency(reconciled.expectedPesewas)} />
@@ -426,7 +493,7 @@ function BackupResultBlock({
             {backup.dbDest && <RevealLink path={backup.dbDest} />}
           </div>
           <div className="text-xs text-text-secondary break-all">{fname}{size ? ' \u00b7 ' + size : ''}</div>
-          <div className="text-xs text-text-secondary">Plug your USB stick in (or restore the network share) and the next backup will land there again. Today's data is safe in ~/CounterBackups.</div>
+          <div className="text-xs text-text-secondary">Plug your USB stick in (or restore the network share) and the next backup will land there again. Today's data is safe in {FRIENDLY_UI_ENABLED ? '~/CounterFriendlyBackups' : '~/CounterBackups'}.</div>
         </div>
       );
     }
@@ -513,7 +580,7 @@ function ActionRow({ kind = 'default', label, hot, caption, onClick }: {
   kind?: 'default' | 'primary' | 'warn'; label: string; hot?: string; caption: string; onClick: () => void;
 }) {
   const cls =
-    kind === 'primary' ? 'bg-accent text-ink border border-accent hover:bg-accent-light shadow-sm'
+    kind === 'primary' ? 'bg-accent text-ink border border-accent hover:bg-accent-light shadow-xs'
     : kind === 'warn'  ? 'panel border-warning text-warning hover:bg-bg-elevated'
     : 'panel text-text-primary hover:bg-bg-elevated hover:border-border-strong';
   return (

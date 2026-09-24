@@ -200,3 +200,15 @@ describe('valuation balance with movements in the same millisecond', () => {
     expect(pool()).toEqual(POOL_BEFORE_SALE);
   });
 });
+
+it('documents the remaining rounding drift when a crate is returned in three parts', async () => {
+  const sale = await sellCrate();
+  for (let i = 0; i < 3; i++) {
+    recordCustomerReturn(db, { customerId: CUSTOMER, originalSaleId: sale.saleId, locationId: L,
+      workerId: W, shiftId, supervisorWorkerId: OWNER, supervisorPin: PIN, refundMethod: 'CASH',
+      reason: 'partial return audit', lines: [{ productId: starId, quantity: 8, unitPricePesewas: 750 }], deviceId: D });
+  }
+  // Known limitation: 3 × round(10000 × 8 / 24) = 9999, not 10000.
+  // Counts are exact, but value is one pesewa short. Keep visible in the audit.
+  expect(pool()).toEqual({ quantity: 240, value: 99999 });
+});

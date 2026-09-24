@@ -1,3 +1,4 @@
+import { FRIENDLY_UI_ENABLED } from '../../shared/lib/buildFlags';
 // Backup configuration: where backups go and how they're classified.
 // Stored as rows in device_config (already created by migration 0012 +
 // deviceId.ts as a safety net). No new table needed.
@@ -69,5 +70,5 @@ export function setBackupConfig(
 
 /** Resolve the default backup directory: <home>/CounterBackups. */
 export function defaultBackupTarget(): string {
-  return path.join(os.homedir(), 'CounterBackups');
+  return path.join(os.homedir(), FRIENDLY_UI_ENABLED ? 'CounterFriendlyBackups' : 'CounterBackups');
 }

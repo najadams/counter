@@ -1,3 +1,4 @@
+import { useDialog } from '../hooks/useDialog';
 // SaleScreen: keyboard-first product search + cart + payment.
 //
 // Keyboard map:
@@ -36,6 +37,8 @@ import { TouchCheckoutSheet } from '../components/TouchCheckoutSheet';
 import { FeedbackBanner } from '../components/FeedbackBanner';
 import { useIsTouch } from '../hooks/useIsTouch';
 import { chimeSuccess, chimeWarning, flashBody } from '../lib/feedback';
+import { FRIENDLY_UI_ENABLED } from '../../shared/lib/buildFlags';
+import { TaskIllustration } from '../components/friendly/TaskIllustration';
 
 /** Door-printer failure on a phone sale: the cashier must walk the customer to
  *  the counter for the exit-token before they leave. Blocking + can't-miss on
@@ -118,6 +121,36 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [completedToast, setCompletedToast] = useState<string | null>(null);
+  // Structured copy of the last completion for the Friendly build's
+  // "Sale complete" panel (the standard build shows completedToast).
+  const [completedInfo, setCompletedInfo] = useState<{ changePesewas: number | null; printerFailed: boolean; printerError?: string } | null>(null);
+  // Synchronous guard against a second tap/F2 landing before React re-renders
+  // with submitting=true — both would otherwise post the same cart twice.
+  const submitLockRef = useRef(false);
+  const completionTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => () => clearTimeout(completionTimerRef.current), []);
+  function scheduleCompletionClear() {
+    clearTimeout(completionTimerRef.current);
+    if (!FRIENDLY_UI_ENABLED) completionTimerRef.current = setTimeout(() => {
+      setCompletedToast(null); setCompletedInfo(null);
+    }, 5000);
+  }
+  function nextSale() {
+    setCompletedInfo(null); setCompletedToast(null);
+    searchRef.current?.focus();
+  }
+  async function persistSale(input: Parameters<typeof counter.completeSale>[0]) {
+    try {
+      return await counter.completeSale(input);
+    } catch {
+      const message = 'We could not confirm whether the sale was saved. Check Recent sales before trying again.';
+      setError(message); setSplitError(message);
+      return null;
+    } finally {
+      submitLockRef.current = false;
+      setSubmitting(false);
+    }
+  }
   // Last completed sale's receipt — kept after the toast clears so the cashier
   // can still hit F8 / the Print button to bring up the OS print dialog.
   // Reset when a new line is added to start the next sale.
@@ -128,7 +161,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
   const setDiscount = useCart((s) => s.setDiscount);
   const [needsDiscountSupervisor, setNeedsDiscountSupervisor] = useState(false);
   const [pendingSupervisor, setPendingSupervisor] = useState<{ id: string; pin: string } | null>(null);
-  const [swapUnitFor, setSwapUnitFor] = useState<string | null>(null);
+  const [swapUnitFor, setSwapUnitFor] = useState<{ productId: string; unitId: string | null } | null>(null);
   const [channelSwitchBanner, setChannelSwitchBanner] = useState<'WALK_IN' | 'WHOLESALE' | 'ROUTE' | null>(null);
   const [showCustomerPicker, setShowCustomerPicker] = useState(false);
   const swapUnit = useCart((s) => s.swapUnit);
@@ -167,6 +200,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
   const [showPaymentModal, setShowPaymentModal] = useState<PaymentMethod | null>(null);
   const isTouch = useIsTouch();
   const [showTouchSheet, setShowTouchSheet] = useState(false);
+  const [checkoutInitialMethod, setCheckoutInitialMethod] = useState<PaymentMethod>('CASH');
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
 
   // Close the touch sheet when the cart empties — i.e. a sale completed (any
@@ -176,6 +210,10 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
     if (showTouchSheet && lines.length === 0) setShowTouchSheet(false);
   }, [lines.length, showTouchSheet]);
   const [showSplit, setShowSplit] = useState(false);
+  const [splitError, setSplitError] = useState<string | null>(null);
+  // The Friendly build offers the touch checkout on every device (hybrid
+  // touchscreen PCs), alongside the F4/F5/F6 keyboard flow.
+  const checkoutSheetAvailable = isTouch || FRIENDLY_UI_ENABLED;
 
   const searchRef = useRef<HTMLInputElement>(null);
   useEffect(() => { searchRef.current?.focus(); }, []);
@@ -281,27 +319,31 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
           // Tier price is per-canonical. Compare to per-unit base price after × factor.
           const tierUnitPrice = tier ? tier.unitPricePesewas * line.factor : null;
           if (tier && tierUnitPrice != null && tierUnitPrice < line.basePricePesewas) {
-            applyTier(line.productId, { id: tier.id, unitPricePesewas: tier.unitPricePesewas, minQuantity: tier.minQuantity });
+            applyTier(line.productId, { id: tier.id, unitPricePesewas: tier.unitPricePesewas, minQuantity: tier.minQuantity }, line.unitId);
           } else if (line.appliedTierId !== null) {
-            applyTier(line.productId, null);
+            applyTier(line.productId, null, line.unitId);
           }
         }
       }
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lines.map((l) => `${l.productId}:${l.quantity}`).join('|'), channel]);
+  }, [lines.map((l) => `${l.productId}:${l.unitId}:${l.factor}:${l.quantity}:${l.basePricePesewas}`).join('|'), channel]);
 
   // Global keyboard shortcuts
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      // The checkout sheet handles its own keys (and Esc must close it, not
+      // clear the cart underneath).
+      if (submitLockRef.current || submitting || document.querySelector('[data-counter-dialog]')) return;
+      if (showTouchSheet || showSplit || showCustomerPicker || swapUnitFor || needsDiscountSupervisor || showReceiptPrint || showBarcodeScanner) return;
       // Don't intercept while a modal is open and an input is focused
       if (showPaymentModal && document.activeElement?.tagName === 'INPUT') return;
 
       if (e.key === 'F4') { e.preventDefault(); openPayment('CASH'); }
       else if (e.key === 'F5') { e.preventDefault(); openPayment('MOMO_MTN'); }
       else if (e.key === 'F6') { e.preventDefault(); openPayment('CREDIT'); }
-      else if (e.key === 'F2') { e.preventDefault(); void submitSale(); }
+      else if (e.key === 'F2') { e.preventDefault(); if (FRIENDLY_UI_ENABLED) openPayment(paymentMethod ?? 'CASH'); else void submitSale(); }
       else if (e.key === 'F8') { e.preventDefault(); if (lastReceipt) setShowReceiptPrint(true); }
       else if (e.key === 'F9') { e.preventDefault(); onExit(); }
       else if (e.key === 'Escape') {
@@ -313,9 +355,10 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showPaymentModal, paymentMethod, paymentReference, cashGiven, customer, lines.length, lastReceipt]);
+  }, [showPaymentModal, showTouchSheet, showSplit, showCustomerPicker, swapUnitFor, needsDiscountSupervisor, showReceiptPrint, showBarcodeScanner, submitting, paymentMethod, paymentReference, cashGiven, customer, lines.length, lastReceipt]);
 
   function openPayment(method: PaymentMethod) {
+    if (submitLockRef.current) return;
     if (lines.length === 0) {
       setError('Add items before choosing payment.');
       return;
@@ -325,33 +368,40 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
       return;
     }
     setError(null);
-    setPaymentMethod(method);
-    setShowPaymentModal(method);
+    if (FRIENDLY_UI_ENABLED) {
+      setCheckoutInitialMethod(method);
+      setShowTouchSheet(true);
+    } else {
+      setPaymentMethod(method);
+      setShowPaymentModal(method);
+    }
   }
 
   async function submitWithSplit(result: SplitPaymentResult): Promise<void> {
-    setShowSplit(false);
+    if (submitLockRef.current) return;
+    // The split dialog stays open until the sale is saved, so a refusal keeps
+    // every tender the cashier typed. Errors show inside the dialog.
+    const fail = (message: string) => { setSubmitting(false); setError(message); setSplitError(message); };
     setSubmitting(true);
     setError(null);
+    setSplitError(null);
     if (result.payments.some((p) => p.method === 'CREDIT') && customer?.cashOnly) {
-      setSubmitting(false);
-      setError(`${customer.displayName} is marked cash-only. Credit tender is blocked.`);
+      fail(`${customer.displayName} is marked cash-only. Credit tender is blocked.`);
       return;
     }
     const sup = pendingSupervisor;
     if (discount > 0 && discount > Math.max(Math.floor((subtotal * DISCOUNT_PERCENT_THRESHOLD_BPS) / 10000), DISCOUNT_ABS_THRESHOLD_PESEWAS)) {
       if (!sup) {
-        setSubmitting(false);
-        setError('Discount above threshold needs a supervisor PIN.');
+        fail('Discount above threshold needs a supervisor PIN.');
         return;
       }
       if (!discountReason.trim()) {
-        setSubmitting(false);
-        setError('Discount needs a reason.');
+        fail('Discount needs a reason.');
         return;
       }
     }
-    const res = await counter.completeSale({
+    submitLockRef.current = true;
+    const res = await persistSale({
       shiftId,
       channel,
       lines: lines.map((l) => ({
@@ -365,8 +415,10 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
       payments: result.payments,
       customerId: customer?.id ?? null,
     });
+    if (!res) return;
+    if (!res.success) { fail(res.error); return; }
     setSubmitting(false);
-    if (!res.success) { setError(res.error); return; }
+    setShowSplit(false);
     const { saleId, changePesewas, printerFailed, printerError, receipt, station } = res.data;
     if (printerFailed) {
       chimeWarning(); flashBody('flash-warning');
@@ -376,6 +428,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
     if (changePesewas != null && changePesewas > 0) toast += ` Change: ${formatMoneyWithCurrency(changePesewas)}.`;
     if (printerFailed) toast += `  ⚠ Receipt queued — ${printerError ?? 'printer offline'}.`;
     setCompletedToast(toast);
+    setCompletedInfo({ changePesewas: changePesewas ?? null, printerFailed, printerError });
     setLastReceipt(receipt);
     void writeBackOrderFulfilment(saleId);
     void writeBackPaperReceiptPosted(saleId);
@@ -386,12 +439,12 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
     setQuery('');
     setHits([]);
     setShowPaymentModal(null);
-    setTimeout(() => setCompletedToast(null), 5000);
+    scheduleCompletionClear();
     searchRef.current?.focus();
   }
 
   async function submitSale(supervisorOverride?: { id: string; pin: string }) {
-    if (submitting) return;
+    if (submitting || submitLockRef.current) return;
     // Read payment fields fresh from the store. The touch checkout sheet sets
     // these and submits in the same tick, where the captured render selectors
     // would be stale. On desktop the state is already settled before F2/Complete,
@@ -435,8 +488,9 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
     }
 
     setSubmitting(true);
+    submitLockRef.current = true;
     setError(null);
-    const res = await counter.completeSale({
+    const res = await persistSale({
       shiftId,
       channel,
       lines: lines.map((l) => ({
@@ -452,7 +506,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
       cashGivenPesewas: paymentMethod === 'CASH' ? cashGiven : null,
       customerId: customer?.id ?? null,
     });
-    setSubmitting(false);
+    if (!res) return;
     if (!res.success) { setError(res.error); return; }
     const { saleId, changePesewas, printerFailed, printerError, receipt, station } = res.data;
     if (printerFailed) {
@@ -467,6 +521,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
     if (changePesewas != null) toast += ` Change: ${formatMoneyWithCurrency(changePesewas)}.`;
     if (printerFailed) toast += `  ⚠ Receipt queued — ${printerError ?? 'printer offline'}.`;
     setCompletedToast(toast);
+    setCompletedInfo({ changePesewas: changePesewas ?? null, printerFailed, printerError });
     setLastReceipt(receipt);
     void writeBackOrderFulfilment(saleId);
     void writeBackPaperReceiptPosted(saleId);
@@ -477,7 +532,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
     setQuery('');
     setHits([]);
     setShowPaymentModal(null);
-    setTimeout(() => setCompletedToast(null), 5000);
+    scheduleCompletionClear();
     searchRef.current?.focus();
   }
 
@@ -579,8 +634,8 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
     // zoom — applies uniformly to fonts, icons, and spacing while leaving
     // every other screen unchanged. 1.15 ≈ a single macOS "Scaled" notch;
     // bump or lower the factor here if the counter PC needs more/less.
-    <div className="min-h-screen bg-bg-deep text-text-primary flex flex-col sale-zoom">
-      <AppHeader subtitle="sale" onBack={onExit} />
+    <div className={`min-h-screen bg-bg-deep text-text-primary flex flex-col ${FRIENDLY_UI_ENABLED ? '' : 'sale-zoom'}`}>
+      <AppHeader subtitle={FRIENDLY_UI_ENABLED ? 'Sell drinks' : 'sale'} onBack={() => { if (!submitLockRef.current) onExit(); }} backDisabled={submitting} />
       {fulfillingOrderId && (
         <div className="bg-accent/10 border-b border-accent px-4 py-2 text-accent text-sm text-center">
           Ringing WhatsApp order #{fulfillingOrderId.slice(-8)} — quoted prices loaded
@@ -592,19 +647,29 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
         </div>
       )}
       {/* One column on phones (LAN access), two panes on desktop. */}
-      <main className="flex-1 grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-0">
+      <main className={`flex-1 grid grid-cols-1 gap-0 ${FRIENDLY_UI_ENABLED ? "lg:grid-cols-[3fr_2fr]" : "lg:grid-cols-[2fr_1fr]"}`}>
+        <fieldset disabled={submitting} className="contents">
         {/* Left: search + results */}
         <section className="border-b lg:border-b-0 lg:border-r border-border flex flex-col">
           <div className="px-6 py-4 border-b border-border bg-bg-surface">
+            {FRIENDLY_UI_ENABLED && (
+              <label htmlFor="sale-search" className="flex items-center gap-3 mb-3">
+                <TaskIllustration name="sell" size={48} />
+                <span className="text-2xl font-semibold">Find a drink</span>
+              </label>
+            )}
             <div className="flex gap-2">
               <input
+                id="sale-search"
                 ref={searchRef}
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={searchKey}
-                placeholder="Search by SKU, name, or barcode..."
-                className="min-w-0 flex-1 bg-bg-input border border-border-strong px-4 py-3 text-lg focus:outline-none focus:border-accent"
+                placeholder={FRIENDLY_UI_ENABLED ? 'Name or barcode' : 'Search by SKU, name, or barcode...'}
+                className={FRIENDLY_UI_ENABLED
+                  ? 'min-w-0 flex-1 min-h-16 bg-bg-input border-2 border-border-strong rounded-xl px-5 py-3 text-2xl focus:outline-hidden focus:border-accent'
+                  : 'min-w-0 flex-1 bg-bg-input border border-border-strong px-4 py-3 text-lg focus:outline-hidden focus:border-accent'}
               />
               {isTouch && (
                 <button
@@ -618,27 +683,48 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
                 </button>
               )}
             </div>
-            <div className={`${isTouch ? 'hidden' : 'hidden sm:block'} text-text-tertiary text-xs mt-2`}>
+            <div className={FRIENDLY_UI_ENABLED ? 'hidden sm:block text-text-secondary text-sm mt-3' : `${isTouch ? 'hidden' : 'hidden sm:block'} text-text-tertiary text-xs mt-2`}>
               <span className="kbd">↑</span><span className="kbd">↓</span> move ·
               <span className="kbd">Enter</span> add ·
               <span className="kbd">F4</span> Cash ·
               <span className="kbd">F5</span> MoMo ·
               <span className="kbd">F6</span> Credit ·
-              <span className="kbd">F2</span> Complete ·
+              <span className="kbd">F2</span> {FRIENDLY_UI_ENABLED ? "Take payment" : "Complete"} ·
               <span className="kbd">F8</span> Print ·
-              <span className="kbd">F9</span> Back ·
+              <span className="kbd">F9</span> {FRIENDLY_UI_ENABLED ? 'Home' : 'Back'} ·
               <span className="kbd">Esc</span> Clear
             </div>
           </div>
           <ul className="flex-1 overflow-y-auto max-h-[45vh] lg:max-h-none">
             {hits.length === 0 && (
-              <li className="px-6 py-4 text-text-tertiary">No products match.</li>
+              <li className={FRIENDLY_UI_ENABLED ? 'px-6 py-6 text-xl text-text-secondary' : 'px-6 py-4 text-text-tertiary'}>{FRIENDLY_UI_ENABLED ? (query.trim() === '' ? 'Type a drink name above to find it.' : 'No drinks match. Check the spelling, or try fewer letters.') : 'No products match.'}</li>
             )}
             {hits.map((p, i) => {
               const active = i === hitIdx;
               const lowStock = p.unitsOnHand <= 0;
               return (
                 <li key={p.id}>
+                  {FRIENDLY_UI_ENABLED ? (
+                    <button
+                      type="button"
+                      onClick={() => { setHitIdx(i); addHitToCart(i); }}
+                      aria-label={`Add ${p.name}, per ${p.defaultUnitName.toLowerCase()}, ${formatMoneyWithCurrency(p.unitPricePesewas)}`}
+                      className={[
+                        'w-full min-h-20 text-left px-6 py-3 flex items-center gap-4 border-b border-border',
+                        active ? 'bg-bg-elevated shadow-[inset_4px_0_0_rgb(var(--c-accent))]' : 'bg-bg-surface hover:bg-bg-elevated',
+                      ].join(' ')}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xl font-semibold text-text-primary leading-snug wrap-break-word">{p.name}</div>
+                        <div className="text-lg text-text-secondary">
+                          per {p.defaultUnitName.toLowerCase()}
+                          <span className={lowStock ? 'text-danger font-semibold' : ''}> · {lowStock ? 'none in stock' : `${p.unitsOnHand} in stock`}</span>
+                        </div>
+                      </div>
+                      <div className="font-mono tnum text-2xl font-semibold text-text-primary">{formatMoney(p.unitPricePesewas)}</div>
+                      <span aria-hidden className="shrink-0 w-12 h-12 rounded-full bg-accent text-ink text-3xl leading-none flex items-center justify-center">+</span>
+                    </button>
+                  ) : (
                   <button
                     type="button"
                     onClick={() => { setHitIdx(i); addHitToCart(i); }}
@@ -656,6 +742,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
                     </div>
                     <div className="font-mono tnum text-text-primary">{formatMoney(p.unitPricePesewas)}</div>
                   </button>
+                  )}
                 </li>
               );
             })}
@@ -665,9 +752,9 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
         {/* Right: cart + totals + payment */}
         <section className="flex flex-col bg-bg-surface">
           <div className="px-6 py-4 border-b border-border flex flex-col gap-3">
-            <div className="text-text-secondary uppercase tracking-wider text-xs">Cart</div>
+            <div className={FRIENDLY_UI_ENABLED ? 'text-2xl font-semibold' : 'text-text-secondary uppercase tracking-wider text-xs'}>Cart</div>
             <div>
-              <div className="text-text-tertiary uppercase tracking-wider text-[10px] mb-1">Channel</div>
+              <div className={FRIENDLY_UI_ENABLED ? 'text-base text-text-secondary mb-1' : 'text-text-tertiary uppercase tracking-wider text-[10px] mb-1'}>{FRIENDLY_UI_ENABLED ? 'Price type' : 'Channel'}</div>
               <div className="grid grid-cols-3 gap-1">
                 {(['WALK_IN', 'WHOLESALE', 'ROUTE'] as const).map((c) => {
                   const active = c === channel;
@@ -677,7 +764,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
                       type="button"
                       onClick={() => attemptChannelChange(c)}
                       className={[
-                        'px-2 py-1.5 border text-xs uppercase tracking-wider',
+                        FRIENDLY_UI_ENABLED ? 'min-h-12 px-2 py-2 border-2 rounded-xl text-base font-semibold' : 'px-2 py-1.5 border text-xs uppercase tracking-wider',
                         active
                           ? 'bg-bg-elevated border-accent text-accent'
                           : 'border-border bg-bg-deep text-text-primary hover:bg-bg-elevated',
@@ -689,7 +776,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
               </div>
             </div>
             <div>
-              <div className="text-text-tertiary uppercase tracking-wider text-[10px] mb-1">Customer</div>
+              <div className={FRIENDLY_UI_ENABLED ? 'text-base text-text-secondary mb-1' : 'text-text-tertiary uppercase tracking-wider text-[10px] mb-1'}>Customer</div>
               {customer ? (
                 <div className="flex items-baseline justify-between gap-2 bg-bg-deep border border-border px-3 py-1.5">
                   <div className="min-w-0">
@@ -714,8 +801,10 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
                 <button
                   type="button"
                   onClick={() => setShowCustomerPicker(true)}
-                  className="w-full px-3 py-1.5 border border-border bg-bg-deep text-text-primary hover:bg-bg-elevated text-xs text-left">
-                  + Attach customer (optional)
+                  className={FRIENDLY_UI_ENABLED
+                    ? 'w-full min-h-12 px-4 py-2 border-2 border-border rounded-xl bg-bg-deep text-text-primary hover:bg-bg-elevated text-lg text-left'
+                    : 'w-full px-3 py-1.5 border border-border bg-bg-deep text-text-primary hover:bg-bg-elevated text-xs text-left'}>
+                  {FRIENDLY_UI_ENABLED ? '+ Add a customer (optional)' : '+ Attach customer (optional)'}
                 </button>
               )}
             </div>
@@ -737,35 +826,79 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
           </div>
           <ul className="flex-1 overflow-y-auto max-h-[40vh] lg:max-h-none">
             {lines.length === 0 && (
-              <li className="px-6 py-6 text-text-tertiary">Empty.</li>
+              <li className={FRIENDLY_UI_ENABLED ? 'px-6 py-6 text-xl text-text-secondary' : 'px-6 py-6 text-text-tertiary'}>{FRIENDLY_UI_ENABLED ? 'The cart is empty. Tap a drink to add it.' : 'Empty.'}</li>
             )}
             {/* LIFO: newest line at the top. Visual only — submit/receipt keep
                 scan order. Reverse a copy so the store array isn't mutated. */}
-            {[...lines].reverse().map((l) => (
-              <li key={l.productId} className="px-6 py-3 border-b border-border">
+            {[...lines].reverse().map((l) => FRIENDLY_UI_ENABLED ? (
+              <li key={`${l.productId}:${l.unitId}`} className="px-6 py-4 border-b border-border">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="text-xl font-semibold text-text-primary wrap-break-word min-w-0">{l.name}</span>
+                  <span className="font-mono tnum text-2xl font-semibold">{formatMoney(l.unitPricePesewas * l.quantity)}</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-3 mt-3">
+                  <button
+                    type="button"
+                    onClick={() => bumpQuantity(l.productId, -1, l.unitId)}
+                    className="w-14 h-14 rounded-xl border-2 border-border-strong bg-bg-elevated text-3xl font-semibold text-text-primary hover:bg-bg-deep"
+                    aria-label={`One less ${l.name}`}
+                  >−</button>
+                  <QuantityInput
+                    productId={l.productId}
+                    quantity={l.quantity}
+                    onCommit={(n) => setQuantity(l.productId, n, l.unitId)}
+                    onRemove={() => removeLine(l.productId, l.unitId)}
+                    label={`How many ${l.name}`}
+                    large
+                  />
+                  <button
+                    type="button"
+                    onClick={() => bumpQuantity(l.productId, +1, l.unitId)}
+                    className="w-14 h-14 rounded-xl border-2 border-border-strong bg-bg-elevated text-3xl font-semibold text-text-primary hover:bg-bg-deep"
+                    aria-label={`One more ${l.name}`}
+                  >+</button>
+                  <button
+                    type="button"
+                    onClick={() => setSwapUnitFor({ productId: l.productId, unitId: l.unitId })}
+                    className="min-h-14 px-4 rounded-xl border-2 border-border text-lg text-text-primary hover:bg-bg-elevated"
+                    title="Change unit"
+                  >{l.unitName.toLowerCase()} ▾</button>
+                  <span className="text-lg text-text-secondary">× {formatMoney(l.unitPricePesewas)}</span>
+                  {l.appliedTierId && l.appliedTierMinQuantity != null && (
+                    <span className="bg-accent-dim text-ink px-2 py-1 rounded text-base">bulk price</span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => removeLine(l.productId, l.unitId)}
+                    className="ml-auto min-h-14 px-4 rounded-xl text-lg text-text-secondary underline hover:text-danger"
+                  >Remove</button>
+                </div>
+              </li>
+            ) : (
+              <li key={`${l.productId}:${l.unitId}`} className="px-6 py-3 border-b border-border">
                 <div className="flex items-baseline justify-between">
                   <span className="text-text-primary truncate">{l.name}</span>
                   <span className="font-mono tnum">{formatMoney(l.unitPricePesewas * l.quantity)}</span>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 mt-1 text-text-tertiary text-xs">
                   <button
-                    onClick={() => bumpQuantity(l.productId, -1)}
+                    onClick={() => bumpQuantity(l.productId, -1, l.unitId)}
                     className="px-2 py-0.5 border border-border hover:bg-bg-elevated text-text-primary"
                     aria-label="Decrease quantity"
                   >−</button>
                   <QuantityInput
                     productId={l.productId}
                     quantity={l.quantity}
-                    onCommit={(n) => setQuantity(l.productId, n)}
-                    onRemove={() => removeLine(l.productId)}
+                    onCommit={(n) => setQuantity(l.productId, n, l.unitId)}
+                    onRemove={() => removeLine(l.productId, l.unitId)}
                   />
                   <button
-                    onClick={() => bumpQuantity(l.productId, +1)}
+                    onClick={() => bumpQuantity(l.productId, +1, l.unitId)}
                     className="px-2 py-0.5 border border-border hover:bg-bg-elevated text-text-primary"
                     aria-label="Increase quantity"
                   >+</button>
                   <button
-                    onClick={() => setSwapUnitFor(l.productId)}
+                    onClick={() => setSwapUnitFor({ productId: l.productId, unitId: l.unitId })}
                     className="px-1.5 py-0.5 border border-border text-text-primary hover:bg-bg-elevated text-[10px] uppercase tracking-wider"
                     title="Swap unit"
                   >{l.unitName}</button>
@@ -776,7 +909,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
                     </span>
                   )}
                   <button
-                    onClick={() => removeLine(l.productId)}
+                    onClick={() => removeLine(l.productId, l.unitId)}
                     className="ml-auto text-text-tertiary hover:text-danger"
                   >remove</button>
                 </div>
@@ -813,7 +946,14 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
                 </div>
               ) : null;
             })()}
+            {FRIENDLY_UI_ENABLED ? (
+              <div className="flex flex-wrap items-baseline justify-between gap-x-3 mt-2 pt-3 border-t-2 border-border">
+                <span className="text-2xl font-semibold">Total</span>
+                <span className="font-mono tnum text-4xl font-bold text-accent whitespace-nowrap">{formatMoneyWithCurrency(total)}</span>
+              </div>
+            ) : (
             <Row label="TOTAL" value={formatMoney(total)} large />
+            )}
             {vat && total > 0 && (
               <div className="text-text-tertiary text-xs flex justify-between">
                 <span>incl. VAT 15% + NHIL 2.5% + GETFund 2.5%</span>
@@ -838,9 +978,37 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
               </div>
             )}
 
-            {isTouch ? (
+            {FRIENDLY_UI_ENABLED ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => { if (FRIENDLY_UI_ENABLED) openPayment('CASH'); else if (lines.length > 0) setShowTouchSheet(true); }}
+                  disabled={lines.length === 0 || submitting}
+                  className="mt-3 min-h-20 w-full flex items-center justify-center gap-3 rounded-2xl bg-accent text-ink text-2xl font-bold whitespace-nowrap px-3 hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <TaskIllustration name="cash" size={48} />
+                  Take payment
+                </button>
+                <div className="mt-2 text-base text-text-secondary">Or choose with the keyboard:</div>
+                <div className="grid grid-cols-3 gap-2">
+                  <PayBtn label="Cash" hot="F4" illustration="cash" onClick={() => openPayment('CASH')} active={paymentMethod === 'CASH'} />
+                  <PayBtn label="MoMo" hot="F5" illustration="momo" onClick={() => openPayment('MOMO_MTN')} active={paymentMethod?.startsWith('MOMO_') ?? false} />
+                  <PayBtn label="Credit" hot="F6" illustration="credit" onClick={() => openPayment('CREDIT')} active={paymentMethod === 'CREDIT'} />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { if (lines.length > 0) { setSplitError(null); setShowSplit(true); } }}
+                  disabled={lines.length === 0}
+                  className="min-h-14 flex items-center justify-center gap-3 rounded-xl border-2 border-border text-lg font-semibold hover:bg-bg-deep disabled:opacity-40"
+                >
+                  <TaskIllustration name="split" size={36} />
+                  Split payment
+                </button>
+
+              </>
+            ) : isTouch ? (
               <button
-                onClick={() => { if (lines.length > 0) setShowTouchSheet(true); }}
+                onClick={() => { if (FRIENDLY_UI_ENABLED) openPayment('CASH'); else if (lines.length > 0) setShowTouchSheet(true); }}
                 disabled={lines.length === 0}
                 className="bg-accent text-ink px-5 py-4 text-lg font-semibold rounded-lg disabled:opacity-40 disabled:cursor-not-allowed mt-2"
               >
@@ -854,7 +1022,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
                   <PayBtn label="Credit" hot="F6" onClick={() => openPayment('CREDIT')} active={paymentMethod === 'CREDIT'} />
                 </div>
                 <button
-                  onClick={() => { if (lines.length > 0) setShowSplit(true); }}
+                  onClick={() => { if (lines.length > 0) { setSplitError(null); setShowSplit(true); } }}
                   disabled={lines.length === 0}
                   className="text-sm px-3 py-2 border border-border hover:bg-bg-deep disabled:opacity-40 mt-1"
                 >
@@ -870,7 +1038,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
               </>
             )}
 
-            {completedToast && (
+            {!FRIENDLY_UI_ENABLED && completedToast && (
               <div className="bg-bg-deep border border-success px-4 py-2 text-success text-sm flex items-center justify-between gap-3">
                 <span>{completedToast}</span>
                 {lastReceipt && (
@@ -893,7 +1061,35 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
             )}
           </div>
         </section>
+        </fieldset>
       </main>
+
+            {FRIENDLY_UI_ENABLED && completedInfo && (
+              <CompletionDialog onPrint={() => { if (lastReceipt) setShowReceiptPrint(true); }}>
+                <div className="flex items-center gap-3">
+                  <TaskIllustration name="check" size={52} />
+                  <span className="text-2xl font-bold text-success">Sale complete</span>
+                </div>
+                {completedInfo.changePesewas != null && (
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+                    <span className="text-xl font-semibold">Change to give</span>
+                    <span className="font-mono tnum text-3xl font-bold whitespace-nowrap">{formatMoneyWithCurrency(completedInfo.changePesewas)}</span>
+                  </div>
+                )}
+                {completedInfo.printerFailed && (
+                  <div className="text-lg text-warning">The receipt did not print ({completedInfo.printerError ?? 'printer offline'}). The sale is saved. Use Print receipt to try again.</div>
+                )}
+                <button type="button" onClick={nextSale} className="min-h-14 rounded-xl bg-accent text-ink text-xl font-semibold">Next sale</button>
+                {lastReceipt && (
+                  <button
+                    type="button"
+                    onClick={() => setShowReceiptPrint(true)}
+                    className="min-h-14 rounded-xl border-2 border-success text-lg font-semibold text-text-primary hover:bg-success/20">
+                    Print receipt <span className="kbd">F8</span>
+                  </button>
+                )}
+              </CompletionDialog>
+            )}
 
       {showReceiptPrint && lastReceipt && (
         <ReceiptPrintModal receipt={lastReceipt} onClose={() => setShowReceiptPrint(false)} />
@@ -904,7 +1100,9 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
           totalPesewas={total}
           hasCustomer={!!customer}
           customerCashOnly={customer?.cashOnly}
-          onCancel={() => setShowSplit(false)}
+          submitting={submitting}
+          submitError={splitError}
+          onCancel={() => { if (!submitting) setShowSplit(false); }}
           onConfirm={(r) => void submitWithSplit(r)}
         />
       )}
@@ -924,8 +1122,10 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
           setCustomer={setCustomer}
         />
       )}
-      {isTouch && showTouchSheet && (
+      {checkoutSheetAvailable && showTouchSheet && (
         <TouchCheckoutSheet
+          initialMethod={checkoutInitialMethod}
+          keyboardShortcuts={FRIENDLY_UI_ENABLED}
           totalPesewas={total}
           paymentReference={paymentReference}
           setPaymentReference={setPaymentReference}
@@ -936,8 +1136,8 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
           submitting={submitting}
           error={error}
           onSubmit={() => void submitSale()}
-          onClose={() => setShowTouchSheet(false)}
-          onOpenSplit={() => { setShowTouchSheet(false); if (lines.length > 0) setShowSplit(true); }}
+          onClose={() => { if (!submitLockRef.current) setShowTouchSheet(false); }}
+          onOpenSplit={() => { if (submitLockRef.current) return; setShowTouchSheet(false); if (lines.length > 0) { setSplitError(null); setShowSplit(true); } }}
         />
       )}
       {isTouch && showBarcodeScanner && (
@@ -979,11 +1179,11 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
       )}
       {swapUnitFor && (
         <UnitSwapModal
-          productId={swapUnitFor}
-          currentUnitId={lines.find((l) => l.productId === swapUnitFor)?.unitId ?? null}
+          productId={swapUnitFor.productId}
+          currentUnitId={swapUnitFor.unitId}
           onCancel={() => setSwapUnitFor(null)}
           onPick={(u) => {
-            swapUnit(swapUnitFor, u);
+            swapUnit(swapUnitFor.productId, u, swapUnitFor.unitId);
             setSwapUnitFor(null);
           }}
         />
@@ -1108,9 +1308,10 @@ function BarcodeScannerModal({
     onDetectedRef.current(code);
   }
 
+  const dialog = useDialog({ onClose: onCancel });
   return (
-    <div className="fixed inset-0 bg-scrim/90 flex items-center justify-center z-[70] p-4" onClick={onCancel}>
-      <div
+    <div className="fixed inset-0 bg-scrim/90 flex items-center justify-center z-70 p-4" onClick={onCancel}>
+      <div {...dialog} aria-label="BarcodeScanner"
         className="bg-bg-surface border border-border w-full max-w-lg max-h-[92vh] flex flex-col shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
@@ -1228,9 +1429,10 @@ function CustomerPickerModal({
     return () => { cancelled = true; clearTimeout(t); };
   }, [query]);
 
+  const dialog = useDialog({ onClose: onCancel });
   return (
-    <div className="fixed inset-0 bg-scrim flex items-center justify-center z-[60]" onClick={onCancel}>
-      <div className="bg-bg-surface border border-border w-full max-w-lg p-6 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-scrim flex items-center justify-center z-60" onClick={onCancel}>
+      <div {...dialog} aria-label="CustomerPicker" className="bg-bg-surface border border-border w-full max-w-lg p-6 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-text-secondary uppercase tracking-wider text-xs">Pick customer</h3>
         <input
           autoFocus
@@ -1329,9 +1531,10 @@ function UnitSwapModal({
     })();
   }, [productId]);
 
+  const dialog = useDialog({ onClose: onCancel });
   return (
-    <div className="fixed inset-0 bg-scrim flex items-center justify-center z-[60]" onClick={onCancel}>
-      <div className="bg-bg-surface border border-border w-full max-w-md p-6 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-scrim flex items-center justify-center z-60" onClick={onCancel}>
+      <div {...dialog} aria-label="UnitSwap" className="bg-bg-surface border border-border w-full max-w-md p-6 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-text-secondary uppercase tracking-wider text-xs">Sellable units</h3>
         {units.length === 0 && <div className="text-text-tertiary text-sm">No sellable units defined.</div>}
         <ul className="flex flex-col gap-1">
@@ -1368,12 +1571,14 @@ function UnitSwapModal({
 // cancels; backspace into empty + blur removes the line, matching the spirit
 // of `setQuantity(0)` in the store.
 function QuantityInput({
-  productId, quantity, onCommit, onRemove,
+  productId, quantity, onCommit, onRemove, label, large = false,
 }: {
   productId: string;
   quantity: number;
   onCommit: (n: number) => void;
   onRemove: () => void;
+  label?: string;
+  large?: boolean;
 }) {
   const [raw, setRaw] = useState(String(quantity));
   const [focused, setFocused] = useState(false);
@@ -1410,8 +1615,10 @@ function QuantityInput({
           (e.currentTarget as HTMLInputElement).blur();
         }
       }}
-      aria-label={`Quantity for ${productId}`}
-      className="font-mono tnum text-text-primary w-14 text-center bg-bg-input border border-border hover:border-border-strong focus:border-accent focus:outline-none px-1 py-0.5"
+      aria-label={label ?? `Quantity for ${productId}`}
+      className={large
+        ? 'font-mono tnum text-text-primary w-20 h-14 text-2xl text-center bg-bg-input border-2 border-border-strong rounded-xl focus:border-accent focus:outline-hidden'
+        : 'font-mono tnum text-text-primary w-14 text-center bg-bg-input border border-border hover:border-border-strong focus:border-accent focus:outline-hidden px-1 py-0.5'}
     />
   );
 }
@@ -1425,7 +1632,28 @@ function Row({ label, value, large }: { label: string; value: string; large?: bo
   );
 }
 
-function PayBtn({ label, hot, onClick, active }: { label: string; hot: string; onClick: () => void; active: boolean }) {
+function PayBtn({ label, hot, onClick, active, illustration }: {
+  label: string; hot: string; onClick: () => void; active: boolean;
+  illustration?: 'cash' | 'momo' | 'credit';
+}) {
+  if (illustration) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-pressed={active}
+        aria-label={`${label} (${hot})`}
+        className={[
+          'min-h-14 px-2 py-2 rounded-xl border-2 flex flex-col items-center gap-1 text-lg font-semibold',
+          active ? 'bg-bg-elevated border-accent text-text-primary' : 'border-border bg-bg-deep hover:bg-bg-elevated text-text-primary',
+        ].join(' ')}
+      >
+        <TaskIllustration name={illustration} size={36} />
+        <span>{label}</span>
+        <span className="kbd">{hot}</span>
+      </button>
+    );
+  }
   return (
     <button
       onClick={onClick}
@@ -1496,16 +1724,55 @@ function PaymentModal(p: PaymentModalProps) {
     p.onConfirm();
   }
 
+  const dialog = useDialog({ onClose: p.onClose });
   return (
     <div className="fixed inset-0 bg-scrim flex items-center justify-center" onClick={p.onClose}>
-      <div className="bg-bg-surface border border-border w-full max-w-md p-8 flex flex-col gap-5" onClick={(e) => e.stopPropagation()}>
+      <div {...dialog} aria-label="Payment" className="bg-bg-surface border border-border w-full max-w-md p-8 flex flex-col gap-5" onClick={(e) => e.stopPropagation()}>
+        {FRIENDLY_UI_ENABLED ? (
+          <h3 className="flex items-center gap-3 text-2xl font-bold">
+            <TaskIllustration name={isCash ? 'cash' : isMomo ? 'momo' : 'credit'} size={48} />
+            {isCash && 'Cash'}
+            {isMomo && 'MoMo'}
+            {isCredit && 'Pay later (credit)'}
+          </h3>
+        ) : (
         <h3 className="text-text-secondary uppercase tracking-wider text-xs">
           {isCash && 'Cash'}
           {isMomo && 'MoMo'}
           {isCredit && 'Credit (on account)'}
         </h3>
+        )}
 
-        {isCash && (
+        {isCash && FRIENDLY_UI_ENABLED && (
+          <>
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-2xl font-semibold">Total</span>
+              <span className="font-mono tnum text-3xl font-bold text-accent">{formatMoneyWithCurrency(p.totalPesewas)}</span>
+            </div>
+            <label htmlFor="payment-cash-received" className="text-xl font-semibold">Money received</label>
+            <input
+              id="payment-cash-received"
+              autoFocus
+              value={cashRaw}
+              onChange={(e) => setCashRaw(e.target.value)}
+              onFocus={(e) => e.target.select()}
+              onKeyDown={(e) => { if (e.key === 'Enter') confirm(); }}
+              inputMode="decimal"
+              className="bg-bg-input border-2 border-border-strong rounded-xl px-4 py-3 text-4xl font-mono tnum text-right focus:outline-hidden focus:border-accent"
+            />
+            {cashPesewas != null && change != null && change >= 0 && (
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-2xl font-semibold">Change to give</span>
+                <span className="font-mono tnum text-3xl font-bold">{formatMoneyWithCurrency(change)}</span>
+              </div>
+            )}
+            {cashPesewas != null && change != null && change < 0 && (
+              <div className="text-danger text-xl font-semibold">Not enough money: {formatMoneyWithCurrency(-change)} more needed.</div>
+            )}
+          </>
+        )}
+
+        {isCash && !FRIENDLY_UI_ENABLED && (
           <>
             <div className="text-text-tertiary text-sm">Total due: <span className="font-mono tnum text-text-primary">{formatMoneyWithCurrency(p.totalPesewas)}</span></div>
             <label className="text-text-secondary text-xs uppercase tracking-wider">Cash given</label>
@@ -1621,7 +1888,7 @@ function PaymentModal(p: PaymentModalProps) {
         )}
 
         <div className="flex gap-3 mt-2">
-          <button onClick={p.onClose} className="px-5 py-3 border border-border text-text-primary hover:bg-bg-elevated">Cancel</button>
+          <button onClick={p.onClose} className={FRIENDLY_UI_ENABLED ? 'min-h-14 px-5 rounded-xl border-2 border-border text-lg font-semibold text-text-primary hover:bg-bg-elevated' : 'px-5 py-3 border border-border text-text-primary hover:bg-bg-elevated'}>Cancel</button>
           <button
             onClick={confirm}
             disabled={
@@ -1629,9 +1896,11 @@ function PaymentModal(p: PaymentModalProps) {
               (isMomo && refRaw.trim() === '') ||
               (isCredit && (!p.customer || p.customer.cashOnly))
             }
-            className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed"
+            className={FRIENDLY_UI_ENABLED
+              ? 'flex-1 min-h-14 px-5 rounded-xl bg-accent text-ink text-lg font-semibold hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed'
+              : 'bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed'}
           >
-            Confirm
+            {FRIENDLY_UI_ENABLED ? 'Use this payment' : 'Confirm'}
           </button>
         </div>
         {isCredit && p.customer?.cashOnly && (
@@ -1640,4 +1909,14 @@ function PaymentModal(p: PaymentModalProps) {
       </div>
     </div>
   );
+}
+
+
+function CompletionDialog({ onPrint, children }: { onPrint: () => void; children: React.ReactNode }) {
+  const dialog = useDialog({ onClose: () => {}, onShortcut: (key) => { if (key === 'F8') onPrint(); } });
+  return <div className="fixed inset-0 bg-scrim z-50 flex items-center justify-center p-4">
+    <div {...dialog} aria-label="Sale complete" className="w-full max-w-lg max-h-[94dvh] overflow-y-auto rounded-2xl border-2 border-success bg-bg-surface p-5 flex flex-col gap-4">
+      {children}
+    </div>
+  </div>;
 }
