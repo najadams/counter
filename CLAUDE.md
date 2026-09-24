@@ -51,6 +51,19 @@ use `${version}` from `package.json`.
 
 Targets configured: nsis (Windows), dmg (Mac), AppImage (Linux).
 
+**Mac builds, one architecture per run.** Each `dist:mac*` script runs
+electron-builder twice (`--mac dmg:arm64`, then `--mac dmg:x64`). Building both
+in one run swapped the arm64 app's SQLite module for the x64 one while its
+image was still being written; v0.4.0's Apple Silicon installers shipped that
+way and opened no window. `scripts/verify-mac-native-modules.sh
+release/*/*.dmg` checks every native module in a Mac image has the image's
+architecture and the app's Electron ABI; the release workflow runs it before
+upload. Run it on any Mac image you build locally too: after
+`npm rebuild better-sqlite3` for the tests, electron-builder can package that
+plain-Node build (it trusts a stale "already built" marker). Delete
+`node_modules/better-sqlite3/build` before a local `dist:*` run to force a real
+rebuild.
+
 **VAT vs no-VAT variants.** Counter ships in two flavours from one codebase (see
 §11). The `dist:*` commands above build the **no-VAT** installer. Append `:vat`
 — `npm run dist:win:vat`, `dist:mac:vat`, `dist:linux:vat` — to build the **VAT**

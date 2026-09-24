@@ -1,6 +1,6 @@
 // Electron main entry. Boots the app, creates the BrowserWindow, wires IPC.
 
-import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -310,7 +310,27 @@ app.whenReady().then(async () => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
   });
-});
+}).catch(reportBootFailure);
+
+/**
+ * Boot failed before the window existed (the database wouldn't open, a
+ * migration threw, a native module didn't load). Without this the rejection
+ * went unhandled and the app sat running with no window and no message:
+ * v0.4.0's arm64 Mac builds did exactly that. Say what happened, point at
+ * the log, and quit so the next launch starts clean.
+ */
+function reportBootFailure(err: unknown): void {
+  const detail = err instanceof Error ? (err.stack ?? err.message) : String(err);
+  log.error('[main] boot failed:', detail);
+  const logFile = log.transports.file.getFile()?.path ?? 'the Counter log file';
+  dialog.showErrorBox(
+    `${app.getName()} could not start`,
+    `${err instanceof Error ? err.message : String(err)}\n\n`
+      + `The full details are in:\n${logFile}\n\n`
+      + 'Send that file to your supplier. Nothing was sold or recorded.',
+  );
+  app.exit(1);
+}
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
