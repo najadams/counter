@@ -623,8 +623,13 @@ export interface SaleCorrectRequest {
   originalSaleId: string;
   /** ONLY the missed items; original lines are rebuilt server-side. */
   addedLines: Array<{ productId: string; quantity: number; unitPricePesewas: number; unitId?: string }>;
-  /** Tenders for the FULL corrected total (must sum to it). */
-  payments: Array<{ method: string; amountPesewas: number; reference?: string | null; cashGivenPesewas?: number | null }>;
+  /** How the customer pays for the added items. The original sale's tenders
+   *  carry over unchanged; the server rebuilds them. */
+  extraPayment: {
+    method: 'CASH' | 'MOMO_MTN' | 'MOMO_VODAFONE' | 'MOMO_AIRTELTIGO' | 'BANK_TRANSFER' | 'CREDIT';
+    reference?: string | null;
+    cashGivenPesewas?: number | null;
+  };
 }
 export interface SaleCorrectResponse {
   originalSaleId: string;

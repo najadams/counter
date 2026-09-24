@@ -239,6 +239,9 @@ export interface CompleteSaleInput {
    *  receipt prints a "CORRECTED — supersedes #<id>" header. The DB link is
    *  written by correctSale, not here. */
   supersedesSaleId?: string | null;
+  /** Pay-later due date to keep (sale correction). Otherwise today + the
+   *  customer's credit terms. */
+  creditDueDate?: string | null;
 }
 
 /** Synchronous core of completeSale: validation + pricing + the atomic DB
@@ -635,7 +638,7 @@ export function completeSaleCore(
   const saleId = `sa-${uuidv4()}`;
   const now = new Date().toISOString();
   const creditDueDate = hasCredit && creditCustomer
-    ? (() => {
+    ? input.creditDueDate ?? (() => {
         const d = new Date(`${now.slice(0, 10)}T00:00:00.000Z`);
         d.setUTCDate(d.getUTCDate() + Math.max(0, creditCustomer.credit_terms_days));
         return d.toISOString().slice(0, 10);

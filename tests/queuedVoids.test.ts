@@ -231,7 +231,7 @@ describe('queued void lifecycle', () => {
     await expect(correctSale(db, {
       originalSaleId: completed.saleId,
       addedLines: [{ productId, quantity: 1, unitPricePesewas: 800 }],
-      payments: [{ method: 'CREDIT', amountPesewas: 2400 }],
+      extraPayment: { method: 'CREDIT' }, correctorShiftId: shiftId,
       workerId: COUNTER, workerName: 'Counter', deviceId: DEVICE, shopName: 'TEST',
     })).rejects.toThrow(/pending void request/);
     expect(() => recordCustomerReturn(db, {

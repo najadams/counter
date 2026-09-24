@@ -4,20 +4,36 @@
 // missed items, shows the new total + the extra to collect, and calls
 // correctSale (which voids the original + re-rings it + prints one CORRECTED
 // receipt). Additive only: original lines can't be edited here.
+//
+// What the customer already paid stays as it was (the server carries the
+// original tenders over); the cashier only says how the EXTRA is paid.
 
 import { XIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { counter } from '../lib/ipc';
-import { formatMoney, formatMoneyWithCurrency } from '../../shared/lib/money';
+import { formatMoney, formatMoneyWithCurrency, parseCedisToPesewas } from '../../shared/lib/money';
 import { FeedbackBanner } from './FeedbackBanner';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogTitle } from './ui/dialog';
 import { Field } from './ui/field';
 import { Input } from './ui/input';
+import { NativeSelect } from './ui/native-select';
 
 interface RecentSale {
   id: string; channel: string; totalPesewas: number; workerName: string;
+  paymentMethod: string; customerName: string | null;
 }
+
+type ExtraMethod = 'CASH' | 'MOMO_MTN' | 'MOMO_VODAFONE' | 'MOMO_AIRTELTIGO' | 'BANK_TRANSFER' | 'CREDIT';
+const EXTRA_METHODS: Array<{ value: ExtraMethod; label: string }> = [
+  { value: 'CASH', label: 'Cash' },
+  { value: 'MOMO_MTN', label: 'MTN MoMo' },
+  { value: 'MOMO_VODAFONE', label: 'Telecel Cash' },
+  { value: 'MOMO_AIRTELTIGO', label: 'AirtelTigo Money' },
+  { value: 'BANK_TRANSFER', label: 'Bank transfer' },
+  { value: 'CREDIT', label: 'Pay later (on account)' },
+];
+const methodLabel = (m: string) => EXTRA_METHODS.find((x) => x.value === m)?.label ?? m;
 interface OrigLine { productName: string; quantity: number; unitPricePesewas: number; unitName: string; }
 interface Addition {
   productId: string; name: string; unitId: string | undefined; unitName: string;
@@ -37,6 +53,13 @@ export function CorrectSaleModal({ sale, onCancel, onDone }: {
   const [hits, setHits] = useState<Hit[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The extra is paid the way the sale was, unless the cashier says otherwise.
+  const [method, setMethod] = useState<ExtraMethod>(() => {
+    const m = EXTRA_METHODS.find((x) => x.value === sale.paymentMethod)?.value ?? 'CASH';
+    return m === 'CREDIT' && !sale.customerName ? 'CASH' : m;
+  });
+  const [cashGivenRaw, setCashGivenRaw] = useState('');
+  const [reference, setReference] = useState('');
 
   useEffect(() => {
     void counter.getSaleLines(sale.id).then((r) => {
@@ -87,9 +110,16 @@ export function CorrectSaleModal({ sale, onCancel, onDone }: {
 
   const delta = additions.reduce((s, a) => s + a.quantity * a.unitPricePesewas, 0);
   const newTotal = sale.totalPesewas + delta;
+  // Blank means exact money; anything unreadable counts as short.
+  const cashGiven = method === 'CASH' && cashGivenRaw.trim() !== '' ? parseCedisToPesewas(cashGivenRaw) ?? 0 : null;
+  const cashShort = cashGiven != null && cashGiven < delta;
+  const needsReference = method.startsWith('MOMO_') || method === 'BANK_TRANSFER';
+  const collectLabel = method === 'CREDIT'
+    ? `add ${formatMoneyWithCurrency(delta)} to ${sale.customerName ?? 'the account'}`
+    : `collect ${formatMoneyWithCurrency(delta)} by ${methodLabel(method)}`;
 
   async function submit() {
-    if (additions.length === 0) return;
+    if (additions.length === 0 || cashShort) return;
     setBusy(true); setError(null);
     const r = await counter.correctSale({
       originalSaleId: sale.id,
@@ -97,12 +127,20 @@ export function CorrectSaleModal({ sale, onCancel, onDone }: {
         productId: a.productId, quantity: a.quantity,
         unitPricePesewas: a.unitPricePesewas, unitId: a.unitId,
       })),
-      payments: [{ method: 'CASH', amountPesewas: newTotal, cashGivenPesewas: newTotal }],
+      extraPayment: {
+        method,
+        reference: needsReference ? reference.trim() || null : null,
+        cashGivenPesewas: cashGiven,
+      },
     });
     setBusy(false);
     if (!r.success) { setError(r.error); return; }
     const d = r.data;
-    onDone(`Corrected #${sale.id.slice(-6)} → new #${d.newSaleId.slice(-6)}. Collected ${formatMoneyWithCurrency(d.deltaPesewas)} extra.${d.printerFailed ? ' Receipt failed — send to counter.' : ''}`);
+    const change = d.changePesewas ? ` Give ${formatMoneyWithCurrency(d.changePesewas)} change.` : '';
+    const what = method === 'CREDIT'
+      ? `Added ${formatMoneyWithCurrency(d.deltaPesewas)} to the account.`
+      : `Collected ${formatMoneyWithCurrency(d.deltaPesewas)} extra by ${methodLabel(method)}.`;
+    onDone(`Corrected #${sale.id.slice(-6)} → new #${d.newSaleId.slice(-6)}. ${what}${change}${d.printerFailed ? ' Receipt failed — send to counter.' : ''}`);
   }
 
   return (
@@ -176,14 +214,40 @@ export function CorrectSaleModal({ sale, onCancel, onDone }: {
             <span className="text-text-secondary">New total</span>
             <span className="font-mono tnum">{formatMoneyWithCurrency(newTotal)}</span>
           </div>
+          <div className="text-xs text-text-tertiary">
+            Already paid: {formatMoneyWithCurrency(sale.totalPesewas)} by {methodLabel(sale.paymentMethod)}{sale.customerName ? ` (${sale.customerName})` : ''}. That stays as it was.
+          </div>
           <div className="flex justify-between text-sm font-semibold text-accent">
-            <span>Collect now</span>
+            <span>{method === 'CREDIT' ? 'Add to account' : 'Collect now'}</span>
             <span className="font-mono tnum">{formatMoneyWithCurrency(delta)}</span>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Extra paid by">
+              <NativeSelect value={method} onChange={(e) => setMethod(e.target.value as ExtraMethod)} disabled={busy}>
+                {EXTRA_METHODS.filter((m) => m.value !== 'CREDIT' || sale.customerName).map((m) => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
+              </NativeSelect>
+            </Field>
+            {method === 'CASH' && (
+              <Field label="Cash received"
+                hint={cashShort
+                  ? <span className="text-danger">Less than {formatMoneyWithCurrency(delta)}</span>
+                  : cashGiven != null && cashGiven > delta ? `Change ${formatMoneyWithCurrency(cashGiven - delta)}` : undefined}>
+                <Input inputMode="decimal" value={cashGivenRaw} placeholder={formatMoney(delta)}
+                  onChange={(e) => setCashGivenRaw(e.target.value)} className="font-mono tnum text-right" />
+              </Field>
+            )}
+            {needsReference && (
+              <Field label="Reference">
+                <Input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Transaction ID" />
+              </Field>
+            )}
           </div>
           <div className="flex gap-3">
             <Button size="lg" onClick={onCancel} disabled={busy}>Cancel</Button>
-            <Button size="lg" variant="primary" onClick={() => void submit()} disabled={additions.length === 0 || busy} className="flex-1">
-              {busy ? 'Correcting…' : `Confirm & collect ${formatMoneyWithCurrency(delta)}`}
+            <Button size="lg" variant="primary" onClick={() => void submit()} disabled={additions.length === 0 || busy || cashShort} className="flex-1">
+              {busy ? 'Correcting…' : `Confirm & ${collectLabel}`}
             </Button>
           </div>
         </div>

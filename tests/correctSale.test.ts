@@ -7,7 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runMigrations } from '../src/main/db/migrations';
 import { runSeed } from '../src/main/db/seed';
-import { openShift } from '../src/main/services/shifts';
+import { computeAndCloseShift, openShift, submitClosingCount } from '../src/main/services/shifts';
 import { completeSale } from '../src/main/services/sales';
 import { correctSale } from '../src/main/services/correctSale';
 import { _setPrinter, _resetPrinter } from '../src/main/printer/printer';
@@ -64,7 +64,7 @@ describe('correctSale (additive)', () => {
     const res = await correctSale(db, {
       originalSaleId: origId,
       addedLines: [{ productId: star.id, quantity: 2, unitPricePesewas: 800 }],
-      payments: [{ method: 'CASH', amountPesewas: 4000, cashGivenPesewas: 4000 }],
+      extraPayment: { method: 'CASH' }, correctorShiftId: shiftId,
       workerId: W, workerName: 'Naj', deviceId: D, shopName: 'TEST',
     });
 
@@ -101,7 +101,7 @@ describe('correctSale (additive)', () => {
     await correctSale(db, {
       originalSaleId: origId,
       addedLines: [{ productId: star.id, quantity: 2, unitPricePesewas: 800 }],
-      payments: [{ method: 'CASH', amountPesewas: 4000, cashGivenPesewas: 4000 }],
+      extraPayment: { method: 'CASH' }, correctorShiftId: shiftId,
       workerId: W, workerName: 'Naj', deviceId: D, shopName: 'TEST',
     });
     // net: 24 restored to original then 5 sold (3 + 2) → 19
@@ -117,7 +117,7 @@ describe('correctSale (additive)', () => {
     const res = await correctSale(db, {
       originalSaleId: origId,
       addedLines: [{ productId: star.id, quantity: 1, unitPricePesewas: 950 }],
-      payments: [{ method: 'CASH', amountPesewas: 3350, cashGivenPesewas: 3350 }],
+      extraPayment: { method: 'CASH' }, correctorShiftId: shiftId,
       workerId: W, workerName: 'Naj', deviceId: D, shopName: 'TEST',
     });
     // 2400 (3×800 snapshot) + 950 (added) = 3350 exactly
@@ -131,15 +131,154 @@ describe('correctSale (additive)', () => {
     const origId = await baseSale();
     const star = product('STAR-330');
     const added = [{ productId: star.id, quantity: 1, unitPricePesewas: 800 }];
-    const pay = [{ method: 'CASH', amountPesewas: 3200, cashGivenPesewas: 3200 }];
+    const pay = { extraPayment: { method: 'CASH' as const }, correctorShiftId: shiftId };
 
-    await expect(correctSale(db, { originalSaleId: origId, addedLines: [], payments: pay, workerId: W, workerName: 'Naj', deviceId: D, shopName: 'TEST' }))
+    await expect(correctSale(db, { originalSaleId: origId, addedLines: [], ...pay, workerId: W, workerName: 'Naj', deviceId: D, shopName: 'TEST' }))
       .rejects.toThrow(/add at least one item/);
 
     // first correction succeeds
-    await correctSale(db, { originalSaleId: origId, addedLines: added, payments: pay, workerId: W, workerName: 'Naj', deviceId: D, shopName: 'TEST' });
+    await correctSale(db, { originalSaleId: origId, addedLines: added, ...pay, workerId: W, workerName: 'Naj', deviceId: D, shopName: 'TEST' });
     // the original is now voided + superseded → a second correction is refused
-    await expect(correctSale(db, { originalSaleId: origId, addedLines: added, payments: pay, workerId: W, workerName: 'Naj', deviceId: D, shopName: 'TEST' }))
+    await expect(correctSale(db, { originalSaleId: origId, addedLines: added, ...pay, workerId: W, workerName: 'Naj', deviceId: D, shopName: 'TEST' }))
       .rejects.toThrow(/already (voided|corrected)/);
+  });
+});
+
+describe('correctSale keeps what the customer already paid', () => {
+  const CUST = 'cu-correct';
+  beforeEach(() => {
+    db.prepare(
+      `INSERT INTO customers (id, display_name, phone, customer_type, current_balance_pesewas,
+        credit_limit_pesewas, credit_terms_days, blocked, empties_owed_count, created_by, updated_by, device_id)
+       VALUES (?, 'Auntie Akos', '+233500000009', 'WALK_IN_REGULAR', 0, 0, 14, 0, 0, ?, ?, ?)`,
+    ).run(CUST, W, W, D);
+  });
+
+  const balance = () =>
+    (db.prepare('SELECT current_balance_pesewas AS b FROM customers WHERE id = ?').get(CUST) as { b: number }).b;
+  const tenders = (saleId: string) =>
+    db.prepare('SELECT payment_method AS m, amount_pesewas AS a, reference AS r, change_pesewas AS c FROM sale_payments WHERE sale_id = ? ORDER BY display_order')
+      .all(saleId) as Array<{ m: string; a: number; r: string | null; c: number | null }>;
+  const expectedCashAtClose = () => {
+    submitClosingCount(db, shiftId, 0, W, D);
+    return computeAndCloseShift(db, shiftId, W, D).expectedPesewas;
+  };
+  async function ring(paymentMethod: string, extra: Record<string, unknown> = {}) {
+    const star = product('STAR-330');
+    return (await completeSale(db, {
+      shiftId, workerId: W, workerName: 'Naj', locationId: L, channel: 'WALK_IN',
+      lines: [{ productId: star.id, quantity: 10, unitPricePesewas: 800 }],
+      paymentMethod, deviceId: D, shopName: 'TEST', ...extra,
+    })).saleId;
+  }
+  const addOne = () => [{ productId: product('STAR-330').id, quantity: 1, unitPricePesewas: 800 }];
+  const base = { workerId: W, workerName: 'Naj', deviceId: D, shopName: 'TEST' };
+
+  it('a pay-later sale stays on the account; only the extra is collected', async () => {
+    const origId = await ring('CREDIT', { customerId: CUST });
+    const due = (db.prepare('SELECT credit_due_date AS d FROM sales WHERE id = ?').get(origId) as { d: string }).d;
+    expect(balance()).toBe(8000);
+
+    const res = await correctSale(db, {
+      ...base, originalSaleId: origId, addedLines: addOne(),
+      extraPayment: { method: 'CASH', cashGivenPesewas: 1000 }, correctorShiftId: shiftId,
+    });
+
+    expect(balance()).toBe(8000);
+    expect(tenders(res.newSaleId)).toEqual([
+      { m: 'CREDIT', a: 8000, r: null, c: null },
+      { m: 'CASH', a: 800, r: null, c: 200 },
+    ]);
+    expect(res.changePesewas).toBe(200);
+    const kept = db.prepare('SELECT credit_due_date AS d FROM sales WHERE id = ?').get(res.newSaleId) as { d: string };
+    expect(kept.d).toBe(due);
+    // The drawer gained the GH¢8 extra and nothing else.
+    expect(expectedCashAtClose()).toBe(5000 + 800);
+  });
+
+  it('an extra put on the account joins the same pay-later tender', async () => {
+    const origId = await ring('CREDIT', { customerId: CUST });
+    const res = await correctSale(db, {
+      ...base, originalSaleId: origId, addedLines: addOne(),
+      extraPayment: { method: 'CREDIT' }, correctorShiftId: shiftId,
+    });
+    expect(balance()).toBe(8800);
+    expect(tenders(res.newSaleId)).toEqual([{ m: 'CREDIT', a: 8800, r: null, c: null }]);
+    expect(expectedCashAtClose()).toBe(5000);
+  });
+
+  it('a MoMo sale stays MoMo with its reference; the extra gets its own line', async () => {
+    const origId = await ring('MOMO_MTN', { paymentReference: 'MP240924.1011.A1' });
+    const res = await correctSale(db, {
+      ...base, originalSaleId: origId, addedLines: addOne(),
+      extraPayment: { method: 'MOMO_VODAFONE', reference: ' TC-778 ' }, correctorShiftId: shiftId,
+    });
+    expect(tenders(res.newSaleId)).toEqual([
+      { m: 'MOMO_MTN', a: 8000, r: 'MP240924.1011.A1', c: null },
+      { m: 'MOMO_VODAFONE', a: 800, r: 'TC-778', c: null },
+    ]);
+    expect(expectedCashAtClose()).toBe(5000);
+  });
+
+  it('a cash sale corrected in cash is one cash line for the new total', async () => {
+    const origId = await ring('CASH', { cashGivenPesewas: 8000 });
+    const res = await correctSale(db, {
+      ...base, originalSaleId: origId, addedLines: addOne(),
+      extraPayment: { method: 'CASH', cashGivenPesewas: 1000 }, correctorShiftId: shiftId,
+    });
+    expect(tenders(res.newSaleId)).toEqual([{ m: 'CASH', a: 8800, r: null, c: 200 }]);
+    expect(expectedCashAtClose()).toBe(5000 + 8800);
+  });
+
+  it('refuses pay later with no customer, and cash short of the extra', async () => {
+    const origId = await ring('CASH', { cashGivenPesewas: 8000 });
+    await expect(correctSale(db, {
+      ...base, originalSaleId: origId, addedLines: addOne(),
+      extraPayment: { method: 'CREDIT' }, correctorShiftId: shiftId,
+    })).rejects.toThrow(/needs a customer/);
+    await expect(correctSale(db, {
+      ...base, originalSaleId: origId, addedLines: addOne(),
+      extraPayment: { method: 'CASH', cashGivenPesewas: 500 }, correctorShiftId: shiftId,
+    })).rejects.toThrow(/less than the amount/);
+  });
+
+  it("refuses a sale from a closed shift, another cashier's shift, or an earlier day", async () => {
+    const origId = await ring('CASH', { cashGivenPesewas: 8000 });
+    const other = openShift(db, { workerId: SUP, locationId: L, shiftType: 'COUNTER', openingCashPesewas: 0, deviceId: D }).shiftId;
+    await expect(correctSale(db, {
+      ...base, originalSaleId: origId, addedLines: addOne(),
+      extraPayment: { method: 'CASH' }, correctorShiftId: other,
+    })).rejects.toThrow(/another cashier's shift/);
+
+    db.prepare("UPDATE sales SET created_at = '2020-01-01T10:00:00.000Z' WHERE id = ?").run(origId);
+    await expect(correctSale(db, {
+      ...base, originalSaleId: origId, addedLines: addOne(),
+      extraPayment: { method: 'CASH' }, correctorShiftId: shiftId,
+    })).rejects.toThrow(/only sales from today/);
+    db.prepare('UPDATE sales SET created_at = ? WHERE id = ?').run(new Date().toISOString(), origId);
+
+    submitClosingCount(db, shiftId, 13000, W, D);
+    computeAndCloseShift(db, shiftId, W, D);
+    await expect(correctSale(db, {
+      ...base, originalSaleId: origId, addedLines: addOne(),
+      extraPayment: { method: 'CASH' }, correctorShiftId: null,
+    })).rejects.toThrow(/shift is closed/);
+  });
+
+  it('refuses a pay-later sale the customer has already paid towards', async () => {
+    const origId = await ring('CREDIT', { customerId: CUST });
+    db.prepare(
+      `INSERT INTO customer_payments (id, customer_id, amount_pesewas, payment_method, received_at, received_by,
+         created_by, updated_by, device_id)
+       VALUES ('cp-1', ?, 1000, 'CASH', ?, ?, ?, ?, ?)`,
+    ).run(CUST, new Date().toISOString(), W, W, W, D);
+    db.prepare(
+      `INSERT INTO customer_payment_allocations (id, customer_payment_id, sale_id, amount_pesewas, created_by, updated_by, device_id)
+       VALUES ('cpa-1', 'cp-1', ?, 1000, ?, ?, ?)`,
+    ).run(origId, W, W, D);
+    await expect(correctSale(db, {
+      ...base, originalSaleId: origId, addedLines: addOne(),
+      extraPayment: { method: 'CASH' }, correctorShiftId: shiftId,
+    })).rejects.toThrow(/already paid towards/);
   });
 });

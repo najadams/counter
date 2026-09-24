@@ -577,11 +577,15 @@ export function registerIpcHandlers(
   ipcMain.handle(IPC_CHANNELS.SALE_CORRECT, wrap<SaleCorrectRequest, SaleCorrectResponse>(
     async (req) => {
       const w = requireWorker();
+      // A correction rings a new sale, so the read-only licence gate applies
+      // here too (see SALE_COMPLETE).
+      assertSalesAllowed(db, app?.getPath('userData'));
       const header = getShopHeader(db);
       const r = await correctSale(db, {
         originalSaleId: req.originalSaleId,
         addedLines: req.addedLines,
-        payments: req.payments,
+        extraPayment: req.extraPayment,
+        correctorShiftId: getOpenShift(db, w.workerId)?.id ?? null,
         workerId: w.workerId, workerName: w.fullName,
         deviceId, shopName: header.shopName, shopSubtitle: header.shopSubtitle,
         station: currentStation(),
