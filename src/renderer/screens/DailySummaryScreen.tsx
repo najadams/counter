@@ -5,12 +5,13 @@ import { useEffect, useState } from 'react';
 import { counter } from '../lib/ipc';
 import { useSession } from '../store/session';
 import { AppHeader } from '../components/AppHeader';
-import { formatMoney, formatMoneyWithCurrency } from '../../shared/lib/money';
-import type { DailySummaryGenerateResponse } from '../../shared/types/ipc';
+import { formatMoney, formatMoneyWithCurrency, parseCedisToPesewas } from '../../shared/lib/money';
+import type { DailySummaryGenerateResponse, OpenShiftBlockingSeal } from '../../shared/types/ipc';
 import { FeedbackBanner } from '../components/FeedbackBanner';
 import { PinUnlockPanel } from '../components/PinUnlockPanel';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
+import { Field } from '../components/ui/field';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 
 interface SummaryRow { date: string; locationId: string; revenuePesewas: number; numSales: number;
@@ -32,6 +33,12 @@ export default function DailySummaryScreen({ onExit }: { onExit: () => void }) {
   const [activeClose, setActiveClose] = useState<{ id: string; sealedAt: string; sealedByName: string } | null>(null);
   const [reopenReason, setReopenReason] = useState('');
   const [showReopen, setShowReopen] = useState(false);
+  // Shifts left open block the seal. Rather than send the owner away to find
+  // the cashier, they count the drawer here and the shift closes normally.
+  const [openShifts, setOpenShifts] = useState<OpenShiftBlockingSeal[] | null>(null);
+  const [counted, setCounted] = useState<Record<string, string>>({});
+  const [closeReason, setCloseReason] = useState('');
+  const [closingShiftId, setClosingShiftId] = useState<string | null>(null);
   const [varianceUnlocked, setVarianceUnlocked] = useState(false);
   const myRole = useSession((s) => s.workerRole);
   const isOwner = myRole === 'OWNER' || myRole === 'FOUNDER';
@@ -47,10 +54,48 @@ export default function DailySummaryScreen({ onExit }: { onExit: () => void }) {
 
   async function sealDay() {
     const r = await counter.periodSeal(selectedDate);
-    if (!r.success) { setError(r.error); return; }
+    if (!r.success) {
+      setError(r.error);
+      // The commonest reason to refuse is an open shift. Fetch them so the
+      // owner can deal with it here instead of hunting for the cashier.
+      if (/open shift/i.test(r.error)) {
+        const shifts = await counter.periodListOpenShifts(selectedDate);
+        if (shifts.success) setOpenShifts(shifts.data.shifts);
+      }
+      return;
+    }
     setInfo(`Day ${selectedDate} sealed.`);
     setError(null);
+    setOpenShifts(null);
     await refreshClose(selectedDate);
+  }
+
+  async function closeOpenShift(shift: OpenShiftBlockingSeal) {
+    // Integer pesewas straight from the text: money never passes through a float.
+    const countedPesewas = parseCedisToPesewas(counted[shift.shiftId] ?? '');
+    if (countedPesewas == null) {
+      setError('Enter the cash you counted in the drawer.');
+      return;
+    }
+    if (closeReason.trim().length < 3) {
+      setError('Say why you are closing this shift — it is recorded.');
+      return;
+    }
+    setClosingShiftId(shift.shiftId);
+    const r = await counter.periodCloseOpenShift({
+      shiftId: shift.shiftId,
+      countedPesewas,
+      reason: closeReason.trim(),
+    });
+    setClosingShiftId(null);
+    if (!r.success) { setError(r.error); return; }
+    setError(null);
+    setInfo(
+      `Closed ${shift.workerName}'s shift — counted ${formatMoney(r.data.countedPesewas)}, `
+      + `expected ${formatMoney(r.data.expectedPesewas)}, variance ${formatMoney(r.data.variancePesewas)}.`,
+    );
+    const remaining = await counter.periodListOpenShifts(selectedDate);
+    setOpenShifts(remaining.success ? remaining.data.shifts : null);
   }
   async function reopenDay() {
     if (!reopenReason.trim()) { setError('Reopen reason required.'); return; }
@@ -152,6 +197,65 @@ export default function DailySummaryScreen({ onExit }: { onExit: () => void }) {
               )
             )}
           </div>
+
+          {openShifts && openShifts.length > 0 && isOwner && (
+            <div className="panel border-warning/50 p-4 space-y-3">
+              <div>
+                <div className="font-semibold">
+                  {openShifts.length} shift{openShifts.length === 1 ? '' : 's'} still open
+                </div>
+                <div className="text-sm text-text-secondary">
+                  A shift stays open until someone counts the drawer. Count it now and
+                  the shift closes the normal way — the variance is worked out the same.
+                  Your name goes on the count, not the cashier&apos;s.
+                </div>
+              </div>
+
+              <Field label="Why are you closing it?">
+                <Input
+                  value={closeReason}
+                  onChange={(e) => setCloseReason(e.target.value)}
+                  placeholder="e.g. Ama went home without closing"
+                />
+              </Field>
+
+              {openShifts.map((shift) => (
+                <div key={shift.shiftId} className="rounded-lg border border-border-subtle p-3 space-y-2">
+                  <div className="text-sm">
+                    <span className="font-semibold">{shift.workerName}</span>
+                    <span className="text-text-secondary">
+                      {' '}· open since {shift.openedAt.slice(0, 16).replace('T', ' ')}
+                    </span>
+                  </div>
+                  <div className="text-xs text-text-secondary">
+                    Books expect {formatMoneyWithCurrency(shift.expectedPesewas)} in the drawer
+                    (opened with {formatMoney(shift.openingCashPesewas)}).
+                  </div>
+                  <div className="flex flex-wrap items-end gap-2">
+                    <Field label="Cash counted (GH¢)">
+                      <Input
+                        inputMode="decimal"
+                        value={counted[shift.shiftId] ?? ''}
+                        onChange={(e) => setCounted((c) => ({ ...c, [shift.shiftId]: e.target.value }))}
+                        placeholder="0.00"
+                        className="w-40 font-mono tnum text-right"
+                      />
+                    </Field>
+                    <Button
+                      onClick={() => void closeOpenShift(shift)}
+                      disabled={closingShiftId === shift.shiftId}
+                    >
+                      {closingShiftId === shift.shiftId ? 'Closing…' : 'Close this shift'}
+                    </Button>
+                  </div>
+                </div>
+              ))}
+
+              <div className="text-xs text-text-tertiary">
+                Once every shift is closed, press Seal day again.
+              </div>
+            </div>
+          )}
 
           {showReopen && (
             <div className="bg-bg-elevated border border-border-subtle rounded p-4 space-y-2">

@@ -341,6 +341,12 @@ export function createCounterApi(invoke: Invoke) {
       invoke<ipc.PeriodSealResponse>(ipc.IPC_CHANNELS_S15_PERIOD.PERIOD_SEAL, { businessDate }),
     periodReopen: (businessDate: string, reason: string) =>
       invoke<ipc.PeriodReopenResponse>(ipc.IPC_CHANNELS_S15_PERIOD.PERIOD_REOPEN, { businessDate, reason }),
+    periodListOpenShifts: (businessDate: string) =>
+      invoke<ipc.PeriodListOpenShiftsResponse>(
+        ipc.IPC_CHANNELS_S15_PERIOD.PERIOD_LIST_OPEN_SHIFTS, { businessDate }),
+    periodCloseOpenShift: (req: ipc.PeriodCloseOpenShiftRequest) =>
+      invoke<ipc.PeriodCloseOpenShiftResponse>(
+        ipc.IPC_CHANNELS_S15_PERIOD.PERIOD_CLOSE_OPEN_SHIFT, req),
 
     // --- Session 15: exception reports ---
     excVoidsByCashier: (fromDate: string, toDate: string) =>

@@ -65,7 +65,8 @@ import {
 import { maybeRunShiftCloseBackup, findBackupRunner } from '../lib/shiftCloseBackup.js';
 import { listLoginCandidates, verifyPin } from '../services/workers.js';
 import {
-  computeAndCloseShift, getOpenShift, openShift, submitClosingCount,
+  computeAndCloseShift, getOpenShift, listOpenShiftsOnOrBefore, openShift,
+  ownerCloseShift, submitClosingCount,
 } from '../services/shifts.js';
 import { completeSale, getShopHeader, searchProducts, topSellingProducts } from '../services/sales.js';
 import {
@@ -1793,6 +1794,8 @@ import {
   IPC_CHANNELS_S15_PERIOD,
   type PeriodGetActiveCloseRequest, type PeriodGetActiveCloseResponse,
   type PeriodListClosesResponse,
+  type PeriodCloseOpenShiftRequest, type PeriodCloseOpenShiftResponse,
+  type PeriodListOpenShiftsRequest, type PeriodListOpenShiftsResponse,
   type PeriodReopenRequest, type PeriodReopenResponse,
   type PeriodSealRequest, type PeriodSealResponse,
 } from '../../shared/types/ipc.js';
@@ -1848,6 +1851,41 @@ export function registerSession15PeriodHandlers(
         });
       },
       IPC_CHANNELS_S15_PERIOD.PERIOD_REOPEN,
+    ),
+  );
+
+  // Sealing refuses while a shift is open, because an open shift means no
+  // blind count has happened yet. These two let an OWNER do that count
+  // themselves — the cashier may be long gone — rather than letting the seal
+  // skip it, which would throw the control away.
+  ipcMain.handle(IPC_CHANNELS_S15_PERIOD.PERIOD_LIST_OPEN_SHIFTS,
+    wrap<PeriodListOpenShiftsRequest, PeriodListOpenShiftsResponse>(
+      (req) => {
+        requireWorker();
+        return { shifts: listOpenShiftsOnOrBefore(db, DEFAULT_LOCATION_ID, req.businessDate) };
+      },
+      IPC_CHANNELS_S15_PERIOD.PERIOD_LIST_OPEN_SHIFTS,
+    ),
+  );
+  ipcMain.handle(IPC_CHANNELS_S15_PERIOD.PERIOD_CLOSE_OPEN_SHIFT,
+    wrap<PeriodCloseOpenShiftRequest, PeriodCloseOpenShiftResponse>(
+      (req) => {
+        const w = requireWorker();
+        const closed = ownerCloseShift(db, {
+          shiftId: req.shiftId,
+          countedPesewas: req.countedPesewas,
+          reason: req.reason,
+          actorWorkerId: w.workerId,
+          deviceId,
+        });
+        return {
+          shiftId: closed.shiftId,
+          countedPesewas: closed.countedPesewas,
+          expectedPesewas: closed.expectedPesewas,
+          variancePesewas: closed.variancePesewas,
+        };
+      },
+      IPC_CHANNELS_S15_PERIOD.PERIOD_CLOSE_OPEN_SHIFT,
     ),
   );
 }

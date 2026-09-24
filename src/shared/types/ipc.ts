@@ -1640,6 +1640,8 @@ export const IPC_CHANNELS_S15_PERIOD = {
   PERIOD_LIST_CLOSES: 'period:list-closes',
   PERIOD_SEAL: 'period:seal',
   PERIOD_REOPEN: 'period:reopen',
+  PERIOD_LIST_OPEN_SHIFTS: 'period:list-open-shifts',
+  PERIOD_CLOSE_OPEN_SHIFT: 'period:close-open-shift',
 } as const;
 
 export interface PeriodCloseRow {
@@ -1661,6 +1663,30 @@ export interface PeriodSealRequest { businessDate: string }
 export interface PeriodSealResponse { closeId: string }
 export interface PeriodReopenRequest { businessDate: string; reason: string }
 export interface PeriodReopenResponse { closeId: string }
+
+/** A shift still open on or before a business date, blocking the seal. */
+export interface OpenShiftBlockingSeal {
+  shiftId: string;
+  workerId: string;
+  workerName: string;
+  openedAt: string;
+  shiftType: string;
+  openingCashPesewas: number;
+  expectedPesewas: number;
+}
+export interface PeriodListOpenShiftsRequest { businessDate: string }
+export interface PeriodListOpenShiftsResponse { shifts: OpenShiftBlockingSeal[] }
+export interface PeriodCloseOpenShiftRequest {
+  shiftId: string;
+  countedPesewas: number;
+  reason: string;
+}
+export interface PeriodCloseOpenShiftResponse {
+  shiftId: string;
+  countedPesewas: number;
+  expectedPesewas: number;
+  variancePesewas: number;
+}
 
 // --- Session 15: exception reports ---------------------------------------
 
