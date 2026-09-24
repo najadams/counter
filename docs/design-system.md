@@ -147,9 +147,13 @@ A strip above the sale screen's search results:
 - **What.** The 8 drinks sold most in the last 30 days at this shop, by
   units, each in its default sale unit. Refreshed when a shift opens.
 - **How.** A tap or click adds one to the cart. **Alt+1 … Alt+8** from the
-  keyboard (digits alone would type into search). Each tile shows its key.
-- **Tile.** Name, size, price in accent-coloured mono, 84px tall, 4 per row
-  on the counter PC. On a phone, a horizontal row of chips under the search.
+  keyboard (digits alone would type into search). The tiles don't draw their
+  keys: the sale screen's key-hint row lists "Alt+1–8 Quick pick" once, and
+  each tile carries its key in `aria-keyshortcuts` for screen readers.
+- **Tile.** Name (up to two lines), unit, price in accent-coloured mono. At
+  least 84px tall (96px in Friendly), 4 per row on the counter PC; every row
+  grows to the tallest tile rather than clipping a long name. On a phone, a
+  horizontal row of chips under the search.
 - **Empty state.** A new shop with no sales yet shows no strip.
 - **Stable.** Fetched once per shift and channel, then held, so tiles and
   their Alt keys don't move under a cashier's hands mid-shift. Alt+N does

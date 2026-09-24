@@ -750,9 +750,10 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
               <span className="kbd">F8</span> Print ·
               <span className="kbd">F9</span> {FRIENDLY_UI_ENABLED ? 'Home' : 'Back'} ·
               <span className="kbd">Esc</span> Clear
+              {quickPicks.length > 0 && <> · <span className="whitespace-nowrap"><span className="kbd">Alt+1–{Math.min(quickPicks.length, QUICK_PICK_COUNT)}</span> Quick pick</span></>}
             </div>
           </div>
-          <QuickPicks picks={quickPicks} onPick={(i) => addQuickPick.current(i)} showKeys={!isTouch} />
+          <QuickPicks picks={quickPicks} onPick={(i) => addQuickPick.current(i)} announceKeys={!isTouch} />
           <ul className="flex-1 overflow-y-auto max-h-[45vh] lg:max-h-none">
             {hits.length === 0 && (
               <li className={FRIENDLY_UI_ENABLED ? 'px-6 py-6 text-xl text-text-secondary' : 'px-6 py-4 text-text-tertiary'}>{FRIENDLY_UI_ENABLED ? (query.trim() === '' ? 'Type a drink name above to find it.' : 'No drinks match. Check the spelling, or try fewer letters.') : 'No products match.'}</li>

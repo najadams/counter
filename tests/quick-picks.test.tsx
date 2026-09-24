@@ -83,6 +83,13 @@ describe('SaleScreen quick picks', () => {
     const strip = await screen.findByRole('group', { name: 'Quick picks' });
     const star = within(strip).getByRole('button', { name: /Add Star Beer 330ml/ });
     expect(star).toHaveAttribute('aria-keyshortcuts', 'Alt+1');
+    // The keys are announced, not drawn: the tiles carry no key chips, and the
+    // hints under the search list the range once.
+    expect(strip.querySelector('kbd, .kbd')).toBeNull();
+    expect(screen.getByText('Alt+1–2')).toBeInTheDocument();
+    // Two-line names fit only at tight leading; cn() (tailwind-merge) drops a
+    // leading-* class when a text-* size follows it in the same call.
+    expect(within(star).getByText('Star Beer 330ml')).toHaveClass('leading-tight');
     expect(within(strip).getByText('180.00')).toBeInTheDocument();
 
     fireEvent.click(star);

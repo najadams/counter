@@ -810,7 +810,7 @@ them. A dialog opened on top of another must render inside the other's
 `DialogContent`; see "Dialog rules" in the design doc.
 
 The sale screen's **quick picks** — the eight best sellers at this shop over
-30 days, by units, as tiles with Alt+1 … Alt+8 — come from
+30 days, by units, as tiles added with Alt+1 … Alt+8 — come from
 `topSellingProducts()` in `src/main/services/sales.ts` over
 `product:top-sellers`. They are fetched once per shift, so positions don't
 move mid-shift; a shop with no sales shows no strip.
