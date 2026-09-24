@@ -12,8 +12,10 @@ import { useEffect, useState } from 'react';
 import { counter } from '../lib/ipc';
 import { SupervisorPinModal } from './SupervisorPinModal';
 import { formatMoney, parseCedisToPesewas } from '../../shared/lib/money';
+import type { SaleListRecentResponse } from '../../shared/types/ipc';
 import { FeedbackBanner } from './FeedbackBanner';
 import { Button } from './ui/button';
+import { Checkbox } from './ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog';
 import { Field } from './ui/field';
 import { Input } from './ui/input';
@@ -51,6 +53,14 @@ interface Line {
 }
 
 export function CustomerReturnModal({ customerId, customerName, onClose, onRecorded }: Props): JSX.Element {
+  const [originalSaleId, setOriginalSaleId] = useState('');
+  const [receiptLess, setReceiptLess] = useState(false);
+  const [recentSales, setRecentSales] = useState<SaleListRecentResponse['sales']>([]);
+  useEffect(() => {
+    let cancelled = false;
+    counter.listRecentSales(100).then(r => { if (!cancelled && r.success) setRecentSales(r.data.sales.filter(s => !s.voided)); });
+    return () => { cancelled = true; };
+  }, []);
   const [refundMethod, setRefundMethod] = useState<'CASH' | 'CREDIT'>('CREDIT');
   const [reason, setReason] = useState('');
   const [notes, setNotes] = useState('');
@@ -74,6 +84,7 @@ export function CustomerReturnModal({ customerId, customerName, onClose, onRecor
 
   function tryRecord() {
     setError(null);
+    if (!originalSaleId && !receiptLess) { setError('Choose the original sale, or confirm a return without a receipt.'); return; }
     if (lines.length === 0) { setError('Add at least one line.'); return; }
     if (!reason.trim()) { setError('Reason is required.'); return; }
     if (lines.some((l) => l.quantity <= 0)) { setError('All quantities must be positive.'); return; }
@@ -84,6 +95,7 @@ export function CustomerReturnModal({ customerId, customerName, onClose, onRecor
     setShowSup(false);
     const r = await counter.recordReturn({
       customerId,
+      originalSaleId: originalSaleId || null,
       refundMethod,
       reason: reason.trim(),
       notes: notes.trim() || null,
@@ -116,6 +128,24 @@ export function CustomerReturnModal({ customerId, customerName, onClose, onRecor
             <FeedbackBanner>{error}</FeedbackBanner>
           )}
 
+          {/* A return names the sale it comes from, so quantities and refunds
+              can be checked against it; a receipt-less return is an explicit,
+              audited exception (returnLimits.ts). */}
+          <Field label="Original sale">
+            <NativeSelect value={originalSaleId} disabled={receiptLess} onChange={(e) => setOriginalSaleId(e.target.value)}>
+              <option value="">Choose the sale</option>
+              {recentSales.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {new Date(s.createdAt).toLocaleString()} · {s.customerName ?? 'Walk-in'} · GHS {formatMoney(s.totalPesewas)} · {s.id.slice(-8)}
+                </option>
+              ))}
+            </NativeSelect>
+          </Field>
+          <label className="flex items-start gap-3 text-sm">
+            <Checkbox className="mt-0.5" checked={receiptLess}
+              onCheckedChange={(checked) => { setReceiptLess(checked === true); setOriginalSaleId(''); }} />
+            <span>Return without a receipt — the supervisor must check the goods before refunding.</span>
+          </label>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Refund method">
               <NativeSelect

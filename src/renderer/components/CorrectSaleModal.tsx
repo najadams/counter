@@ -18,6 +18,7 @@ import { Dialog, DialogContent, DialogTitle } from './ui/dialog';
 import { Field } from './ui/field';
 import { Input } from './ui/input';
 import { NativeSelect } from './ui/native-select';
+import { Checkbox } from './ui/checkbox';
 
 interface RecentSale {
   id: string; channel: string; totalPesewas: number; workerName: string;
@@ -60,6 +61,7 @@ export function CorrectSaleModal({ sale, onCancel, onDone }: {
   });
   const [cashGivenRaw, setCashGivenRaw] = useState('');
   const [reference, setReference] = useState('');
+  const [allowUnrecordedStock, setAllowUnrecordedStock] = useState(false);
 
   useEffect(() => {
     void counter.getSaleLines(sale.id).then((r) => {
@@ -133,6 +135,7 @@ export function CorrectSaleModal({ sale, onCancel, onDone }: {
         reference: needsReference ? reference.trim() || null : null,
         cashGivenPesewas: cashGiven,
       },
+      allowUnrecordedStock,
     });
     setBusy(false);
     if (!r.success) { setError(r.error); return; }
@@ -245,6 +248,13 @@ export function CorrectSaleModal({ sale, onCancel, onDone }: {
               </Field>
             )}
           </div>
+          <label className="flex items-start gap-3 text-sm">
+            <Checkbox className="mt-0.5" checked={allowUnrecordedStock} disabled={busy}
+              onCheckedChange={(checked) => setAllowUnrecordedStock(checked === true)} />
+            <span>Restock not recorded yet
+              <small className="block text-xs text-text-secondary">The goods are here; the delivery will be entered later.</small>
+            </span>
+          </label>
           <div className="flex gap-3">
             <Button size="lg" onClick={onCancel} disabled={busy}>Cancel</Button>
             <Button size="lg" variant="primary" onClick={() => void submit()} disabled={additions.length === 0 || busy || cashShort} className="flex-1">

@@ -384,6 +384,8 @@ export interface SaleTenderInput {
 }
 
 export interface SaleCompleteRequest {
+  /** Staff explicitly confirm goods are present but receipt entry is pending. */
+  allowUnrecordedStock?: boolean;
   shiftId: string;
   channel: SaleChannel;
   lines: Array<{ productId: string; quantity: number; unitPricePesewas: number; unitId?: string | null }>;
@@ -643,6 +645,8 @@ export interface SaleCorrectRequest {
     reference?: string | null;
     cashGivenPesewas?: number | null;
   };
+  /** Goods are here though the delivery isn't entered yet (see SaleCompleteRequest). */
+  allowUnrecordedStock?: boolean;
 }
 export interface SaleCorrectResponse {
   originalSaleId: string;

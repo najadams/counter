@@ -431,6 +431,20 @@ describe('SaleScreen checkout', () => {
     await act(async () => resolveSale({ success: false, error: 'Refused' }));
   });
 
+  it('sends the restock exception explicitly and clears it for the next sale', async () => {
+    counterMock.completeSale.mockResolvedValue({ success: true, data: { saleId: 'sale-1', changePesewas: 0, printerFailed: false, receipt: null, station: 'counter' } });
+    render(<SaleScreen onExit={vi.fn()} />);
+    const checkbox = screen.getByRole('checkbox', { name: /Restock not recorded yet/ });
+    expect(checkbox).not.toBeChecked();
+    fireEvent.click(checkbox);
+    fireEvent.keyDown(window, { key: 'F4' });
+    fireEvent.click(screen.getByRole('button', { name: /Complete sale/ }));
+    await screen.findByRole('dialog', { name: 'Sale complete' });
+    expect(counterMock.completeSale.mock.calls[0]![0]).toMatchObject({ allowUnrecordedStock: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Next sale' }));
+    expect(screen.getByRole('checkbox', { name: /Restock not recorded yet/ })).not.toBeChecked();
+  });
+
   it('keeps change and printer failure visible until Next sale', async () => {
     counterMock.completeSale.mockResolvedValue({ success: true, data: { saleId: 'sale-1', changePesewas: 400, printerFailed: true, printerError: 'Offline', receipt: null, station: 'counter' } });
     render(<SaleScreen onExit={vi.fn()} />);

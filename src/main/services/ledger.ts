@@ -2685,45 +2685,34 @@ export function postCustomerReturnIfActive(
   if (!row || !isLedgerPostingEnabled(db, row.locationId)) return null;
   const returnLines = db.prepare(
     `SELECT crl.stock_movement_id AS stockMovementId, crl.product_id AS productId,
-            sm.quantity
+            crl.restored_net_cost_pesewas AS restoredNetCost, sm.quantity
        FROM customer_return_lines crl
        JOIN stock_movements sm ON sm.id = crl.stock_movement_id
       WHERE crl.return_id = ?`,
-  ).all(row.id) as Array<{ stockMovementId: string; productId: string; quantity: number }>;
+  ).all(row.id) as Array<{ stockMovementId: string; productId: string; quantity: number; restoredNetCost: number | null }>;
   let restoredCogs = 0;
   let restoredNetCogs = 0;
   for (const line of returnLines) {
-    let exactInbound: number | undefined;
-    if (row.originalSaleId) {
-      // Restore what the sale actually took out of the pool: the valuation row,
-      // falling back to the movement for sales rung before ledger posting.
-      const original = db.prepare(
-        `SELECT COALESCE(SUM(-sm.quantity), 0) AS quantity,
-                COALESCE(SUM(-COALESCE(ivm.value_delta_pesewas, sm.total_value_pesewas)), 0) AS value
-           FROM stock_movements sm
-           LEFT JOIN inventory_valuation_movements ivm ON ivm.stock_movement_id = sm.id
-          WHERE sm.sale_id = ? AND sm.product_id = ? AND sm.quantity < 0`,
-      ).get(row.originalSaleId, line.productId) as { quantity: number; value: number };
-      if (original.quantity > 0) {
-        exactInbound = line.quantity >= original.quantity
-          ? original.value
-          : Math.round((original.value * line.quantity) / original.quantity);
-      }
-    }
-    const valuation = recordInventoryValuationMovement(db, {
+    // The return service already allocated cumulative exact cost before inserting
+    // each row, in the same transaction as its quantity cap.
+    const exactInbound = (db.prepare('SELECT total_value_pesewas AS value FROM stock_movements WHERE id = ?')
+      .get(line.stockMovementId) as { value: number }).value;
+    recordInventoryValuationMovement(db, {
       stockMovementId: line.stockMovementId,
       exactInboundValuePesewas: exactInbound,
       actorWorkerId,
       deviceId,
     });
-    restoredCogs += valuation.valueDeltaPesewas;
-    restoredNetCogs += inputTaxForCost(valuation.valueDeltaPesewas).taxablePesewas;
+    // Any shortfall reconciliation is a separate journal. Book the returned
+    // goods at their allocated original cost, not that cost plus its adjustment.
+    restoredCogs += exactInbound;
+    restoredNetCogs += line.restoredNetCost ?? inputTaxForCost(exactInbound).taxablePesewas;
     db.prepare(
       `UPDATE stock_movements
           SET total_value_pesewas = ?, updated_at = ?, updated_by = ?
         WHERE id = ?`,
     ).run(
-      valuation.valueDeltaPesewas, new Date().toISOString(), actorWorkerId, line.stockMovementId,
+      exactInbound, new Date().toISOString(), actorWorkerId, line.stockMovementId,
     );
   }
   const vat = vatForSale(row.totalRefundPesewas);
@@ -2835,10 +2824,22 @@ export function postStockLossIfActive(
   }).journalEntryId;
 }
 
+/** Round an integer ratio without an imprecise intermediate product. */
+function roundRatio(value: number, quantity: number, denominator: number): number {
+  if (![value, quantity, denominator].every(Number.isSafeInteger) || value < 0 || quantity < 0 || denominator <= 0) {
+    throw new Error('Invalid inventory cost allocation');
+  }
+  const d = BigInt(denominator);
+  const result = Number((2n * BigInt(value) * BigInt(quantity) + d) / (2n * d));
+  if (!Number.isSafeInteger(result)) throw new Error('Inventory value is too large');
+  return result;
+}
+
 export function recordInventoryValuationMovement(
   db: DB,
   input: {
     stockMovementId: string;
+    allowUnrecordedStock?: boolean;
     exactInboundValuePesewas?: number;
     actorWorkerId: string;
     deviceId: string;
@@ -2862,11 +2863,11 @@ export function recordInventoryValuationMovement(
   if (existing) return existing;
   const movement = db.prepare(
     `SELECT id, product_id AS productId, location_id AS locationId, quantity,
-            total_value_pesewas AS totalValuePesewas, created_at AS occurredAt
+            unit_cost_pesewas AS unitCostPesewas, total_value_pesewas AS totalValuePesewas, created_at AS occurredAt
        FROM stock_movements WHERE id = ?`,
   ).get(input.stockMovementId) as {
     id: string; productId: string; locationId: string; quantity: number;
-    totalValuePesewas: number; occurredAt: string;
+    unitCostPesewas: number; totalValuePesewas: number; occurredAt: string;
   } | undefined;
   if (!movement) throw new Error(`stock movement ${input.stockMovementId} not found`);
   // Movements written in the same millisecond tie on both timestamps, and ids
@@ -2882,21 +2883,51 @@ export function recordInventoryValuationMovement(
   const priorQty = prior?.quantity ?? 0;
   const priorValue = prior?.value ?? 0;
   let valueDelta: number;
-  if (movement.quantity > 0) {
-    valueDelta = input.exactInboundValuePesewas ?? Math.abs(movement.totalValuePesewas);
-  } else {
-    const unitsOut = Math.abs(movement.quantity);
-    if (unitsOut > priorQty) throw new Error('inventory valuation cannot go negative');
-    valueDelta = priorQty === unitsOut
-      ? -priorValue
-      : -Math.round((priorValue * unitsOut) / priorQty);
-  }
   const balanceQuantity = priorQty + movement.quantity;
+  let reconciliation = 0;
+  if (movement.quantity > 0) {
+    const inbound = input.exactInboundValuePesewas ?? Math.abs(movement.totalValuePesewas);
+    valueDelta = inbound;
+    if (priorQty < 0) {
+      // A late delivery first settles the missing units. Keep the remaining
+      // shortfall at its provisional cost; value surplus units at receipt cost.
+      const target = balanceQuantity < 0
+        ? -roundRatio(Math.abs(priorValue), -balanceQuantity, -priorQty)
+        : balanceQuantity === 0 ? 0 : roundRatio(inbound, balanceQuantity, movement.quantity);
+      reconciliation = target - (priorValue + inbound);
+      valueDelta += reconciliation;
+    }
+  } else {
+    const unitsOut = -movement.quantity;
+    if (unitsOut > priorQty) {
+      if (!input.allowUnrecordedStock) throw new Error('inventory valuation cannot go negative without confirming unrecorded restock');
+      const knownCost = priorQty > 0 ? priorValue : 0;
+      const estimate = priorQty !== 0 ? roundRatio(Math.abs(priorValue), 1, Math.abs(priorQty)) : movement.unitCostPesewas;
+      valueDelta = -(knownCost + (unitsOut - Math.max(0, priorQty)) * estimate);
+    } else {
+      valueDelta = priorQty === unitsOut ? -priorValue : -roundRatio(priorValue, unitsOut, priorQty);
+    }
+  }
   const balanceValuePesewas = priorValue + valueDelta;
-  if (balanceQuantity < 0 || balanceValuePesewas < 0) throw new Error('negative inventory valuation balance');
-  const averageUnitCostPesewas = balanceQuantity > 0
-    ? Math.round(balanceValuePesewas / balanceQuantity)
-    : 0;
+  const averageUnitCostPesewas = balanceQuantity !== 0
+    ? roundRatio(Math.abs(balanceValuePesewas), 1, Math.abs(balanceQuantity)) : 0;
+  if (reconciliation !== 0) {
+    const amount = Math.abs(reconciliation);
+    const net = inputTaxForCost(amount).taxablePesewas;
+    const tax = amount - net;
+    const creditCost = reconciliation > 0;
+    postJournal(db, {
+      locationId: movement.locationId, businessDate: businessDate(movement.occurredAt), occurredAt: movement.occurredAt,
+      sourceType: 'STOCK_MOVEMENT', sourceId: movement.id, postingType: 'LATE_RESTOCK_COST',
+      description: 'Reconcile estimated cost of sales before restock was recorded',
+      actorWorkerId: input.actorWorkerId, deviceId: input.deviceId,
+      lines: [
+        { accountCode: LEDGER_CODES.INVENTORY, debitPesewas: creditCost ? amount : 0, creditPesewas: creditCost ? 0 : amount },
+        ...(net > 0 ? [{ accountCode: LEDGER_CODES.COGS, debitPesewas: creditCost ? 0 : net, creditPesewas: creditCost ? net : 0 }] : []),
+        ...(tax > 0 ? [{ accountCode: LEDGER_CODES.TAX_PAYABLE, debitPesewas: creditCost ? 0 : tax, creditPesewas: creditCost ? tax : 0 }] : []),
+      ],
+    });
+  }
   const valuationMovementId = `ivm-${uuidv4()}`;
   db.prepare(
     `INSERT INTO inventory_valuation_movements (
@@ -2909,7 +2940,7 @@ export function recordInventoryValuationMovement(
     movement.quantity, valueDelta, balanceQuantity, balanceValuePesewas,
     averageUnitCostPesewas, movement.occurredAt, input.actorWorkerId, input.deviceId,
   );
-  db.prepare(
+  if (balanceQuantity !== 0) db.prepare(
     `UPDATE products SET cost_price_pesewas = ?, updated_at = ?, updated_by = ?
       WHERE id = ?`,
   ).run(averageUnitCostPesewas, new Date().toISOString(), input.actorWorkerId, movement.productId);

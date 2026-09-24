@@ -62,6 +62,10 @@ export interface CorrectSaleInput {
   extraPayment: CorrectSaleExtraPayment;
   /** The corrector's own open shift, or null when they have none. */
   correctorShiftId: string | null;
+  /** Staff confirm the goods are here though the delivery isn't entered yet
+   *  (the same per-sale exception as the sale screen's). The re-ring checks
+   *  stock again, originals included. */
+  allowUnrecordedStock?: boolean;
   workerId: string;
   workerName: string;
   deviceId: string;
@@ -226,6 +230,7 @@ export async function correctSale(db: DB, input: CorrectSaleInput): Promise<Corr
       station: input.station,
       lockPrices: true,
       supersedesSaleId: orig.id,
+      allowUnrecordedStock: input.allowUnrecordedStock === true,
     });
 
     // Bidirectional link: the original is now provably dead for the door/reports.

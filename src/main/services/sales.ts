@@ -202,6 +202,8 @@ export interface SalePaymentInput {
 }
 
 export interface CompleteSaleInput {
+  /** Staff explicitly confirm goods are present but receipt entry is pending. */
+  allowUnrecordedStock?: boolean;
   shiftId: string;
   workerId: string;
   workerName: string;
@@ -653,6 +655,18 @@ export function completeSaleCore(
 
   // --- atomic transaction ---------------------------------------------------
   const tx = db.transaction(() => {
+    const requested = new Map<string, number>();
+    for (const line of resolvedLines) requested.set(line.productId, (requested.get(line.productId) ?? 0) + line.quantityCanonical);
+    const shortfalls = [...requested].flatMap(([productId, quantity]) => {
+      const available = unitsOnHand(db, productId, input.locationId);
+      return quantity > available ? [{ productId, requested: quantity, available, balanceAfter: available - quantity }] : [];
+    });
+    if (shortfalls.length && input.allowUnrecordedStock !== true) {
+      const first = shortfalls[0]!;
+      throw new Error(`${productRows.get(first.productId)!.name}: only ${Math.max(0, first.available)} smallest units recorded, ${first.requested} needed. Record restock, reduce quantity, or select “Restock not recorded yet” if the goods are here.`);
+    }
+    if (shortfalls.length) logAudit(db, { workerId: input.workerId, action: 'SALE_UNRECORDED_STOCK',
+      entityType: 'sales', entityId: saleId, afterValue: { shortfalls }, deviceId: input.deviceId });
     db.prepare(
       `INSERT INTO sales (
         id, shift_id, worker_id, location_id, customer_id, channel,
@@ -774,6 +788,7 @@ export function completeSaleCore(
       if (isLedgerPostingEnabled(db, input.locationId)) {
         const valuation = recordInventoryValuationMovement(db, {
           stockMovementId: sm.id,
+          allowUnrecordedStock: input.allowUnrecordedStock === true,
           actorWorkerId: input.workerId,
           deviceId: input.deviceId,
         });
@@ -849,7 +864,7 @@ export function completeSaleCore(
     postSaleIfActive(db, saleId, input.workerId, input.deviceId);
   });
 
-  tx();
+  tx.immediate();
 
   // --- print receipt (outside the transaction) ------------------------------
   let customerName: string | null = null;

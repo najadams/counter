@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { runMigrations } from '../src/main/db/migrations';
 import { runSeed } from '../src/main/db/seed';
 import { openShift } from '../src/main/services/shifts';
+import { insertStockMovement } from '../src/main/services/stockMovements';
 import { completeSale } from '../src/main/services/sales';
 import { _setPrinter, _resetPrinter } from '../src/main/printer/printer';
 import { applyOrders, pullOrdersOnce } from '../src/main/sync/pullOrders';
@@ -44,6 +45,9 @@ afterEach(() => { _resetPrinter(); db.close(); });
 async function makeRealSaleId(): Promise<string> {
   const shiftId = openShift(db, { workerId: W, locationId: L, shiftType: 'COUNTER', openingCashPesewas: 5000, deviceId: D }).shiftId;
   const product = db.prepare("SELECT id, walk_in_price_pesewas AS price FROM products LIMIT 1").get() as { id: string; price: number };
+  insertStockMovement(db, { productId: product.id, locationId: L, quantity: 1,
+    reasonCode: 'OPENING_STOCK', workerId: W, unitCostPesewas: 600,
+    supervisorApprovalId: 'dev-supervisor-1', deviceId: D });
   const r = await completeSale(db, {
     shiftId, workerId: W, workerName: 'Naj', locationId: L, channel: 'WALK_IN',
     lines: [{ productId: product.id, quantity: 1, unitPricePesewas: product.price }],

@@ -844,7 +844,16 @@ Revenue and margin in the daily summary, Overview, Sales and Margin reports are
 the returns and the cash paid back. Refunds used to be recorded as cash drops
 (notes `customer-refund:…`); those old rows stay as they were.
 
-Verify with `npx vitest --run tests/correctSale.test.ts tests/cash-refunds.test.ts tests/queuedVoids.test.ts`.
+**Stock and returns guards** (`docs/reviews/2026-09-20-restock-and-return-safety.md`).
+A sale can't take recorded stock below zero unless the cashier ticks **Restock
+not recorded yet** (goods are here, the delivery isn't entered); it's per sale,
+audited as `SALE_UNRECORDED_STOCK`, and Correct offers the same box. A return
+names its original sale (`returnLimits.ts`): it can't return more of a product
+than was sold or refund more than is left on the sale; a receipt-less return is
+an explicit, audited exception. Migration 0055 lets valuation go negative until
+the late delivery is entered.
+
+Verify with `npx vitest --run tests/correctSale.test.ts tests/cash-refunds.test.ts tests/queuedVoids.test.ts tests/deferred-restock.test.ts`.
 
 ## 16. Version and updates
 

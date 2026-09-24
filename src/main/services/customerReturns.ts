@@ -19,6 +19,9 @@ import { verifyPin } from './workers.js';
 import { reconcileCustomerBalance } from './customerCredit.js';
 import { assertNotSealed } from './periods.js';
 import { postCustomerReturnIfActive } from './ledger.js';
+import { inputTaxForCost } from '../../shared/lib/vat.js';
+import { returnCost } from './returnLimits.js';
+import { logAudit } from '../db/audit.js';
 
 type DB = Database;
 
@@ -167,6 +170,19 @@ export function recordCustomerReturn(
   assertNotSealed(db, input.locationId, todayISO, 'recording a customer return');
 
   return db.transaction(() => {
+    if (input.originalSaleId) {
+      const sale = db.prepare('SELECT customer_id, location_id, voided, total_pesewas FROM sales WHERE id = ?')
+        .get(input.originalSaleId) as { customer_id: string | null; location_id: string; voided: number; total_pesewas: number } | undefined;
+      if (!sale || sale.voided || sale.location_id !== input.locationId || (sale.customer_id && sale.customer_id !== input.customerId)) {
+        throw new Error('The original sale is missing, cancelled, or belongs to another customer or shop.');
+      }
+      if (db.prepare("SELECT 1 FROM sale_void_requests WHERE sale_id = ? AND status = 'PENDING'").get(input.originalSaleId)) {
+        throw new Error('Resolve the pending cancellation before returning this sale.');
+      }
+      const refunded = (db.prepare('SELECT COALESCE(SUM(total_refund_pesewas), 0) AS n FROM customer_returns WHERE original_sale_id = ?')
+        .get(input.originalSaleId) as { n: number }).n;
+      if (totalRefund > sale.total_pesewas - refunded) throw new Error('Refund exceeds the amount remaining on the original sale.');
+    }
     const returnId = `cr-${uuidv4()}`;
     db.prepare(
       `INSERT INTO customer_returns
@@ -184,6 +200,9 @@ export function recordCustomerReturn(
 
     // Per-line: stock_movements (positive RETURN_FROM_CUSTOMER) + customer_return_lines.
     for (const l of resolvedLines) {
+      const exactCost = input.originalSaleId
+        ? returnCost(db, input.originalSaleId, l.productId, l.quantityCanonical)
+        : { gross: l.canonicalUnitCost * l.quantityCanonical, net: inputTaxForCost(l.canonicalUnitCost * l.quantityCanonical).taxablePesewas };
       const movId = `sm-${uuidv4()}`;
       // stock_movements has no customer_id column. Customer linkage lives
       // on customer_returns.customer_id, joined back through
@@ -197,7 +216,7 @@ export function recordCustomerReturn(
       ).run(
         movId, l.productId, input.locationId, l.quantityCanonical,
         input.workerId, l.canonicalUnitCost,
-        l.canonicalUnitCost * l.quantityCanonical,
+        exactCost.gross,
         input.supervisorWorkerId,
         input.workerId, input.workerId, input.deviceId,
       );
@@ -206,11 +225,11 @@ export function recordCustomerReturn(
       db.prepare(
         `INSERT INTO customer_return_lines
            (id, return_id, product_id, applies_to_unit_id, quantity, unit_price_pesewas,
-            line_total_pesewas, stock_movement_id, created_by, device_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            line_total_pesewas, stock_movement_id, restored_net_cost_pesewas, created_by, device_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         lineId, returnId, l.productId, l.unitId, l.quantityDisplay,
-        l.unitPricePesewas, l.lineTotalPesewas, movId,
+        l.unitPricePesewas, l.lineTotalPesewas, movId, exactCost.net,
         input.workerId, input.deviceId,
       );
     }
@@ -317,6 +336,10 @@ export function recordCustomerReturn(
     }
 
     postCustomerReturnIfActive(db, returnId, input.workerId, input.deviceId);
+    logAudit(db, { workerId: input.workerId, action: 'CUSTOMER_RETURN_RECORDED',
+      entityType: 'customer_returns', entityId: returnId,
+      afterValue: { originalSaleId: input.originalSaleId ?? null, receiptLess: !input.originalSaleId,
+        supervisorWorkerId: input.supervisorWorkerId, totalRefund, reason: input.reason.trim() }, deviceId: input.deviceId });
 
     return {
       returnId,
@@ -324,7 +347,7 @@ export function recordCustomerReturn(
       creditAllocations,
       cashRefundId,
     };
-  })();
+  }).immediate();
 }
 
 export interface CustomerReturnRow {
