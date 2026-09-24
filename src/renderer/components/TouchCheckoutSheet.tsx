@@ -165,7 +165,7 @@ export function TouchCheckoutSheet(p: TouchCheckoutSheetProps): JSX.Element {
       <Dialog onClose={close} busy={p.submitting} onShortcut={onShortcut}>
         <DialogContent
           showCloseButton={false}
-          className="w-full sm:w-[min(56rem,calc(100%-3rem))] max-h-[94dvh] gap-0 overflow-hidden rounded-t-3xl rounded-b-none bg-bg-surface p-0 sm:rounded-3xl max-sm:top-auto max-sm:bottom-0 max-sm:translate-y-0"
+          className="w-full sm:w-[min(56rem,calc(100%-3rem))] max-h-[94dvh] gap-0 overflow-hidden rounded-t-3xl rounded-b-none bg-bg-surface p-0 sm:rounded-3xl max-sm:top-auto max-sm:bottom-0 max-sm:translate-y-0 max-sm:data-starting-style:translate-y-8 max-sm:data-starting-style:scale-100"
         >
           <div className="shrink-0 px-5 py-3 border-b border-border flex flex-wrap items-center justify-between gap-3">
             <DialogTitle className="text-2xl sm:text-3xl font-bold">Take payment</DialogTitle>

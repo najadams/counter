@@ -86,6 +86,23 @@ Each is an RGB-channel variable (`--c-*`) used through Tailwind names
   200ms, `--ease-standard`. `prefers-reduced-motion` finishes transitions
   instantly; the sale-complete flash stays, because it is a colour signal.
 
+### Motion rules
+
+The till is keyboard-first, so **motion never delays or swallows input**.
+Every animation starts after its element is already in the DOM, focused
+and taking keys, and only opacity, translate, scale and colour move (cheap
+for the GPU on a modest PC). `tests/motion.test.tsx` holds these.
+
+| What | How |
+|---|---|
+| **Screen change** | The new screen fades up 6px over 200ms (`screen-in` on `#root > *`). Every screen is a direct child of `#root`, so this plays on each change and never on a re-render. Not the View Transitions API: that applies the change a frame late (after snapshotting the old screen), so F1 then typing could send a key to the old screen, and its overlay blocks clicks while it runs. |
+| **Dialogs, sheets** | Enter: scale from 95% and fade (sheets slide 40px; the Friendly checkout rises from the bottom on a phone). Exit: none. The app unmounts a dialog the moment it is dismissed, so the next key goes to the screen at once; a closing animation would leave it half there while Escape-then-F5 raced it. |
+| **Selects, popovers, tooltips** | Enter and exit (Base UI owns their open state). |
+| **New cart line** | `animate-cart-line-in`: eases down 6px with a brief accent wash, so the cashier sees what the scan or tap added. |
+| **A changed figure** | `animate-value-bump`: the line total and the cart total pop once in the accent when they change (the element is keyed on its value), so a second press of the same pick visibly registers. |
+| **Disclosure** | `animate-reveal`: a Friendly home group fades in as it opens. |
+| **Loading reports** | `ReportSkeleton`: placeholder stat cards and rows in the report's shape, so nothing jumps when the numbers land; screen readers hear the old "Loading…" words. |
+
 ## Layout
 
 - **Raw elements are for content, not actions.** An action is a `Button`;
@@ -209,5 +226,5 @@ the app always has. Every dialog in the app now uses `Dialog` or `Sheet`;
 | 1 | Harbour tokens: palette, three themes, fluid type, Geist, corners, motion | PR #9 |
 | 2 | Shared components; every `.btn` and status badge moved onto them; Edit customer is the first dialog on `Dialog` | PR #10 |
 | 3 | Every dialog on `Dialog`/`Sheet`; quick picks; lucide icons; charts on tokens; panels as white cards | PR #11 |
-| 3b | Screens' buttons, fields and tables onto the components; `NavTab`; grey containers become cards; `@container` layouts for sale, home, reports and settings | This branch |
-| 4 | Enter/exit motion, view transitions, cart animation | |
+| 3b | Screens' buttons, fields and tables onto the components; `NavTab`; grey containers become cards; `@container` layouts for sale, home, reports and settings | PR #12 |
+| 4 | Motion: screen fade-in, dialog enter, cart line and total animation, disclosure reveal, report skeletons | This branch |

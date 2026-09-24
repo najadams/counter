@@ -206,7 +206,7 @@ function MenuGroup({ id, title, illustration, badge, open, onToggle, children }:
         )}
         <span aria-hidden className={`text-2xl text-text-secondary transition-transform ${open ? 'rotate-180' : ''}`}>⌄</span>
       </button>
-      <div id={panelId} role="region" aria-label={title} hidden={!open} className={`${open ? 'grid' : 'hidden'} grid-cols-1 @2xl:grid-cols-2 gap-3 px-4 pb-4`}>
+      <div id={panelId} role="region" aria-label={title} hidden={!open} className={`${open ? 'grid' : 'hidden'} grid-cols-1 @2xl:grid-cols-2 gap-3 px-4 pb-4 animate-reveal`}>
         {children}
       </div>
     </div>

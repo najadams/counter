@@ -9,6 +9,7 @@ import type { ReportsOverviewResponse } from '../../../shared/types/ipc';
 import { FeedbackBanner } from '../../components/FeedbackBanner';
 import { Button } from '../../components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
+import { ReportSkeleton } from '../../components/ReportSkeleton';
 
 interface Props {
   reportAccessToken: string;
@@ -42,7 +43,7 @@ export function OverviewTab({
   useEffect(() => { registerRefresh?.(refresh, loading); /* eslint-disable-next-line */ }, [loading]);
 
   if (error) return <FeedbackBanner>{error}</FeedbackBanner>;
-  if (!data) return <div className="text-text-tertiary text-sm">Loading dashboard…</div>;
+  if (!data) return <ReportSkeleton label="Loading dashboard…" stats={6} />;
 
   return (
     <div className="flex flex-col gap-6">

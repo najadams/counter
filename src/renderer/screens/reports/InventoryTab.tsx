@@ -16,6 +16,7 @@ import { Button } from '../../components/ui/button';
 import { NativeSelect } from '../../components/ui/native-select';
 import { Input } from '../../components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
+import { ReportSkeleton } from '../../components/ReportSkeleton';
 
 type Filter = 'all' | 'belowReorder' | 'stockout' | 'inStock';
 type Sort =
@@ -132,7 +133,7 @@ export function InventoryTab({ reportAccessToken }: { reportAccessToken: string 
       </div>
 
       {error && <FeedbackBanner>{error}</FeedbackBanner>}
-      {loading && !data && <div className="text-text-tertiary text-sm">Loading…</div>}
+      {loading && !data && <ReportSkeleton />}
 
       {data && (
         <>

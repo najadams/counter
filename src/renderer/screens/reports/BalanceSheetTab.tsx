@@ -7,6 +7,7 @@ import { buildCsvFilename, exportRowsAsCsv, pesewasToCsvNumber } from '../../lib
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Table, TableBody, TableCell, TableRow } from '../../components/ui/table';
+import { ReportSkeleton } from '../../components/ReportSkeleton';
 
 function today(): string {
   const d = new Date();
@@ -79,6 +80,7 @@ export function BalanceSheetTab({ reportAccessToken }: { reportAccessToken: stri
 
       {error && <FeedbackBanner>{error}</FeedbackBanner>}
 
+      {loading && !data && <ReportSkeleton />}
       {!data && !loading && !error && <div className="panel p-6 text-text-tertiary text-sm">No position data is available.</div>}
 
       {data && (
