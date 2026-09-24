@@ -43,7 +43,8 @@ export function SalesTab({ reportAccessToken }: { reportAccessToken: string }) {
       data.buckets,
       [
         { header: groupBy === 'day' ? 'date' : groupBy, get: (r) => r.bucket },
-        { header: 'revenue_cedis', get: (r) => pesewasToCsvNumber(r.revenuePesewas) },
+        { header: 'net_sales_cedis', get: (r) => pesewasToCsvNumber(r.revenuePesewas) },
+        { header: 'returns_cedis', get: (r) => pesewasToCsvNumber(r.returnsPesewas) },
         { header: 'num_sales', get: (r) => r.numSales },
         { header: 'unique_customers', get: (r) => r.numUniqueCustomers },
         { header: 'avg_basket_cedis', get: (r) => pesewasToCsvNumber(r.avgBasketPesewas) },
@@ -86,7 +87,10 @@ export function SalesTab({ reportAccessToken }: { reportAccessToken: string }) {
       {data && (
         <>
           <section className="grid grid-cols-2 @xl:grid-cols-4 gap-4">
-            <Stat label="Revenue" value={formatMoneyWithCurrency(data.totalRevenuePesewas)} />
+            <Stat label="Net sales" value={formatMoneyWithCurrency(data.totalRevenuePesewas)}
+              sub={data.totalReturnsPesewas > 0
+                ? `${formatMoneyWithCurrency(data.totalGrossSalesPesewas)} sold − ${formatMoneyWithCurrency(data.totalReturnsPesewas)} returned (${data.totalNumReturns})`
+                : undefined} />
             <Stat label="Sales" value={String(data.totalNumSales)} />
             <Stat label="Unique customers" value={String(data.totalUniqueCustomers)} />
             <Stat label="Avg basket"
@@ -97,7 +101,7 @@ export function SalesTab({ reportAccessToken }: { reportAccessToken: string }) {
           <section className="panel">
             <div className="px-4 py-3 border-b border-border-subtle flex items-center justify-between">
               <h3 className="text-text-secondary uppercase tracking-wider text-xs">
-                Revenue per {groupBy}
+                Net sales per {groupBy}
               </h3>
               <span className="text-text-tertiary text-xs">{data.buckets.length} bucket{data.buckets.length === 1 ? '' : 's'}</span>
             </div>
@@ -110,7 +114,8 @@ export function SalesTab({ reportAccessToken }: { reportAccessToken: string }) {
                 <TableHeader>
                   <TableRow>
                     <TableHead>When</TableHead>
-                    <TableHead className="text-right">Revenue</TableHead>
+                    <TableHead className="text-right">Net sales</TableHead>
+                    <TableHead className="text-right">Returns</TableHead>
                     <TableHead className="text-right">Sales</TableHead>
                     <TableHead className="text-right">Cust.</TableHead>
                     <TableHead className="text-right">Avg basket</TableHead>
@@ -134,6 +139,9 @@ export function SalesTab({ reportAccessToken }: { reportAccessToken: string }) {
                         </TableCell>
                         <TableCell className="px-4 py-2 text-right font-mono tabular-nums">
                           {formatMoney(b.revenuePesewas)}
+                        </TableCell>
+                        <TableCell className="px-4 py-2 text-right font-mono tabular-nums text-text-tertiary">
+                          {b.returnsPesewas > 0 ? `−${formatMoney(b.returnsPesewas)}` : '—'}
                         </TableCell>
                         <TableCell className="px-4 py-2 text-right font-mono tabular-nums">{b.numSales}</TableCell>
                         <TableCell className="px-4 py-2 text-right font-mono tabular-nums">{b.numUniqueCustomers}</TableCell>
@@ -160,11 +168,11 @@ export function SalesTab({ reportAccessToken }: { reportAccessToken: string }) {
           {/* Breakdown grid */}
           <section className="grid grid-cols-2 @xl:grid-cols-3 gap-4">
             <BreakdownTable
-              title="By channel" totalRev={data.totalRevenuePesewas}
+              title="By channel (sold)" totalRev={data.totalGrossSalesPesewas}
               rows={data.byChannel.map((c) => ({ label: c.channel, rev: c.revenuePesewas, sub: `${c.numSales} sale${c.numSales === 1 ? '' : 's'}` }))}
             />
             <BreakdownTable
-              title="By payment method" totalRev={data.totalRevenuePesewas}
+              title="By payment method (sold)" totalRev={data.totalGrossSalesPesewas}
               rows={data.byPaymentMethod.map((m) => ({ label: m.method, rev: m.revenuePesewas, sub: `${m.numSales} sale${m.numSales === 1 ? '' : 's'}` }))}
             />
             <div className="panel flex flex-col">
@@ -204,11 +212,12 @@ export function SalesTab({ reportAccessToken }: { reportAccessToken: string }) {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="panel p-4">
       <div className="text-text-tertiary uppercase tracking-wider text-xs">{label}</div>
       <div className="text-xl font-bold tabular-nums mt-1">{value}</div>
+      {sub && <div className="text-xs text-text-tertiary tabular-nums mt-1">{sub}</div>}
     </div>
   );
 }

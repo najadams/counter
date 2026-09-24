@@ -18,6 +18,7 @@ import { extractInclusiveVat, inclusiveBaseSql, splitInclusiveVat, VAT_ENABLED }
 import { listTaxPaymentsForPeriod, type TaxPaymentRow } from './taxPayments.js';
 import { creditPrincipalExpr } from './customerCredit.js';
 import { logAudit } from '../db/audit.js';
+import { cashFromSales, cashRefunded } from './drawerCash.js';
 
 const ALLOWED_ROLES = new Set(['OWNER', 'FOUNDER', 'SUPERVISOR']);
 
@@ -107,6 +108,53 @@ function lineNetCogsSql(): string {
   return taxableSql(LINE_COST_SQL);
 }
 
+/**
+ * Customer returns recorded between two instants, dated by the return (the
+ * day the money went back), not by the original sale. `refundPesewas` is
+ * VAT-inclusive like sales totals; `netRefundPesewas` and `netCostPesewas`
+ * (the stock cost that came back) are after tax in the VAT build, like the
+ * margin figures. Every revenue and margin figure below is net of these.
+ */
+function returnsBetween(db: DB, fromISO: string, toExclusiveISO: string): {
+  refundPesewas: number; netRefundPesewas: number; netCostPesewas: number; count: number;
+} {
+  const refunds = db
+    .prepare(
+      `SELECT COALESCE(SUM(total_refund_pesewas), 0) AS refundPesewas,
+              COALESCE(SUM(${taxableSql('total_refund_pesewas')}), 0) AS netRefundPesewas,
+              COUNT(*) AS count
+         FROM customer_returns
+        WHERE created_at >= ? AND created_at < ?`,
+    )
+    .get(fromISO, toExclusiveISO) as { refundPesewas: number; netRefundPesewas: number; count: number };
+  const cost = db
+    .prepare(
+      `SELECT COALESCE(SUM(${taxableSql('sm.total_value_pesewas')}), 0) AS netCostPesewas
+         FROM customer_return_lines crl
+         JOIN customer_returns cr ON cr.id = crl.return_id
+         JOIN stock_movements sm ON sm.id = crl.stock_movement_id
+        WHERE cr.created_at >= ? AND cr.created_at < ?`,
+    )
+    .get(fromISO, toExclusiveISO) as { netCostPesewas: number };
+  return { ...refunds, netCostPesewas: cost.netCostPesewas };
+}
+
+/** Return lines as negative sold lines, for the per-product and per-category
+ *  margin tables (two parameters: from, to-exclusive). */
+function returnLinesProfitSql(): string {
+  return `SELECT p.id AS productId, p.sku, p.name, p.category, p.brand,
+                 -(crl.quantity * COALESCE(pu.conversion_factor, 1)) AS unitsSold,
+                 -(${taxableSql('crl.line_total_pesewas')}) AS revenuePesewas,
+                 -(${taxableSql('COALESCE(sm.total_value_pesewas, 0)')}) AS cogsPesewas
+            FROM customer_return_lines crl
+            JOIN customer_returns cr ON cr.id = crl.return_id
+            JOIN products p ON p.id = crl.product_id
+            LEFT JOIN product_units pu ON pu.id = crl.applies_to_unit_id
+            LEFT JOIN stock_movements sm ON sm.id = crl.stock_movement_id
+           WHERE cr.created_at >= ? AND cr.created_at < ?`;
+}
+
+/** Sales net of customer returns in the range; the count is of sales. */
 function salesTotalsBetween(db: DB, fromISO: string, toExclusiveISO: string): SumRow {
   const r = db
     .prepare(
@@ -117,7 +165,7 @@ function salesTotalsBetween(db: DB, fromISO: string, toExclusiveISO: string): Su
            AND created_at >= ? AND created_at < ?`,
     )
     .get(fromISO, toExclusiveISO) as SumRow;
-  return r;
+  return { ...r, sumPesewas: r.sumPesewas - returnsBetween(db, fromISO, toExclusiveISO).refundPesewas };
 }
 
 function marginTotalsBetween(db: DB, fromISO: string, toExclusiveISO: string): {
@@ -145,7 +193,10 @@ function marginTotalsBetween(db: DB, fromISO: string, toExclusiveISO: string): {
          FROM line_profit`,
     )
     .get(fromISO, toExclusiveISO) as { revenuePesewas: number; cogsPesewas: number; marginPesewas: number };
-  return r;
+  const returns = returnsBetween(db, fromISO, toExclusiveISO);
+  const revenuePesewas = r.revenuePesewas - returns.netRefundPesewas;
+  const cogsPesewas = r.cogsPesewas - returns.netCostPesewas;
+  return { revenuePesewas, cogsPesewas, marginPesewas: revenuePesewas - cogsPesewas };
 }
 
 // --- Public response shape -----------------------------------------------
@@ -646,14 +697,7 @@ export function getReportsOverview(db: DB, input: GetReportsOverviewInput): Repo
     // Tender-by-tender, not sale-by-sale: a split 70 cash + 30 MoMo sale
     // contributes 70 to cashSales, not the full 100. Matches the same
     // accounting fix applied in byPaymentMethod / computeAndCloseShift.
-    const cashSales = db
-      .prepare(
-        `SELECT COALESCE(SUM(sp.amount_pesewas), 0) AS s
-           FROM sale_payments sp
-           JOIN sales sa ON sa.id = sp.sale_id
-           WHERE sa.shift_id = ? AND sa.voided = 0 AND sp.payment_method = 'CASH'`,
-      )
-      .get(s.id) as { s: number };
+    const cashSales = { s: cashFromSales(db, s.id) - cashRefunded(db, s.id) };
     // Customers paying down their credit balances in cash inflate the till
     // during the shift. Must be added here so the "Cash in tills" KPI on
     // the home Overview matches what computeAndCloseShift will compute on
@@ -977,13 +1021,15 @@ export interface SalesReportInput {
 export interface SalesReportBucket {
   /** YYYY-MM-DD for day, YYYY-Www for week (ISO-ish), YYYY-MM for month. */
   bucket: string;
+  /** Sales less the returns made in this period. */
   revenuePesewas: number;
+  returnsPesewas: number;
   numSales: number;
   numUniqueCustomers: number;
   walkInPesewas: number;
   wholesalePesewas: number;
   routePesewas: number;
-  /** "Avg basket" = revenue / numSales. NULL if no sales. */
+  /** "Avg basket" = sales before returns / numSales. NULL if no sales. */
   avgBasketPesewas: number | null;
 }
 
@@ -999,7 +1045,12 @@ export interface SalesReportResult {
   fromDate: string;
   toDate: string;
   groupBy: GroupBy;
+  /** Sales less customer returns. */
   totalRevenuePesewas: number;
+  /** Sales before returns: the base for the channel/method/cashier splits. */
+  totalGrossSalesPesewas: number;
+  totalReturnsPesewas: number;
+  totalNumReturns: number;
   totalNumSales: number;
   totalUniqueCustomers: number;
   totalAvgBasketPesewas: number | null;
@@ -1542,10 +1593,11 @@ export function getSalesReport(db: DB, input: SalesReportInput): SalesReportResu
   requireReportsActor(db, input.actorWorkerId);
   const { fromISO, toExclusiveISO } = dateRangeToISO(input.fromDate, input.toDate);
 
-  const bucketExpr =
-    input.groupBy === 'month' ? "strftime('%Y-%m', s.created_at, 'localtime')"
-    : input.groupBy === 'week' ? "strftime('%Y-W%W', s.created_at, 'localtime')"
-    : "date(s.created_at, 'localtime')";
+  const bucketFor = (column: string) =>
+    input.groupBy === 'month' ? `strftime('%Y-%m', ${column}, 'localtime')`
+    : input.groupBy === 'week' ? `strftime('%Y-W%W', ${column}, 'localtime')`
+    : `date(${column}, 'localtime')`;
+  const bucketExpr = bucketFor('s.created_at');
 
   const bucketRows = db
     .prepare(
@@ -1562,12 +1614,28 @@ export function getSalesReport(db: DB, input: SalesReportInput): SalesReportResu
          GROUP BY bucket
          ORDER BY bucket ASC`,
     )
-    .all(fromISO, toExclusiveISO) as Array<Omit<SalesReportBucket, 'avgBasketPesewas'>>;
+    .all(fromISO, toExclusiveISO) as Array<Omit<SalesReportBucket, 'avgBasketPesewas' | 'returnsPesewas'>>;
 
-  const buckets: SalesReportBucket[] = bucketRows.map((b) => ({
-    ...b,
-    avgBasketPesewas: b.numSales > 0 ? Math.round(b.revenuePesewas / b.numSales) : null,
-  }));
+  // Returns land in the period they were made. A basket is what was bought,
+  // so its average stays on sales before returns.
+  const returnsByBucket = new Map(
+    (db.prepare(
+      `SELECT ${bucketFor('cr.created_at')} AS bucket, SUM(cr.total_refund_pesewas) AS returnsPesewas
+         FROM customer_returns cr
+        WHERE cr.created_at >= ? AND cr.created_at < ?
+        GROUP BY bucket`,
+    ).all(fromISO, toExclusiveISO) as Array<{ bucket: string; returnsPesewas: number }>)
+      .map((r) => [r.bucket, r.returnsPesewas]),
+  );
+  const buckets: SalesReportBucket[] = bucketRows.map((b) => {
+    const returnsPesewas = returnsByBucket.get(b.bucket) ?? 0;
+    return {
+      ...b,
+      revenuePesewas: b.revenuePesewas - returnsPesewas,
+      returnsPesewas,
+      avgBasketPesewas: b.numSales > 0 ? Math.round(b.revenuePesewas / b.numSales) : null,
+    };
+  });
 
   const byChannel = db
     .prepare(
@@ -1628,11 +1696,15 @@ export function getSalesReport(db: DB, input: SalesReportInput): SalesReportResu
     )
     .get(fromISO, toExclusiveISO) as { rev: number; n: number; uniq: number };
 
+  const returns = returnsBetween(db, fromISO, toExclusiveISO);
   return {
     fromDate: input.fromDate,
     toDate: input.toDate,
     groupBy: input.groupBy,
-    totalRevenuePesewas: totals.rev,
+    totalRevenuePesewas: totals.rev - returns.refundPesewas,
+    totalGrossSalesPesewas: totals.rev,
+    totalReturnsPesewas: returns.refundPesewas,
+    totalNumReturns: returns.count,
     totalNumSales: totals.n,
     totalUniqueCustomers: totals.uniq,
     totalAvgBasketPesewas: totals.n > 0 ? Math.round(totals.rev / totals.n) : null,
@@ -1718,6 +1790,8 @@ export function getMarginReport(db: DB, input: MarginReportInput): MarginReportR
            LEFT JOIN product_units pu ON pu.id = sl.applied_unit_id
           WHERE s.voided = 0
             AND s.created_at >= ? AND s.created_at < ?
+         UNION ALL
+         ${returnLinesProfitSql()}
        )
        SELECT productId, sku, name, category, brand,
               SUM(unitsSold) AS unitsSold,
@@ -1728,7 +1802,7 @@ export function getMarginReport(db: DB, input: MarginReportInput): MarginReportR
         GROUP BY productId
         ORDER BY marginPesewas DESC`,
     )
-    .all(fromISO, toExclusiveISO) as Array<Omit<MarginPerProduct, 'marginBps'>>;
+    .all(fromISO, toExclusiveISO, fromISO, toExclusiveISO) as Array<Omit<MarginPerProduct, 'marginBps'>>;
 
   const byProduct: MarginPerProduct[] = byProductRows.map((r) => ({
     ...r,
@@ -1748,6 +1822,9 @@ export function getMarginReport(db: DB, input: MarginReportInput): MarginReportR
            LEFT JOIN product_units pu ON pu.id = sl.applied_unit_id
           WHERE s.voided = 0
             AND s.created_at >= ? AND s.created_at < ?
+         UNION ALL
+         SELECT productId, category, unitsSold, revenuePesewas, cogsPesewas
+           FROM (${returnLinesProfitSql()})
        )
        SELECT category,
               SUM(unitsSold) AS unitsSold,
@@ -1759,7 +1836,7 @@ export function getMarginReport(db: DB, input: MarginReportInput): MarginReportR
         GROUP BY category
         ORDER BY marginPesewas DESC`,
     )
-    .all(fromISO, toExclusiveISO) as Array<Omit<MarginPerCategory, 'marginBps'>>;
+    .all(fromISO, toExclusiveISO, fromISO, toExclusiveISO) as Array<Omit<MarginPerCategory, 'marginBps'>>;
 
   const byCategory: MarginPerCategory[] = byCategoryRows.map((r) => ({
     ...r,
@@ -2090,17 +2167,8 @@ function getOpenTillCashAsOf(db: DB, locationId: string, toExclusiveISO: string)
 
   let total = 0;
   for (const shift of openShifts) {
-    const cashSales = (db
-      .prepare(
-        `SELECT COALESCE(SUM(sp.amount_pesewas), 0) AS total
-           FROM sale_payments sp
-           JOIN sales s ON s.id = sp.sale_id
-          WHERE s.shift_id = ?
-            AND s.voided = 0
-            AND sp.payment_method = 'CASH'
-            AND s.created_at < ?`,
-      )
-      .get(shift.id, toExclusiveISO) as { total: number }).total;
+    const cashSales = cashFromSales(db, shift.id, toExclusiveISO)
+      - cashRefunded(db, shift.id, toExclusiveISO);
     const debtPaymentsCash = (db
       .prepare(
         `SELECT COALESCE(SUM(amount_pesewas), 0) AS total

@@ -11,6 +11,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { logAudit } from '../db/audit.js';
 import { isLedgerPostingEnabled, mappedFinancialAccount } from './ledger.js';
 import { assertNoPendingVoidRequestsForShift } from './voids.js';
+import { cashFromSales, cashRefunded } from './drawerCash.js';
 import { maybeOpenTillVarianceCase } from './varianceCases.js';
 
 export interface OpenShiftInput {
@@ -221,10 +222,9 @@ export interface CloseShiftResult {
 
 /**
  * Step 2 of close: compute expected cash, write variance, finalize the shift.
- * Expected = opening_cash + cash sales - cash drops.
- *   - cash sales = SUM(sales.total_pesewas) WHERE shift_id AND payment_method = 'CASH' AND voided = 0
- *   - cash drops = SUM(cash_counts.counted_pesewas) WHERE shift_id AND count_type = 'CASH_DROP'
- * (CASH_DROP isn't used yet — Week 2 — but the formula is ready.)
+ * Expected = opening cash + cash sales + cash debt payments - cash refunds
+ *            - cash drops - petty cash - cash tax payments.
+ * (Cash sales and refunds: drawerCash.ts.)
  *
  * Audits SHIFT_CLOSED with full reconciliation snapshot.
  */
@@ -266,17 +266,11 @@ export function computeAndCloseShift(
     );
   }
 
-  // Sum CASH tenders across all sales in this shift. Split-tender sales
-  // contribute only their CASH portion, not the full sale total. Voided
-  // sales contribute nothing.
-  const cashSalesRow = db
-    .prepare(
-      `SELECT COALESCE(SUM(sp.amount_pesewas), 0) AS total
-         FROM sale_payments sp
-         JOIN sales s ON s.id = sp.sale_id
-         WHERE s.shift_id = ? AND sp.payment_method = 'CASH' AND s.voided = 0`,
-    )
-    .get(shiftId) as { total: number };
+  // CASH tenders this drawer took from sales (a split sale counts only its
+  // cash part), and cash it paid back to customers. See drawerCash.ts for
+  // how voids are counted.
+  const cashSales = cashFromSales(db, shiftId);
+  const refunds = cashRefunded(db, shiftId);
 
   const cashDropsRow = db
     .prepare(
@@ -317,8 +311,9 @@ export function computeAndCloseShift(
 
   const expected =
     shift.opening_cash_pesewas
-    + cashSalesRow.total
+    + cashSales
     + debtPaymentsCashRow.total
+    - refunds
     - cashDropsRow.total
     - expensesRow.total
     - taxPaymentsCashRow.total;

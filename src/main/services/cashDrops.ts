@@ -7,6 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { logAudit } from '../db/audit.js';
 import { verifyPin } from './workers.js';
 import { isLedgerActive, postOwnerDrawingIfActive } from './ledger.js';
+import { cashFromSales, cashRefunded } from './drawerCash.js';
 
 const SUPERVISOR_ROLES = new Set(['SUPERVISOR', 'OWNER', 'FOUNDER']);
 const DRAWING_CATEGORIES = new Set(['OWNER_DRAWING', 'FAMILY_SUPPORT', 'OWNER_SALARY', 'OTHER_DRAWING']);
@@ -82,15 +83,8 @@ export function recordCashDrop(
   if (shift.closed_at) throw new Error(`recordCashDrop: shift already closed`);
 
   // Compute current expected cash:
-  //  opening + cash sales + debt payments in cash - drops - expenses
-  const cashSales = (db
-    .prepare(
-      `SELECT COALESCE(SUM(sp.amount_pesewas), 0) AS total
-         FROM sale_payments sp
-         JOIN sales s ON s.id = sp.sale_id
-         WHERE s.shift_id = ? AND sp.payment_method = 'CASH' AND s.voided = 0`,
-    )
-    .get(input.shiftId) as { total: number }).total;
+  //  opening + cash sales + debt payments in cash - refunds - drops - expenses
+  const cashSales = cashFromSales(db, input.shiftId) - cashRefunded(db, input.shiftId);
   const debtPaymentsCash = (db
     .prepare(
       `SELECT COALESCE(SUM(amount_pesewas), 0) AS total FROM customer_payments
@@ -320,21 +314,14 @@ export function listCashDropsForShift(db: DB, shiftId: string): CashDropRow[] {
     .all(shiftId) as CashDropRow[];
 }
 
-/** Compute the current expected cash (opening + cash sales - drops). Useful
+/** Compute the current expected cash (opening + cash sales - refunds - drops …). Useful
  *  for a "current till expected" display in the cash drop modal. */
 export function getCurrentExpectedCash(db: DB, shiftId: string): number {
   const shift = db
     .prepare('SELECT opening_cash_pesewas FROM shifts WHERE id = ?')
     .get(shiftId) as { opening_cash_pesewas: number } | undefined;
   if (!shift) return 0;
-  const cashSales = (db
-    .prepare(
-      `SELECT COALESCE(SUM(sp.amount_pesewas), 0) AS total
-         FROM sale_payments sp
-         JOIN sales s ON s.id = sp.sale_id
-         WHERE s.shift_id = ? AND sp.payment_method = 'CASH' AND s.voided = 0`,
-    )
-    .get(shiftId) as { total: number }).total;
+  const cashSales = cashFromSales(db, shiftId) - cashRefunded(db, shiftId);
   // Cash brought into the till by customers paying down credit balances.
   // Must match the inclusion in recordCashDrop and computeAndCloseShift —
   // otherwise the three views of "expected cash" disagree.

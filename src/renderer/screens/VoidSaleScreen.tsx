@@ -14,12 +14,13 @@ import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { reviewStatusTone } from '../lib/tones';
 import { Input } from '../components/ui/input';
+import { Segmented } from '../components/ui/segmented';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 
 interface RecentSale {
   id: string; createdAt: string; channel: string; totalPesewas: number;
   paymentMethod: string; workerName: string; customerName: string | null;
-  voided: boolean; lineCount: number;
+  voided: boolean; lineCount: number; cashPesewas: number;
   voidRequest: {
     id: string; status: 'PENDING' | 'APPROVED' | 'DECLINED' | 'WITHDRAWN';
     reason: string; requestedAt: string; requesterId: string; requesterName: string;
@@ -33,6 +34,9 @@ export default function VoidSaleScreen({ onExit, onDuplicate }: { onExit: () => 
   const [sales, setSales] = useState<RecentSale[]>([]);
   const [selected, setSelected] = useState<RecentSale | null>(null);
   const [reason, setReason] = useState('');
+  // Whether the customer gets the sale's cash back (asked only when it had
+  // cash). Unanswered until the cashier picks one.
+  const [cashBack, setCashBack] = useState<'refund' | 'none' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [receiptDetail, setReceiptDetail] = useState<{
@@ -112,11 +116,18 @@ export default function VoidSaleScreen({ onExit, onDuplicate }: { onExit: () => 
   async function submitRequest() {
     if (!selected) return;
     setError(null);
-    const res = await counter.saleVoidRequestCreate({ saleId: selected.id, reason: reason.trim() });
+    const res = await counter.saleVoidRequestCreate({
+      saleId: selected.id, reason: reason.trim(),
+      refundCash: selected.cashPesewas > 0 ? cashBack === 'refund' : undefined,
+    });
     if (!res.success) { setError(res.error); return; }
-    setInfo(`Void request submitted for receipt #${selected.id.slice(-8)}. The sale remains valid until a senior worker approves it.`);
+    const refund = res.data.cashRefundPesewas
+      ? ` Once approved, give the customer ${formatMoneyWithCurrency(res.data.cashRefundPesewas)} from ${res.data.refundDrawerName ? `${res.data.refundDrawerName}’s` : 'the'} drawer.`
+      : '';
+    setInfo(`Void request submitted for receipt #${selected.id.slice(-8)}. The sale remains valid until a senior worker approves it.${refund}`);
     setSelected(null);
     setReason('');
+    setCashBack(null);
     await refresh();
   }
 
@@ -185,7 +196,7 @@ export default function VoidSaleScreen({ onExit, onDuplicate }: { onExit: () => 
                               Correct
                             </Button>
                             <Button variant="danger" size="sm"
-                              onClick={() => { setSelected(s); setReason(''); setError(null); setInfo(null); }}>
+                              onClick={() => { setSelected(s); setReason(''); setCashBack(null); setError(null); setInfo(null); }}>
                               Submit void request
                             </Button>
                           </>}
@@ -219,17 +230,36 @@ export default function VoidSaleScreen({ onExit, onDuplicate }: { onExit: () => 
             <Input className="h-12 px-4"
               autoFocus value={reason} onChange={(e) => setReason(e.target.value)}
               placeholder="e.g. customer changed mind, wrong product, accidental double-scan" />
+            {selected.cashPesewas > 0 && (
+              <div className="flex flex-col gap-2">
+                <label className="text-text-secondary text-xs uppercase tracking-wider">
+                  The {formatMoneyWithCurrency(selected.cashPesewas)} paid in cash (required)
+                </label>
+                <Segmented
+                  label="Cash back to the customer"
+                  value={cashBack}
+                  onChange={setCashBack}
+                  options={[
+                    { value: 'refund', label: 'Give the cash back' },
+                    { value: 'none', label: 'No cash changes hands' },
+                  ]}
+                />
+                <p className="text-xs text-text-tertiary">
+                  Choose “No cash changes hands” when the sale was rung by mistake and the money never came in.
+                </p>
+              </div>
+            )}
             {error && <FeedbackBanner>{error}</FeedbackBanner>}
             <div className="flex gap-3">
               <Button size="lg" onClick={() => setSelected(null)}>Cancel</Button>
               <Button variant="primary"
                 onClick={() => void submitRequest()}
-                disabled={reason.trim().length < 3 || reason.trim().length > 200}
+                disabled={reason.trim().length < 3 || reason.trim().length > 200 || (selected.cashPesewas > 0 && cashBack === null)}
                 className="disabled:opacity-40">
                 Submit void request
               </Button>
             </div>
-            <p className="text-xs text-warning">Do not refund cash or return stock yet. The original sale remains valid until approval.</p>
+            <p className="text-xs text-warning">Do not hand over cash or put stock back yet. The original sale remains valid until approval.</p>
           </div>
         )}
       </main>

@@ -16,6 +16,18 @@
 // server-side (the client only sends additions), so a removal/reduction is
 // structurally impossible here — those keep using void + full re-ring. The
 // supervisor-gated reduction path is deferred until the real-usage tally.
+//
+// Money: the customer already paid the original total, so the original
+// tenders carry over UNCHANGED (cash stays cash, MoMo stays MoMo with its
+// reference, pay-later stays on the same customer with the same due date).
+// Only the extra is new, paid however the client says. Tenders are rebuilt
+// here, never taken from the client, so a correction cannot quietly turn a
+// debt or a MoMo payment into cash.
+//
+// Shift: the extra money goes into the drawer of the shift the sale was rung
+// in, so that shift must still be open and the corrector must be working it
+// (or have no shift of their own: a supervisor at the cashier's till). After
+// the shift closes, missed items are a new sale in the current shift.
 
 import type { Database as DB } from 'better-sqlite3';
 import { logAudit } from '../db/audit.js';
@@ -28,13 +40,28 @@ import {
 } from './sales.js';
 import type { SaleReceipt } from '../printer/receipt.js';
 
+export const EXTRA_PAYMENT_METHODS = [
+  'CASH', 'MOMO_MTN', 'MOMO_VODAFONE', 'MOMO_AIRTELTIGO', 'BANK_TRANSFER', 'CREDIT',
+] as const;
+export type ExtraPaymentMethod = (typeof EXTRA_PAYMENT_METHODS)[number];
+
+/** How the customer pays for the ADDED items only. */
+export interface CorrectSaleExtraPayment {
+  method: ExtraPaymentMethod;
+  /** MoMo / bank reference. */
+  reference?: string | null;
+  /** CASH only: what the customer handed over, for change. Defaults to exact. */
+  cashGivenPesewas?: number | null;
+}
+
 export interface CorrectSaleInput {
   originalSaleId: string;
   /** ONLY the missed items. Original lines are rebuilt server-side. */
   addedLines: CompleteSaleLine[];
-  /** Tenders for the FULL corrected total (completeSale requires they sum to it).
-   *  The drawer nets the delta; the audit records it. */
-  payments: SalePaymentInput[];
+  /** How the extra is paid. The original tenders carry over as they were. */
+  extraPayment: CorrectSaleExtraPayment;
+  /** The corrector's own open shift, or null when they have none. */
+  correctorShiftId: string | null;
   workerId: string;
   workerName: string;
   deviceId: string;
@@ -60,6 +87,9 @@ export async function correctSale(db: DB, input: CorrectSaleInput): Promise<Corr
   if (input.addedLines.length === 0) {
     throw new Error('correctSale: nothing added — a correction must add at least one item');
   }
+  if (!EXTRA_PAYMENT_METHODS.includes(input.extraPayment?.method)) {
+    throw new Error('correctSale: choose how the customer pays for the added items');
+  }
   for (const l of input.addedLines) {
     if (!Number.isInteger(l.quantity) || l.quantity <= 0) {
       throw new Error('correctSale: added line quantity must be a positive integer');
@@ -74,7 +104,7 @@ export async function correctSale(db: DB, input: CorrectSaleInput): Promise<Corr
     `SELECT id, shift_id AS shiftId, worker_id AS workerId, location_id AS locationId,
             customer_id AS customerId, channel, total_pesewas AS totalPesewas,
             discount_pesewas AS discountPesewas, discount_reason AS discountReason,
-            is_credit AS isCredit,
+            is_credit AS isCredit, credit_due_date AS creditDueDate,
             voided, superseded_by_sale_id AS supersededBy, created_at AS createdAt
        FROM sales WHERE id = ?`,
   ).get(input.originalSaleId) as
@@ -82,6 +112,7 @@ export async function correctSale(db: DB, input: CorrectSaleInput): Promise<Corr
         id: string; shiftId: string; workerId: string; locationId: string;
         customerId: string | null; channel: SaleChannel; totalPesewas: number;
         discountPesewas: number; discountReason: string | null; isCredit: number;
+        creditDueDate: string | null;
         voided: number; supersededBy: string | null; createdAt: string;
       }
     | undefined;
@@ -100,8 +131,30 @@ export async function correctSale(db: DB, input: CorrectSaleInput): Promise<Corr
   ).get(input.originalSaleId);
   if (returned) throw new Error('correctSale: sale has a linked return; use void + re-ring instead');
 
-  // Same-day only.
-  assertNotSealed(db, orig.locationId, orig.createdAt.slice(0, 10), `correcting sale ${orig.id}`);
+  // Same day, same open shift, same drawer (see the header).
+  const today = new Date().toISOString().slice(0, 10);
+  if (orig.createdAt.slice(0, 10) !== today) {
+    throw new Error('correctSale: only sales from today can be corrected; ring the missed items as a new sale');
+  }
+  assertNotSealed(db, orig.locationId, today, `correcting sale ${orig.id}`);
+  const origShift = db.prepare('SELECT closed_at AS closedAt FROM shifts WHERE id = ?')
+    .get(orig.shiftId) as { closedAt: string | null } | undefined;
+  if (!origShift || origShift.closedAt) {
+    throw new Error("correctSale: this sale's shift is closed; ring the missed items as a new sale");
+  }
+  if (input.correctorShiftId && input.correctorShiftId !== orig.shiftId) {
+    throw new Error(
+      "correctSale: this sale was rung in another cashier's shift; correct it at that till, or ring the missed items as a new sale",
+    );
+  }
+  // Pay-later sales already paid down would leave those payments allocated to
+  // the voided original. Rare on the same day; a return handles it instead.
+  const allocated = db.prepare(
+    'SELECT 1 FROM customer_payment_allocations WHERE sale_id = ? LIMIT 1',
+  ).get(orig.id);
+  if (allocated) {
+    throw new Error('correctSale: the customer has already paid towards this sale; ring the missed items as a new sale');
+  }
 
   // Original lines for the RE-RING, at their snapshot prices + units.
   const origSaleLines = db.prepare(
@@ -129,6 +182,10 @@ export async function correctSale(db: DB, input: CorrectSaleInput): Promise<Corr
     })),
     ...input.addedLines,
   ];
+
+  // Tenders: the original ones as they were, plus the extra.
+  const extraPesewas = input.addedLines.reduce((sum, l) => sum + l.quantity * l.unitPricePesewas, 0);
+  const payments = correctedPayments(db, orig.id, orig.customerId, extraPesewas, input.extraPayment);
 
   const now = new Date().toISOString();
   const voidReason = `Superseded by correction of sale ${orig.id}`;
@@ -158,8 +215,11 @@ export async function correctSale(db: DB, input: CorrectSaleInput): Promise<Corr
       // re-pricing). discountReason is required when discount > 0.
       discountPesewas: orig.discountPesewas,
       discountReason: orig.discountReason,
-      payments: input.payments,
+      payments,
       customerId: orig.customerId,
+      // Pay-later keeps the original due date; the customer's terms don't
+      // restart because an item was added.
+      creditDueDate: orig.creditDueDate,
       deviceId: input.deviceId,
       shopName: input.shopName,
       shopSubtitle: input.shopSubtitle ?? null,
@@ -190,6 +250,7 @@ export async function correctSale(db: DB, input: CorrectSaleInput): Promise<Corr
         correctedTotalPesewas: built.totalPesewas,
         deltaPesewas: built.totalPesewas - orig.totalPesewas,
         addedLineCount: input.addedLines.length,
+        extraPaymentMethod: input.extraPayment.method,
       },
       deviceId: input.deviceId,
     });
@@ -223,4 +284,56 @@ export async function correctSale(db: DB, input: CorrectSaleInput): Promise<Corr
     receipt: core.receipt,
     station,
   };
+}
+
+/**
+ * The corrected sale's tenders: every original tender verbatim, plus the
+ * extra. An extra in cash or pay-later joins the original tender of the same
+ * kind (one cash line, one pay-later line on the receipt); MoMo and bank
+ * keep their own line and reference.
+ */
+function correctedPayments(
+  db: DB,
+  originalSaleId: string,
+  customerId: string | null,
+  extraPesewas: number,
+  extra: CorrectSaleExtraPayment,
+): SalePaymentInput[] {
+  const original = db.prepare(
+    `SELECT payment_method AS method, amount_pesewas AS amountPesewas, reference
+       FROM sale_payments WHERE sale_id = ? ORDER BY display_order, created_at`,
+  ).all(originalSaleId) as Array<{ method: string; amountPesewas: number; reference: string | null }>;
+  if (original.length === 0) throw new Error('correctSale: original has no payments (corrupt)');
+
+  // Original cash was exact by now: any change was handed back at the time.
+  const payments: SalePaymentInput[] = original.map((p) => ({
+    method: p.method,
+    amountPesewas: p.amountPesewas,
+    reference: p.reference,
+    cashGivenPesewas: p.method === 'CASH' ? p.amountPesewas : null,
+  }));
+
+  if (extra.method === 'CREDIT' && !customerId) {
+    throw new Error('correctSale: pay later needs a customer on the sale');
+  }
+  const cashGiven = extra.method === 'CASH' ? (extra.cashGivenPesewas ?? extraPesewas) : null;
+  if (cashGiven != null && (!Number.isInteger(cashGiven) || cashGiven < extraPesewas)) {
+    throw new Error('correctSale: cash given is less than the amount to collect');
+  }
+
+  const merge = extra.method === 'CASH' || extra.method === 'CREDIT'
+    ? payments.find((p) => p.method === extra.method)
+    : undefined;
+  if (merge) {
+    merge.amountPesewas += extraPesewas;
+    if (cashGiven != null) merge.cashGivenPesewas = (merge.cashGivenPesewas ?? 0) + cashGiven;
+  } else {
+    payments.push({
+      method: extra.method,
+      amountPesewas: extraPesewas,
+      reference: extra.reference?.trim() || null,
+      cashGivenPesewas: cashGiven,
+    });
+  }
+  return payments;
 }

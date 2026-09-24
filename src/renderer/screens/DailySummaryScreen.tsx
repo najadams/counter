@@ -178,6 +178,10 @@ export default function DailySummaryScreen({ onExit }: { onExit: () => void }) {
                 <KPI label="Net revenue" value={formatMoneyWithCurrency(detail.totalRevenuePesewas)} />
                 <KPI label="Net margin" value={formatMoneyWithCurrency(detail.grossMarginPesewas)} subtle={`${detail.totalRevenuePesewas > 0 ? ((detail.grossMarginPesewas / detail.totalRevenuePesewas) * 100).toFixed(1) + '%' : '—'}`} />
                 <KPI label="Sales" value={String(detail.numSales)} subtle={`${detail.numUniqueCustomers} customers`} />
+                <KPI label="Returns"
+                  value={detail.totalReturnsPesewas > 0 ? `−${formatMoneyWithCurrency(detail.totalReturnsPesewas)}` : formatMoneyWithCurrency(0)}
+                  tone={detail.totalReturnsPesewas > 0 ? 'warn' : 'ok'}
+                  subtle={`${detail.numReturns} return${detail.numReturns === 1 ? '' : 's'} · ${formatMoneyWithCurrency(detail.cashRefundedPesewas)} cash paid back`} />
                 <KPI label="Breakage loss" value={formatMoneyWithCurrency(detail.totalBreakageValuePesewas)} tone={detail.totalBreakageValuePesewas > 0 ? 'danger' : 'ok'} />
                 <KPI label="Consumption value" value={formatMoneyWithCurrency(detail.totalConsumptionValuePesewas)} />
                 <KPI label="Expenses" value={formatMoneyWithCurrency(detail.totalExpensesValuePesewas ?? 0)} tone={(detail.totalExpensesValuePesewas ?? 0) > 0 ? 'warn' : 'ok'} subtle={(detail.expensesByCategory ?? []).slice(0, 2).map(c => `${c.category} ${formatMoneyWithCurrency(c.totalPesewas)}`).join(', ') || undefined} />

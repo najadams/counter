@@ -541,6 +541,8 @@ export interface SaleListRecentResponse {
     id: string; createdAt: string; channel: string; totalPesewas: number;
     paymentMethod: string; workerName: string; customerName: string | null;
     voided: boolean; lineCount: number;
+    /** The sale's cash tenders: what a void could hand back. */
+    cashPesewas: number;
     voidRequest: {
       id: string;
       status: SaleVoidRequestStatus;
@@ -578,6 +580,11 @@ export interface SaleVoidRequestSummary {
   totalPesewas: number;
   paymentMethod: string;
   lineCount: number;
+  /** Cash going back to the customer on approval, or null when none. */
+  cashRefundPesewas: number | null;
+  /** The drawer (shift) that pays it, and whose drawer that is. */
+  refundShiftId: string | null;
+  refundDrawerName: string | null;
 }
 export interface SaleVoidRequestDetail extends SaleVoidRequestSummary {
   lines: Array<{
@@ -600,7 +607,13 @@ export interface SaleVoidRequestDetail extends SaleVoidRequestSummary {
     getfundPesewas: number;
   };
 }
-export interface SaleVoidRequestCreateRequest { saleId: string; reason: string }
+export interface SaleVoidRequestCreateRequest {
+  saleId: string;
+  reason: string;
+  /** Give the sale's cash back from the requester's drawer (default true);
+   *  false when no money changed hands. */
+  refundCash?: boolean;
+}
 export interface SaleVoidRequestListRequest {
   scope: SaleVoidRequestScope;
   status?: SaleVoidRequestStatus | 'RESOLVED';
@@ -623,8 +636,13 @@ export interface SaleCorrectRequest {
   originalSaleId: string;
   /** ONLY the missed items; original lines are rebuilt server-side. */
   addedLines: Array<{ productId: string; quantity: number; unitPricePesewas: number; unitId?: string }>;
-  /** Tenders for the FULL corrected total (must sum to it). */
-  payments: Array<{ method: string; amountPesewas: number; reference?: string | null; cashGivenPesewas?: number | null }>;
+  /** How the customer pays for the added items. The original sale's tenders
+   *  carry over unchanged; the server rebuilds them. */
+  extraPayment: {
+    method: 'CASH' | 'MOMO_MTN' | 'MOMO_VODAFONE' | 'MOMO_AIRTELTIGO' | 'BANK_TRANSFER' | 'CREDIT';
+    reference?: string | null;
+    cashGivenPesewas?: number | null;
+  };
 }
 export interface SaleCorrectResponse {
   originalSaleId: string;
@@ -871,8 +889,12 @@ export interface DailySummaryGenerateRequest { date: string; locationId?: string
 export interface DailySummaryGenerateResponse {
   id: string;
   summaryDate: string; locationId: string;
+  /** Net of the day's customer returns. */
   totalRevenuePesewas: number; totalCostOfGoodsSoldPesewas: number;
   grossMarginPesewas: number; totalBreakageValuePesewas: number;
+  /** The day's customer returns (refund value, count) and the cash paid back
+   *  over the counter for returns and refunded voids. */
+  totalReturnsPesewas: number; numReturns: number; cashRefundedPesewas: number;
   totalConsumptionValuePesewas: number;
   totalExpensesValuePesewas: number;
   expensesByCategory: Array<{ category: string; totalPesewas: number; count: number }>;
@@ -2108,7 +2130,8 @@ export interface ReturnRecordResponse {
   returnId: string;
   totalRefundPesewas: number;
   creditAllocations: Array<{ saleId: string; amountPesewas: number }>;
-  negativeCashDropId: string | null;
+  /** When refundMethod = CASH, the cash refund recorded in the shift. */
+  cashRefundId: string | null;
 }
 
 export interface ReturnListRequest { customerId: string; limit?: number }
@@ -2368,13 +2391,20 @@ export interface ReportsSalesResponse {
   fromDate: string;
   toDate: string;
   groupBy: ReportGroupBy;
+  /** Sales less customer returns. */
   totalRevenuePesewas: number;
+  /** Sales before returns: the base for the channel/method/cashier splits. */
+  totalGrossSalesPesewas: number;
+  totalReturnsPesewas: number;
+  totalNumReturns: number;
   totalNumSales: number;
   totalUniqueCustomers: number;
   totalAvgBasketPesewas: number | null;
   buckets: Array<{
     bucket: string;
+    /** Sales less the returns made in this period. */
     revenuePesewas: number;
+    returnsPesewas: number;
     numSales: number;
     numUniqueCustomers: number;
     walkInPesewas: number;
