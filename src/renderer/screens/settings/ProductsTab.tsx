@@ -88,87 +88,85 @@ export function ProductsTab() {
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 flex-1">
-          <input value={filter} onChange={(e) => setFilter(e.target.value)}
-            placeholder="Filter by name or SKU…"
-            className="bg-bg-input border border-border-strong px-4 py-2 flex-1" />
+          <Input className="flex-1 px-4" value={filter} onChange={(e) => setFilter(e.target.value)}
+            placeholder="Filter by name or SKU…" />
           <label className="flex items-center gap-2 text-text-secondary text-sm">
             <input type="checkbox" checked={includeInactive} onChange={(e) => setIncludeInactive(e.target.checked)} />
             show inactive
           </label>
         </div>
-        <button
+        <Button variant="primary"
           onClick={() => isAdmin && setShowAdd(true)}
           disabled={!isAdmin}
-          title={isAdmin ? '' : 'OWNER or FOUNDER role required to add products'}
-          className="bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light text-sm disabled:opacity-40 disabled:cursor-not-allowed">
+          title={isAdmin ? '' : 'OWNER or FOUNDER role required to add products'}>
           + Add product
-        </button>
+        </Button>
       </div>
 
       {info && <div className="bg-bg-surface border border-success px-5 py-3 text-success text-sm">{info}</div>}
       {error && <FeedbackBanner>{error}</FeedbackBanner>}
 
-      <div className="bg-bg-surface border border-border overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-text-secondary text-xs uppercase tracking-wider">
-              <th className="px-3 py-3 text-left">Product</th>
-              <th className="px-3 py-3 text-left">Category</th>
-              <th className="px-3 py-3 text-right">Cost</th>
-              <th className="px-3 py-3 text-right">Walk-in</th>
-              <th className="px-3 py-3 text-right">Wholesale</th>
-              <th className="px-3 py-3 text-right">Route</th>
-              <th className="px-3 py-3 text-right">On hand</th>
-              <th className="px-3 py-3 text-right">Reorder</th>
-              <th className="px-3 py-3 text-left">Status</th>
-              <th className="px-3 py-3"></th>
-            </tr>
-          </thead>
-          <tbody>
+      <div className="panel overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="px-3">Product</TableHead>
+              <TableHead className="px-3">Category</TableHead>
+              <TableHead className="px-3 text-right">Cost</TableHead>
+              <TableHead className="px-3 text-right">Walk-in</TableHead>
+              <TableHead className="px-3 text-right">Wholesale</TableHead>
+              <TableHead className="px-3 text-right">Route</TableHead>
+              <TableHead className="px-3 text-right">On hand</TableHead>
+              <TableHead className="px-3 text-right">Reorder</TableHead>
+              <TableHead className="px-3">Status</TableHead>
+              <TableHead className="px-3"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {visible.map((p) => {
               const lowMargin = p.walkInPricePesewas < p.costPricePesewas;
               return (
-                <tr key={p.id} className="border-t border-border">
-                  <td className="px-3 py-2">
+                <TableRow key={p.id}>
+                  <TableCell className="px-3 py-2">
                     <div>{p.name}</div>
                     <div className="text-text-tertiary text-xs">{p.sku}{p.brand ? ` · ${p.brand}` : ''}</div>
-                  </td>
-                  <td className="px-3 py-2">{p.category}</td>
-                  <td className="px-3 py-2 text-right font-mono tnum">{formatMoney(p.costPricePesewas)}</td>
-                  <td className={`px-3 py-2 text-right font-mono tnum ${lowMargin ? 'text-danger' : ''}`}>{formatMoney(p.walkInPricePesewas)}</td>
-                  <td className="px-3 py-2 text-right font-mono tnum">{formatMoney(p.wholesalePricePesewas)}</td>
-                  <td className="px-3 py-2 text-right font-mono tnum">{formatMoney(p.routePricePesewas)}</td>
-                  <td className={`px-3 py-2 text-right font-mono tnum ${p.unitsOnHand <= p.reorderThreshold && p.reorderThreshold > 0 ? 'text-warning' : ''}`}
+                  </TableCell>
+                  <TableCell className="px-3 py-2">{p.category}</TableCell>
+                  <TableCell className="px-3 py-2 text-right font-mono tnum">{formatMoney(p.costPricePesewas)}</TableCell>
+                  <TableCell className={`px-3 py-2 text-right font-mono tnum ${lowMargin ? 'text-danger' : ''}`}>{formatMoney(p.walkInPricePesewas)}</TableCell>
+                  <TableCell className="px-3 py-2 text-right font-mono tnum">{formatMoney(p.wholesalePricePesewas)}</TableCell>
+                  <TableCell className="px-3 py-2 text-right font-mono tnum">{formatMoney(p.routePricePesewas)}</TableCell>
+                  <TableCell className={`px-3 py-2 text-right font-mono tnum ${p.unitsOnHand <= p.reorderThreshold && p.reorderThreshold > 0 ? 'text-warning' : ''}`}
                       title={`${p.unitsOnHand} canonical units`}>
                     {p.units.length > 1
                       ? formatStockCompact(p.unitsOnHand, p.units)
                       : p.unitsOnHand}
-                  </td>
-                  <td className="px-3 py-2 text-right font-mono tnum text-text-tertiary">
+                  </TableCell>
+                  <TableCell className="px-3 py-2 text-right font-mono tnum text-text-tertiary">
                     {p.reorderThreshold > 0 ? `≤ ${p.reorderThreshold}` : '—'}
-                  </td>
-                  <td className="px-3 py-2">{p.active ? <span className="text-success">active</span> : <span className="text-text-tertiary">inactive</span>}</td>
-                  <td className="px-3 py-2 text-right space-x-2">
-                    <button onClick={() => setHistoryFor(p)} className="text-text-tertiary hover:text-accent text-xs">history</button>
+                  </TableCell>
+                  <TableCell className="px-3 py-2">{p.active ? <span className="text-success">active</span> : <span className="text-text-tertiary">inactive</span>}</TableCell>
+                  <TableCell className="px-3 py-2 text-right space-x-2">
+                    <Button variant="link" className="text-text-tertiary hover:text-accent no-underline hover:underline text-xs" onClick={() => setHistoryFor(p)}>history</Button>
                     {isAdmin ? (
                       <>
-                        <button onClick={() => setEditing(p)} className="text-text-tertiary hover:text-accent text-xs">edit</button>
+                        <Button variant="link" className="text-text-tertiary hover:text-accent no-underline hover:underline text-xs" onClick={() => setEditing(p)}>edit</Button>
                         {p.active
-                          ? <button onClick={() => deactivate(p.id)} className="text-text-tertiary hover:text-warning text-xs">deactivate</button>
-                          : <button onClick={() => reactivate(p.id)} className="text-text-tertiary hover:text-success text-xs">reactivate</button>}
+                          ? <Button variant="link" className="text-text-tertiary hover:text-warning no-underline hover:underline text-xs" onClick={() => deactivate(p.id)}>deactivate</Button>
+                          : <Button variant="link" className="text-text-tertiary hover:text-success no-underline hover:underline text-xs" onClick={() => reactivate(p.id)}>reactivate</Button>}
                       </>
                     ) : (
                       <span className="text-text-tertiary text-xs" title="OWNER or FOUNDER role required to edit or deactivate">edit/deactivate: admin only</span>
                     )}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               );
             })}
             {visible.length === 0 && (
-              <tr><td colSpan={10} className="px-4 py-6 text-text-tertiary text-center">No products match.</td></tr>
+              <TableRow><TableCell colSpan={10} className="px-4 py-6 text-text-tertiary text-center">No products match.</TableCell></TableRow>
             )}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
 
       {showAdd && (
@@ -660,74 +658,69 @@ function PricingTiersEditor({ productId, onError }: { productId: string; onError
           Channel ALL applies to walk-in, wholesale, and route.
         </div>
       </div>
-      <table className="w-full text-sm border border-border-subtle">
-        <thead>
-          <tr className="text-text-secondary text-xs uppercase tracking-wider bg-bg-surface/60">
-            <th className="text-left px-3 py-2">Channel</th>
-            <th className="text-left px-3 py-2">Applies to</th>
-            <th className="text-right px-3 py-2">Min qty</th>
-            <th className="text-right px-3 py-2">Unit price</th>
-            <th className="text-left px-3 py-2">Status</th>
-            <th className="px-3 py-2"></th>
-          </tr>
-        </thead>
-        <tbody>
+      <Table className="border border-border-subtle">
+        <TableHeader>
+          <TableRow className="bg-bg-surface/60">
+            <TableHead className="px-3">Channel</TableHead>
+            <TableHead className="px-3">Applies to</TableHead>
+            <TableHead className="text-right px-3">Min qty</TableHead>
+            <TableHead className="text-right px-3">Unit price</TableHead>
+            <TableHead className="px-3">Status</TableHead>
+            <TableHead className="px-3"></TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {tiers.map((t) => (
-            <tr key={t.id} className="border-t border-border-subtle hover:bg-bg-deep/40">
-              <td className="px-3 py-2">{t.channel}</td>
-              <td className="px-3 py-2 text-text-tertiary text-xs">{unitName(t.appliesToUnitId)}</td>
-              <td className="text-right font-mono tnum px-3 py-2">{t.minQuantity}</td>
-              <td className="text-right font-mono tnum px-3 py-2">{formatMoney(t.unitPricePesewas)}</td>
-              <td className="px-3 py-2">{t.active ? <span className="text-success">active</span> : <span className="text-text-tertiary">inactive</span>}</td>
-              <td className="text-right px-3 py-2">
+            <TableRow key={t.id}>
+              <TableCell className="px-3 py-2">{t.channel}</TableCell>
+              <TableCell className="px-3 py-2 text-text-tertiary text-xs">{unitName(t.appliesToUnitId)}</TableCell>
+              <TableCell className="text-right font-mono tnum px-3 py-2">{t.minQuantity}</TableCell>
+              <TableCell className="text-right font-mono tnum px-3 py-2">{formatMoney(t.unitPricePesewas)}</TableCell>
+              <TableCell className="px-3 py-2">{t.active ? <span className="text-success">active</span> : <span className="text-text-tertiary">inactive</span>}</TableCell>
+              <TableCell className="text-right px-3 py-2">
                 {t.active
-                  ? <button onClick={() => void deactivate(t)} className="text-text-tertiary hover:text-warning text-xs">deactivate</button>
-                  : <button onClick={() => void reactivate(t)} className="text-text-tertiary hover:text-success text-xs">reactivate</button>}
-              </td>
-            </tr>
+                  ? <Button variant="link" className="text-text-tertiary hover:text-warning no-underline hover:underline text-xs" onClick={() => void deactivate(t)}>deactivate</Button>
+                  : <Button variant="link" className="text-text-tertiary hover:text-success no-underline hover:underline text-xs" onClick={() => void reactivate(t)}>reactivate</Button>}
+              </TableCell>
+            </TableRow>
           ))}
           {tiers.length === 0 && (
-            <tr><td colSpan={6} className="text-text-tertiary text-center py-4 px-3">No tiers yet.</td></tr>
+            <TableRow><TableCell colSpan={6} className="text-text-tertiary text-center py-4 px-3">No tiers yet.</TableCell></TableRow>
           )}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
       <div className="flex flex-col gap-3 border-t border-border pt-3">
         <div className="grid grid-cols-4 gap-3">
           <div className="flex flex-col gap-1">
             <span className="text-text-secondary text-xs uppercase tracking-wider">Channel</span>
-            <select value={draftChannel} onChange={(e) => setDraftChannel(e.target.value as TierRow['channel'])}
-              className="bg-bg-input border border-border-strong px-3 py-2">
+            <NativeSelect value={draftChannel} onChange={(e) => setDraftChannel(e.target.value as TierRow['channel'])}>
               {(['ALL', 'WALK_IN', 'WHOLESALE', 'ROUTE'] as const).map((c) => <option key={c}>{c}</option>)}
-            </select>
+            </NativeSelect>
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-text-secondary text-xs uppercase tracking-wider">Applies to</span>
-            <select value={draftUnitId} onChange={(e) => setDraftUnitId(e.target.value)}
-              className="bg-bg-input border border-border-strong px-3 py-2">
+            <NativeSelect value={draftUnitId} onChange={(e) => setDraftUnitId(e.target.value)}>
               <option value="">any unit</option>
               {units.map((u) => (
                 <option key={u.id} value={u.id}>{u.unitName}{u.conversionFactor > 1 ? ` ×${u.conversionFactor}` : ''}</option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-text-secondary text-xs uppercase tracking-wider">Min qty</span>
-            <input value={draftMinQty} onChange={(e) => setDraftMinQty(e.target.value.replace(/\D/g, ''))}
-              placeholder="e.g. 12"
-              className="bg-bg-input border border-border-strong px-3 py-2 font-mono tnum text-right" />
+            <Input className="font-mono tnum text-right" value={draftMinQty} onChange={(e) => setDraftMinQty(e.target.value.replace(/\D/g, ''))}
+              placeholder="e.g. 12" />
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-text-secondary text-xs uppercase tracking-wider">Unit price (cedis)</span>
-            <input value={draftPrice} onChange={(e) => setDraftPrice(e.target.value)}
-              placeholder="e.g. 14.50"
-              className="bg-bg-input border border-border-strong px-3 py-2 font-mono tnum text-right" />
+            <Input className="font-mono tnum text-right" value={draftPrice} onChange={(e) => setDraftPrice(e.target.value)}
+              placeholder="e.g. 14.50" />
           </div>
         </div>
         <div className="flex justify-end">
-          <button onClick={() => void addOne()}
-            className="bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light text-sm whitespace-nowrap">
+          <Button variant="primary" className="whitespace-nowrap" onClick={() => void addOne()}>
             + Add tier
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -871,87 +864,81 @@ function ProductUnitsEditor({
           whole boxes, just add ONE row with factor 1.
         </div>
       </div>
-      <table className="w-full text-sm border border-border-subtle">
-        <thead>
-          <tr className="text-text-secondary text-xs uppercase tracking-wider bg-bg-deep/60">
-            <th className="text-left px-3 py-2">Name</th>
-            <th className="text-right px-3 py-2">Factor</th>
-            <th className="text-right px-3 py-2">Price (each)</th>
-            <th className="text-center px-3 py-2">Sale</th>
-            <th className="text-center px-3 py-2">Purchase</th>
-            <th className="text-left px-3 py-2">Status</th>
-            <th className="px-3 py-2"></th>
-          </tr>
-        </thead>
-        <tbody>
+      <Table className="border border-border-subtle">
+        <TableHeader>
+          <TableRow className="bg-bg-deep/60">
+            <TableHead className="px-3">Name</TableHead>
+            <TableHead className="text-right px-3">Factor</TableHead>
+            <TableHead className="text-right px-3">Price (each)</TableHead>
+            <TableHead className="text-center px-3">Sale</TableHead>
+            <TableHead className="text-center px-3">Purchase</TableHead>
+            <TableHead className="px-3">Status</TableHead>
+            <TableHead className="px-3"></TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {units.map((u) => (
             editId === u.id ? (
-              <tr key={u.id} className="border-t border-border-subtle bg-bg-deep/40">
-                <td className="px-2 py-1.5">
-                  <input value={editName} onChange={(e) => setEditName(e.target.value.toUpperCase())}
-                    className="w-full bg-bg-input border border-border-strong px-2 py-1 font-mono text-sm" />
-                </td>
-                <td className="px-2 py-1.5">
-                  <input value={editFactor} onChange={(e) => setEditFactor(e.target.value.replace(/\D/g, ''))}
-                    className="w-full bg-bg-input border border-border-strong px-2 py-1 font-mono tnum text-sm text-right" />
-                </td>
-                <td className="px-2 py-1.5">
-                  <input value={editPrice} onChange={(e) => setEditPrice(e.target.value)}
-                    className="w-full bg-bg-input border border-border-strong px-2 py-1 font-mono tnum text-sm text-right" />
-                </td>
-                <td className="text-center px-2 py-1.5">
+              <TableRow key={u.id} className="bg-bg-deep/40">
+                <TableCell className="px-2 py-1.5">
+                  <Input className="font-mono h-8 px-2" value={editName} onChange={(e) => setEditName(e.target.value.toUpperCase())} />
+                </TableCell>
+                <TableCell className="px-2 py-1.5">
+                  <Input className="font-mono tnum text-right h-8 px-2" value={editFactor} onChange={(e) => setEditFactor(e.target.value.replace(/\D/g, ''))} />
+                </TableCell>
+                <TableCell className="px-2 py-1.5">
+                  <Input className="font-mono tnum text-right h-8 px-2" value={editPrice} onChange={(e) => setEditPrice(e.target.value)} />
+                </TableCell>
+                <TableCell className="text-center px-2 py-1.5">
                   <input type="checkbox" checked={editSale} onChange={(e) => setEditSale(e.target.checked)} />
-                </td>
-                <td className="text-center px-2 py-1.5">
+                </TableCell>
+                <TableCell className="text-center px-2 py-1.5">
                   <input type="checkbox" checked={editPurchase} onChange={(e) => setEditPurchase(e.target.checked)} />
-                </td>
-                <td className="px-3 py-1.5">{u.active ? <span className="text-success">active</span> : <span className="text-text-tertiary">inactive</span>}</td>
-                <td className="text-right px-3 py-1.5 whitespace-nowrap">
-                  <button onClick={() => void saveEdit(u)} className="text-accent hover:text-accent-light text-xs">save</button>
-                  <button onClick={cancelEdit} className="text-text-tertiary hover:text-text-primary text-xs ml-3">cancel</button>
-                </td>
-              </tr>
+                </TableCell>
+                <TableCell className="px-3 py-1.5">{u.active ? <span className="text-success">active</span> : <span className="text-text-tertiary">inactive</span>}</TableCell>
+                <TableCell className="text-right px-3 py-1.5 whitespace-nowrap">
+                  <Button variant="link" className="text-accent hover:text-accent-light no-underline hover:underline text-xs" onClick={() => void saveEdit(u)}>save</Button>
+                  <Button variant="link" className="text-text-tertiary hover:text-text-primary ml-3 no-underline hover:underline text-xs" onClick={cancelEdit}>cancel</Button>
+                </TableCell>
+              </TableRow>
             ) : (
-            <tr key={u.id} className="border-t border-border-subtle hover:bg-bg-deep/40">
-              <td className="font-mono px-3 py-2">{u.unitName}</td>
-              <td className="text-right font-mono tnum px-3 py-2">× {u.conversionFactor}</td>
-              <td className="text-right font-mono tnum px-3 py-2">{formatMoney(u.pricePesewas)}</td>
-              <td className="text-center px-3 py-2"><YesNo value={u.isSaleUnit} /></td>
-              <td className="text-center px-3 py-2"><YesNo value={u.isPurchaseUnit} /></td>
-              <td className="px-3 py-2">{u.active ? <span className="text-success">active</span> : <span className="text-text-tertiary">inactive</span>}</td>
-              <td className="text-right px-3 py-2 whitespace-nowrap">
-                <button onClick={() => startEdit(u)} className="text-text-tertiary hover:text-text-primary text-xs">edit</button>
+            <TableRow key={u.id}>
+              <TableCell className="font-mono px-3 py-2">{u.unitName}</TableCell>
+              <TableCell className="text-right font-mono tnum px-3 py-2">× {u.conversionFactor}</TableCell>
+              <TableCell className="text-right font-mono tnum px-3 py-2">{formatMoney(u.pricePesewas)}</TableCell>
+              <TableCell className="text-center px-3 py-2"><YesNo value={u.isSaleUnit} /></TableCell>
+              <TableCell className="text-center px-3 py-2"><YesNo value={u.isPurchaseUnit} /></TableCell>
+              <TableCell className="px-3 py-2">{u.active ? <span className="text-success">active</span> : <span className="text-text-tertiary">inactive</span>}</TableCell>
+              <TableCell className="text-right px-3 py-2 whitespace-nowrap">
+                <Button variant="link" className="text-text-tertiary hover:text-text-primary no-underline hover:underline text-xs" onClick={() => startEdit(u)}>edit</Button>
                 {u.active
-                  ? <button onClick={() => void deactivate(u)} className="text-text-tertiary hover:text-warning text-xs ml-3">deactivate</button>
-                  : <button onClick={() => void reactivate(u)} className="text-text-tertiary hover:text-success text-xs ml-3">reactivate</button>}
-              </td>
-            </tr>
+                  ? <Button variant="link" className="text-text-tertiary hover:text-warning ml-3 no-underline hover:underline text-xs" onClick={() => void deactivate(u)}>deactivate</Button>
+                  : <Button variant="link" className="text-text-tertiary hover:text-success ml-3 no-underline hover:underline text-xs" onClick={() => void reactivate(u)}>reactivate</Button>}
+              </TableCell>
+            </TableRow>
             )
           ))}
           {units.length === 0 && (
-            <tr><td colSpan={7} className="text-text-tertiary text-center py-4 px-3">No units defined yet.</td></tr>
+            <TableRow><TableCell colSpan={7} className="text-text-tertiary text-center py-4 px-3">No units defined yet.</TableCell></TableRow>
           )}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
       <div className="flex flex-col gap-3 border-t border-border pt-3">
         <div className="grid grid-cols-[1fr_7rem_9rem] gap-3">
           <div className="flex flex-col gap-1">
             <span className="text-text-secondary text-xs uppercase tracking-wider">Unit name</span>
-            <input value={draftName} onChange={(e) => setDraftName(e.target.value.toUpperCase())}
-              placeholder="CRATE, PACK, BAG_50KG…"
-              className="bg-bg-input border border-border-strong px-3 py-2 font-mono" />
+            <Input className="font-mono" value={draftName} onChange={(e) => setDraftName(e.target.value.toUpperCase())}
+              placeholder="CRATE, PACK, BAG_50KG…" />
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-text-secondary text-xs uppercase tracking-wider">Factor</span>
-            <input value={draftFactor} onChange={(e) => setDraftFactor(e.target.value.replace(/\D/g, ''))}
-              placeholder="24"
-              className="bg-bg-input border border-border-strong px-3 py-2 font-mono tnum text-right" />
+            <Input className="font-mono tnum text-right" value={draftFactor} onChange={(e) => setDraftFactor(e.target.value.replace(/\D/g, ''))}
+              placeholder="24" />
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-text-secondary text-xs uppercase tracking-wider">Price (cedis)</span>
-            <input value={draftPrice} onChange={(e) => setDraftPrice(e.target.value)}
-              placeholder="180.00"
-              className="bg-bg-input border border-border-strong px-3 py-2 font-mono tnum text-right" />
+            <Input className="font-mono tnum text-right" value={draftPrice} onChange={(e) => setDraftPrice(e.target.value)}
+              placeholder="180.00" />
           </div>
         </div>
         <div className="flex items-center justify-between gap-4">
@@ -965,10 +952,9 @@ function ProductUnitsEditor({
               Purchasable
             </label>
           </div>
-          <button onClick={() => void addOne()}
-            className="bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light text-sm whitespace-nowrap">
+          <Button variant="primary" className="whitespace-nowrap" onClick={() => void addOne()}>
             + Add unit
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -982,37 +968,34 @@ function ProductUnitsEditor({
           <div className="grid grid-cols-2 gap-3">
             <label className="flex flex-col gap-1">
               <span className="text-text-secondary text-xs uppercase tracking-wider">Default at the till</span>
-              <select value={primarySaleUnitId} onChange={(e) => setPrimarySaleUnitId(e.target.value)}
-                className="bg-bg-input border border-border-strong px-3 py-2">
+              <NativeSelect value={primarySaleUnitId} onChange={(e) => setPrimarySaleUnitId(e.target.value)}>
                 <option value="">— smallest (canonical)</option>
                 {units.filter((u) => u.isSaleUnit && u.active).map((u) => (
                   <option key={u.id} value={u.id}>
                     {u.unitName}{u.conversionFactor > 1 ? ` (× ${u.conversionFactor})` : ''}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </label>
             <label className="flex flex-col gap-1">
               <span className="text-text-secondary text-xs uppercase tracking-wider">Default on receive</span>
-              <select value={primaryPurchaseUnitId} onChange={(e) => setPrimaryPurchaseUnitId(e.target.value)}
-                className="bg-bg-input border border-border-strong px-3 py-2">
+              <NativeSelect value={primaryPurchaseUnitId} onChange={(e) => setPrimaryPurchaseUnitId(e.target.value)}>
                 <option value="">— smallest (canonical)</option>
                 {units.filter((u) => u.isPurchaseUnit && u.active).map((u) => (
                   <option key={u.id} value={u.id}>
                     {u.unitName}{u.conversionFactor > 1 ? ` (× ${u.conversionFactor})` : ''}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </label>
           </div>
           <div className="flex justify-end items-center gap-3">
             {primarySaved && (
               <span className="inline-flex items-center gap-1 text-success text-xs"><CheckIcon aria-hidden="true" className="size-3.5" />Saved</span>
             )}
-            <button onClick={() => void savePrimaryUnits()} disabled={savingPrimary}
-              className="px-4 py-2 border border-border hover:bg-bg-elevated text-xs disabled:opacity-40">
+            <Button size="sm" onClick={() => void savePrimaryUnits()} disabled={savingPrimary}>
               {savingPrimary ? 'Saving…' : 'Save default units'}
-            </button>
+            </Button>
           </div>
         </div>
       )}

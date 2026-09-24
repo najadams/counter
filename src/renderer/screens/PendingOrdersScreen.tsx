@@ -14,6 +14,9 @@ import { AppHeader } from '../components/AppHeader';
 import { formatMoney, formatMoneyWithCurrency } from '../../shared/lib/money';
 import type { PendingOrderDetail, PendingOrderSummary } from '../../shared/types/ipc';
 import { FeedbackBanner } from '../components/FeedbackBanner';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 
 export default function PendingOrdersScreen({ onExit, onAccept }: { onExit: () => void; onAccept: () => void }) {
   const loadLines = useCart((s) => s.loadLines);
@@ -158,94 +161,92 @@ export default function PendingOrdersScreen({ onExit, onAccept }: { onExit: () =
         {info && <div className="bg-bg-surface border border-success px-5 py-3 text-success text-sm">{info}</div>}
         {error && !selectedId && <FeedbackBanner>{error}</FeedbackBanner>}
 
-        <div className="bg-bg-surface border border-border overflow-y-auto" style={{ maxHeight: '55vh' }}>
-          <table className="w-full">
-            <thead>
-              <tr className="text-text-secondary text-xs uppercase tracking-wider">
-                <th className="px-4 py-3 text-left">Received</th>
-                <th className="px-4 py-3 text-left">Customer</th>
-                <th className="px-4 py-3 text-left">Channel</th>
-                <th className="px-4 py-3 text-right">Lines</th>
-                <th className="px-4 py-3 text-right">Total</th>
-                <th className="px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody className="text-sm">
+        <div className="panel overflow-y-auto" style={{ maxHeight: '55vh' }}>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Received</TableHead>
+                <TableHead>Customer</TableHead>
+                <TableHead>Channel</TableHead>
+                <TableHead className="text-right">Lines</TableHead>
+                <TableHead className="text-right">Total</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody className="text-sm">
               {orders.map((o) => (
-                <tr key={o.id} className="border-t border-border">
-                  <td className="px-4 py-3 font-mono tnum">
+                <TableRow key={o.id}>
+                  <TableCell className="px-4 py-3 font-mono tnum">
                     {new Date(o.receivedAt).toLocaleTimeString()}
                     <span className="text-text-tertiary ml-2">#{o.id.slice(-6)}</span>
-                  </td>
-                  <td className="px-4 py-3">{o.customerName ?? o.customerPhone}</td>
-                  <td className="px-4 py-3">{o.channel}</td>
-                  <td className="px-4 py-3 text-right font-mono tnum">{o.lineCount}</td>
-                  <td className="px-4 py-3 text-right font-mono tnum">{formatMoney(o.totalPesewas)}</td>
-                  <td className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => { setSelectedId(o.id); setError(null); setInfo(null); }}
-                      className="px-3 py-1 border border-accent text-accent hover:bg-accent hover:text-ink text-xs">
+                  </TableCell>
+                  <TableCell className="px-4 py-3">{o.customerName ?? o.customerPhone}</TableCell>
+                  <TableCell className="px-4 py-3">{o.channel}</TableCell>
+                  <TableCell className="px-4 py-3 text-right font-mono tnum">{o.lineCount}</TableCell>
+                  <TableCell className="px-4 py-3 text-right font-mono tnum">{formatMoney(o.totalPesewas)}</TableCell>
+                  <TableCell className="px-4 py-3 text-right">
+                    <Button size="sm" className="text-accent" onClick={() => { setSelectedId(o.id); setError(null); setInfo(null); }}>
                       Review
-                    </button>
-                  </td>
-                </tr>
+                    </Button>
+                  </TableCell>
+                </TableRow>
               ))}
               {orders.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-6 text-text-tertiary text-center">No orders waiting.</td></tr>
+                <TableRow><TableCell colSpan={6} className="px-4 py-6 text-text-tertiary text-center">No orders waiting.</TableCell></TableRow>
               )}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
 
-        <div className="bg-bg-surface border border-border overflow-y-auto" style={{ maxHeight: '35vh' }}>
+        <div className="panel overflow-y-auto" style={{ maxHeight: '35vh' }}>
           <div className="px-4 py-3 border-b border-border-subtle flex items-center justify-between">
             <h3 className="text-text-secondary uppercase tracking-wider text-xs">Delivery operations</h3>
             <span className="text-text-tertiary text-xs">{deliveryOrders.length}</span>
           </div>
-          <table className="w-full">
-            <thead>
-              <tr className="text-text-secondary text-xs uppercase tracking-wider">
-                <th className="px-4 py-3 text-left">Customer</th>
-                <th className="px-4 py-3 text-left">Status</th>
-                <th className="px-4 py-3 text-left">Driver</th>
-                <th className="px-4 py-3 text-right">Profit</th>
-                <th className="px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody className="text-sm">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Customer</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Driver</TableHead>
+                <TableHead className="text-right">Profit</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody className="text-sm">
               {deliveryOrders.map((o) => (
-                <tr key={o.id} className="border-t border-border">
-                  <td className="px-4 py-3">{o.customerName ?? o.customerPhone}<span className="text-text-tertiary text-xs ml-2">#{o.id.slice(-6)}</span></td>
-                  <td className="px-4 py-3">{o.deliveryStatus}</td>
-                  <td className="px-4 py-3">{o.driverName ?? '—'}</td>
-                  <td className="px-4 py-3 text-right font-mono tnum">
+                <TableRow key={o.id}>
+                  <TableCell className="px-4 py-3">{o.customerName ?? o.customerPhone}<span className="text-text-tertiary text-xs ml-2">#{o.id.slice(-6)}</span></TableCell>
+                  <TableCell className="px-4 py-3">{o.deliveryStatus}</TableCell>
+                  <TableCell className="px-4 py-3">{o.driverName ?? '—'}</TableCell>
+                  <TableCell className="px-4 py-3 text-right font-mono tnum">
                     {o.deliveryProfitPesewas == null ? '—' : formatMoney(o.deliveryProfitPesewas)}
-                  </td>
-                  <td className="px-4 py-3 text-right space-x-2">
+                  </TableCell>
+                  <TableCell className="px-4 py-3 text-right space-x-2">
                     {o.deliveryStatus === 'NOT_STARTED' && (
-                      <button onClick={() => void deliveryAction(o, 'pack')} disabled={busy} className="text-accent text-xs">pack</button>
+                      <Button variant="link" className="text-accent no-underline hover:underline text-xs" onClick={() => void deliveryAction(o, 'pack')} disabled={busy}>pack</Button>
                     )}
                     {o.deliveryStatus === 'PACKED' && (
-                      <button onClick={() => void deliveryAction(o, 'dispatch')} disabled={busy} className="text-accent text-xs">dispatch</button>
+                      <Button variant="link" className="text-accent no-underline hover:underline text-xs" onClick={() => void deliveryAction(o, 'dispatch')} disabled={busy}>dispatch</Button>
                     )}
                     {o.deliveryStatus === 'DISPATCHED' && (
                       <>
-                        <button onClick={() => void deliveryAction(o, 'delivered')} disabled={busy} className="text-success text-xs">delivered</button>
-                        <button onClick={() => void deliveryAction(o, 'failed')} disabled={busy} className="text-danger text-xs">failed</button>
+                        <Button variant="link" className="text-success no-underline hover:underline text-xs" onClick={() => void deliveryAction(o, 'delivered')} disabled={busy}>delivered</Button>
+                        <Button variant="link" className="text-danger no-underline hover:underline text-xs" onClick={() => void deliveryAction(o, 'failed')} disabled={busy}>failed</Button>
                       </>
                     )}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
               {deliveryOrders.length === 0 && (
-                <tr><td colSpan={5} className="px-4 py-6 text-text-tertiary text-center">No delivery orders yet.</td></tr>
+                <TableRow><TableCell colSpan={5} className="px-4 py-6 text-text-tertiary text-center">No delivery orders yet.</TableCell></TableRow>
               )}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
 
         {detail && !rejecting && (
-          <div className="bg-bg-surface border border-border p-6 flex flex-col gap-4">
+          <div className="panel p-6 flex flex-col gap-4">
             <div className="flex items-baseline justify-between">
               <h3 className="text-text-secondary uppercase tracking-wider text-xs">
                 Order #{detail.id.slice(-8)}
@@ -273,50 +274,45 @@ export default function PendingOrdersScreen({ onExit, onAccept }: { onExit: () =
             {error && <FeedbackBanner>{error}</FeedbackBanner>}
 
             <div className="flex gap-3">
-              <button onClick={() => setSelectedId(null)} className="px-5 py-3 border border-border hover:bg-bg-elevated">
+              <Button size="lg" onClick={() => setSelectedId(null)}>
                 Close
-              </button>
-              <button
+              </Button>
+              <Button variant="danger" size="lg"
                 onClick={() => { setRejecting(true); setReason(''); setError(null); }}
-                disabled={busy}
-                className="px-5 py-3 border border-danger text-danger hover:bg-danger hover:text-ink disabled:opacity-40">
+                disabled={busy}>
                 Decline
-              </button>
-              <button
+              </Button>
+              <Button variant="primary" size="lg" className="flex-1"
                 onClick={() => void accept(detail.id)}
-                disabled={busy}
-                className="flex-1 bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40">
+                disabled={busy}>
                 {busy ? 'Loading…' : 'Accept & ring up'}
-              </button>
+              </Button>
             </div>
           </div>
         )}
 
         {detail && rejecting && (
-          <div className="bg-bg-surface border border-border p-6 flex flex-col gap-4">
+          <div className="panel p-6 flex flex-col gap-4">
             <h3 className="text-text-secondary uppercase tracking-wider text-xs">
               Decline order #{detail.id.slice(-8)}
             </h3>
             <label className="text-text-secondary text-xs uppercase tracking-wider">Reason (required)</label>
-            <input
+            <Input className="h-12 px-4"
               autoFocus value={reason} onChange={(e) => setReason(e.target.value)}
-              placeholder="e.g. out of stock, closing early, can't deliver to that area"
-              className="bg-bg-input border border-border-strong px-4 py-3"
-            />
+              placeholder="e.g. out of stock, closing early, can't deliver to that area" />
             <p className="text-text-tertiary text-xs">
               The customer will see this reason from the WhatsApp agent. No stock or payment is affected.
             </p>
             {error && <FeedbackBanner>{error}</FeedbackBanner>}
             <div className="flex gap-3">
-              <button onClick={() => setRejecting(false)} className="px-5 py-3 border border-border hover:bg-bg-elevated">
+              <Button size="lg" onClick={() => setRejecting(false)}>
                 Back
-              </button>
-              <button
+              </Button>
+              <Button variant="destructive" size="lg"
                 onClick={() => void reject(detail.id)}
-                disabled={busy || reason.trim().length < 3}
-                className="bg-danger text-ink px-5 py-3 font-semibold hover:opacity-90 disabled:opacity-40">
+                disabled={busy || reason.trim().length < 3}>
                 {busy ? 'Declining…' : 'Confirm decline'}
-              </button>
+              </Button>
             </div>
           </div>
         )}

@@ -13,6 +13,8 @@ import { useSession } from '../store/session';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { reviewStatusTone } from '../lib/tones';
+import { Input } from '../components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 
 interface RecentSale {
   id: string; createdAt: string; channel: string; totalPesewas: number;
@@ -135,41 +137,39 @@ export default function VoidSaleScreen({ onExit, onDuplicate }: { onExit: () => 
           <span className="text-text-tertiary text-xs"><span className="kbd">F9</span> back</span>
         </div>
         {info && <div className="bg-bg-surface border border-success px-5 py-3 text-success text-sm">{info}</div>}
-        <div className="bg-bg-surface border border-border overflow-y-auto" style={{ maxHeight: '60vh' }}>
-          <table className="w-full">
-            <thead>
-              <tr className="text-text-secondary text-xs uppercase tracking-wider">
-                <th className="px-4 py-3 text-left">When</th>
-                <th className="px-4 py-3 text-left">Worker</th>
-                <th className="px-4 py-3 text-left">Channel · Payment</th>
-                <th className="px-4 py-3 text-right">Total</th>
-                <th className="px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody className="text-sm">
+        <div className="panel overflow-y-auto" style={{ maxHeight: '60vh' }}>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>When</TableHead>
+                <TableHead>Worker</TableHead>
+                <TableHead>Channel · Payment</TableHead>
+                <TableHead className="text-right">Total</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody className="text-sm">
               {sales.map((s) => (
-                <tr key={s.id} className={`border-t border-border ${s.voided ? 'text-text-tertiary' : ''} ${s.voidRequest?.status === 'PENDING' ? 'bg-warning/10' : ''}`}>
-                  <td className="px-4 py-3 font-mono tnum">
+                <TableRow key={s.id} className={`border-t border-border ${s.voided ? 'text-text-tertiary' : ''} ${s.voidRequest?.status === 'PENDING' ? 'bg-warning/10' : ''}`}>
+                  <TableCell className="px-4 py-3 font-mono tnum">
                     {new Date(s.createdAt).toLocaleTimeString()}
                     <span className="text-text-tertiary ml-2">#{s.id.slice(-6)}</span>
                     {s.voidRequest && <div className="mt-1"><Badge tone={reviewStatusTone(s.voidRequest.status)}>{s.voidRequest.status.toLowerCase()}</Badge></div>}
-                  </td>
-                  <td className="px-4 py-3">{s.workerName}</td>
-                  <td className="px-4 py-3">{s.channel} · {s.paymentMethod}{s.customerName ? ` · ${s.customerName}` : ''}</td>
-                  <td className="px-4 py-3 text-right font-mono tnum">{formatMoney(s.totalPesewas)}</td>
-                  <td className="px-4 py-3 text-right">
+                  </TableCell>
+                  <TableCell className="px-4 py-3">{s.workerName}</TableCell>
+                  <TableCell className="px-4 py-3">{s.channel} · {s.paymentMethod}{s.customerName ? ` · ${s.customerName}` : ''}</TableCell>
+                  <TableCell className="px-4 py-3 text-right font-mono tnum">{formatMoney(s.totalPesewas)}</TableCell>
+                  <TableCell className="px-4 py-3 text-right">
                     <div className="flex gap-2 justify-end">
-                      <button
+                      <Button size="sm" className="text-text-tertiary"
                         onClick={() => void reprint(s.id)}
-                        disabled={loadingReceiptId === s.id}
-                        className="px-3 py-1 border border-border text-text-tertiary hover:text-accent hover:border-accent text-xs disabled:opacity-50">
+                        disabled={loadingReceiptId === s.id}>
                         {loadingReceiptId === s.id ? 'Loading…' : 'Print receipt'}
-                      </button>
-                      <button
-                        onClick={() => void duplicate(s.id)}
-                        className="px-3 py-1 border border-border text-text-tertiary hover:text-accent hover:border-accent text-xs">
+                      </Button>
+                      <Button size="sm" className="text-text-tertiary"
+                        onClick={() => void duplicate(s.id)}>
                         Duplicate
-                      </button>
+                      </Button>
                       {s.voided
                         ? <Badge tone="danger">Voided</Badge>
                         : s.voidRequest?.status === 'PENDING'
@@ -180,35 +180,33 @@ export default function VoidSaleScreen({ onExit, onDuplicate }: { onExit: () => 
                             )}
                           </>
                         : <>
-                            <button
-                              onClick={() => { setCorrecting(s); setError(null); setInfo(null); }}
-                              className="px-3 py-1 border border-border text-text-tertiary hover:text-accent hover:border-accent text-xs">
+                            <Button size="sm" className="text-text-tertiary"
+                              onClick={() => { setCorrecting(s); setError(null); setInfo(null); }}>
                               Correct
-                            </button>
-                            <button
-                              onClick={() => { setSelected(s); setReason(''); setError(null); setInfo(null); }}
-                              className="px-3 py-1 border border-danger text-danger hover:bg-danger hover:text-ink text-xs">
+                            </Button>
+                            <Button variant="danger" size="sm"
+                              onClick={() => { setSelected(s); setReason(''); setError(null); setInfo(null); }}>
                               Submit void request
-                            </button>
+                            </Button>
                           </>}
                     </div>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               )).flatMap((row, index) => {
                 const sale = sales[index];
                 return sale?.voidRequest && sale.voidRequest.status !== 'PENDING'
-                  ? [row, <tr key={`${sale.id}-decision`} className="bg-bg-elevated/35 border-t border-border-subtle"><td colSpan={5} className="px-4 py-2 text-xs text-text-secondary">{sale.voidRequest.status === 'WITHDRAWN' ? `Withdrawn by ${sale.voidRequest.requesterName}.` : `${sale.voidRequest.status === 'APPROVED' ? 'Approved' : 'Declined'} by ${sale.voidRequest.reviewerName ?? 'senior worker'}${sale.voidRequest.reviewedAt ? ` on ${new Date(sale.voidRequest.reviewedAt).toLocaleString()}` : ''}.`}{sale.voidRequest.reviewNote ? ` ${sale.voidRequest.reviewNote}` : ''}</td></tr>]
+                  ? [row, <TableRow key={`${sale.id}-decision`} className="bg-bg-elevated/35"><TableCell colSpan={5} className="px-4 py-2 text-xs text-text-secondary">{sale.voidRequest.status === 'WITHDRAWN' ? `Withdrawn by ${sale.voidRequest.requesterName}.` : `${sale.voidRequest.status === 'APPROVED' ? 'Approved' : 'Declined'} by ${sale.voidRequest.reviewerName ?? 'senior worker'}${sale.voidRequest.reviewedAt ? ` on ${new Date(sale.voidRequest.reviewedAt).toLocaleString()}` : ''}.`}{sale.voidRequest.reviewNote ? ` ${sale.voidRequest.reviewNote}` : ''}</TableCell></TableRow>]
                   : [row];
               })}
               {sales.length === 0 && (
-                <tr><td colSpan={5} className="px-4 py-6 text-text-tertiary text-center">No sales yet.</td></tr>
+                <TableRow><TableCell colSpan={5} className="px-4 py-6 text-text-tertiary text-center">No sales yet.</TableCell></TableRow>
               )}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
 
         {selected && (
-          <div className="bg-bg-surface border border-border p-6 flex flex-col gap-4">
+          <div className="panel p-6 flex flex-col gap-4">
             <div>
               <div className="eyebrow">Same-day review</div>
               <h3 className="text-lg font-semibold mt-1">Request void for receipt #{selected.id.slice(-8)}</h3>
@@ -218,14 +216,12 @@ export default function VoidSaleScreen({ onExit, onDuplicate }: { onExit: () => 
               <span className="ml-2 font-mono tnum text-text-primary">{formatMoneyWithCurrency(selected.totalPesewas)}</span>
             </div>
             <label className="text-text-secondary text-xs uppercase tracking-wider">Reason (required)</label>
-            <input
+            <Input className="h-12 px-4"
               autoFocus value={reason} onChange={(e) => setReason(e.target.value)}
-              placeholder="e.g. customer changed mind, wrong product, accidental double-scan"
-              className="bg-bg-input border border-border-strong px-4 py-3"
-            />
+              placeholder="e.g. customer changed mind, wrong product, accidental double-scan" />
             {error && <FeedbackBanner>{error}</FeedbackBanner>}
             <div className="flex gap-3">
-              <button onClick={() => setSelected(null)} className="px-5 py-3 border border-border hover:bg-bg-elevated">Cancel</button>
+              <Button size="lg" onClick={() => setSelected(null)}>Cancel</Button>
               <Button variant="primary"
                 onClick={() => void submitRequest()}
                 disabled={reason.trim().length < 3 || reason.trim().length > 200}

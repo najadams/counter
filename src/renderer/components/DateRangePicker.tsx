@@ -6,6 +6,9 @@
 // to local-midnight boundaries.
 
 import { useMemo } from 'react';
+import { Field } from './ui/field';
+import { Input } from './ui/input';
+import { Segmented } from './ui/segmented';
 
 export interface DateRange {
   fromDate: string;
@@ -107,31 +110,17 @@ export function DateRangePicker({ value, onChange }: Props) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
-        {PRESETS.map((p) => (
-          <button
-            key={p.key}
-            onClick={() => pick(p.key)}
-            className={[
-              'px-3 py-1.5 text-xs border rounded-xs',
-              value.presetKey === p.key
-                ? 'bg-accent text-ink border-accent font-semibold'
-                : 'border-border text-text-secondary hover:text-text-primary hover:border-border-strong',
-            ].join(' ')}
-          >
-            {p.label}
-          </button>
-        ))}
+        <Segmented label="Date range" size="sm" className="flex-wrap" value={value.presetKey} onChange={pick}
+          options={PRESETS.map((p) => ({ value: p.key, label: p.label }))} />
         <div className="flex items-center gap-2 ml-auto">
-          <label className="flex flex-col gap-0.5">
-            <span className="text-xs uppercase tracking-wider text-text-tertiary">From</span>
-            <input type="date" value={value.fromDate} onChange={(e) => setFrom(e.target.value)}
-              className="bg-bg-input border border-border-strong px-2 py-1 text-sm font-mono" />
-          </label>
-          <label className="flex flex-col gap-0.5">
-            <span className="text-xs uppercase tracking-wider text-text-tertiary">To</span>
-            <input type="date" value={value.toDate} onChange={(e) => setTo(e.target.value)}
-              className="bg-bg-input border border-border-strong px-2 py-1 text-sm font-mono" />
-          </label>
+          <Field label="From" className="gap-0.5 text-xs">
+            <Input type="date" value={value.fromDate} onChange={(e) => setFrom(e.target.value)}
+              className="h-8 px-2 font-mono" />
+          </Field>
+          <Field label="To" className="gap-0.5 text-xs">
+            <Input type="date" value={value.toDate} onChange={(e) => setTo(e.target.value)}
+              className="h-8 px-2 font-mono" />
+          </Field>
         </div>
       </div>
       <div className="text-xs text-text-tertiary">{summary}</div>

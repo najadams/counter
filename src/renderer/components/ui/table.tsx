@@ -4,12 +4,20 @@ import { cn } from '../../lib/cn';
 // Plain semantic table parts in the Harbour look. Money and quantity cells
 // take `className="text-right font-mono tnum"` so columns line up.
 
-export function Table({ className, ...props }: ComponentPropsWithoutRef<'table'>) {
-  return (
-    <div data-slot="table-container" className="relative w-full overflow-x-auto">
-      <table data-slot="table" className={cn('w-full caption-bottom border-collapse text-sm', className)} {...props} />
-    </div>
-  );
+export function Table({ className, scroll = true, ...props }: ComponentPropsWithoutRef<'table'> & {
+  /**
+   * Wrap the table in its own horizontal scroller (the default) so a wide
+   * table scrolls instead of widening the page. Pass false when the table
+   * sits in a panel that already scrolls and has a sticky header: the
+   * wrapper would become the header's scroll container and it would stop
+   * sticking.
+   */
+  scroll?: boolean;
+}) {
+  const table = <table data-slot="table" className={cn('w-full caption-bottom border-collapse text-sm', className)} {...props} />;
+  return scroll
+    ? <div data-slot="table-container" className="relative w-full overflow-x-auto">{table}</div>
+    : table;
 }
 
 export function TableHeader({ className, ...props }: ComponentPropsWithoutRef<'thead'>) {
@@ -28,7 +36,7 @@ export function TableRow({ className, ...props }: ComponentPropsWithoutRef<'tr'>
   return (
     <tr
       data-slot="table-row"
-      className={cn('border-b border-border-subtle transition-colors hover:bg-bg-elevated/45 data-[state=selected]:bg-accent/10', className)}
+      className={cn('border-b border-border-subtle transition-colors hover:bg-bg-surface/60 data-[state=selected]:bg-accent/10', className)}
       {...props}
     />
   );

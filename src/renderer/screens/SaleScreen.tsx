@@ -43,6 +43,7 @@ import { useIsTouch } from '../hooks/useIsTouch';
 import { chimeSuccess, chimeWarning, flashBody } from '../lib/feedback';
 import { FRIENDLY_UI_ENABLED } from '../../shared/lib/buildFlags';
 import { TaskIllustration } from '../components/friendly/TaskIllustration';
+import { Segmented } from '../components/ui/segmented';
 
 /** Door-printer failure on a phone sale: the cashier must walk the customer to
  *  the counter for the exit-token before they leave. Blocking + can't-miss on
@@ -659,13 +660,11 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
               {salesBlocked.machineCode}
             </div>
           </div>
-          <button
+          <Button variant="primary" size="lg" className="w-full"
             type="button"
-            onClick={onExit}
-            className="w-full bg-accent text-bg-deep font-bold rounded py-3"
-          >
+            onClick={onExit}>
             Back
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -709,7 +708,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
       <main className={`flex-1 grid grid-cols-1 gap-0 ${FRIENDLY_UI_ENABLED ? "lg:grid-cols-[3fr_2fr]" : "lg:grid-cols-[2fr_1fr]"}`}>
         <fieldset disabled={submitting} className="contents">
         {/* Left: search + results */}
-        <section className="border-b lg:border-b-0 lg:border-r border-border flex flex-col">
+        <section className="@container border-b lg:border-b-0 lg:border-r border-border flex flex-col">
           <div className="px-6 py-4 border-b border-border bg-bg-surface">
             {FRIENDLY_UI_ENABLED && (
               <label htmlFor="sale-search" className="flex items-center gap-3 mb-3">
@@ -718,7 +717,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
               </label>
             )}
             <div className="flex gap-2">
-              <input
+              <Input
                 id="sale-search"
                 ref={searchRef}
                 type="text"
@@ -727,19 +726,18 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
                 onKeyDown={searchKey}
                 placeholder={FRIENDLY_UI_ENABLED ? 'Name or barcode' : 'Search by SKU, name, or barcode...'}
                 className={FRIENDLY_UI_ENABLED
-                  ? 'min-w-0 flex-1 min-h-16 bg-bg-input border-2 border-border-strong rounded-xl px-5 py-3 text-2xl focus:outline-hidden focus:border-accent'
-                  : 'min-w-0 flex-1 bg-bg-input border border-border-strong px-4 py-3 text-lg focus:outline-hidden focus:border-accent'}
+                  ? 'flex-1 h-16 border-2 rounded-xl px-5 text-2xl'
+                  : 'flex-1 h-12 px-4 text-lg'}
               />
               {isTouch && (
-                <button
+                <Button size="lg" className="shrink-0"
                   type="button"
                   onClick={() => setShowBarcodeScanner(true)}
-                  className="shrink-0 border border-border-strong bg-bg-deep px-4 py-3 text-text-primary hover:bg-bg-elevated"
+                 
                   aria-label="Scan barcode with camera"
-                  title="Scan barcode"
-                >
+                  title="Scan barcode">
                   Scan
-                </button>
+                </Button>
               )}
             </div>
             <div className={FRIENDLY_UI_ENABLED ? 'hidden sm:block text-text-secondary text-sm mt-3' : `${isTouch ? 'hidden' : 'hidden sm:block'} text-text-tertiary text-xs mt-2`}>
@@ -815,25 +813,18 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
             <div className={FRIENDLY_UI_ENABLED ? 'text-2xl font-semibold' : 'text-text-secondary uppercase tracking-wider text-xs'}>Cart</div>
             <div>
               <div className={FRIENDLY_UI_ENABLED ? 'text-base text-text-secondary mb-1' : 'text-text-tertiary uppercase tracking-wider text-[10px] mb-1'}>{FRIENDLY_UI_ENABLED ? 'Price type' : 'Channel'}</div>
-              <div className="grid grid-cols-3 gap-1">
-                {(['WALK_IN', 'WHOLESALE', 'ROUTE'] as const).map((c) => {
-                  const active = c === channel;
-                  return (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => attemptChannelChange(c)}
-                      className={[
-                        FRIENDLY_UI_ENABLED ? 'min-h-12 px-2 py-2 border-2 rounded-xl text-base font-semibold' : 'px-2 py-1.5 border text-xs uppercase tracking-wider',
-                        active
-                          ? 'bg-bg-elevated border-accent text-accent'
-                          : 'border-border bg-bg-deep text-text-primary hover:bg-bg-elevated',
-                      ].join(' ')}>
-                      {c === 'WALK_IN' ? 'Walk-in' : c === 'WHOLESALE' ? 'Wholesale' : 'Route'}
-                    </button>
-                  );
-                })}
-              </div>
+              <Segmented
+                label={FRIENDLY_UI_ENABLED ? 'Price type' : 'Channel'}
+                size={FRIENDLY_UI_ENABLED ? 'lg' : 'md'}
+                fill
+                value={channel}
+                onChange={attemptChannelChange}
+                options={[
+                  { value: 'WALK_IN', label: 'Walk-in' },
+                  { value: 'WHOLESALE', label: 'Wholesale' },
+                  { value: 'ROUTE', label: 'Route' },
+                ]}
+              />
             </div>
             <div>
               <div className={FRIENDLY_UI_ENABLED ? 'text-base text-text-secondary mb-1' : 'text-text-tertiary uppercase tracking-wider text-[10px] mb-1'}>Customer</div>
@@ -847,14 +838,12 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
                     </div>
                   </div>
                   <div className="flex gap-2 shrink-0">
-                    <button
+                    <Button variant="link" className="text-accent hover:text-accent-light no-underline hover:underline text-xs"
                       type="button"
-                      onClick={() => setShowCustomerPicker(true)}
-                      className="text-accent text-xs hover:text-accent-light">change</button>
-                    <button
+                      onClick={() => setShowCustomerPicker(true)}>change</Button>
+                    <Button variant="link" className="text-text-tertiary hover:text-danger no-underline hover:underline text-xs"
                       type="button"
-                      onClick={() => setCustomer(null)}
-                      className="text-text-tertiary text-xs hover:text-danger">clear</button>
+                      onClick={() => setCustomer(null)}>clear</Button>
                   </div>
                 </div>
               ) : (
@@ -871,11 +860,10 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
             {channelSwitchBanner && (
               <div className="bg-bg-deep border border-warning px-3 py-2 text-warning text-xs flex items-center justify-between gap-2">
                 <span>{customer?.displayName} prefers <span className="font-semibold">{channelSwitchBanner.replace('_', ' ')}</span> pricing.</span>
-                <button
-                  onClick={() => attemptChannelChange(channelSwitchBanner)}
-                  className="px-2 py-0.5 border border-warning text-warning hover:bg-warning hover:text-ink">
+                <Button variant="warning" size="sm" className="h-7 px-2"
+                  onClick={() => attemptChannelChange(channelSwitchBanner)}>
                   Switch
-                </button>
+                </Button>
               </div>
             )}
             {error && (
@@ -897,12 +885,11 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
                   <span className="font-mono tnum text-2xl font-semibold">{formatMoney(l.unitPricePesewas * l.quantity)}</span>
                 </div>
                 <div className="flex flex-wrap items-center gap-3 mt-3">
-                  <button
+                  <Button className="w-14 h-14 rounded-xl border-2 text-3xl"
                     type="button"
                     onClick={() => bumpQuantity(l.productId, -1, l.unitId)}
-                    className="w-14 h-14 rounded-xl border-2 border-border-strong bg-bg-elevated text-3xl font-semibold text-text-primary hover:bg-bg-deep"
-                    aria-label={`One less ${l.name}`}
-                  >−</button>
+                   
+                    aria-label={`One less ${l.name}`}>−</Button>
                   <QuantityInput
                     productId={l.productId}
                     quantity={l.quantity}
@@ -911,27 +898,23 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
                     label={`How many ${l.name}`}
                     large
                   />
-                  <button
+                  <Button className="w-14 h-14 rounded-xl border-2 text-3xl"
                     type="button"
                     onClick={() => bumpQuantity(l.productId, +1, l.unitId)}
-                    className="w-14 h-14 rounded-xl border-2 border-border-strong bg-bg-elevated text-3xl font-semibold text-text-primary hover:bg-bg-deep"
-                    aria-label={`One more ${l.name}`}
-                  >+</button>
-                  <button
+                   
+                    aria-label={`One more ${l.name}`}>+</Button>
+                  <Button size="xl" className="min-h-14 rounded-xl border-2 text-lg"
                     type="button"
                     onClick={() => setSwapUnitFor({ productId: l.productId, unitId: l.unitId })}
-                    className="min-h-14 px-4 rounded-xl border-2 border-border text-lg text-text-primary hover:bg-bg-elevated"
-                    title="Change unit"
-                  >{l.unitName.toLowerCase()} <ChevronDownIcon aria-hidden="true" className="inline size-5 align-middle" /></button>
+                   
+                    title="Change unit">{l.unitName.toLowerCase()} <ChevronDownIcon aria-hidden="true" className="inline size-5 align-middle" /></Button>
                   <span className="text-lg text-text-secondary">× {formatMoney(l.unitPricePesewas)}</span>
                   {l.appliedTierId && l.appliedTierMinQuantity != null && (
                     <span className="bg-accent-dim text-ink px-2 py-1 rounded text-base">bulk price</span>
                   )}
-                  <button
+                  <Button variant="link" className="ml-auto min-h-14 rounded-xl text-lg text-text-secondary hover:text-danger"
                     type="button"
-                    onClick={() => removeLine(l.productId, l.unitId)}
-                    className="ml-auto min-h-14 px-4 rounded-xl text-lg text-text-secondary underline hover:text-danger"
-                  >Remove</button>
+                    onClick={() => removeLine(l.productId, l.unitId)}>Remove</Button>
                 </div>
               </li>
             ) : (
@@ -941,37 +924,32 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
                   <span className="font-mono tnum">{formatMoney(l.unitPricePesewas * l.quantity)}</span>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 mt-1 text-text-tertiary text-xs">
-                  <button
+                  <Button size="icon-sm" className="size-7"
                     onClick={() => bumpQuantity(l.productId, -1, l.unitId)}
-                    className="px-2 py-0.5 border border-border hover:bg-bg-elevated text-text-primary"
-                    aria-label="Decrease quantity"
-                  >−</button>
+                   
+                    aria-label="Decrease quantity">−</Button>
                   <QuantityInput
                     productId={l.productId}
                     quantity={l.quantity}
                     onCommit={(n) => setQuantity(l.productId, n, l.unitId)}
                     onRemove={() => removeLine(l.productId, l.unitId)}
                   />
-                  <button
+                  <Button size="icon-sm" className="size-7"
                     onClick={() => bumpQuantity(l.productId, +1, l.unitId)}
-                    className="px-2 py-0.5 border border-border hover:bg-bg-elevated text-text-primary"
-                    aria-label="Increase quantity"
-                  >+</button>
-                  <button
+                   
+                    aria-label="Increase quantity">+</Button>
+                  <Button size="sm" className="text-[10px] uppercase tracking-wider h-7 px-2"
                     onClick={() => setSwapUnitFor({ productId: l.productId, unitId: l.unitId })}
-                    className="px-1.5 py-0.5 border border-border text-text-primary hover:bg-bg-elevated text-[10px] uppercase tracking-wider"
-                    title="Swap unit"
-                  >{l.unitName}</button>
+                   
+                    title="Swap unit">{l.unitName}</Button>
                   <span>× {formatMoney(l.unitPricePesewas)}</span>
                   {l.appliedTierId && l.appliedTierMinQuantity != null && (
                     <span className="bg-accent-dim text-ink px-1.5 py-0.5 text-[10px] uppercase tracking-wider">
                       ≥ {l.appliedTierMinQuantity} tier
                     </span>
                   )}
-                  <button
-                    onClick={() => removeLine(l.productId, l.unitId)}
-                    className="ml-auto text-text-tertiary hover:text-danger"
-                  >remove</button>
+                  <Button variant="link" className="ml-auto text-text-tertiary hover:text-danger no-underline hover:underline"
+                    onClick={() => removeLine(l.productId, l.unitId)}>remove</Button>
                 </div>
               </li>
             ))}
@@ -982,20 +960,18 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
 
             <div className="grid grid-cols-[1fr_2fr] gap-2 items-baseline">
               <span className="text-text-secondary uppercase tracking-wider text-xs">Discount</span>
-              <input
+              <Input className="font-mono tnum text-right h-8 px-2"
                 value={discountRaw}
                 onChange={(e) => setDiscountRaw(e.target.value)}
-                placeholder="0.00"
-                className="bg-bg-input border border-border-strong px-2 py-1 font-mono tnum text-right text-sm" />
+                placeholder="0.00" />
             </div>
             {discount > 0 && (
               <div className="grid grid-cols-[1fr_2fr] gap-2 items-baseline">
                 <span className="text-text-secondary uppercase tracking-wider text-xs">Reason</span>
-                <input
+                <Input className="h-8 px-2"
                   value={discountReason}
                   onChange={(e) => setDiscountReason(e.target.value)}
-                  placeholder="why? (e.g. regular customer)"
-                  className="bg-bg-input border border-border-strong px-2 py-1 text-sm" />
+                  placeholder="why? (e.g. regular customer)" />
               </div>
             )}
             {discount > 0 && (() => {
@@ -1055,25 +1031,21 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
                   <PayBtn label="MoMo" hot="F5" illustration="momo" onClick={() => openPayment('MOMO_MTN')} active={paymentMethod?.startsWith('MOMO_') ?? false} />
                   <PayBtn label="Credit" hot="F6" illustration="credit" onClick={() => openPayment('CREDIT')} active={paymentMethod === 'CREDIT'} />
                 </div>
-                <button
+                <Button size="xl" className="min-h-14 gap-3 rounded-xl border-2 text-lg"
                   type="button"
                   onClick={() => { if (lines.length > 0) { setSplitError(null); setShowSplit(true); } }}
-                  disabled={lines.length === 0}
-                  className="min-h-14 flex items-center justify-center gap-3 rounded-xl border-2 border-border text-lg font-semibold hover:bg-bg-deep disabled:opacity-40"
-                >
+                  disabled={lines.length === 0}>
                   <TaskIllustration name="split" size={36} />
                   Split payment
-                </button>
+                </Button>
 
               </>
             ) : isTouch ? (
-              <button
+              <Button variant="primary" size="lg" className="text-lg rounded-lg mt-2"
                 onClick={() => { if (FRIENDLY_UI_ENABLED) openPayment('CASH'); else if (lines.length > 0) setShowTouchSheet(true); }}
-                disabled={lines.length === 0}
-                className="bg-accent text-ink px-5 py-4 text-lg font-semibold rounded-lg disabled:opacity-40 disabled:cursor-not-allowed mt-2"
-              >
+                disabled={lines.length === 0}>
                 Checkout
-              </button>
+              </Button>
             ) : (
               <>
                 <div className="grid grid-cols-3 gap-2 mt-2">
@@ -1081,20 +1053,16 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
                   <PayBtn label="MoMo" hot="F5" onClick={() => openPayment('MOMO_MTN')} active={paymentMethod?.startsWith('MOMO_') ?? false} />
                   <PayBtn label="Credit" hot="F6" onClick={() => openPayment('CREDIT')} active={paymentMethod === 'CREDIT'} />
                 </div>
-                <button
+                <Button className="mt-1"
                   onClick={() => { if (lines.length > 0) { setSplitError(null); setShowSplit(true); } }}
-                  disabled={lines.length === 0}
-                  className="text-sm px-3 py-2 border border-border hover:bg-bg-deep disabled:opacity-40 mt-1"
-                >
+                  disabled={lines.length === 0}>
                   Split payment (cash + MoMo, etc.)
-                </button>
-                <button
+                </Button>
+                <Button variant="primary" size="lg" className="mt-2"
                   onClick={() => void submitSale()}
-                  disabled={submitting || lines.length === 0 || !paymentMethod}
-                  className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed mt-2"
-                >
+                  disabled={submitting || lines.length === 0 || !paymentMethod}>
                   {submitting ? 'Completing…' : 'Complete sale'} <span className="kbd">F2</span>
-                </button>
+                </Button>
               </>
             )}
 
@@ -1107,22 +1075,19 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
                   {completedToast}
                 </span>
                 {lastReceipt && (
-                  <button
+                  <Button variant="success" size="sm"
                     type="button"
-                    onClick={() => setShowReceiptPrint(true)}
-                    className="border border-success px-3 py-1 text-xs hover:bg-success hover:text-ink">
+                    onClick={() => setShowReceiptPrint(true)}>
                     Print receipt <span className="kbd">F8</span>
-                  </button>
+                  </Button>
                 )}
               </div>
             )}
             {!completedToast && lastReceipt && (
-              <button
-                type="button"
-                onClick={() => setShowReceiptPrint(true)}
-                className="text-text-tertiary text-xs hover:text-text-secondary text-left">
-                Reprint last sale #{lastReceipt.receiptId.slice(-8)} <span className="kbd">F8</span>
-              </button>
+              <Button variant="link" shortcut="F8" onClick={() => setShowReceiptPrint(true)}
+                className="self-start text-xs text-text-tertiary no-underline hover:text-text-secondary hover:underline">
+                Reprint last sale #{lastReceipt.receiptId.slice(-8)}
+              </Button>
             )}
           </div>
         </section>

@@ -11,6 +11,7 @@ import { Field } from '../../components/ui/field';
 import { Input } from '../../components/ui/input';
 import { NativeSelect } from '../../components/ui/native-select';
 import { Textarea } from '../../components/ui/textarea';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 
 interface AdminSupplier {
   id: string;
@@ -62,80 +63,76 @@ export function SuppliersTab() {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-end gap-3">
-        <button
+        <Button variant="primary"
           onClick={() => isAdmin && setShowAdd(true)}
           disabled={!isAdmin}
-          title={isAdmin ? '' : 'OWNER or FOUNDER role required to add suppliers'}
-          className="bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light text-sm disabled:opacity-40 disabled:cursor-not-allowed">
+          title={isAdmin ? '' : 'OWNER or FOUNDER role required to add suppliers'}>
           + Add supplier
-        </button>
+        </Button>
       </div>
 
       {error && <FeedbackBanner>{error}</FeedbackBanner>}
       {info && <div className="bg-success/10 border border-success/40 text-success text-sm px-3 py-2 rounded">{info}</div>}
 
       <div className="bg-bg-elevated rounded border border-border-subtle overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-bg-deep text-text-tertiary uppercase text-xs">
-            <tr>
-              <th className="text-left px-4 py-3">Name</th>
-              <th className="text-left px-4 py-3">Contact</th>
-              <th className="text-left px-4 py-3">Phone</th>
-              <th className="text-right px-4 py-3">Terms</th>
-              <th className="text-right px-4 py-3">Limit</th>
-              <th className="text-right px-4 py-3">Balance</th>
-              <th className="text-left px-4 py-3">Status</th>
-              <th className="px-4 py-3"></th>
-            </tr>
-          </thead>
-          <tbody>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Contact</TableHead>
+              <TableHead>Phone</TableHead>
+              <TableHead className="text-right">Terms</TableHead>
+              <TableHead className="text-right">Limit</TableHead>
+              <TableHead className="text-right">Balance</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {suppliers.length === 0 && (
-              <tr><td colSpan={8} className="px-4 py-8 text-center text-text-tertiary">
+              <TableRow><TableCell colSpan={8} className="px-4 py-8 text-center text-text-tertiary">
                 No suppliers yet. {isAdmin ? 'Add the first one above.' : ''}
-              </td></tr>
+              </TableCell></TableRow>
             )}
             {suppliers.map((s) => (
-              <tr key={s.id} className="border-t border-border-subtle hover:bg-bg-deep/40">
-                <td className="px-4 py-3 font-medium">{s.name}</td>
-                <td className="px-4 py-3 text-text-secondary">{s.contactPerson ?? '—'}</td>
-                <td className="px-4 py-3 text-text-secondary">{s.phone ?? '—'}</td>
-                <td className="px-4 py-3 text-right">{s.paymentTermsDays} days · {s.paymentSchedule.replace('_', ' ').toLowerCase()}</td>
-                <td className="px-4 py-3 text-right tabular-nums">
+              <TableRow key={s.id}>
+                <TableCell className="px-4 py-3 font-medium">{s.name}</TableCell>
+                <TableCell className="px-4 py-3 text-text-secondary">{s.contactPerson ?? '—'}</TableCell>
+                <TableCell className="px-4 py-3 text-text-secondary">{s.phone ?? '—'}</TableCell>
+                <TableCell className="px-4 py-3 text-right">{s.paymentTermsDays} days · {s.paymentSchedule.replace('_', ' ').toLowerCase()}</TableCell>
+                <TableCell className="px-4 py-3 text-right tabular-nums">
                   {s.creditLimitPesewas > 0 ? formatMoneyWithCurrency(s.creditLimitPesewas) : '—'}
-                </td>
-                <td className="px-4 py-3 text-right tabular-nums">
+                </TableCell>
+                <TableCell className="px-4 py-3 text-right tabular-nums">
                   {formatMoneyWithCurrency(s.currentBalancePesewas)}
-                </td>
-                <td className="px-4 py-3">
+                </TableCell>
+                <TableCell className="px-4 py-3">
                   {s.active
                     ? <span className="text-success">Active</span>
                     : <span className="text-text-tertiary">Inactive</span>}
-                </td>
-                <td className="px-4 py-3 text-right">
+                </TableCell>
+                <TableCell className="px-4 py-3 text-right">
                   {isAdmin ? (
                     <div className="flex gap-2 justify-end">
-                      <button onClick={() => setEditing(s)}
-                        className="text-xs px-3 py-1 border border-border hover:bg-bg-elevated">
+                      <Button size="sm" onClick={() => setEditing(s)}>
                         Edit
-                      </button>
+                      </Button>
                       {s.active
-                        ? <button onClick={() => deactivate(s.id)}
-                            className="text-xs px-3 py-1 border border-border hover:bg-bg-elevated text-danger">
+                        ? <Button variant="danger" size="sm" onClick={() => deactivate(s.id)}>
                             Deactivate
-                          </button>
-                        : <button onClick={() => reactivate(s.id)}
-                            className="text-xs px-3 py-1 border border-border hover:bg-bg-elevated text-success">
+                          </Button>
+                        : <Button variant="success" size="sm" onClick={() => reactivate(s.id)}>
                             Reactivate
-                          </button>}
+                          </Button>}
                     </div>
                   ) : (
                     <span className="text-text-tertiary text-xs" title="OWNER or FOUNDER role required">admin only</span>
                   )}
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
 
       {showAdd && (

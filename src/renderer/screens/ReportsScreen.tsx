@@ -29,6 +29,8 @@ import { useSession } from '../store/session';
 import { useReportAccess } from '../store/reportAccess';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
+import { NavTab } from '../components/ui/nav-tab';
+import { Input } from '../components/ui/input';
 
 type Tab =
   | 'owner-summary' | 'profit' | 'position' | 'management-cash'
@@ -170,7 +172,7 @@ export default function ReportsScreen({
   return (
     <div className="min-h-screen bg-bg-deep text-text-primary flex flex-col">
       <AppHeader subtitle={`reports — ${tab}`} onBack={onExit} />
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-8 py-6 flex flex-col gap-5">
+      <main className="@container flex-1 max-w-7xl w-full mx-auto px-4 sm:px-8 py-6 flex flex-col gap-5">
         {!accessToken ? (
           <form onSubmit={(event) => void unlockReports(event)} className="panel max-w-xl p-6 sm:p-8 flex flex-col gap-5">
             <div>
@@ -180,9 +182,9 @@ export default function ReportsScreen({
             </div>
             {accessError && <FeedbackBanner>{accessError}</FeedbackBanner>}
             <div className="flex flex-wrap gap-3">
-              <input autoFocus type="password" inputMode="numeric" maxLength={6} value={pin}
+              <Input className="max-w-44 text-lg font-mono" autoFocus type="password" inputMode="numeric" maxLength={6} value={pin}
                 onChange={(event) => setPin(event.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder="Your PIN" className="input max-w-44 text-lg font-mono" />
+                placeholder="Your PIN" />
               <Button variant="primary" type="submit" disabled={pin.length < 4 || unlocking}>
                 {unlocking ? 'Unlocking…' : 'Unlock reports'}
               </Button>
@@ -245,16 +247,5 @@ export default function ReportsScreen({
 function TabBtn({ active, onClick, children }: {
   active: boolean; onClick: () => void; children: React.ReactNode;
 }) {
-  return (
-    <button
-      onClick={onClick}
-      className={[
-        'px-4 py-2.5 text-sm whitespace-nowrap border-b-2',
-        active
-          ? 'border-accent text-accent'
-          : 'border-transparent text-text-secondary hover:text-text-primary',
-      ].join(' ')}>
-      {children}
-    </button>
-  );
+  return <NavTab active={active} onClick={onClick}>{children}</NavTab>;
 }

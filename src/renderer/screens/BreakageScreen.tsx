@@ -6,6 +6,10 @@ import { counter } from '../lib/ipc';
 import { AppHeader } from '../components/AppHeader';
 import { formatMoney, formatMoneyWithCurrency } from '../../shared/lib/money';
 import { FeedbackBanner } from '../components/FeedbackBanner';
+import { Button } from '../components/ui/button';
+import { Textarea } from '../components/ui/textarea';
+import { NativeSelect } from '../components/ui/native-select';
+import { Input } from '../components/ui/input';
 
 interface ProductHit { id: string; sku: string; name: string; unitPricePesewas: number; costPricePesewas: number; unitsOnHand: number }
 
@@ -102,17 +106,15 @@ export default function BreakageScreen({ onExit }: { onExit: () => void }) {
         </div>
         {info && <div className="bg-bg-surface border border-success px-5 py-3 text-success text-sm">{info}</div>}
 
-        <input
+        <Input className="h-12 px-4"
           ref={searchRef} type="text" value={query} onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search product (SKU or name)…"
-          className="bg-bg-input border border-border-strong px-4 py-3"
-        />
-        <ul className="bg-bg-surface border border-border max-h-48 overflow-y-auto">
+          placeholder="Search product (SKU or name)…" />
+        <ul className="panel max-h-48 overflow-y-auto">
           {hits.map((p) => (
             <li key={p.id}>
               <button
                 onClick={() => setSelected(p)}
-                className={`w-full text-left px-4 py-2 flex justify-between border-b border-border ${selected?.id === p.id ? 'bg-bg-elevated' : 'hover:bg-bg-elevated'}`}>
+                className={`w-full text-left px-4 py-2 flex justify-between border-b border-border ${selected?.id === p.id ? 'bg-accent/10' : 'hover:bg-bg-surface'}`}>
                 <span>{p.name} <span className="text-text-tertiary text-xs">{p.sku}</span></span>
                 <span className="text-text-tertiary text-sm">{p.unitsOnHand} on hand · cost {formatMoney(p.costPricePesewas)}</span>
               </button>
@@ -122,32 +124,30 @@ export default function BreakageScreen({ onExit }: { onExit: () => void }) {
         </ul>
 
         {selected && (
-          <div className="bg-bg-surface border border-border p-5 flex flex-col gap-4">
+          <div className="panel p-5 flex flex-col gap-4">
             <div className="text-text-primary">{selected.name} <span className="text-text-tertiary text-xs">{selected.sku}</span></div>
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-text-secondary text-xs uppercase tracking-wider">Quantity</label>
                 <div className="flex items-center gap-2 mt-1">
-                  <button onClick={() => setQuantity((q) => Math.max(1, q - 1))} className="px-3 py-2 border border-border">−</button>
+                  <Button onClick={() => setQuantity((q) => Math.max(1, q - 1))}>−</Button>
                   <span className="font-mono tnum text-2xl w-12 text-center">{quantity}</span>
-                  <button onClick={() => setQuantity((q) => q + 1)} className="px-3 py-2 border border-border">+</button>
+                  <Button onClick={() => setQuantity((q) => q + 1)}>+</Button>
                 </div>
               </div>
               <div>
                 <label className="text-text-secondary text-xs uppercase tracking-wider">Cause</label>
-                <select
-                  value={cause} onChange={(e) => setCause(e.target.value as Cause)}
-                  className="w-full mt-1 bg-bg-input border border-border-strong px-3 py-2">
+                <NativeSelect className="mt-1"
+                  value={cause} onChange={(e) => setCause(e.target.value as Cause)}>
                   {CAUSES.map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
-                </select>
+                </NativeSelect>
               </div>
             </div>
-            <textarea
+            <Textarea
               value={description} onChange={(e) => setDescription(e.target.value)}
               placeholder="What happened? (optional)"
-              className="bg-bg-input border border-border-strong px-3 py-2 text-sm"
-              rows={2}
-            />
+             
+              rows={2} />
             <div className="flex flex-col gap-2">
               <label className="text-text-secondary text-xs uppercase tracking-wider">Photo (required)</label>
               <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={pickFile}
@@ -159,13 +159,12 @@ export default function BreakageScreen({ onExit }: { onExit: () => void }) {
             </div>
             {error && <FeedbackBanner>{error}</FeedbackBanner>}
             <div className="flex gap-3">
-              <button onClick={() => setSelected(null)} className="px-5 py-3 border border-border hover:bg-bg-elevated">Cancel</button>
-              <button
+              <Button size="lg" onClick={() => setSelected(null)}>Cancel</Button>
+              <Button variant="destructive" size="lg"
                 onClick={() => void submit()}
-                disabled={!photoB64 || submitting}
-                className="bg-danger text-ink px-5 py-3 font-semibold hover:opacity-90 disabled:opacity-40">
+                disabled={!photoB64 || submitting}>
                 {submitting ? 'Logging…' : 'Report breakage'}
-              </button>
+              </Button>
             </div>
           </div>
         )}

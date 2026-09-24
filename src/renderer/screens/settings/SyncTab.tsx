@@ -7,6 +7,9 @@ import { counter } from '../../lib/ipc';
 import { useSession } from '../../store/session';
 import type { SyncStatus, AddShopResult } from '../../../shared/types/ipc';
 import { FeedbackBanner } from '../../components/FeedbackBanner';
+import { Button } from '../../components/ui/button';
+import { Segmented } from '../../components/ui/segmented';
+import { Input } from '../../components/ui/input';
 
 export function SyncTab(): JSX.Element {
   const role_ = useSession((s) => s.workerRole);
@@ -72,10 +75,8 @@ export function SyncTab(): JSX.Element {
         />
         <div>
           <label className="block text-xs uppercase tracking-wider text-text-secondary mb-1">Role</label>
-          <div className="flex gap-2">
-            <RoleBtn active={role === 'SHOP'} onClick={() => setRole('SHOP')}>Shop (sells; pulls catalog)</RoleBtn>
-            <RoleBtn active={role === 'HQ'} onClick={() => setRole('HQ')}>HQ (owns the catalog)</RoleBtn>
-          </div>
+          <Segmented label="Role" fill value={role} onChange={setRole}
+            options={[{ value: 'SHOP', label: 'Shop (sells; pulls catalog)' }, { value: 'HQ', label: 'HQ (owns the catalog)' }]} />
         </div>
       </fieldset>
 
@@ -83,10 +84,9 @@ export function SyncTab(): JSX.Element {
       {msg && <div className="border border-success bg-success/10 text-success text-sm px-3 py-2 rounded">{msg}</div>}
       {!isOwner && <div className="text-text-tertiary text-xs">Only OWNER or FOUNDER can change sync settings.</div>}
 
-      <button onClick={() => void save()} disabled={!isOwner || saving}
-        className="bg-accent text-ink px-5 py-2 font-semibold hover:bg-accent-light disabled:opacity-50">
+      <Button variant="primary" size="lg" onClick={() => void save()} disabled={!isOwner || saving}>
         {saving ? 'Saving…' : 'Save sync settings'}
-      </button>
+      </Button>
 
       {status?.configured && isOwner && <AddBranchSection />}
     </div>
@@ -156,10 +156,9 @@ function AddBranchSection(): JSX.Element {
           I have copied these details to the new branch&apos;s install.
         </label>
 
-        <button onClick={dismiss} disabled={!acknowledged}
-          className="w-full py-2 rounded bg-accent text-ink font-semibold disabled:opacity-50">
+        <Button variant="primary" className="w-full" onClick={dismiss} disabled={!acknowledged}>
           Done
-        </button>
+        </Button>
       </div>
     );
   }
@@ -175,10 +174,9 @@ function AddBranchSection(): JSX.Element {
       </div>
       <Field label="New branch's shop code / id" value={newShopId} onChange={setNewShopId} placeholder="e.g. osu-2" />
       {err && <FeedbackBanner>{err}</FeedbackBanner>}
-      <button onClick={() => void addBranch()} disabled={busy}
-        className="bg-accent text-ink px-5 py-2 font-semibold hover:bg-accent-light disabled:opacity-50">
+      <Button variant="primary" size="lg" onClick={() => void addBranch()} disabled={busy}>
         {busy ? 'Adding…' : 'Add branch'}
-      </button>
+      </Button>
     </div>
   );
 }
@@ -198,18 +196,9 @@ function Field({ label, value, onChange, placeholder, type = 'text' }: {
   return (
     <div>
       <label className="block text-xs uppercase tracking-wider text-text-secondary mb-1">{label}</label>
-      <input type={type} value={value} placeholder={placeholder}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full bg-bg-input border border-border px-3 py-2 text-sm focus:outline-hidden focus:border-accent" />
+      <Input type={type} value={value} placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)} />
     </div>
   );
 }
 
-function RoleBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button onClick={onClick}
-      className={`flex-1 px-3 py-2 text-sm border ${active ? 'border-accent text-accent bg-accent/10' : 'border-border text-text-secondary hover:bg-bg-elevated'}`}>
-      {children}
-    </button>
-  );
-}

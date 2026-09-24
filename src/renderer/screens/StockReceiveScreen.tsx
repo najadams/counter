@@ -11,6 +11,10 @@ import type { StockReceiptRequestSummary } from '../../shared/types/ipc';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { reviewStatusTone } from '../lib/tones';
+import { Textarea } from '../components/ui/textarea';
+import { NativeSelect } from '../components/ui/native-select';
+import { Input } from '../components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 
 interface Supplier { id: string; name: string; paymentTermsDays: number; currentBalancePesewas: number }
 interface DraftPO { id: string; poNumber: string; supplierId: string; totalOrderedPesewas: number; lineCount: number; createdAt: string }
@@ -232,77 +236,64 @@ export default function StockReceiveScreen({ onExit }: { onExit: () => void }) {
         {!isOpeningStock && (
           <>
             <label className="text-text-secondary text-xs uppercase tracking-wider">Supplier</label>
-            <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)}
-              className="bg-bg-input border border-border-strong px-4 py-3 text-text-primary">
+            <NativeSelect className="h-12 px-4" value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
               {suppliers.length === 0 && <option value="">— no suppliers configured —</option>}
               {suppliers.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name} {s.currentBalancePesewas > 0 ? `· owe ${formatMoney(s.currentBalancePesewas)}` : ''}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
             {supplierDraftPOs.length > 0 && (
               <label>
                 <span className="block text-text-secondary text-xs uppercase tracking-wider mb-1">Match to PO</span>
-                <select
+                <NativeSelect
                   value={purchaseOrderId}
-                  onChange={(e) => setPurchaseOrderId(e.target.value)}
-                  className="w-full bg-bg-input border border-border-strong px-3 py-2 text-text-primary"
-                >
+                  onChange={(e) => setPurchaseOrderId(e.target.value)}>
                   <option value="">Receipt only</option>
                   {supplierDraftPOs.map((po) => (
                     <option key={po.id} value={po.id}>
                       {po.poNumber} · {po.lineCount} line(s) · {formatMoney(po.totalOrderedPesewas)}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </label>
             )}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <label>
                 <span className="block text-text-secondary text-xs uppercase tracking-wider mb-1">Supplier invoice #</span>
-                <input
+                <Input
                   value={supplierInvoiceNumber}
                   onChange={(e) => setSupplierInvoiceNumber(e.target.value)}
-                  placeholder="e.g. INV-1042"
-                  className="w-full bg-bg-input border border-border-strong px-3 py-2"
-                />
+                  placeholder="e.g. INV-1042" />
               </label>
               <label>
                 <span className="block text-text-secondary text-xs uppercase tracking-wider mb-1">Invoice date</span>
-                <input
+                <Input
                   type="date"
                   value={supplierInvoiceDate}
-                  onChange={(e) => setSupplierInvoiceDate(e.target.value)}
-                  className="w-full bg-bg-input border border-border-strong px-3 py-2"
-                />
+                  onChange={(e) => setSupplierInvoiceDate(e.target.value)} />
               </label>
               <label>
                 <span className="block text-text-secondary text-xs uppercase tracking-wider mb-1">Due date</span>
-                <input
+                <Input
                   type="date"
                   value={supplierDueDate}
-                  onChange={(e) => setSupplierDueDate(e.target.value)}
-                  className="w-full bg-bg-input border border-border-strong px-3 py-2"
-                />
+                  onChange={(e) => setSupplierDueDate(e.target.value)} />
               </label>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label>
                 <span className="block text-text-secondary text-xs uppercase tracking-wider mb-1">Transport cost</span>
-                <input
+                <Input
                   value={transportCost}
-                  onChange={(e) => setTransportCost(e.target.value)}
-                  className="w-full bg-bg-input border border-border-strong px-3 py-2"
-                />
+                  onChange={(e) => setTransportCost(e.target.value)} />
               </label>
               <label>
                 <span className="block text-text-secondary text-xs uppercase tracking-wider mb-1">Loading cost</span>
-                <input
+                <Input
                   value={loadingCost}
-                  onChange={(e) => setLoadingCost(e.target.value)}
-                  className="w-full bg-bg-input border border-border-strong px-3 py-2"
-                />
+                  onChange={(e) => setLoadingCost(e.target.value)} />
               </label>
             </div>
           </>
@@ -317,50 +308,50 @@ export default function StockReceiveScreen({ onExit }: { onExit: () => void }) {
         )}
 
         <h3 className="text-text-secondary uppercase tracking-wider text-xs mt-2">Lines</h3>
-        <div className="bg-bg-surface border border-border">
-          <table className="w-full">
-            <thead>
-              <tr className="text-text-secondary text-xs uppercase tracking-wider">
-                <th className="px-4 py-2 text-left">Product</th>
-                <th className="px-4 py-2 text-right">Qty</th>
-                <th className="px-4 py-2 text-right">Cost / unit</th>
-                <th className="px-4 py-2 text-right">Line total</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody className="text-sm">
+        <div className="panel">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Product</TableHead>
+                <TableHead className="text-right">Qty</TableHead>
+                <TableHead className="text-right">Cost / unit</TableHead>
+                <TableHead className="text-right">Line total</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody className="text-sm">
               {lines.map((l, i) => (
-                <tr key={i} className="border-t border-border">
-                  <td className="px-4 py-2">{l.productName} <span className="text-text-tertiary text-xs">{l.productSku} · {l.unitName}{l.conversionFactor > 1 ? ` (×${l.conversionFactor})` : ''}</span></td>
-                  <td className="px-4 py-2 text-right font-mono tnum">{l.quantity}</td>
-                  <td className="px-4 py-2 text-right font-mono tnum">{formatMoney(l.unitCostPesewas)}</td>
-                  <td className="px-4 py-2 text-right font-mono tnum">{formatMoney(l.quantity * l.unitCostPesewas)}</td>
-                  <td className="px-2 py-2 text-right">
-                    <button onClick={() => removeLine(i)} className="text-text-tertiary hover:text-danger text-xs">remove</button>
-                  </td>
-                </tr>
+                <TableRow key={i}>
+                  <TableCell className="px-4 py-2">{l.productName} <span className="text-text-tertiary text-xs">{l.productSku} · {l.unitName}{l.conversionFactor > 1 ? ` (×${l.conversionFactor})` : ''}</span></TableCell>
+                  <TableCell className="px-4 py-2 text-right font-mono tnum">{l.quantity}</TableCell>
+                  <TableCell className="px-4 py-2 text-right font-mono tnum">{formatMoney(l.unitCostPesewas)}</TableCell>
+                  <TableCell className="px-4 py-2 text-right font-mono tnum">{formatMoney(l.quantity * l.unitCostPesewas)}</TableCell>
+                  <TableCell className="px-2 py-2 text-right">
+                    <Button variant="link" className="text-text-tertiary hover:text-danger no-underline hover:underline text-xs" onClick={() => removeLine(i)}>remove</Button>
+                  </TableCell>
+                </TableRow>
               ))}
               {lines.length === 0 && (
-                <tr><td colSpan={5} className="px-4 py-3 text-text-tertiary text-center">No lines yet.</td></tr>
+                <TableRow><TableCell colSpan={5} className="px-4 py-3 text-text-tertiary text-center">No lines yet.</TableCell></TableRow>
               )}
-              <tr className="border-t border-border bg-bg-deep">
-                <td className="px-4 py-2 text-text-secondary uppercase tracking-wider text-xs" colSpan={3}>Total</td>
-                <td className="px-4 py-2 text-right font-mono tnum text-text-primary">{formatMoney(totalValue)}</td>
-                <td></td>
-              </tr>
-            </tbody>
-          </table>
+              <TableRow className="bg-bg-deep">
+                <TableCell className="px-4 py-2 text-text-secondary uppercase tracking-wider text-xs" colSpan={3}>Total</TableCell>
+                <TableCell className="px-4 py-2 text-right font-mono tnum text-text-primary">{formatMoney(totalValue)}</TableCell>
+                <TableCell></TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
         </div>
 
-        <div className="bg-bg-surface border border-border p-5 flex flex-col gap-3">
+        <div className="panel p-5 flex flex-col gap-3">
           <h4 className="text-text-secondary uppercase tracking-wider text-xs">Add line</h4>
-          <input value={productQuery} onChange={(e) => setProductQuery(e.target.value)}
-            placeholder="Search product…" className="bg-bg-input border border-border-strong px-4 py-2" />
+          <Input className="px-4" value={productQuery} onChange={(e) => setProductQuery(e.target.value)}
+            placeholder="Search product…" />
           <ul className="max-h-32 overflow-y-auto">
             {hits.slice(0, 5).map((p) => (
               <li key={p.id}>
                 <button onClick={() => { setPendingProduct(p); setPendingQty(0); }}
-                  className={`w-full text-left px-3 py-2 flex justify-between border-b border-border ${pendingProduct?.id === p.id ? 'bg-bg-elevated' : 'hover:bg-bg-elevated'}`}>
+                  className={`w-full text-left px-3 py-2 flex justify-between border-b border-border ${pendingProduct?.id === p.id ? 'bg-accent/10' : 'hover:bg-bg-surface'}`}>
                   <span>{p.name} <span className="text-text-tertiary text-xs">{p.sku}</span></span>
                   <span className="text-text-tertiary text-sm" title="Per smallest unit (canonical). Cost field below will scale to the chosen receive unit.">
                     last cost {formatMoney(p.costPricePesewas)}<span className="opacity-50"> / single</span>
@@ -373,47 +364,42 @@ export default function StockReceiveScreen({ onExit }: { onExit: () => void }) {
             <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto_auto] gap-3 items-end">
               <div>
                 <label className="text-text-secondary text-xs uppercase tracking-wider">Unit</label>
-                <select value={pendingUnitId ?? ''} onChange={(e) => setPendingUnitId(e.target.value || null)}
-                  className="w-full bg-bg-input border border-border-strong px-3 py-2">
+                <NativeSelect value={pendingUnitId ?? ''} onChange={(e) => setPendingUnitId(e.target.value || null)}>
                   {pendingProductUnits.length === 0 && <option value="">(no purchase units)</option>}
                   {pendingProductUnits.map((u) => (
                     <option key={u.id} value={u.id}>{u.unitName} (× {u.conversionFactor})</option>
                   ))}
-                </select>
+                </NativeSelect>
               </div>
               <div className="w-20">
                 <label className="text-text-secondary text-xs uppercase tracking-wider">Qty</label>
-                <input type="number" min={1} value={pendingQty || ''} onChange={(e) => setPendingQty(Number(e.target.value))}
-                  className="w-full bg-bg-input border border-border-strong px-3 py-2 font-mono tnum" />
+                <Input className="font-mono tnum" type="number" min={1} value={pendingQty || ''} onChange={(e) => setPendingQty(Number(e.target.value))} />
               </div>
               <div className="w-36">
                 <label className="text-text-secondary text-xs uppercase tracking-wider">
                   Cost / {pendingProductUnits.find((u) => u.id === pendingUnitId)?.unitName ?? 'unit'} (₵)
                 </label>
-                <input value={pendingCost} onChange={(e) => setPendingCost(e.target.value)}
-                  className="w-full bg-bg-input border border-border-strong px-3 py-2 font-mono tnum" />
+                <Input className="font-mono tnum" value={pendingCost} onChange={(e) => setPendingCost(e.target.value)} />
               </div>
-              <button onClick={addPendingToList}
-                className="bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light">
+              <Button variant="primary" onClick={addPendingToList}>
                 Add line
-              </button>
+              </Button>
             </div>
           )}
         </div>
 
-        <textarea value={notes} onChange={(e) => setNotes(e.target.value)}
-          placeholder="Notes (optional)" className="bg-bg-input border border-border-strong px-3 py-2 text-sm" rows={2} />
+        <Textarea value={notes} onChange={(e) => setNotes(e.target.value)}
+          placeholder="Notes (optional)" rows={2} />
 
         {error && <FeedbackBanner>{error}</FeedbackBanner>}
 
         <div className="flex gap-3">
-          <button onClick={onExit} className="px-5 py-3 border border-border hover:bg-bg-elevated">Cancel</button>
-          <button
+          <Button size="lg" onClick={onExit}>Cancel</Button>
+          <Button variant="primary" size="lg"
             onClick={() => void submitRequest()}
-            disabled={submitting || lines.length === 0 || (!isOpeningStock && !supplierId)}
-            className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40">
+            disabled={submitting || lines.length === 0 || (!isOpeningStock && !supplierId)}>
             {submitting ? 'Submitting…' : 'Submit for approval'}
-          </button>
+          </Button>
         </div>
       </main>
     </div>

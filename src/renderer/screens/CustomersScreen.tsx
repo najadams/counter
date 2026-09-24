@@ -9,6 +9,8 @@ import CustomerDetailScreen from './CustomerDetailScreen';
 import { RecordPaymentModal } from '../components/RecordPaymentModal';
 import { CustomerCreateModal } from '../components/CustomerCreateModal';
 import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 
 interface Row {
   id: string; displayName: string; businessName: string | null; phone: string; customerType: string;
@@ -82,11 +84,10 @@ export default function CustomersScreen({ onExit }: { onExit: () => void }) {
         <div className="flex items-center justify-between">
           <h2 className="text-text-secondary uppercase tracking-wider text-xs">Open balances</h2>
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => setShowAdd(true)}
-              className="bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light text-sm">
+            <Button variant="primary"
+              onClick={() => setShowAdd(true)}>
               + Add customer
-            </button>
+            </Button>
             <span className="text-text-tertiary text-xs"><span className="kbd">F9</span> back</span>
           </div>
         </div>
@@ -110,9 +111,8 @@ export default function CustomersScreen({ onExit }: { onExit: () => void }) {
         )}
 
         <div className="flex items-center gap-3">
-          <input value={filter} onChange={(e) => setFilter(e.target.value)}
-            placeholder="Filter by customer, company, or phone…"
-            className="bg-bg-input border border-border-strong px-3 py-2 flex-1" />
+          <Input className="flex-1" value={filter} onChange={(e) => setFilter(e.target.value)}
+            placeholder="Filter by customer, company, or phone…" />
           <label className="flex items-center gap-2 text-text-secondary text-sm">
             <input type="checkbox" checked={includeBlocked} onChange={(e) => setIncludeBlocked(e.target.checked)} />
             include blocked
@@ -128,20 +128,20 @@ export default function CustomersScreen({ onExit }: { onExit: () => void }) {
           )}
         </div>
 
-        <div className="bg-bg-surface border border-border overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-text-secondary text-xs uppercase tracking-wider">
-                <th className="px-4 py-3 text-left">Customer</th>
-                <th className="px-4 py-3 text-left">Phone</th>
-                <th className="px-4 py-3 text-right">Balance</th>
-                <th className="px-4 py-3 text-right">Limit</th>
-                <th className="px-4 py-3 text-left">Oldest unpaid</th>
-                <th className="px-4 py-3 text-left">Status</th>
-                <th className="px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody>
+        <div className="panel overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Customer</TableHead>
+                <TableHead>Phone</TableHead>
+                <TableHead className="text-right">Balance</TableHead>
+                <TableHead className="text-right">Limit</TableHead>
+                <TableHead>Oldest unpaid</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {visible.map((r) => {
                 const overLimit = r.creditLimitPesewas > 0 && r.trueBalancePesewas >= r.creditLimitPesewas;
                 const tone = r.oldestUnpaidBucket === 'bucket90_plus' ? 'text-danger'
@@ -149,45 +149,44 @@ export default function CustomersScreen({ onExit }: { onExit: () => void }) {
                   : r.oldestUnpaidBucket === 'bucket31_60' ? 'text-warning'
                   : 'text-text-primary';
                 return (
-                  <tr key={r.id} className="border-t border-border hover:bg-bg-elevated/40 cursor-pointer"
+                  <TableRow key={r.id} className="cursor-pointer"
                       onClick={() => setSelectedCustomer(r.id)}
                       title="Open customer details (open sales, recent sales, receipts)">
-                    <td className="px-4 py-3">
+                    <TableCell className="px-4 py-3">
                       <button onClick={(e) => { e.stopPropagation(); setSelectedCustomer(r.id); }}
                         className="text-left text-accent hover:underline font-medium">
                         {r.displayName}
                         {r.needsReconcile && <span className="ml-2 text-warning text-xs">drift</span>}
                       </button>
                       <div className="text-text-tertiary text-xs">{r.businessName ? `${r.businessName} · ` : ''}{r.customerType} · click row for details</div>
-                    </td>
-                    <td className="px-4 py-3 font-mono tnum">{r.phone}</td>
-                    <td className={`px-4 py-3 text-right font-mono tnum ${tone}`}>{formatMoney(r.trueBalancePesewas)}</td>
-                    <td className={`px-4 py-3 text-right font-mono tnum ${overLimit ? 'text-warning' : 'text-text-tertiary'}`}>
+                    </TableCell>
+                    <TableCell className="px-4 py-3 font-mono tnum">{r.phone}</TableCell>
+                    <TableCell className={`px-4 py-3 text-right font-mono tnum ${tone}`}>{formatMoney(r.trueBalancePesewas)}</TableCell>
+                    <TableCell className={`px-4 py-3 text-right font-mono tnum ${overLimit ? 'text-warning' : 'text-text-tertiary'}`}>
                       {r.creditLimitPesewas > 0 ? formatMoney(r.creditLimitPesewas) : '—'}
-                    </td>
-                    <td className={`px-4 py-3 ${tone}`}>
+                    </TableCell>
+                    <TableCell className={`px-4 py-3 ${tone}`}>
                       {r.ageOfOldestUnpaidDays === null ? '—' : `${r.ageOfOldestUnpaidDays} days · ${BUCKET_LABEL[r.oldestUnpaidBucket!]}`}
-                    </td>
-                    <td className="px-4 py-3">
+                    </TableCell>
+                    <TableCell className="px-4 py-3">
                       {r.blocked ? <span className="text-danger">blocked</span>
                         : overLimit ? <span className="text-warning">over limit</span>
                         : <span className="text-success">ok</span>}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setShowPay({ customerId: r.id, displayName: r.displayName }); }}
-                        className="bg-accent text-ink px-3 py-1 hover:bg-accent-light text-xs font-semibold">
+                    </TableCell>
+                    <TableCell className="px-4 py-3 text-right">
+                      <Button variant="primary" size="sm"
+                        onClick={(e) => { e.stopPropagation(); setShowPay({ customerId: r.id, displayName: r.displayName }); }}>
                         Take payment
-                      </button>
-                    </td>
-                  </tr>
+                      </Button>
+                    </TableCell>
+                  </TableRow>
                 );
               })}
               {visible.length === 0 && (
-                <tr><td colSpan={7} className="px-4 py-6 text-text-tertiary text-center">No customers match.</td></tr>
+                <TableRow><TableCell colSpan={7} className="px-4 py-6 text-text-tertiary text-center">No customers match.</TableCell></TableRow>
               )}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       </main>
 
@@ -223,10 +222,10 @@ function KPI({ label, value, tone = 'ok', large, onClick, active }: {
     </>
   );
   return onClick ? (
-    <button onClick={onClick} className={`bg-bg-surface border ${border} p-4 text-left hover:bg-bg-elevated`}>
+    <button onClick={onClick} className={`panel ${border} p-4 text-left hover:border-accent hover:bg-accent/5`}>
       {inner}
     </button>
   ) : (
-    <div className={`bg-bg-surface border ${border} p-4`}>{inner}</div>
+    <div className={`panel ${border} p-4`}>{inner}</div>
   );
 }

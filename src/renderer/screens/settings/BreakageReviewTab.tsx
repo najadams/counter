@@ -7,6 +7,9 @@ import { useSession } from '../../store/session';
 import { formatMoneyWithCurrency } from '../../../shared/lib/money';
 import { FeedbackBanner } from '../../components/FeedbackBanner';
 import { Dialog, DialogContent } from '../../components/ui/dialog';
+import { Button } from '../../components/ui/button';
+import { NativeSelect } from '../../components/ui/native-select';
+import { Input } from '../../components/ui/input';
 
 interface Row {
   id: string; productId: string; productName: string; productSku: string;
@@ -93,42 +96,36 @@ export function BreakageReviewTab() {
       <div className="grid grid-cols-5 gap-3">
         <label className="block">
           <span className="block text-xs text-text-tertiary mb-1 uppercase tracking-wider">Worker</span>
-          <select value={filterWorker} onChange={(e) => setFilterWorker(e.target.value)}
-            className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle text-sm">
+          <NativeSelect value={filterWorker} onChange={(e) => setFilterWorker(e.target.value)}>
             <option value="">— anyone —</option>
             {workers.map((w) => <option key={w.id} value={w.id}>{w.fullName} ({w.role})</option>)}
-          </select>
+          </NativeSelect>
         </label>
         <label className="block">
           <span className="block text-xs text-text-tertiary mb-1 uppercase tracking-wider">Cause</span>
-          <select value={filterCause} onChange={(e) => setFilterCause(e.target.value)}
-            className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle text-sm">
+          <NativeSelect value={filterCause} onChange={(e) => setFilterCause(e.target.value)}>
             <option value="">— any —</option>
             {causes.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
+          </NativeSelect>
         </label>
         <label className="block">
           <span className="block text-xs text-text-tertiary mb-1 uppercase tracking-wider">From</span>
-          <input type="date" value={filterFromDate} onChange={(e) => setFilterFromDate(e.target.value)}
-            className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle text-sm" />
+          <Input type="date" value={filterFromDate} onChange={(e) => setFilterFromDate(e.target.value)} />
         </label>
         <label className="block">
           <span className="block text-xs text-text-tertiary mb-1 uppercase tracking-wider">To</span>
-          <input type="date" value={filterToDate} onChange={(e) => setFilterToDate(e.target.value)}
-            className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle text-sm" />
+          <Input type="date" value={filterToDate} onChange={(e) => setFilterToDate(e.target.value)} />
         </label>
         <div className="flex items-end gap-2">
-          <button onClick={() => { setPage(0); void refresh(); }}
-            className="bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light text-sm">
+          <Button variant="primary" onClick={() => { setPage(0); void refresh(); }}>
             Apply
-          </button>
-          <button onClick={() => {
+          </Button>
+          <Button onClick={() => {
             setFilterWorker(''); setFilterCause(''); setFilterFromDate(''); setFilterToDate('');
             setPage(0); setTimeout(() => void refresh(), 0);
-          }}
-            className="px-4 py-2 border border-border hover:bg-bg-deep text-sm">
+          }}>
             Reset
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -138,20 +135,18 @@ export function BreakageReviewTab() {
         </div>
         {totalPages > 1 && (
           <div className="flex items-center gap-2 text-text-tertiary">
-            <button disabled={page === 0}
-              onClick={() => { setPage(p => Math.max(0, p - 1)); setTimeout(() => void refresh(), 0); }}
-              className="px-3 py-1 border border-border disabled:opacity-30">prev</button>
+            <Button size="sm" disabled={page === 0}
+              onClick={() => { setPage(p => Math.max(0, p - 1)); setTimeout(() => void refresh(), 0); }}>prev</Button>
             <span>{page + 1} / {totalPages}</span>
-            <button disabled={page + 1 >= totalPages}
-              onClick={() => { setPage(p => p + 1); setTimeout(() => void refresh(), 0); }}
-              className="px-3 py-1 border border-border disabled:opacity-30">next</button>
+            <Button size="sm" disabled={page + 1 >= totalPages}
+              onClick={() => { setPage(p => p + 1); setTimeout(() => void refresh(), 0); }}>next</Button>
           </div>
         )}
       </div>
 
       {error && <FeedbackBanner>{error}</FeedbackBanner>}
 
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 @4xl:grid-cols-3 gap-3">
         {loading && <div className="col-span-full text-center text-text-tertiary py-6">Loading…</div>}
         {!loading && rows.length === 0 && (
           <div className="col-span-full text-center text-text-tertiary py-6">No breakage events match.</div>

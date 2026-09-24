@@ -789,7 +789,8 @@ fails any text/background pairing under WCAG AA (4.5:1). Keep every F-key and
 each screen's primary action where it is: the redesign must not retrain staff.
 
 Build screens from the shared components in `src/renderer/components/ui/`
-(Button, Dialog, Sheet, Badge, Card, Table, Field, NativeSelect, Segmented).
+(Button, Dialog, Sheet, Badge, Card, Table, Field, Input, NativeSelect,
+Segmented, NavTab). Raw `<button>`s are only for clickable rows and tiles.
 The Dialog keeps the till's keyboard rules — topmost-only Escape and F-keys,
 a busy lock, focus return — and `tests/ui-components.test.tsx` holds it to
 them. A dialog opened on top of another must render inside the other's

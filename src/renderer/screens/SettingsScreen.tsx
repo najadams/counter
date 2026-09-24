@@ -18,6 +18,8 @@ import { DataTransferTab } from './settings/DataTransferTab';
 import { SyncTab } from './settings/SyncTab';
 import { PhoneAccessTab } from './settings/PhoneAccessTab';
 import { RunbookPrintScreen } from './RunbookPrintScreen';
+import { Button } from '../components/ui/button';
+import { NavTab } from '../components/ui/nav-tab';
 
 type Tab = 'workers' | 'products' | 'tiers' | 'suppliers' | 'supplier-pay' | 'audit' | 'breakage' | 'reprints' | 'exceptions' | 'reorder' | 'appearance' | 'backups' | 'transfer' | 'sync' | 'phone';
 
@@ -48,7 +50,7 @@ export default function SettingsScreen({ onExit }: { onExit: () => void }) {
        *  forced the tab row to overflow into a hidden zone where the "Done"
        *  button vanished off the right edge. Use full width with sensible
        *  padding that scales to the viewport. */}
-      <main className="flex-1 w-full mx-auto px-4 sm:px-6 lg:px-10 py-6 flex flex-col gap-5">
+      <main className="@container flex-1 w-full mx-auto px-4 sm:px-6 lg:px-10 py-6 flex flex-col gap-5">
         {/* Header row: tabs and action buttons share one wrap-aware flex
          *  container. On narrow widths the tabs wrap to a second line and
          *  the action buttons slide below them automatically. */}
@@ -71,13 +73,12 @@ export default function SettingsScreen({ onExit }: { onExit: () => void }) {
             <TabBtn active={tab === 'phone'} onClick={() => setTab('phone')}>Phone access</TabBtn>
           </div>
           <div className="flex gap-3 shrink-0">
-            <button onClick={() => setShowRunbook(true)}
-              className="px-4 py-2 border border-border hover:bg-bg-elevated text-sm whitespace-nowrap">
+            <Button className="whitespace-nowrap" onClick={() => setShowRunbook(true)}>
               Print worker handbook
-            </button>
-            <button onClick={onExit} className="px-4 py-2 border border-border hover:bg-bg-elevated text-sm whitespace-nowrap">
+            </Button>
+            <Button className="whitespace-nowrap" onClick={onExit}>
               Done <span className="kbd">F9</span>
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -107,14 +108,5 @@ export default function SettingsScreen({ onExit }: { onExit: () => void }) {
 }
 
 function TabBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      onClick={onClick}
-      className={[
-        'px-3 lg:px-4 py-3 text-xs lg:text-sm uppercase tracking-wider border-b-2 whitespace-nowrap',
-        active ? 'border-accent text-accent' : 'border-transparent text-text-secondary hover:text-text-primary',
-      ].join(' ')}>
-      {children}
-    </button>
-  );
+  return <NavTab active={active} onClick={onClick} className="min-h-12">{children}</NavTab>;
 }

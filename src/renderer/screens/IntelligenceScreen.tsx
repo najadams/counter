@@ -11,6 +11,7 @@ import type {
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { severityTone } from '../lib/tones';
+import { NativeSelect } from '../components/ui/native-select';
 
 type View = NonNullable<IntelligenceListRequest['view']>;
 type Destination = 'variance' | 'voidApprovals' | 'stockApprovals' | 'stocktake' | 'customers' | 'settings' | 'reports';
@@ -111,41 +112,37 @@ export default function IntelligenceScreen({ onExit, onNavigate }: {
             <Tab active={view === 'HISTORY'} onClick={() => setView('HISTORY')}>History</Tab>
           </div>
           <label className="text-xs text-text-secondary">Category
-            <select value={category} onChange={(event) => setCategory(event.target.value as IntelligenceCategory | '')}
-              className="block input py-2 mt-1">
+            <NativeSelect className="mt-1" value={category} onChange={(event) => setCategory(event.target.value as IntelligenceCategory | '')}>
               <option value="">All categories</option>
               {['CONTROL','INVENTORY','CREDIT','PRICING','CASH','CUSTOMER','CONCENTRATION'].map((value) => <option key={value}>{value}</option>)}
-            </select>
+            </NativeSelect>
           </label>
           <label className="text-xs text-text-secondary">Severity
-            <select value={severity} onChange={(event) => setSeverity(event.target.value as IntelligenceSeverity | '')}
-              className="block input py-2 mt-1">
+            <NativeSelect className="mt-1" value={severity} onChange={(event) => setSeverity(event.target.value as IntelligenceSeverity | '')}>
               <option value="">All severities</option>
               {['CRITICAL','HIGH','MEDIUM','LOW'].map((value) => <option key={value}>{value}</option>)}
-            </select>
+            </NativeSelect>
           </label>
           <label className="text-xs text-text-secondary">Status
-            <select value={status} onChange={(event) => setStatus(event.target.value as IntelligenceStatus | '')}
-              className="block input py-2 mt-1">
+            <NativeSelect className="mt-1" value={status} onChange={(event) => setStatus(event.target.value as IntelligenceStatus | '')}>
               <option value="">All statuses</option>
               {['OPEN','ACKNOWLEDGED','ASSIGNED','SNOOZED','RESOLVED','DISMISSED','EXPIRED'].map((value) => <option key={value}>{value}</option>)}
-            </select>
+            </NativeSelect>
           </label>
           <label className="text-xs text-text-secondary">Assignee
-            <select value={assignee} onChange={(event) => setAssignee(event.target.value)}
-              className="block input py-2 mt-1">
+            <NativeSelect className="mt-1" value={assignee} onChange={(event) => setAssignee(event.target.value)}>
               <option value="">Anyone</option>
               <option value="ME">Assigned to me</option>
               <option value="UNASSIGNED">Unassigned</option>
               {Object.entries(knownAssignees).filter(([id]) => id !== workerId)
                 .map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-            </select>
+            </NativeSelect>
           </label>
           {Object.keys(knownShops).length > 0 && <label className="text-xs text-text-secondary">Shop
-            <select value={shopId} onChange={(event) => setShopId(event.target.value)} className="block input py-2 mt-1">
+            <NativeSelect className="mt-1" value={shopId} onChange={(event) => setShopId(event.target.value)}>
               <option value="">All shops</option>
               {Object.entries(knownShops).map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-            </select>
+            </NativeSelect>
           </label>}
           <Button variant="secondary" className="ml-auto" onClick={() => void refreshModels()} disabled={loading}>
             {loading ? 'Refreshing…' : 'Refresh intelligence'}

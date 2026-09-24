@@ -199,7 +199,7 @@ export function GraphsTab({ reportAccessToken }: { reportAccessToken: string }) 
 
       {data && (
         <>
-          <section className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+          <section className="grid grid-cols-2 @4xl:grid-cols-6 gap-3">
             <Stat label="Revenue" value={formatMoneyWithCurrency(data.totals.revenuePesewas)} />
             <Stat label="Gross profit" value={formatMoneyWithCurrency(data.totals.netProfitPesewas)}
               tone={data.totals.netProfitPesewas < 0 ? 'danger' : 'success'} />
@@ -213,14 +213,14 @@ export function GraphsTab({ reportAccessToken }: { reportAccessToken: string }) 
             <Stat label="Supplier paid" value={formatMoneyWithCurrency(data.totals.supplierPaymentsPesewas)} />
           </section>
 
-          <section className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <section className="grid grid-cols-2 @4xl:grid-cols-4 gap-3">
             <Stat label="Expenses" value={formatMoneyWithCurrency(data.totals.expensesPesewas)} />
             <Stat label="Drawings" value={formatMoneyWithCurrency(data.totals.drawingsPesewas)} />
             <Stat label="Tax paid" value={formatMoneyWithCurrency(data.totals.taxPaidPesewas)} />
             <Stat label="Sales" value={String(data.totals.numSales)} />
           </section>
 
-          <section className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+          <section className="grid grid-cols-1 @6xl:grid-cols-2 gap-5">
             <ChartCard title="Revenue vs gross profit">
               <ResponsiveContainer width="100%" height={320}>
                 <AreaChart data={rows} margin={{ top: 16, right: 20, bottom: 8, left: 8 }}>
@@ -263,7 +263,7 @@ export function GraphsTab({ reportAccessToken }: { reportAccessToken: string }) 
             </ChartCard>
           </section>
 
-          <section className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+          <section className="grid grid-cols-1 @6xl:grid-cols-2 gap-5">
             <ChartCard title="Stockout forecast">
               {stockoutForecast.length > 0 ? (
                 <ResponsiveContainer width="100%" height={360}>
@@ -298,7 +298,7 @@ export function GraphsTab({ reportAccessToken }: { reportAccessToken: string }) 
             </ChartCard>
           </section>
 
-          <section className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+          <section className="grid grid-cols-1 @6xl:grid-cols-2 gap-5">
             <ChartCard title="Delivery profit by day">
               {deliveryByDay.length > 0 ? (
                 <ResponsiveContainer width="100%" height={320}>
@@ -333,7 +333,7 @@ export function GraphsTab({ reportAccessToken }: { reportAccessToken: string }) 
             </ChartCard>
           </section>
 
-          <section className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+          <section className="grid grid-cols-1 @6xl:grid-cols-2 gap-5">
             <ChartCard title="Top products by profit">
               {topProducts.length > 0 ? (
                 <ResponsiveContainer width="100%" height={360}>
@@ -367,7 +367,7 @@ export function GraphsTab({ reportAccessToken }: { reportAccessToken: string }) 
             </ChartCard>
           </section>
 
-          <section className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+          <section className="grid grid-cols-1 @6xl:grid-cols-2 gap-5">
             <ChartCard title="Slow stock value">
               {slowStock.length > 0 ? (
                 <ResponsiveContainer width="100%" height={360}>
@@ -397,7 +397,7 @@ export function GraphsTab({ reportAccessToken }: { reportAccessToken: string }) 
             </ChartCard>
           </section>
 
-          <section className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+          <section className="grid grid-cols-1 @6xl:grid-cols-2 gap-5">
             <ChartCard title="Credit aging">
               {creditAging.length > 0 ? (
                 <ResponsiveContainer width="100%" height={320}>
@@ -429,7 +429,7 @@ export function GraphsTab({ reportAccessToken }: { reportAccessToken: string }) 
             </ChartCard>
           </section>
 
-          <section className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+          <section className="grid grid-cols-1 @6xl:grid-cols-2 gap-5">
             <ChartCard title="Daily net tax">
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={rows} margin={{ top: 16, right: 20, bottom: 8, left: 8 }}>
@@ -459,7 +459,7 @@ export function GraphsTab({ reportAccessToken }: { reportAccessToken: string }) 
             </ChartCard>
           </section>
 
-          <section className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+          <section className="grid grid-cols-1 @6xl:grid-cols-2 gap-5">
             <BreakdownTable
               title="Expenses by category"
               rows={expensesByCategory.map((row) => ({
@@ -476,7 +476,7 @@ export function GraphsTab({ reportAccessToken }: { reportAccessToken: string }) 
             />
           </section>
 
-          <section className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+          <section className="grid grid-cols-1 @6xl:grid-cols-2 gap-5">
             <BreakdownTable
               title="Stockout watchlist"
               rows={stockoutForecast.map((row) => ({

@@ -12,6 +12,12 @@ import { formatMoney, formatMoneyWithCurrency, parseCedisToPesewas } from '../..
 import { FeedbackBanner } from '../components/FeedbackBanner';
 import { CustomerEditModal } from '../components/CustomerEditModal';
 import { useSession } from '../store/session';
+import { Button } from '../components/ui/button';
+import { NavTab } from '../components/ui/nav-tab';
+import { Textarea } from '../components/ui/textarea';
+import { NativeSelect } from '../components/ui/native-select';
+import { Input } from '../components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 
 interface Overview {
   id: string; displayName: string; phone: string; customerType: string;
@@ -141,28 +147,24 @@ export default function CustomerDetailScreen({
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-3">
-            <button onClick={() => setShowEdit(true)} className="px-4 py-2 border border-border hover:bg-bg-elevated text-sm">
+            <Button onClick={() => setShowEdit(true)}>
               Edit customer
-            </button>
-            <button onClick={() => onRecordPayment({ customerId: overview.id, displayName: overview.displayName })}
-              className="bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light">
+            </Button>
+            <Button variant="primary" onClick={() => onRecordPayment({ customerId: overview.id, displayName: overview.displayName })}>
               Record payment
-            </button>
-            <button onClick={() => setShowStatement(true)}
-              className="px-4 py-2 border border-border hover:bg-bg-elevated text-sm">
+            </Button>
+            <Button onClick={() => setShowStatement(true)}>
               Print statement
-            </button>
-            <button onClick={() => setShowOverrides(true)}
-              className="px-4 py-2 border border-border hover:bg-bg-elevated text-sm">
+            </Button>
+            <Button onClick={() => setShowOverrides(true)}>
               Price overrides
-            </button>
-            <button onClick={() => setShowReturn(true)}
-              className="px-4 py-2 border border-border hover:bg-bg-elevated text-sm">
+            </Button>
+            <Button onClick={() => setShowReturn(true)}>
               Record return
-            </button>
-            <button onClick={onExit} className="px-4 py-2 border border-border hover:bg-bg-elevated text-sm">
+            </Button>
+            <Button onClick={onExit}>
               Back <span className="kbd">F9</span>
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -171,9 +173,9 @@ export default function CustomerDetailScreen({
         {overview.driftPesewas !== 0 && (
           <FeedbackBanner tone="warning" className="flex items-center justify-between gap-3">
             <span>Cached balance ({formatMoney(overview.cachedBalancePesewas)}) differs from truth ({formatMoney(overview.trueBalancePesewas)}) by {formatMoney(overview.driftPesewas)} pesewas.</span>
-            <button onClick={() => void reconcile()} className="px-3 py-1 border border-warning hover:bg-warning hover:text-ink">
+            <Button variant="warning" size="sm" onClick={() => void reconcile()}>
               Reconcile
-            </button>
+            </Button>
           </FeedbackBanner>
         )}
         {overview.blocked && (
@@ -183,14 +185,14 @@ export default function CustomerDetailScreen({
         )}
 
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <div className="bg-bg-surface border border-border p-4">
+          <div className="panel p-4">
             <div className="text-text-secondary uppercase tracking-wider text-xs">Owed to us</div>
             <div className="font-mono tnum text-3xl text-accent mt-1">{formatMoneyWithCurrency(overview.trueBalancePesewas)}</div>
             <div className="text-text-tertiary text-xs mt-1">
               {overview.ageOfOldestUnpaidDays === null ? 'no open sales' : `oldest ${overview.ageOfOldestUnpaidDays} days old`}
             </div>
           </div>
-          <div className="bg-bg-surface border border-border p-4">
+          <div className="panel p-4">
             <div className="text-text-secondary uppercase tracking-wider text-xs">Credit limit</div>
             <div className="font-mono tnum text-3xl mt-1">
               {overview.creditLimitPesewas > 0 ? formatMoneyWithCurrency(overview.creditLimitPesewas) : '—'}
@@ -204,7 +206,7 @@ export default function CustomerDetailScreen({
               </div>
             )}
           </div>
-          <div className="bg-bg-surface border border-border p-4">
+          <div className="panel p-4">
             <div className="text-text-secondary uppercase tracking-wider text-xs">Aging</div>
             <ul className="text-sm font-mono tnum mt-1 space-y-1">
               <li className="flex justify-between"><span className="text-text-secondary">0–30</span><span>{formatMoney(overview.agingBuckets.bucket0_30)}</span></li>
@@ -215,70 +217,70 @@ export default function CustomerDetailScreen({
           </div>
         </div>
 
-        <div className="flex">
+        <div className="flex overflow-x-auto border-b border-border">
           <TabBtn active={tab === 'open'} onClick={() => setTab('open')}>Open sales ({openSales.length})</TabBtn>
           <TabBtn active={tab === 'history'} onClick={() => setTab('history')}>Recent activity</TabBtn>
           <TabBtn active={tab === 'collection'} onClick={() => setTab('collection')}>Collection</TabBtn>
         </div>
 
         {tab === 'open' && (
-          <div className="bg-bg-surface border border-border">
+          <div className="panel">
             <div className="px-4 py-2 text-text-tertiary text-xs border-b border-border">
               Click a row to see the items on that sale.
             </div>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-text-secondary text-xs uppercase tracking-wider">
-                  <th className="px-4 py-3 text-left">When</th>
-                  <th className="px-4 py-3 text-right">Total</th>
-                  <th className="px-4 py-3 text-right">Paid</th>
-                  <th className="px-4 py-3 text-right">Outstanding</th>
-                  <th className="px-4 py-3 text-left">Due</th>
-                  <th className="px-4 py-3 text-left">Status</th>
-                  <th className="px-4 py-3 text-right">Age</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>When</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                  <TableHead className="text-right">Paid</TableHead>
+                  <TableHead className="text-right">Outstanding</TableHead>
+                  <TableHead>Due</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Age</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {openSales.map((s) => (
-                  <tr
+                  <TableRow
                     key={s.saleId}
                     onClick={() => void openReceipt(s.saleId)}
-                    className="border-t border-border cursor-pointer hover:bg-bg-elevated"
+                    className="cursor-pointer"
                     title="View receipt"
                   >
-                    <td className="px-4 py-2 font-mono tnum">
+                    <TableCell className="px-4 py-2 font-mono tnum">
                       {new Date(s.createdAt).toLocaleString()}
                       <span className="text-text-tertiary ml-2">#{s.saleId.slice(-6)}</span>
                       {loadingReceiptId === s.saleId && <span className="text-text-tertiary ml-2 text-xs">loading…</span>}
-                    </td>
-                    <td className="px-4 py-2 text-right font-mono tnum">{formatMoney(s.totalPesewas)}</td>
-                    <td className="px-4 py-2 text-right font-mono tnum text-text-tertiary">{formatMoney(s.paidPesewas)}</td>
-                    <td className="px-4 py-2 text-right font-mono tnum text-accent">{formatMoney(s.outstandingPesewas)}</td>
-                    <td className={`px-4 py-2 font-mono tnum ${s.daysOverdue != null ? 'text-warning' : 'text-text-tertiary'}`}>
+                    </TableCell>
+                    <TableCell className="px-4 py-2 text-right font-mono tnum">{formatMoney(s.totalPesewas)}</TableCell>
+                    <TableCell className="px-4 py-2 text-right font-mono tnum text-text-tertiary">{formatMoney(s.paidPesewas)}</TableCell>
+                    <TableCell className="px-4 py-2 text-right font-mono tnum text-accent">{formatMoney(s.outstandingPesewas)}</TableCell>
+                    <TableCell className={`px-4 py-2 font-mono tnum ${s.daysOverdue != null ? 'text-warning' : 'text-text-tertiary'}`}>
                       {s.dueDate ?? '—'}{s.daysOverdue != null ? ` · ${s.daysOverdue}d late` : ''}
-                    </td>
-                    <td className="px-4 py-2">{s.debtStatus}</td>
-                    <td className={`px-4 py-2 text-right font-mono tnum ${s.ageDays > 90 ? 'text-danger' : s.ageDays > 30 ? 'text-warning' : ''}`}>{s.ageDays}d</td>
-                  </tr>
+                    </TableCell>
+                    <TableCell className="px-4 py-2">{s.debtStatus}</TableCell>
+                    <TableCell className={`px-4 py-2 text-right font-mono tnum ${s.ageDays > 90 ? 'text-danger' : s.ageDays > 30 ? 'text-warning' : ''}`}>{s.ageDays}d</TableCell>
+                  </TableRow>
                 ))}
                 {openSales.length === 0 && (
-                  <tr><td colSpan={7} className="px-4 py-4 text-text-tertiary text-center">No outstanding balance.</td></tr>
+                  <TableRow><TableCell colSpan={7} className="px-4 py-4 text-text-tertiary text-center">No outstanding balance.</TableCell></TableRow>
                 )}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
         )}
 
         {tab === 'history' && (
           <div className="grid grid-cols-2 gap-4">
-            <div className="bg-bg-surface border border-border">
+            <div className="panel">
               <div className="px-4 py-3 text-text-secondary uppercase tracking-wider text-xs border-b border-border">Recent sales</div>
               <ul className="divide-y divide-border text-sm">
                 {overview.recentSales.map((s) => (
                   <li
                     key={s.id}
                     onClick={() => !s.voided && void openReceipt(s.id)}
-                    className={`px-4 py-2 flex justify-between ${s.voided ? 'line-through text-text-tertiary' : 'cursor-pointer hover:bg-bg-elevated'}`}
+                    className={`px-4 py-2 flex justify-between ${s.voided ? 'line-through text-text-tertiary' : 'cursor-pointer hover:bg-bg-surface'}`}
                     title={s.voided ? 'Voided sale' : 'View receipt'}
                   >
                     <span className="font-mono tnum text-xs text-text-tertiary">
@@ -292,7 +294,7 @@ export default function CustomerDetailScreen({
                 {overview.recentSales.length === 0 && <li className="px-4 py-2 text-text-tertiary">none</li>}
               </ul>
             </div>
-            <div className="bg-bg-surface border border-border">
+            <div className="panel">
               <div className="px-4 py-3 text-text-secondary uppercase tracking-wider text-xs border-b border-border">Recent payments</div>
               <ul className="divide-y divide-border text-sm">
                 {overview.recentPayments.map((p) => (
@@ -312,66 +314,64 @@ export default function CustomerDetailScreen({
 
         {tab === 'collection' && debt && (
           <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4">
-            <div className="bg-bg-surface border border-border">
+            <div className="panel">
               <div className="px-4 py-3 border-b border-border flex items-center justify-between">
                 <div className="text-text-secondary uppercase tracking-wider text-xs">Recovery ledger</div>
                 <div className="text-text-tertiary text-xs">
                   {debt.oldestOverdueDays == null ? 'nothing overdue' : `oldest overdue ${debt.oldestOverdueDays}d`}
                 </div>
               </div>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-text-secondary text-xs uppercase tracking-wider">
-                    <th className="px-4 py-3 text-left">Sale</th>
-                    <th className="px-4 py-3 text-right">Due</th>
-                    <th className="px-4 py-3 text-left">Recovery</th>
-                    <th className="px-4 py-3 text-left">Next</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Sale</TableHead>
+                    <TableHead className="text-right">Due</TableHead>
+                    <TableHead>Recovery</TableHead>
+                    <TableHead>Next</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {debt.openSales.map((s) => (
-                    <tr key={s.saleId} className="border-t border-border">
-                      <td className="px-4 py-3">
-                        <button onClick={() => void openReceipt(s.saleId)} className="font-mono tnum text-accent hover:text-accent-light">
+                    <TableRow key={s.saleId}>
+                      <TableCell className="px-4 py-3">
+                        <Button variant="link" className="font-mono tnum text-accent hover:text-accent-light no-underline hover:underline" onClick={() => void openReceipt(s.saleId)}>
                           #{s.saleId.slice(-6)}
-                        </button>
+                        </Button>
                         <div className="text-text-tertiary text-xs">
                           {new Date(s.createdAt).toLocaleDateString()} · credit {formatMoney(s.creditPesewas)} · open {formatMoney(s.outstandingPesewas)}
                         </div>
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono tnum">
+                      </TableCell>
+                      <TableCell className="px-4 py-3 text-right font-mono tnum">
                         {s.dueDate ?? '—'}
                         <div className={s.daysOverdue != null ? 'text-warning text-xs' : 'text-text-tertiary text-xs'}>
                           {s.daysOverdue != null ? `${s.daysOverdue}d late` : 'current'}
                         </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <select
+                      </TableCell>
+                      <TableCell className="px-4 py-3">
+                        <NativeSelect className="h-8 px-2"
                           value={s.debtStatus}
-                          onChange={(e) => void setDebtStatus(s.saleId, e.target.value as DebtStatus)}
-                          className="bg-bg-input border border-border-strong px-2 py-1 text-sm"
-                        >
+                          onChange={(e) => void setDebtStatus(s.saleId, e.target.value as DebtStatus)}>
                           {(['CURRENT', 'OVERDUE', 'PROMISED', 'RECOVERABLE', 'DOUBTFUL', 'DEAD'] as DebtStatus[]).map((st) => (
                             <option key={st} value={st}>{st}</option>
                           ))}
-                        </select>
+                        </NativeSelect>
                         {s.openPromise && (
                           <div className="text-text-tertiary text-xs mt-1">
                             promised {formatMoney(s.openPromise.promisedAmountPesewas)} by {s.openPromise.promiseDueDate}
                           </div>
                         )}
-                      </td>
-                      <td className="px-4 py-3 text-xs">
+                      </TableCell>
+                      <TableCell className="px-4 py-3 text-xs">
                         <div>{s.nextFollowUpAt ?? '—'}</div>
                         {s.lastFollowUpAt && <div className="text-text-tertiary">last {new Date(s.lastFollowUpAt).toLocaleDateString()}</div>}
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
                   {debt.openSales.length === 0 && (
-                    <tr><td colSpan={4} className="px-4 py-4 text-text-tertiary text-center">No debts to collect.</td></tr>
+                    <TableRow><TableCell colSpan={4} className="px-4 py-4 text-text-tertiary text-center">No debts to collect.</TableCell></TableRow>
                   )}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
 
             <div className="flex flex-col gap-4">
@@ -387,7 +387,7 @@ export default function CustomerDetailScreen({
                 }}
               />
 
-              <div className="bg-bg-surface border border-border">
+              <div className="panel">
                 <div className="px-4 py-3 text-text-secondary uppercase tracking-wider text-xs border-b border-border">Promises</div>
                 <ul className="divide-y divide-border text-sm">
                   {debt.promises.map((p) => (
@@ -397,13 +397,11 @@ export default function CustomerDetailScreen({
                           <div className="font-mono tnum">{formatMoney(p.promisedAmountPesewas)} by {p.promiseDueDate}</div>
                           <div className="text-text-tertiary text-xs">{p.status}{p.saleId ? ` · #${p.saleId.slice(-6)}` : ''}</div>
                         </div>
-                        <select
+                        <NativeSelect className="text-xs h-8 px-2"
                           value={p.status}
-                          onChange={(e) => void updatePromise(p.id, e.target.value as 'OPEN' | 'KEPT' | 'BROKEN' | 'CANCELLED')}
-                          className="bg-bg-input border border-border-strong px-2 py-1 text-xs"
-                        >
+                          onChange={(e) => void updatePromise(p.id, e.target.value as 'OPEN' | 'KEPT' | 'BROKEN' | 'CANCELLED')}>
                           {(['OPEN', 'KEPT', 'BROKEN', 'CANCELLED'] as const).map((st) => <option key={st} value={st}>{st}</option>)}
-                        </select>
+                        </NativeSelect>
                       </div>
                       {p.notes && <div className="text-text-tertiary text-xs mt-1">{p.notes}</div>}
                     </li>
@@ -412,7 +410,7 @@ export default function CustomerDetailScreen({
                 </ul>
               </div>
 
-              <div className="bg-bg-surface border border-border">
+              <div className="panel">
                 <div className="px-4 py-3 text-text-secondary uppercase tracking-wider text-xs border-b border-border">Recent follow-ups</div>
                 <ul className="divide-y divide-border text-sm">
                   {debt.recentFollowUps.map((f) => (
@@ -486,13 +484,7 @@ export default function CustomerDetailScreen({
 }
 
 function TabBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button onClick={onClick}
-      className={[
-        'px-5 py-2 text-sm uppercase tracking-wider border-b-2',
-        active ? 'border-accent text-accent' : 'border-transparent text-text-secondary hover:text-text-primary',
-      ].join(' ')}>{children}</button>
-  );
+  return <NavTab active={active} onClick={onClick}>{children}</NavTab>;
 }
 
 function FollowUpForm({
@@ -546,60 +538,49 @@ function FollowUpForm({
   }
 
   return (
-    <div className="bg-bg-surface border border-border p-4 flex flex-col gap-3">
+    <div className="panel p-4 flex flex-col gap-3">
       <div className="text-text-secondary uppercase tracking-wider text-xs">Record follow-up</div>
-      <select value={saleId} onChange={(e) => setSaleId(e.target.value)}
-        className="bg-bg-input border border-border-strong px-3 py-2 text-sm">
+      <NativeSelect value={saleId} onChange={(e) => setSaleId(e.target.value)}>
         <option value="">Customer-level note</option>
         {sales.map((s) => (
           <option key={s.saleId} value={s.saleId}>
             #{s.saleId.slice(-6)} · {formatMoney(s.outstandingPesewas)} open
           </option>
         ))}
-      </select>
+      </NativeSelect>
       <div className="grid grid-cols-2 gap-2">
-        <select value={contactMethod} onChange={(e) => setContactMethod(e.target.value as ContactMethod)}
-          className="bg-bg-input border border-border-strong px-3 py-2 text-sm">
+        <NativeSelect value={contactMethod} onChange={(e) => setContactMethod(e.target.value as ContactMethod)}>
           {(['CALL', 'WHATSAPP', 'VISIT', 'IN_PERSON', 'SMS', 'OTHER'] as ContactMethod[]).map((m) => (
             <option key={m} value={m}>{m}</option>
           ))}
-        </select>
-        <select value={outcome} onChange={(e) => setOutcome(e.target.value as FollowupOutcome)}
-          className="bg-bg-input border border-border-strong px-3 py-2 text-sm">
+        </NativeSelect>
+        <NativeSelect value={outcome} onChange={(e) => setOutcome(e.target.value as FollowupOutcome)}>
           {(['REMINDER_SENT', 'PROMISED_TO_PAY', 'PART_PAID', 'NO_ANSWER', 'DISPUTED', 'REFUSED', 'OTHER'] as FollowupOutcome[]).map((o) => (
             <option key={o} value={o}>{o}</option>
           ))}
-        </select>
+        </NativeSelect>
       </div>
-      <textarea
+      <Textarea className="min-h-20"
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
-        placeholder="Notes"
-        className="bg-bg-input border border-border-strong px-3 py-2 text-sm min-h-20"
-      />
+        placeholder="Notes" />
       <label className="text-text-secondary text-xs uppercase tracking-wider">Next follow-up</label>
-      <input type="date" value={nextFollowUpAt} onChange={(e) => setNextFollowUpAt(e.target.value)}
-        className="bg-bg-input border border-border-strong px-3 py-2 text-sm" />
+      <Input type="date" value={nextFollowUpAt} onChange={(e) => setNextFollowUpAt(e.target.value)} />
       {outcome === 'PROMISED_TO_PAY' && (
         <div className="grid grid-cols-2 gap-2">
-          <input
+          <Input className="font-mono tnum"
             value={promisedAmount}
             onChange={(e) => setPromisedAmount(e.target.value)}
-            placeholder="Promise amount"
-            className="bg-bg-input border border-border-strong px-3 py-2 font-mono tnum text-sm"
-          />
-          <input type="date" value={promiseDueDate} onChange={(e) => setPromiseDueDate(e.target.value)}
-            className="bg-bg-input border border-border-strong px-3 py-2 text-sm" />
+            placeholder="Promise amount" />
+          <Input type="date" value={promiseDueDate} onChange={(e) => setPromiseDueDate(e.target.value)} />
         </div>
       )}
       {localError && <div className="text-danger text-sm">{localError}</div>}
-      <button
+      <Button variant="primary"
         onClick={() => void submit()}
-        disabled={submitting}
-        className="bg-accent text-ink px-4 py-2 font-semibold hover:bg-accent-light disabled:opacity-40"
-      >
+        disabled={submitting}>
         {submitting ? 'Recording…' : 'Record follow-up'}
-      </button>
+      </Button>
     </div>
   );
 }

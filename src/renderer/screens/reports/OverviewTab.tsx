@@ -7,6 +7,8 @@ import { counter } from '../../lib/ipc';
 import { formatMoney, formatMoneyWithCurrency } from '../../../shared/lib/money';
 import type { ReportsOverviewResponse } from '../../../shared/types/ipc';
 import { FeedbackBanner } from '../../components/FeedbackBanner';
+import { Button } from '../../components/ui/button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 
 interface Props {
   reportAccessToken: string;
@@ -49,7 +51,7 @@ export function OverviewTab({
       </div>
 
       {/* --- KPI cards (3×2) --- */}
-      <section className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+      <section className="grid grid-cols-2 @xl:grid-cols-3 gap-4">
         <KpiCard
           label="Revenue · today"
           value={formatMoneyWithCurrency(data.revenue.todayPesewas)}
@@ -101,10 +103,9 @@ export function OverviewTab({
           footer={
             <div className="flex gap-3 text-xs">
               {data.inventory.belowReorderCount > 0 && (
-                <button onClick={onOpenReorder}
-                  className="inline-flex items-center gap-1 text-warning hover:underline">
+                <Button variant="link" className="text-warning no-underline hover:underline" onClick={onOpenReorder}>
                   {data.inventory.belowReorderCount} below reorder <ArrowRightIcon aria-hidden="true" className="size-3.5" />
-                </button>
+                </Button>
               )}
               {data.inventory.stockoutCount > 0 && (
                 <span className="text-danger">
@@ -122,7 +123,7 @@ export function OverviewTab({
         <PayablesCard data={data} onClick={onOpenSupplierPayments} />
       </section>
 
-      <section className="bg-bg-surface border border-border p-5 flex flex-col gap-3">
+      <section className="panel p-5 flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <h3 className="text-text-secondary uppercase tracking-wider text-xs">Revenue · last 30 days</h3>
           <div className="text-text-tertiary text-xs">
@@ -133,38 +134,38 @@ export function OverviewTab({
       </section>
 
       <section className="grid grid-cols-2 gap-4">
-        <div className="bg-bg-surface border border-border p-5 flex flex-col gap-3">
+        <div className="panel p-5 flex flex-col gap-3">
           <h3 className="text-text-secondary uppercase tracking-wider text-xs">Top sellers · this week</h3>
           {data.topSellersThisWeek.length === 0 ? (
             <div className="text-text-tertiary text-sm py-4">No sales recorded this week.</div>
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-text-tertiary text-xs uppercase tracking-wider">
-                  <th className="text-left pb-2">Product</th>
-                  <th className="text-right pb-2">Units</th>
-                  <th className="text-right pb-2">Revenue</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="pb-2">Product</TableHead>
+                  <TableHead className="text-right pb-2">Units</TableHead>
+                  <TableHead className="text-right pb-2">Revenue</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {data.topSellersThisWeek.map((p) => (
-                  <tr key={p.productId} className="border-t border-border-subtle">
-                    <td className="py-2">
+                  <TableRow key={p.productId}>
+                    <TableCell className="py-2">
                       <div className="font-medium">{p.name}</div>
                       <div className="text-text-tertiary text-xs font-mono">{p.sku}</div>
-                    </td>
-                    <td className="py-2 text-right font-mono tabular-nums">{p.unitsSold}</td>
-                    <td className="py-2 text-right font-mono tabular-nums">
+                    </TableCell>
+                    <TableCell className="py-2 text-right font-mono tabular-nums">{p.unitsSold}</TableCell>
+                    <TableCell className="py-2 text-right font-mono tabular-nums">
                       {formatMoneyWithCurrency(p.revenuePesewas)}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           )}
         </div>
 
-        <div className="bg-bg-surface border border-border p-5 flex flex-col gap-3">
+        <div className="panel p-5 flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <h3 className="text-text-secondary uppercase tracking-wider text-xs">Slow movers · capital tied up</h3>
             <span className="text-text-tertiary text-xs">no sale in 14 days</span>
@@ -174,84 +175,84 @@ export function OverviewTab({
               Nothing sitting idle — every active SKU sold in the last 14 days.
             </div>
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-text-tertiary text-xs uppercase tracking-wider">
-                  <th className="text-left pb-2">Product</th>
-                  <th className="text-right pb-2">On hand</th>
-                  <th className="text-right pb-2">Tied-up ₵</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="pb-2">Product</TableHead>
+                  <TableHead className="text-right pb-2">On hand</TableHead>
+                  <TableHead className="text-right pb-2">Tied-up ₵</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {data.slowMovers.map((p) => (
-                  <tr key={p.productId} className="border-t border-border-subtle">
-                    <td className="py-2">
+                  <TableRow key={p.productId}>
+                    <TableCell className="py-2">
                       <div className="font-medium">{p.name}</div>
                       <div className="text-text-tertiary text-xs">
                         {p.daysSinceLastSale == null
                           ? 'never sold'
                           : `last sold ${p.daysSinceLastSale} day${p.daysSinceLastSale === 1 ? '' : 's'} ago`}
                       </div>
-                    </td>
-                    <td className="py-2 text-right font-mono tabular-nums">{p.unitsOnHand}</td>
-                    <td className="py-2 text-right font-mono tabular-nums text-warning">
+                    </TableCell>
+                    <TableCell className="py-2 text-right font-mono tabular-nums">{p.unitsOnHand}</TableCell>
+                    <TableCell className="py-2 text-right font-mono tabular-nums text-warning">
                       {formatMoneyWithCurrency(p.stockValueAtCostPesewas)}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           )}
         </div>
       </section>
 
-      <section className="bg-bg-surface border border-border p-5 flex flex-col gap-3">
+      <section className="panel p-5 flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <h3 className="text-text-secondary uppercase tracking-wider text-xs">Recent stocktake variance</h3>
           {onOpenStocktake && (
-            <button onClick={onOpenStocktake} className="inline-flex items-center gap-1 text-accent text-xs hover:underline">
+            <Button variant="link" className="text-accent no-underline hover:underline text-xs" onClick={onOpenStocktake}>
               Open stocktake <ArrowRightIcon aria-hidden="true" className="size-3.5" />
-            </button>
+            </Button>
           )}
         </div>
         {data.recentVarianceEvents.length === 0 ? (
           <div className="text-text-tertiary text-sm py-4">No completed stocktake with variance yet.</div>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-text-tertiary text-xs uppercase tracking-wider">
-                <th className="text-left pb-2">When</th>
-                <th className="text-right pb-2">Loss</th>
-                <th className="text-right pb-2">Found</th>
-                <th className="text-right pb-2">Net</th>
-                <th className="text-right pb-2">SKUs off</th>
-                <th className="text-right pb-2">Shrinkage</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="pb-2">When</TableHead>
+                <TableHead className="text-right pb-2">Loss</TableHead>
+                <TableHead className="text-right pb-2">Found</TableHead>
+                <TableHead className="text-right pb-2">Net</TableHead>
+                <TableHead className="text-right pb-2">SKUs off</TableHead>
+                <TableHead className="text-right pb-2">Shrinkage</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {data.recentVarianceEvents.map((e) => {
                 const net = e.lossValuePesewas - e.foundValuePesewas;
                 return (
-                  <tr key={e.stocktakeId} className="border-t border-border-subtle">
-                    <td className="py-2">{new Date(e.completedAt).toLocaleDateString()}</td>
-                    <td className="py-2 text-right font-mono tabular-nums text-danger">
+                  <TableRow key={e.stocktakeId}>
+                    <TableCell className="py-2">{new Date(e.completedAt).toLocaleDateString()}</TableCell>
+                    <TableCell className="py-2 text-right font-mono tabular-nums text-danger">
                       {formatMoneyWithCurrency(e.lossValuePesewas)}
-                    </td>
-                    <td className="py-2 text-right font-mono tabular-nums text-success">
+                    </TableCell>
+                    <TableCell className="py-2 text-right font-mono tabular-nums text-success">
                       {formatMoneyWithCurrency(e.foundValuePesewas)}
-                    </td>
-                    <td className={`py-2 text-right font-mono tabular-nums ${net > 0 ? 'text-danger' : net < 0 ? 'text-success' : ''}`}>
+                    </TableCell>
+                    <TableCell className={`py-2 text-right font-mono tabular-nums ${net > 0 ? 'text-danger' : net < 0 ? 'text-success' : ''}`}>
                       {net === 0 ? '0.00' : signedMoney(net)}
-                    </td>
-                    <td className="py-2 text-right font-mono tabular-nums">{e.productsWithVariance}</td>
-                    <td className="py-2 text-right font-mono tabular-nums">
+                    </TableCell>
+                    <TableCell className="py-2 text-right font-mono tabular-nums">{e.productsWithVariance}</TableCell>
+                    <TableCell className="py-2 text-right font-mono tabular-nums">
                       {e.shrinkageRate == null ? '—' : `${(e.shrinkageRate * 100).toFixed(2)}%`}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 );
               })}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         )}
       </section>
     </div>
@@ -275,8 +276,8 @@ function KpiCard({
     <Tag
       onClick={onClick}
       className={[
-        'bg-bg-surface border border-border p-5 flex flex-col gap-1 text-left',
-        clickable ? 'hover:bg-bg-elevated cursor-pointer transition-colors' : '',
+        'panel p-5 flex flex-col gap-1 text-left',
+        clickable ? 'hover:border-accent hover:bg-accent/5 cursor-pointer transition-colors' : '',
       ].join(' ')}
     >
       <div className="text-text-tertiary uppercase tracking-wider text-xs">{label}</div>
@@ -301,7 +302,7 @@ function ReceivablesCard({ data, onClick }: { data: ReportsOverviewResponse; onC
   return (
     <button
       onClick={onClick}
-      className="bg-bg-surface border border-border p-5 flex flex-col gap-3 text-left hover:bg-bg-elevated cursor-pointer transition-colors"
+      className="panel p-5 flex flex-col gap-3 text-left hover:border-accent hover:bg-accent/5 cursor-pointer transition-colors"
     >
       <div className="flex items-baseline justify-between">
         <div>
@@ -317,7 +318,7 @@ function ReceivablesCard({ data, onClick }: { data: ReportsOverviewResponse; onC
           )}
         </div>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+      <div className="grid grid-cols-2 @xl:grid-cols-4 gap-2 text-xs">
         <AgingPill label="0–30" amount={r.bucket0_30Pesewas} tone="" />
         <AgingPill label="31–60" amount={r.bucket31_60Pesewas} tone="text-text-secondary" />
         <AgingPill label="61–90" amount={r.bucket61_90Pesewas} tone="text-warning" />
@@ -338,7 +339,7 @@ function PayablesCard({ data, onClick }: { data: ReportsOverviewResponse; onClic
   return (
     <button
       onClick={onClick}
-      className="bg-bg-surface border border-border p-5 flex flex-col gap-2 text-left hover:bg-bg-elevated cursor-pointer transition-colors"
+      className="panel p-5 flex flex-col gap-2 text-left hover:border-accent hover:bg-accent/5 cursor-pointer transition-colors"
     >
       <div className="flex items-baseline justify-between">
         <div>

@@ -13,6 +13,10 @@ import { useSession } from '../../store/session';
 import { formatMoney, parseCedisToPesewas } from '../../../shared/lib/money';
 import type { PricingTierRow, PricingChannel } from '../../../shared/types/ipc';
 import { FeedbackBanner } from '../../components/FeedbackBanner';
+import { Button } from '../../components/ui/button';
+import { NativeSelect } from '../../components/ui/native-select';
+import { Input } from '../../components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 
 interface AdminProduct {
   id: string; sku: string; name: string;
@@ -135,24 +139,22 @@ export function PricingTiersTab() {
   }
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6">
+    <div className="flex flex-col @4xl:flex-row gap-6">
       {/* Left: product picker. Full-width on small windows so the picker
        *  stays usable; collapses to a 18rem sidebar at lg+ widths. */}
       <div className="w-full lg:w-72 xl:w-80 lg:shrink-0 flex flex-col gap-2">
-        <input
+        <Input
           autoFocus
           placeholder="Filter SKU or name…"
           value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          className="bg-bg-deep border border-border-subtle px-3 py-2 text-sm rounded"
-        />
+          onChange={(e) => setFilter(e.target.value)} />
         <div className="border border-border-subtle rounded max-h-[40vh] lg:max-h-[70vh] overflow-auto">
           {filteredProducts.map((p) => (
             <button
               key={p.id}
               onClick={() => setSelectedId(p.id)}
               className={`w-full text-left px-3 py-2 text-sm border-b border-border-subtle last:border-b-0 ${
-                selectedId === p.id ? 'bg-bg-elevated' : 'hover:bg-bg-elevated'
+                selectedId === p.id ? 'bg-accent/10' : 'hover:bg-bg-surface'
               }`}
             >
               <div className="font-mono tnum text-xs text-text-secondary">{p.sku}</div>
@@ -195,100 +197,88 @@ export function PricingTiersTab() {
 
             {/* Tier table */}
             <div className="overflow-x-auto border border-border-subtle rounded">
-            <table className="w-full min-w-[640px] text-sm">
-              <thead className="bg-bg-elevated text-text-secondary text-xs uppercase tracking-wider">
-                <tr>
-                  <th className="px-3 py-2 text-left">Channel</th>
-                  <th className="px-3 py-2 text-right">Min qty</th>
-                  <th className="px-3 py-2 text-right">Unit price</th>
-                  <th className="px-3 py-2 text-left">Unit scope</th>
-                  <th className="px-3 py-2 text-right">Priority</th>
-                  <th className="px-3 py-2 text-left">Notes</th>
-                  <th className="px-3 py-2 text-right">Status</th>
-                  <th className="px-3 py-2"></th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table className="min-w-[640px]">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="px-3">Channel</TableHead>
+                  <TableHead className="px-3 text-right">Min qty</TableHead>
+                  <TableHead className="px-3 text-right">Unit price</TableHead>
+                  <TableHead className="px-3">Unit scope</TableHead>
+                  <TableHead className="px-3 text-right">Priority</TableHead>
+                  <TableHead className="px-3">Notes</TableHead>
+                  <TableHead className="px-3 text-right">Status</TableHead>
+                  <TableHead className="px-3"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {visibleTiers.map((t) => {
                   const unitName = t.appliesToUnitId
                     ? selected.units.find((u) => u.id === t.appliesToUnitId)?.unitName ?? '?'
                     : 'Any';
                   const isEditing = editingId === t.id;
                   return (
-                    <tr key={t.id} className={`border-t border-border-subtle ${t.active ? '' : 'opacity-50'}`}>
-                      <td className="px-3 py-2">{t.channel}</td>
-                      <td className="px-3 py-2 text-right font-mono tnum">{t.minQuantity}</td>
-                      <td className="px-3 py-2 text-right font-mono tnum">
+                    <TableRow key={t.id} className={`border-t border-border-subtle ${t.active ? '' : 'opacity-50'}`}>
+                      <TableCell className="px-3 py-2">{t.channel}</TableCell>
+                      <TableCell className="px-3 py-2 text-right font-mono tnum">{t.minQuantity}</TableCell>
+                      <TableCell className="px-3 py-2 text-right font-mono tnum">
                         {isEditing ? (
-                          <input
+                          <Input className="text-right w-20 h-8 px-2"
                             value={editPriceRaw}
-                            onChange={(e) => setEditPriceRaw(e.target.value)}
-                            className="bg-bg-deep border border-border-subtle px-2 py-1 text-right w-20 rounded"
-                          />
+                            onChange={(e) => setEditPriceRaw(e.target.value)} />
                         ) : (
                           formatMoney(t.unitPricePesewas)
                         )}
-                      </td>
-                      <td className="px-3 py-2">{unitName}</td>
-                      <td className="px-3 py-2 text-right font-mono tnum">
+                      </TableCell>
+                      <TableCell className="px-3 py-2">{unitName}</TableCell>
+                      <TableCell className="px-3 py-2 text-right font-mono tnum">
                         {isEditing ? (
-                          <input
+                          <Input className="text-right w-12 h-8 px-2"
                             value={editPriority}
-                            onChange={(e) => setEditPriority(e.target.value)}
-                            className="bg-bg-deep border border-border-subtle px-2 py-1 text-right w-12 rounded"
-                          />
+                            onChange={(e) => setEditPriority(e.target.value)} />
                         ) : (
                           t.priority
                         )}
-                      </td>
-                      <td className="px-3 py-2 text-text-tertiary text-xs">{t.notes ?? ''}</td>
-                      <td className="px-3 py-2 text-right">{t.active ? 'Active' : 'Inactive'}</td>
-                      <td className="px-3 py-2 text-right">
+                      </TableCell>
+                      <TableCell className="px-3 py-2 text-text-tertiary text-xs">{t.notes ?? ''}</TableCell>
+                      <TableCell className="px-3 py-2 text-right">{t.active ? 'Active' : 'Inactive'}</TableCell>
+                      <TableCell className="px-3 py-2 text-right">
                         {isAdmin && isEditing && (
                           <div className="flex gap-1 justify-end">
-                            <button
-                              onClick={() => saveEdit(t)}
-                              className="bg-accent text-ink px-2 py-1 text-xs rounded hover:bg-accent-light"
-                            >
+                            <Button variant="primary" size="sm"
+                              onClick={() => saveEdit(t)}>
                               Save
-                            </button>
-                            <button
-                              onClick={() => setEditingId(null)}
-                              className="border border-border px-2 py-1 text-xs rounded hover:bg-bg-elevated"
-                            >
+                            </Button>
+                            <Button size="sm"
+                              onClick={() => setEditingId(null)}>
                               Cancel
-                            </button>
+                            </Button>
                           </div>
                         )}
                         {isAdmin && !isEditing && (
                           <div className="flex gap-1 justify-end">
-                            <button
-                              onClick={() => startEdit(t)}
-                              className="border border-border px-2 py-1 text-xs rounded hover:bg-bg-elevated"
-                            >
+                            <Button size="sm"
+                              onClick={() => startEdit(t)}>
                               Edit
-                            </button>
-                            <button
-                              onClick={() => toggle(t)}
-                              className="border border-border px-2 py-1 text-xs rounded hover:bg-bg-elevated"
-                            >
+                            </Button>
+                            <Button size="sm"
+                              onClick={() => toggle(t)}>
                               {t.active ? 'Deactivate' : 'Reactivate'}
-                            </button>
+                            </Button>
                           </div>
                         )}
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   );
                 })}
                 {visibleTiers.length === 0 && (
-                  <tr>
-                    <td colSpan={8} className="px-3 py-6 text-center text-text-tertiary text-sm">
+                  <TableRow>
+                    <TableCell colSpan={8} className="px-3 py-6 text-center text-text-tertiary text-sm">
                       No tiers yet for this product.
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 )}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
             </div>
 
             {/* Add-tier form. Each field is wrapped with a label so the form
@@ -300,69 +290,55 @@ export function PricingTiersTab() {
                 <div className="text-text-secondary uppercase tracking-wider text-xs">Add tier</div>
                 <div className="flex flex-wrap gap-3 items-end">
                   <Field label="Channel" className="w-32">
-                    <select
+                    <NativeSelect className="px-2"
                       value={addChannel}
-                      onChange={(e) => setAddChannel(e.target.value as PricingChannel)}
-                      className="w-full bg-bg-deep border border-border-subtle px-2 py-2 rounded text-sm"
-                    >
+                      onChange={(e) => setAddChannel(e.target.value as PricingChannel)}>
                       {CHANNELS.map((c) => (
                         <option key={c} value={c}>{c}</option>
                       ))}
-                    </select>
+                    </NativeSelect>
                   </Field>
                   <Field label="Min qty" className="w-24">
-                    <input
+                    <Input className="font-mono tnum px-2"
                       type="number"
                       min={1}
                       placeholder="0"
                       value={addMinQty}
-                      onChange={(e) => setAddMinQty(e.target.value)}
-                      className="w-full bg-bg-deep border border-border-subtle px-2 py-2 rounded text-sm font-mono tnum"
-                    />
+                      onChange={(e) => setAddMinQty(e.target.value)} />
                   </Field>
                   <Field label="Unit price (GHS)" className="w-32">
-                    <input
+                    <Input className="font-mono tnum px-2"
                       placeholder="0.00"
                       value={addPriceRaw}
-                      onChange={(e) => setAddPriceRaw(e.target.value)}
-                      className="w-full bg-bg-deep border border-border-subtle px-2 py-2 rounded text-sm font-mono tnum"
-                    />
+                      onChange={(e) => setAddPriceRaw(e.target.value)} />
                   </Field>
                   <Field label="Unit scope" className="w-44">
-                    <select
+                    <NativeSelect className="px-2"
                       value={addUnitId}
-                      onChange={(e) => setAddUnitId(e.target.value)}
-                      className="w-full bg-bg-deep border border-border-subtle px-2 py-2 rounded text-sm"
-                    >
+                      onChange={(e) => setAddUnitId(e.target.value)}>
                       <option value="">Any unit</option>
                       {selected.units.map((u) => (
                         <option key={u.id} value={u.id}>{u.unitName} (×{u.conversionFactor})</option>
                       ))}
-                    </select>
+                    </NativeSelect>
                   </Field>
                   <Field label="Priority" className="w-20">
-                    <input
+                    <Input className="font-mono tnum px-2"
                       type="number"
                       placeholder="0"
                       value={addPriority}
-                      onChange={(e) => setAddPriority(e.target.value)}
-                      className="w-full bg-bg-deep border border-border-subtle px-2 py-2 rounded text-sm font-mono tnum"
-                    />
+                      onChange={(e) => setAddPriority(e.target.value)} />
                   </Field>
                   <Field label="Notes" className="flex-1 min-w-48">
-                    <input
+                    <Input className="px-2"
                       placeholder="(optional)"
                       value={addNotes}
-                      onChange={(e) => setAddNotes(e.target.value)}
-                      className="w-full bg-bg-deep border border-border-subtle px-2 py-2 rounded text-sm"
-                    />
+                      onChange={(e) => setAddNotes(e.target.value)} />
                   </Field>
-                  <button
-                    onClick={add}
-                    className="bg-accent text-ink px-5 py-2 rounded text-sm font-semibold hover:bg-accent-light h-[38px]"
-                  >
+                  <Button variant="primary" size="lg" className="h-[38px]"
+                    onClick={add}>
                     Add
-                  </button>
+                  </Button>
                 </div>
                 <div className="text-text-tertiary text-xs">
                   Channel <strong>ALL</strong> applies to walk-in, wholesale, and route. Higher priority wins ties.

@@ -7,6 +7,7 @@ import type {
   ReportsPriceIntelligenceResponse,
 } from '../../../shared/types/ipc';
 import { FeedbackBanner } from '../../components/FeedbackBanner';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 
 export function PriceIntelligenceTab({ reportAccessToken }: { reportAccessToken: string }) {
   const [prices, setPrices] = useState<ReportsPriceIntelligenceResponse | null>(null);
@@ -36,44 +37,44 @@ export function PriceIntelligenceTab({ reportAccessToken }: { reportAccessToken:
 
   return (
     <div className="flex flex-col gap-5">
-      <section className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+      <section className="grid grid-cols-2 @xl:grid-cols-3 gap-4">
         <Stat label="Products" value={String(prices.rows.length)} />
         <Stat label="Above competitor" value={String(pricierThanCompetitor)} />
         <Stat label="Landed receipts" value={formatMoneyWithCurrency(landedTotal)} />
       </section>
 
-      <section className="bg-bg-surface border border-border">
+      <section className="panel">
         <Header title="Price position" count={prices.rows.length} />
-        <table className="w-full text-sm">
-          <thead className="bg-bg-deep/60 text-text-tertiary text-xs uppercase tracking-wider">
-            <tr>
-              <th className="text-left px-4 py-2">Product</th>
-              <th className="text-right px-4 py-2">Cost</th>
-              <th className="text-right px-4 py-2">Walk-in</th>
-              <th className="text-right px-4 py-2">Competitor</th>
-              <th className="text-right px-4 py-2">Gap</th>
-            </tr>
-          </thead>
-          <tbody>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Product</TableHead>
+              <TableHead className="text-right">Cost</TableHead>
+              <TableHead className="text-right">Walk-in</TableHead>
+              <TableHead className="text-right">Competitor</TableHead>
+              <TableHead className="text-right">Gap</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {prices.rows.slice(0, 80).map((r) => (
-              <tr key={r.productId} className="border-t border-border-subtle">
-                <td className="px-4 py-2">{r.productName}<span className="text-text-tertiary text-xs ml-2">{r.sku}</span></td>
-                <td className="px-4 py-2 text-right font-mono tnum">{formatMoney(r.costPricePesewas)}</td>
-                <td className="px-4 py-2 text-right font-mono tnum">{formatMoney(r.walkInPricePesewas)}</td>
-                <td className="px-4 py-2 text-right font-mono tnum">
+              <TableRow key={r.productId}>
+                <TableCell className="px-4 py-2">{r.productName}<span className="text-text-tertiary text-xs ml-2">{r.sku}</span></TableCell>
+                <TableCell className="px-4 py-2 text-right font-mono tnum">{formatMoney(r.costPricePesewas)}</TableCell>
+                <TableCell className="px-4 py-2 text-right font-mono tnum">{formatMoney(r.walkInPricePesewas)}</TableCell>
+                <TableCell className="px-4 py-2 text-right font-mono tnum">
                   {r.competitorPricePesewas == null ? '—' : formatMoney(r.competitorPricePesewas)}
-                </td>
-                <td className={`px-4 py-2 text-right font-mono tnum ${(r.walkInVsCompetitorPesewas ?? 0) > 0 ? 'text-warning' : 'text-text-tertiary'}`}>
+                </TableCell>
+                <TableCell className={`px-4 py-2 text-right font-mono tnum ${(r.walkInVsCompetitorPesewas ?? 0) > 0 ? 'text-warning' : 'text-text-tertiary'}`}>
                   {r.walkInVsCompetitorPesewas == null ? '—' : formatMoney(r.walkInVsCompetitorPesewas)}
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </section>
 
-      <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-bg-surface border border-border">
+      <section className="grid grid-cols-1 @4xl:grid-cols-2 gap-4">
+        <div className="panel">
           <Header title="Recent price changes" count={history.rows.length} />
           <div className="divide-y divide-border-subtle">
             {history.rows.map((r) => (
@@ -90,7 +91,7 @@ export function PriceIntelligenceTab({ reportAccessToken }: { reportAccessToken:
             {history.rows.length === 0 && <Empty>No price changes yet.</Empty>}
           </div>
         </div>
-        <div className="bg-bg-surface border border-border">
+        <div className="panel">
           <Header title="Landed cost rows" count={landed.rows.length} />
           <div className="divide-y divide-border-subtle">
             {landed.rows.slice(0, 50).map((r) => (
@@ -126,7 +127,7 @@ function Header({ title, count }: { title: string; count: number }) {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-bg-surface border border-border p-4">
+    <div className="panel p-4">
       <div className="text-text-tertiary uppercase tracking-wider text-xs">{label}</div>
       <div className="font-mono tnum text-xl mt-1">{value}</div>
     </div>

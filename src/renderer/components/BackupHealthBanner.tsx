@@ -16,6 +16,7 @@
 import { useEffect, useState } from 'react';
 import { counter } from '../lib/ipc';
 import { describeHeartbeat, type Banner } from '../../shared/lib/backupHeartbeat';
+import { Button } from './ui/button';
 
 const DISMISS_KEY = 'counter.backupBanner.dismissedUntil';
 
@@ -76,17 +77,16 @@ export function BackupHealthBanner(): JSX.Element | null {
         <div className="font-semibold text-sm">{banner.headline}</div>
         <div className="text-xs text-text-secondary mt-1">{banner.detail}</div>
       </div>
-      <button
+      <Button variant="link" className="text-text-secondary hover:text-text-primary self-start text-xs"
         type="button"
         onClick={() => {
           dismissUntilTomorrow();
           setHidden(true);
         }}
-        className="text-xs underline text-text-secondary hover:text-text-primary self-start"
-        title="Hide this banner until tomorrow morning"
-      >
+       
+        title="Hide this banner until tomorrow morning">
         Remind tomorrow
-      </button>
+      </Button>
     </div>
   );
 }

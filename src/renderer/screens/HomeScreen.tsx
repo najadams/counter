@@ -11,6 +11,7 @@
 //   F11  Recent sales / void
 //   F12  Settings
 
+import { LogOutIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { counter, isDesktopHost } from '../lib/ipc';
@@ -49,6 +50,7 @@ import { FriendlyHomeMenu } from '../components/friendly/FriendlyHomeMenu';
 import { NumberPad } from '../components/friendly/NumberPad';
 import { TaskIllustration } from '../components/friendly/TaskIllustration';
 import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
 
 type View = 'home' | 'sale' | 'void' | 'voidApprovals' | 'varianceCases' | 'stockApprovals' | 'breakage' | 'consumption' | 'stock' | 'settings' | 'stocktake' | 'summary' | 'customers' | 'reports' | 'intelligence' | 'pendingOrders' | 'moneyOut' | 'paperReceipts';
 
@@ -254,7 +256,7 @@ export default function HomeScreen({ onReactivate }: { onReactivate?: () => void
   return (
     <div className="min-h-screen bg-bg-deep text-text-primary flex flex-col">
       <AppHeader subtitle="home" />
-      <main className={`flex-1 ${FRIENDLY_UI_ENABLED ? "max-w-6xl" : "max-w-4xl"} w-full mx-auto px-4 py-6 sm:px-12 sm:py-10 flex flex-col gap-4`}>
+      <main className={`@container flex-1 ${FRIENDLY_UI_ENABLED ? "max-w-6xl" : "max-w-4xl"} w-full mx-auto px-4 py-6 sm:px-12 sm:py-10 flex flex-col gap-4`}>
         {step === 'idle' && (
           <>
             <BackupHealthBanner />
@@ -303,7 +305,7 @@ export default function HomeScreen({ onReactivate }: { onReactivate?: () => void
             <LanJoinCard />
 
             <ActionRow kind="primary" label="Sale" hot="F1" caption="Search SKUs, build cart, take payment." onClick={() => setView('sale')} />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 @xl:grid-cols-2 gap-4">
               <ActionRow
                 kind={pendingOrderCount > 0 ? 'warn' : 'default'}
                 label="WhatsApp orders"
@@ -332,7 +334,9 @@ export default function HomeScreen({ onReactivate }: { onReactivate?: () => void
             )}
 
             <div className="mt-auto pt-6 border-t border-border flex justify-between items-center">
-              <button onClick={() => void logout()} className={FRIENDLY_UI_ENABLED ? 'min-h-14 px-5 rounded-xl border-2 border-border text-lg font-semibold text-text-primary hover:bg-bg-elevated' : 'text-text-tertiary hover:text-text-primary text-sm'}>Sign out</button>
+              {FRIENDLY_UI_ENABLED
+                ? <Button size="xl" className="rounded-xl border-2 border-border text-lg" onClick={() => void logout()}>Sign out</Button>
+                : <Button variant="ghost" size="sm" onClick={() => void logout()}><LogOutIcon aria-hidden="true" />Sign out</Button>}
               {opening !== null && (
                 <span className={FRIENDLY_UI_ENABLED ? 'text-text-secondary text-base' : 'text-text-tertiary text-xs'}>{FRIENDLY_UI_ENABLED ? 'Money in drawer at start' : 'Opening cash'}: {formatMoneyWithCurrency(opening)}</span>
               )}
@@ -365,14 +369,12 @@ export default function HomeScreen({ onReactivate }: { onReactivate?: () => void
                       <span className="font-mono text-xs">#{r.saleId.slice(-6)}</span>
                       <span className="font-mono">{formatMoneyWithCurrency(r.saleTotalPesewas)}</span>
                       <span className="text-text-tertiary text-xs flex-1">{r.reason}</span>
-                      <button onClick={() => void retryOneReprint(r.id)}
-                        className="text-xs px-2 py-1 border border-border hover:bg-bg-elevated">
+                      <Button size="sm" onClick={() => void retryOneReprint(r.id)}>
                         Print now
-                      </button>
-                      <button onClick={() => void discardOneReprint(r.id)}
-                        className="text-xs px-2 py-1 border border-border hover:bg-bg-elevated text-danger">
+                      </Button>
+                      <Button variant="danger" size="sm" onClick={() => void discardOneReprint(r.id)}>
                         Discard
-                      </button>
+                      </Button>
                     </li>
                   ))}
                 </ul>
@@ -392,24 +394,21 @@ export default function HomeScreen({ onReactivate }: { onReactivate?: () => void
                   </div>
                 </div>
                 <label htmlFor="friendly-closing-count" className="text-lg font-semibold">Money in the drawer (GHS)</label>
-                <input id="friendly-closing-count" type="text" inputMode="decimal" autoFocus value={counted}
+                <Input className="border-2 rounded-xl text-5xl font-mono tnum text-right h-auto py-4 px-5" id="friendly-closing-count" type="text" inputMode="decimal" autoFocus value={counted}
                   onChange={(e) => setCounted(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter') void submitCountAndClose(); }}
-                  disabled={closing} placeholder="0.00"
-                  className="w-full min-w-0 bg-bg-input border-2 border-border-strong rounded-xl px-5 py-4 text-5xl font-mono tnum text-right focus:outline-hidden focus:border-accent" />
+                  disabled={closing} placeholder="0.00" />
                 <p className="text-lg text-text-secondary">You will see the expected amount after you confirm.</p>
                 <div className="max-w-md w-full self-center">
                   <NumberPad label="Cash count number pad" value={counted} onChange={setCounted} allowDecimal disabled={closing} />
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <button type="button" onClick={() => { setStep('idle'); setCounted(''); setError(null); }}
-                    className="min-h-16 rounded-xl border-2 border-border text-xl font-semibold hover:bg-bg-surface">Cancel</button>
-                  <button type="button" onClick={() => void submitCountAndClose()}
+                <div className="grid grid-cols-1 @xl:grid-cols-2 gap-3">
+                  <Button size="xl" className="min-h-16 rounded-xl border-2 text-xl" type="button" onClick={() => { setStep('idle'); setCounted(''); setError(null); }}>Cancel</Button>
+                  <Button variant="primary" size="xl" className="min-h-16 rounded-xl text-xl" type="button" onClick={() => void submitCountAndClose()}
                     disabled={closing || voidCounts.currentShiftPendingCount > 0 || (pendingReprints.length > 0 && !reprintAck)}
-                    title={pendingReprints.length > 0 && !reprintAck ? 'Resolve pending receipts or acknowledge first' : ''}
-                    className="min-h-16 rounded-xl bg-accent text-ink text-xl font-semibold hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed">
+                    title={pendingReprints.length > 0 && !reprintAck ? 'Resolve pending receipts or acknowledge first' : ''}>
                     {closing ? 'Checking the count…' : 'Confirm count'}
-                  </button>
+                  </Button>
                 </div>
               </section>
             ) : (
@@ -420,21 +419,18 @@ export default function HomeScreen({ onReactivate }: { onReactivate?: () => void
             </p>
             <div className="flex items-baseline gap-3">
               <span className="text-text-secondary text-xl">GHS</span>
-              <input type="text" inputMode="decimal" autoFocus value={counted}
+              <Input className="flex-1 text-4xl font-mono tnum text-right h-auto py-4 px-5" type="text" inputMode="decimal" autoFocus value={counted}
                 onChange={(e) => setCounted(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') void submitCountAndClose(); }}
-                disabled={closing} placeholder="0.00"
-                className="flex-1 min-w-0 bg-bg-input border border-border-strong px-5 py-4 text-4xl font-mono tnum text-right focus:outline-hidden focus:border-accent" />
+                disabled={closing} placeholder="0.00" />
             </div>
             <div className="flex gap-3">
-              <button onClick={() => { setStep('idle'); setCounted(''); setError(null); }}
-                className="px-5 py-3 border border-border hover:bg-bg-elevated">Cancel</button>
-              <button onClick={() => void submitCountAndClose()}
+              <Button size="lg" onClick={() => { setStep('idle'); setCounted(''); setError(null); }}>Cancel</Button>
+              <Button variant="primary" size="lg" onClick={() => void submitCountAndClose()}
                 disabled={closing || voidCounts.currentShiftPendingCount > 0 || (pendingReprints.length > 0 && !reprintAck)}
-                title={pendingReprints.length > 0 && !reprintAck ? 'Resolve pending receipts or acknowledge first' : ''}
-                className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed">
+                title={pendingReprints.length > 0 && !reprintAck ? 'Resolve pending receipts or acknowledge first' : ''}>
                 {closing ? 'Reconciling…' : 'Confirm count'}
-              </button>
+              </Button>
             </div>
             </>
             )}
@@ -445,7 +441,7 @@ export default function HomeScreen({ onReactivate }: { onReactivate?: () => void
         {step === 'reconciled' && reconciled && (
           <div className="flex flex-col gap-4">
             <h2 className={FRIENDLY_UI_ENABLED ? "text-3xl font-semibold" : "text-text-secondary uppercase tracking-wider text-xs"}>{FRIENDLY_UI_ENABLED ? "Shift closed" : "Reconciliation"}</h2>
-            <div className="bg-bg-surface border border-border divide-y divide-border">
+            <div className="panel divide-y divide-border">
               <Row label="Counted"  value={formatMoneyWithCurrency(reconciled.countedPesewas)} />
               <Row label="Expected" value={formatMoneyWithCurrency(reconciled.expectedPesewas)} />
               <Row label="Variance"
@@ -457,9 +453,8 @@ export default function HomeScreen({ onReactivate }: { onReactivate?: () => void
 
             <BackupResultBlock backup={reconciled.backup} acked={backupAcked} onAck={() => setBackupAcked(true)} />
 
-            <button onClick={finishReconciled}
-              disabled={reconciled.backup.ran && reconciled.backup.ok === false && !backupAcked}
-              className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light self-start disabled:opacity-50 disabled:cursor-not-allowed">Done</button>
+            <Button variant="primary" size="lg" className="self-start" onClick={finishReconciled}
+              disabled={reconciled.backup.ran && reconciled.backup.ok === false && !backupAcked}>Done</Button>
           </div>
         )}
       </main>
@@ -520,10 +515,9 @@ function BackupResultBlock({
         or wait for the nightly job to retry.
       </div>
       {!acked && (
-        <button onClick={onAck}
-          className="text-xs border border-danger px-3 py-1 hover:bg-danger/20">
+        <Button variant="danger" size="sm" onClick={onAck}>
           Acknowledge & continue
-        </button>
+        </Button>
       )}
     </div>
   );
@@ -541,12 +535,10 @@ function RevealLink({ path }: { path: string }) {
     typeof navigator === 'undefined' ? '' : (navigator.platform || navigator.userAgent),
   ) ? 'Show in Finder' : 'Show in file browser';
   return (
-    <button
-      onClick={() => { void counter.backupRevealTarget(path); }}
-      className="text-xs underline text-text-secondary hover:text-text-primary"
-    >
+    <Button variant="link" className="text-text-secondary hover:text-text-primary text-xs"
+      onClick={() => { void counter.backupRevealTarget(path); }}>
       {label}
-    </button>
+    </Button>
   );
 }
 

@@ -86,6 +86,23 @@ Each is an RGB-channel variable (`--c-*`) used through Tailwind names
   200ms, `--ease-standard`. `prefers-reduced-motion` finishes transitions
   instantly; the sale-complete flash stays, because it is a colour signal.
 
+## Layout
+
+- **Raw elements are for content, not actions.** An action is a `Button`;
+  a list row, tile or card that happens to be clickable (search results,
+  pickers, home tiles, payment-method tiles) stays a styled `<button>`.
+- **Surfaces.** A group of content sits on a white card (`Card` or
+  `.panel`). Anything that needs its own fill inside one uses `bg-surface`
+  (a recessed well); selection inside a card is `bg-accent/10`.
+- **Fit the pane, not the window.** Screens mark their content area as a
+  size container (`@container`) and grids use container breakpoints
+  (`@xl:`, `@2xl:`, `@4xl:`, `@6xl:`), so a report or settings tab reflows
+  for the space it actually has. Home keeps its two columns of tiles (three
+  in Friendly from 64rem) — staff find tiles by position. Quick picks go
+  from chips to three tiles at 32rem of search pane, four at 42rem.
+- Container queries never match inside a dialog (it portals to `<body>`),
+  so dialog content uses plain widths or window breakpoints.
+
 ## Icons
 
 Lucide (`lucide-react`), `currentColor`, always beside a word or with an
@@ -149,10 +166,11 @@ a `forwardRef` (React 18).
 | `Dialog`, `Sheet` | Anything that takes over the screen until answered. See the rules below. |
 | `Input`, `Textarea`, `NativeSelect`, `Select`, `Checkbox` | Form fields; each needs a visible label. Prefer `NativeSelect` for short fixed lists (it keeps the browser's type-to-jump keys); `Select` for rich items. |
 | `Field` | A visible label around one control, with an optional hint. Wrapping the control names it without ids. |
-| `Segmented` | Two to four mutually exclusive buttons that switch a view or mode in place (Pending / History). Real buttons with `aria-pressed`. |
+| `Segmented` | Two to four mutually exclusive buttons that switch a view or mode in place (Pending / History, Walk-in / Wholesale / Route, date presets). Real buttons with `aria-pressed`. `size` `sm`/`md`/`lg` (Friendly), `fill` to share the full width, `value={null}` when none applies. |
+| `NavTab` | The underline section tabs across the top of a screen (Settings, Reports, a customer's record, Money out). The current one carries `aria-current`. |
 | `Badge` | Status. `tone`: `neutral`, `accent`, `success`, `warning`, `danger`, plus the words. `lib/tones.ts` maps review statuses and severities. |
 | `Card` | A white surface for a group of related content. The older `.panel` class is the same card; inside either, give a nested fill `bg-surface` (a recessed well), never `bg-elevated`, which vanishes into the card. |
-| `Table` and parts | Data tables; money and quantity cells take `text-right font-mono tnum`. |
+| `Table` and parts | Every data table. Money and quantity cells take `text-right font-mono tnum`; cells keep their own padding where a report wants density. `scroll={false}` drops the table's own horizontal scroller, for a table in a panel that already scrolls and has a sticky header. The paper surfaces (statement, receipt, PIN cards, runbook) stay plain black-on-white tables. |
 | `Tabs` | `segmented` for switching a view in place, `line` for sections of a screen. |
 | `Tooltip`, `Popover` | Extra explanation, never the only copy of something needed. |
 | `Kbd`, `Separator`, `Skeleton`, `ScrollArea`, `Toaster` | As named. Toasts are for short confirmations only; errors stay inline. |
@@ -190,6 +208,6 @@ the app always has. Every dialog in the app now uses `Dialog` or `Sheet`;
 | D | Direction chosen: this document | Done |
 | 1 | Harbour tokens: palette, three themes, fluid type, Geist, corners, motion | PR #9 |
 | 2 | Shared components; every `.btn` and status badge moved onto them; Edit customer is the first dialog on `Dialog` | PR #10 |
-| 3 | Every dialog on `Dialog`/`Sheet`; quick picks; lucide icons; charts on tokens; panels as white cards | This branch |
-| 3b | The remaining raw buttons, inputs and tables on screens onto the components; `@container` layouts for sale, home, reports and settings | Next |
+| 3 | Every dialog on `Dialog`/`Sheet`; quick picks; lucide icons; charts on tokens; panels as white cards | PR #11 |
+| 3b | Screens' buttons, fields and tables onto the components; `NavTab`; grey containers become cards; `@container` layouts for sale, home, reports and settings | This branch |
 | 4 | Enter/exit motion, view transitions, cart animation | |

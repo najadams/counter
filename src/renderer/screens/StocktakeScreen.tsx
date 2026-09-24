@@ -7,6 +7,11 @@ import { AppHeader } from '../components/AppHeader';
 import { SupervisorPinModal } from '../components/SupervisorPinModal';
 import { formatMoney, formatMoneyWithCurrency } from '../../shared/lib/money';
 import { FeedbackBanner } from '../components/FeedbackBanner';
+import { Button } from '../components/ui/button';
+import { Textarea } from '../components/ui/textarea';
+import { NativeSelect } from '../components/ui/native-select';
+import { Input } from '../components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 
 interface ActiveStocktake {
   id: string; status: string; startedAt: string;
@@ -157,30 +162,28 @@ export default function StocktakeScreen({ onExit }: { onExit: () => void }) {
         {error && <FeedbackBanner>{error}</FeedbackBanner>}
 
         {!active && (
-          <div className="bg-bg-surface border border-border p-6 flex items-center justify-between">
+          <div className="panel p-6 flex items-center justify-between">
             <div>
               <div className="text-text-primary">No active stocktake.</div>
               <div className="text-text-tertiary text-sm mt-1">Start one to capture physical counts and compute shrinkage rate.</div>
             </div>
             <div className="flex items-center gap-3">
-              <select value={startClass} onChange={(e) => setStartClass(e.target.value as 'A' | 'B' | 'C' | '')}
-                className="bg-bg-input border border-border-strong px-3 py-2 text-sm">
+              <NativeSelect value={startClass} onChange={(e) => setStartClass(e.target.value as 'A' | 'B' | 'C' | '')}>
                 <option value="">All products (full count)</option>
                 <option value="A">Class A only (top sellers)</option>
                 <option value="B">Class B only</option>
                 <option value="C">Class C only (long tail)</option>
-              </select>
-              <button onClick={() => void start()}
-                className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light">
+              </NativeSelect>
+              <Button variant="primary" size="lg" onClick={() => void start()}>
                 Start stocktake
-              </button>
+              </Button>
             </div>
           </div>
         )}
 
         {active && (
           <>
-            <div className="bg-bg-surface border border-border p-4 grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+            <div className="panel p-4 grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
               <div>
                 <div className="text-text-secondary uppercase tracking-wider text-xs">Counted</div>
                 <div className="font-mono tnum text-2xl">{counted} / {total}</div>
@@ -203,22 +206,21 @@ export default function StocktakeScreen({ onExit }: { onExit: () => void }) {
               </div>
             </div>
 
-            <input value={filter} onChange={(e) => setFilter(e.target.value)}
-              placeholder="Filter products…"
-              className="bg-bg-input border border-border-strong px-4 py-2" />
+            <Input className="px-4" value={filter} onChange={(e) => setFilter(e.target.value)}
+              placeholder="Filter products…" />
 
-            <div className="bg-bg-surface border border-border overflow-y-auto" style={{ maxHeight: '50vh' }}>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-text-secondary text-xs uppercase tracking-wider sticky top-0 bg-bg-surface">
-                    <th className="px-4 py-3 text-left">Product</th>
-                    <th className="px-4 py-3 text-right">Expected</th>
-                    <th className="px-4 py-3 text-right">Counted</th>
-                    <th className="px-4 py-3 text-right">Variance</th>
-                    <th className="px-4 py-3 text-right">Δ value</th>
-                  </tr>
-                </thead>
-                <tbody>
+            <div className="rounded-xl bg-bg-elevated border border-border overflow-y-auto" style={{ maxHeight: '50vh' }}>
+              <Table scroll={false}>
+                <TableHeader>
+                  <TableRow className="sticky top-0 z-10 bg-bg-surface">
+                    <TableHead>Product</TableHead>
+                    <TableHead className="text-right">Expected</TableHead>
+                    <TableHead className="text-right">Counted</TableHead>
+                    <TableHead className="text-right">Variance</TableHead>
+                    <TableHead className="text-right">Δ value</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {filteredLines.map((l) => {
                     const draft = draftCounts[l.productId];
                     const tone = l.variance == null ? 'text-text-tertiary'
@@ -227,61 +229,58 @@ export default function StocktakeScreen({ onExit }: { onExit: () => void }) {
                     const chosen = unitChoices[l.productId] || '';
                     const factor = opts.find((u) => u.id === chosen)?.conversionFactor ?? 1;
                     return (
-                      <tr key={l.id} className="border-t border-border">
-                        <td className="px-4 py-2">
+                      <TableRow key={l.id}>
+                        <TableCell className="px-4 py-2">
                           {l.productName}
                           <span className="text-text-tertiary text-xs ml-2">{l.productSku}</span>
-                        </td>
-                        <td className="px-4 py-2 text-right font-mono tnum">{l.expectedQty}</td>
-                        <td className="px-4 py-2 text-right">
+                        </TableCell>
+                        <TableCell className="px-4 py-2 text-right font-mono tnum">{l.expectedQty}</TableCell>
+                        <TableCell className="px-4 py-2 text-right">
                           <div className="flex items-center gap-1 justify-end">
-                            <input
+                            <Input className="w-20 font-mono tnum text-right h-8 px-2"
                               value={draft ?? (l.countedQty == null ? '' : String(factor === 1 ? l.countedQty : Math.floor(l.countedQty / factor)))}
                               onChange={(e) => setDraftCounts((p) => ({ ...p, [l.productId]: e.target.value }))}
                               onKeyDown={(e) => { if (e.key === 'Enter') void saveCount(l.productId); }}
-                              onBlur={() => { if (draft != null) void saveCount(l.productId); }}
-                              className="w-20 bg-bg-input border border-border-strong px-2 py-1 font-mono tnum text-right" />
+                              onBlur={() => { if (draft != null) void saveCount(l.productId); }} />
                             {opts.length > 1 && (
-                              <select value={chosen}
-                                onChange={(e) => setUnitChoices((p) => ({ ...p, [l.productId]: e.target.value }))}
-                                className="bg-bg-input border border-border-strong px-1 py-1 text-xs">
+                              <NativeSelect className="text-xs h-8 px-1" value={chosen}
+                                onChange={(e) => setUnitChoices((p) => ({ ...p, [l.productId]: e.target.value }))}>
                                 {opts.map((o) => (
                                   <option key={o.id} value={o.id}>{o.unitName}{o.conversionFactor > 1 ? ` ×${o.conversionFactor}` : ''}</option>
                                 ))}
-                              </select>
+                              </NativeSelect>
                             )}
                           </div>
-                        </td>
-                        <td className={`px-4 py-2 text-right font-mono tnum ${tone}`}>
+                        </TableCell>
+                        <TableCell className={`px-4 py-2 text-right font-mono tnum ${tone}`}>
                           {l.variance == null ? '—' : (l.variance > 0 ? '+' : '') + l.variance}
-                        </td>
-                        <td className={`px-4 py-2 text-right font-mono tnum ${tone}`}>
+                        </TableCell>
+                        <TableCell className={`px-4 py-2 text-right font-mono tnum ${tone}`}>
                           {l.varianceValuePesewas == null ? '—' : (l.varianceValuePesewas >= 0 ? '+' : '') + formatMoney(l.varianceValuePesewas)}
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     );
                   })}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
 
-            <textarea value={completionNotes} onChange={(e) => setCompletionNotes(e.target.value)}
+            <Textarea value={completionNotes} onChange={(e) => setCompletionNotes(e.target.value)}
               placeholder="Notes for the completion (optional)"
-              className="bg-bg-input border border-border-strong px-3 py-2 text-sm" rows={2} />
+              rows={2} />
 
             <div className="flex gap-3 items-center justify-between">
-              <button onClick={() => void cancel()} className="px-5 py-3 border border-border hover:bg-bg-elevated text-text-tertiary">
+              <Button size="lg" className="text-text-tertiary" onClick={() => void cancel()}>
                 Cancel stocktake
-              </button>
+              </Button>
               {uncounted > 0 && (
                 <span className="text-warning text-sm">
                   {uncounted} product(s) un-counted — they will be skipped (no variance recorded).
                 </span>
               )}
-              <button onClick={() => setAskingSupervisor(true)}
-                className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light">
+              <Button variant="primary" size="lg" onClick={() => setAskingSupervisor(true)}>
                 Complete with supervisor
-              </button>
+              </Button>
             </div>
             {askingSupervisor && (
               <SupervisorPinModal
@@ -294,36 +293,36 @@ export default function StocktakeScreen({ onExit }: { onExit: () => void }) {
         )}
 
         <h2 className="text-text-secondary uppercase tracking-wider text-xs mt-6">Recent stocktakes</h2>
-        <div className="bg-bg-surface border border-border">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-text-secondary text-xs uppercase tracking-wider">
-                <th className="px-4 py-3 text-left">Completed</th>
-                <th className="px-4 py-3 text-left">Status</th>
-                <th className="px-4 py-3 text-right">Counted</th>
-                <th className="px-4 py-3 text-right">Loss</th>
-                <th className="px-4 py-3 text-right">Found</th>
-                <th className="px-4 py-3 text-right">Shrinkage</th>
-              </tr>
-            </thead>
-            <tbody>
+        <div className="panel">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Completed</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Counted</TableHead>
+                <TableHead className="text-right">Loss</TableHead>
+                <TableHead className="text-right">Found</TableHead>
+                <TableHead className="text-right">Shrinkage</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {recent.map((e) => (
-                <tr key={e.id} className="border-t border-border">
-                  <td className="px-4 py-2 font-mono tnum">{(e as any).completedAt ? new Date((e as any).completedAt).toLocaleString() : '—'}</td>
-                  <td className="px-4 py-2">{e.status}</td>
-                  <td className="px-4 py-2 text-right font-mono tnum">{e.productsCounted}</td>
-                  <td className="px-4 py-2 text-right font-mono tnum text-danger">{formatMoney(e.totalLossValuePesewas)}</td>
-                  <td className="px-4 py-2 text-right font-mono tnum text-success">{formatMoney(e.totalFoundValuePesewas)}</td>
-                  <td className="px-4 py-2 text-right font-mono tnum">
+                <TableRow key={e.id}>
+                  <TableCell className="px-4 py-2 font-mono tnum">{(e as any).completedAt ? new Date((e as any).completedAt).toLocaleString() : '—'}</TableCell>
+                  <TableCell className="px-4 py-2">{e.status}</TableCell>
+                  <TableCell className="px-4 py-2 text-right font-mono tnum">{e.productsCounted}</TableCell>
+                  <TableCell className="px-4 py-2 text-right font-mono tnum text-danger">{formatMoney(e.totalLossValuePesewas)}</TableCell>
+                  <TableCell className="px-4 py-2 text-right font-mono tnum text-success">{formatMoney(e.totalFoundValuePesewas)}</TableCell>
+                  <TableCell className="px-4 py-2 text-right font-mono tnum">
                     {e.shrinkageRate == null ? '—' : (e.shrinkageRate * 100).toFixed(2) + '%'}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
               {recent.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-4 text-text-tertiary text-center">None yet.</td></tr>
+                <TableRow><TableCell colSpan={6} className="px-4 py-4 text-text-tertiary text-center">None yet.</TableCell></TableRow>
               )}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       </main>
     </div>

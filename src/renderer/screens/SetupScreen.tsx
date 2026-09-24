@@ -8,6 +8,8 @@ import { useState } from 'react';
 import { counter } from '../lib/ipc';
 import { useSession } from '../store/session';
 import { FeedbackBanner } from '../components/FeedbackBanner';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
 
 export default function SetupScreen() {
   const setupCreateOwner = async (full: string, phone: string, pin: string) =>
@@ -103,12 +105,11 @@ export default function SetupScreen() {
             I have written this code down somewhere safe.
           </label>
 
-          <button
+          <Button variant="primary" size="lg" className="w-full"
             onClick={continueAfterRecovery}
-            disabled={!acknowledgedRecovery}
-            className="w-full py-3 rounded bg-accent text-ink font-semibold disabled:opacity-50">
+            disabled={!acknowledgedRecovery}>
             Continue to Counter
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -133,25 +134,23 @@ export default function SetupScreen() {
 
         <label className="block">
           <span className="block text-sm text-text-secondary mb-1">Full name</span>
-          <input
+          <Input
             type="text"
             autoFocus
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
-            className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle text-text-primary"
-            placeholder="e.g. Kwame Adams"
-          />
+           
+            placeholder="e.g. Kwame Adams" />
         </label>
 
         <label className="block">
           <span className="block text-sm text-text-secondary mb-1">Phone number</span>
-          <input
+          <Input
             type="tel"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
-            className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle text-text-primary"
-            placeholder="0244 123 456"
-          />
+           
+            placeholder="0244 123 456" />
           <span className="block text-xs text-text-tertiary mt-1">
             10-digit Ghana number. Used as the unique identifier.
           </span>
@@ -160,25 +159,21 @@ export default function SetupScreen() {
         <div className="grid grid-cols-2 gap-3">
           <label className="block">
             <span className="block text-sm text-text-secondary mb-1">PIN (4–6 digits)</span>
-            <input
+            <Input className="tracking-widest"
               type="password"
               inputMode="numeric"
               maxLength={6}
               value={pin}
-              onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
-              className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle text-text-primary tracking-widest"
-            />
+              onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))} />
           </label>
           <label className="block">
             <span className="block text-sm text-text-secondary mb-1">Confirm PIN</span>
-            <input
+            <Input className="tracking-widest"
               type="password"
               inputMode="numeric"
               maxLength={6}
               value={confirm}
-              onChange={(e) => setConfirm(e.target.value.replace(/\D/g, ''))}
-              className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle text-text-primary tracking-widest"
-            />
+              onChange={(e) => setConfirm(e.target.value.replace(/\D/g, ''))} />
           </label>
         </div>
 
@@ -188,13 +183,15 @@ export default function SetupScreen() {
           </FeedbackBanner>
         )}
 
-        <button
+        <Button
           type="submit"
+          variant="primary"
+          size="lg"
           disabled={busy}
-          className="w-full py-3 rounded bg-accent-primary text-ink font-semibold disabled:opacity-50"
+          className="w-full"
         >
           {busy ? 'Creating account…' : 'Create owner account'}
-        </button>
+        </Button>
 
         <p className="text-xs text-text-tertiary">
           Write the PIN down somewhere safe. There is no password reset for
