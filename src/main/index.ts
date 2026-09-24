@@ -1,11 +1,12 @@
 // Electron main entry. Boots the app, creates the BrowserWindow, wires IPC.
 
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import log from 'electron-log/main';
 import { COUNTERS_DECOY_ENABLED, FRIENDLY_UI_ENABLED } from '../shared/lib/buildFlags.js';
+import { VAT_ENABLED } from '../shared/lib/vat.js';
 
 log.initialize();
 log.transports.file.level = 'info';
@@ -238,6 +239,24 @@ app.whenReady().then(async () => {
   handlers.registerPendingOrdersHandlers(registry, db, deviceId);
   handlers.registerIntelligenceHandlers(registry, db, deviceId);
   handlers.registerActivationHandlers(registry, db, deviceId, userData);
+
+  // Version and update notice: which build this is, and whether GitHub has a
+  // newer release (updateCheck.ts; nothing is downloaded).
+  const updateCheck = await import('./services/updateCheck.js');
+  const edition = COUNTERS_DECOY_ENABLED ? 'COUNTERS' as const
+    : FRIENDLY_UI_ENABLED ? 'FRIENDLY' as const
+    : VAT_ENABLED ? 'VAT' as const
+    : 'STANDARD' as const;
+  const appInfo = { version: app.getVersion(), edition, platform: process.platform, arch: process.arch };
+  updateCheck.configureUpdateChecks({ currentVersion: appInfo.version, edition, platform: process.platform, arch: process.arch, userDataDir: userData });
+  handlers.registerAppInfoHandlers(registry, {
+    ...appInfo,
+    updates: { current: updateCheck.currentUpdateInfo, checkNow: updateCheck.checkForUpdateNow },
+    openExternal: (url) => shell.openExternal(url),
+  });
+  updateCheck.startUpdateChecks((u) => log.info(
+    `[update] ${u.status}: running ${u.currentVersion}, latest ${u.latestVersion ?? 'unknown'}${u.error ? ` (${u.error})` : ''}`,
+  ));
   log.info(`[main] IPC handlers registered: ${registry.handlers.size} channels`);
 
   // Activation: record (but never enforce) a key that has stopped matching this

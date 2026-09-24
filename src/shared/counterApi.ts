@@ -29,6 +29,10 @@ export function createCounterApi(invoke: Invoke) {
     httpStatus: () => invoke<ipc.HttpStatusResponse>(ipc.IPC_CHANNELS.NET_HTTP_STATUS, {}),
     setHttp: (enabled: boolean, lan = true) => invoke<ipc.HttpStatusResponse>(ipc.IPC_CHANNELS.NET_HTTP_SET, { enabled, lan }),
     syncGetStatus: () => invoke<ipc.SyncStatus>(ipc.IPC_CHANNELS_SYNC.SYNC_GET_STATUS, {}),
+    // --- version and updates ---
+    appAbout: () => invoke<ipc.AppAboutResponse>(ipc.IPC_CHANNELS_APP.APP_ABOUT, {}),
+    appCheckForUpdate: () => invoke<ipc.AppUpdateCheckResponse>(ipc.IPC_CHANNELS_APP.APP_UPDATE_CHECK, {}),
+    appOpenDownloadPage: () => invoke<ipc.AppOpenDownloadPageResponse>(ipc.IPC_CHANNELS_APP.APP_OPEN_DOWNLOAD_PAGE, {}),
     syncGetConfig: () => invoke<ipc.SyncConfigView>(ipc.IPC_CHANNELS_SYNC.SYNC_GET_CONFIG, {}),
     syncSetConfig: (req: ipc.SyncSetConfigRequest) => invoke<ipc.SyncConfigView>(ipc.IPC_CHANNELS_SYNC.SYNC_SET_CONFIG, req),
     syncAddShop: (req: ipc.AddShopRequest) => invoke<ipc.AddShopResult>(ipc.IPC_CHANNELS_SYNC.SYNC_ADD_SHOP, req),

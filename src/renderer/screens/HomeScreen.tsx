@@ -19,6 +19,7 @@ import { useSession } from '../store/session';
 import { AppHeader } from '../components/AppHeader';
 import { BackupHealthBanner } from '../components/BackupHealthBanner';
 import { SyncHealthBanner } from '../components/SyncHealthBanner';
+import { UpdateBanner } from '../components/UpdateBanner';
 import { ActivationHealthBanner } from '../components/ActivationHealthBanner';
 import { formatMoney, formatMoneyWithCurrency, parseCedisToPesewas } from '../../shared/lib/money';
 import type {
@@ -262,6 +263,7 @@ export default function HomeScreen({ onReactivate }: { onReactivate?: () => void
             <BackupHealthBanner />
             <SyncHealthBanner />
             <ActivationHealthBanner onReactivate={onReactivate} />
+            {isSenior && <UpdateBanner />}
             {!FRIENDLY_UI_ENABLED && isSenior && <IntelligenceBriefPanel onOpen={() => setView('intelligence')} />}
             {obligationWarnings
               && (obligationWarnings.overdueCount > 0

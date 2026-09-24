@@ -3,7 +3,7 @@
 import type { App } from 'electron';
 import type { Database as DB } from 'better-sqlite3';
 import type { IpcRegistrar } from './registry.js';
-import { currentDeviceId, currentSession, currentStation, setGlobalSession, type Session } from './session.js';
+import { currentDeviceId, currentSession, currentStation, requestSession, setGlobalSession, type Session } from './session.js';
 import { getAccessInfo } from '../http/server.js';
 import { httpStatus, setHttp } from '../http/manager.js';
 import { getSyncStatus } from '../sync/status.js';
@@ -3953,4 +3953,69 @@ export function registerActivationHandlers(
       IPC_CHANNELS_ACTIVATION.ACTIVATION_ACTIVATE,
     ),
   );
+}
+
+// --- App version and updates ----------------------------------------------
+
+import {
+  IPC_CHANNELS_APP,
+  type AppAboutResponse, type AppOpenDownloadPageResponse, type AppUpdateCheckResponse,
+} from '../../shared/types/ipc.js';
+import { RELEASES_PAGE, type Edition, type UpdateInfo } from '../services/updateCheck.js';
+
+const EDITION_NAMES: Record<Edition, string> = {
+  STANDARD: 'Counter', VAT: 'Counter VAT', FRIENDLY: 'Counter Friendly', COUNTERS: 'Counters',
+};
+
+/** Version, edition and update status. The checks run in updateCheck.ts and
+ *  are passed in as `updates`; opening the download page is for the shop PC
+ *  only (a phone on the LAN must not open a browser on the host). */
+export function registerAppInfoHandlers(
+  ipcMain: IpcRegistrar,
+  info: {
+    version: string;
+    edition: Edition;
+    platform: string;
+    arch: string;
+    updates: { current: () => UpdateInfo | null; checkNow: () => Promise<UpdateInfo | null> };
+    openExternal?: (url: string) => Promise<void>;
+  },
+): void {
+  const onShopPc = () => !requestSession.getStore() && !!info.openExternal;
+
+  ipcMain.handle(IPC_CHANNELS_APP.APP_ABOUT, wrap<void, AppAboutResponse>(
+    () => {
+      requireWorker();
+      return {
+        version: info.version,
+        edition: info.edition,
+        editionName: EDITION_NAMES[info.edition],
+        platform: info.platform,
+        arch: info.arch,
+        update: info.updates.current(),
+        canOpenDownloadPage: onShopPc(),
+      };
+    },
+    IPC_CHANNELS_APP.APP_ABOUT,
+  ));
+
+  ipcMain.handle(IPC_CHANNELS_APP.APP_UPDATE_CHECK, wrap<void, AppUpdateCheckResponse>(
+    async () => {
+      requireWorker();
+      return info.updates.checkNow();
+    },
+    IPC_CHANNELS_APP.APP_UPDATE_CHECK,
+  ));
+
+  ipcMain.handle(IPC_CHANNELS_APP.APP_OPEN_DOWNLOAD_PAGE, wrap<void, AppOpenDownloadPageResponse>(
+    async () => {
+      requireWorker();
+      if (!onShopPc()) throw new Error('Open the download page on the shop PC');
+      const url = info.updates.current()?.releaseUrl ?? RELEASES_PAGE;
+      // Only ever this project's releases, whatever the stored answer says.
+      await info.openExternal!(url.startsWith(`${RELEASES_PAGE}/`) ? url : RELEASES_PAGE);
+      return { opened: true };
+    },
+    IPC_CHANNELS_APP.APP_OPEN_DOWNLOAD_PAGE,
+  ));
 }

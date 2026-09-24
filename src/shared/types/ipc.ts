@@ -3623,3 +3623,40 @@ export interface ActivationActivateResponse {
   licensee?: string;
   message?: string;
 }
+
+// --- App version and updates --------------------------------------------
+
+export const IPC_CHANNELS_APP = {
+  APP_ABOUT: 'app:about',
+  APP_UPDATE_CHECK: 'app:update-check',
+  APP_OPEN_DOWNLOAD_PAGE: 'app:open-download-page',
+} as const;
+
+export type AppEdition = 'STANDARD' | 'VAT' | 'FRIENDLY' | 'COUNTERS';
+
+/** Mirrors UpdateInfo in src/main/services/updateCheck.ts. */
+export interface AppUpdateInfo {
+  status: 'UP_TO_DATE' | 'AVAILABLE' | 'UNKNOWN';
+  currentVersion: string;
+  latestVersion: string | null;
+  releasedAt: string | null;
+  releaseUrl: string | null;
+  installerName: string | null;
+  notes: string | null;
+  checkedAt: string | null;
+  error: string | null;
+}
+
+export interface AppAboutResponse {
+  version: string;
+  edition: AppEdition;
+  /** "Counter", "Counter VAT", "Counter Friendly" or "Counters". */
+  editionName: string;
+  platform: string;
+  arch: string;
+  update: AppUpdateInfo | null;
+  /** False on a phone over the LAN: the page opens on the shop PC only. */
+  canOpenDownloadPage: boolean;
+}
+export type AppUpdateCheckResponse = AppUpdateInfo | null;
+export interface AppOpenDownloadPageResponse { opened: true }
