@@ -845,3 +845,27 @@ the returns and the cash paid back. Refunds used to be recorded as cash drops
 (notes `customer-refund:…`); those old rows stay as they were.
 
 Verify with `npx vitest --run tests/correctSale.test.ts tests/cash-refunds.test.ts tests/queuedVoids.test.ts`.
+
+## 16. Version and updates
+
+Settings → **About** shows which edition and version this till runs. Twice a
+day (first check 20 s after start), the main process asks GitHub for the latest
+release (`src/main/services/updateCheck.ts`). The request carries nothing about
+the shop, only `User-Agent: Counter/<version>`. The answer is kept in
+`<userData>/last_update_check.json`, so an offline till still shows the last
+one. Set `COUNTER_UPDATE_CHECK=0` to switch the check off.
+
+When a newer release exists, owners, founders and supervisors see a notice on
+Home ("Remind tomorrow" hides it for a day, per version), and About lists the
+steps and the exact installer for this edition and computer. **Download page**
+opens the GitHub release on the shop PC only; a phone on the LAN can't make the
+host open a browser. Nothing is downloaded or installed automatically.
+
+To update a shop: close the day, back up and copy the backup to a USB stick,
+close Counter, run the installer for the **same edition** over the old one, and
+reopen. The data folder isn't touched, and Counter snapshots the database
+before applying new migrations (§4). A different edition installs as a separate
+app with its own empty database.
+
+Publishing a release (§2a, tag `vX.Y.Z`) is what makes the notice appear. Drafts
+and pre-releases are ignored.
