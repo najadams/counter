@@ -515,6 +515,7 @@ export function registerIpcHandlers(
         reason: req.reason,
         requesterWorkerId: w.workerId,
         deviceId: currentDeviceId(deviceId),
+        refundCash: req.refundCash,
       });
       refreshExactIntelligenceNonFatal(db, w.workerId, currentDeviceId(deviceId));
       return created;

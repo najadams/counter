@@ -26,6 +26,8 @@ export const SYNCED_EVENT_TABLES = [
   'risk_thresholds', 'risk_assumptions', 'saved_scenarios',
   'management_ledger_settings',
   'sale_void_requests',
+  // Cash handed back to customers out of a drawer (migration 0056).
+  'cash_refunds',
   'variance_case_settings', 'variance_cases', 'variance_case_events',
   'stock_receipt_requests', 'stock_receipt_request_lines',
   'intelligence_items', 'intelligence_item_events',

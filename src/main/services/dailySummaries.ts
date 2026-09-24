@@ -14,9 +14,16 @@ export interface DailySummary {
   id: string;
   summaryDate: string;             // 'YYYY-MM-DD'
   locationId: string;
+  /** Sales less the day's customer returns (net of tax in the VAT build). */
   totalRevenuePesewas: number;
+  /** Cost of goods sold less the stock cost that came back on returns. */
   totalCostOfGoodsSoldPesewas: number;
   grossMarginPesewas: number;
+  /** Refunds on the day's customer returns (VAT-inclusive), and how many. */
+  totalReturnsPesewas: number;
+  numReturns: number;
+  /** Cash paid back over the counter: returns and voids with a refund. */
+  cashRefundedPesewas: number;
   totalBreakageValuePesewas: number;
   totalConsumptionValuePesewas: number;
   totalExpensesValuePesewas: number;
@@ -101,8 +108,35 @@ export function generateDailySummary(
     )
     .get(locationId, dayStart, next) as { cogs: number };
 
-  const totalRevenue = salesAgg.revenue;
-  const totalCogs = cogsRow.cogs;
+  // Returns count against the day they were made, not the original sale's.
+  const returnsRow = db
+    .prepare(
+      `SELECT COALESCE(SUM(total_refund_pesewas), 0) AS refund,
+              COALESCE(SUM(${taxableSql('total_refund_pesewas')}), 0) AS netRefund,
+              COUNT(*) AS num
+         FROM customer_returns
+         WHERE location_id = ? AND created_at >= ? AND created_at < ?`,
+    )
+    .get(locationId, dayStart, next) as { refund: number; netRefund: number; num: number };
+  const returnsCostRow = db
+    .prepare(
+      `SELECT COALESCE(SUM(${taxableSql('sm.total_value_pesewas')}), 0) AS cost
+         FROM customer_return_lines crl
+         JOIN customer_returns cr ON cr.id = crl.return_id
+         JOIN stock_movements sm ON sm.id = crl.stock_movement_id
+         WHERE cr.location_id = ? AND cr.created_at >= ? AND cr.created_at < ?`,
+    )
+    .get(locationId, dayStart, next) as { cost: number };
+  const cashRefundedRow = db
+    .prepare(
+      `SELECT COALESCE(SUM(amount_pesewas), 0) AS total
+         FROM cash_refunds
+         WHERE location_id = ? AND created_at >= ? AND created_at < ?`,
+    )
+    .get(locationId, dayStart, next) as { total: number };
+
+  const totalRevenue = salesAgg.revenue - returnsRow.netRefund;
+  const totalCogs = cogsRow.cogs - returnsCostRow.cost;
   const grossMargin = totalRevenue - totalCogs;
 
   // Breakage value (loss is stored as negative total_value; we report positive)
@@ -280,6 +314,7 @@ export function generateDailySummary(
         num_sales = ?, num_unique_customers = ?,
         top_skus_json = ?, reorder_alerts_json = ?, shift_summaries_json = ?,
         total_expenses_value_pesewas = ?, expenses_by_category_json = ?,
+        total_returns_pesewas = ?, num_returns = ?, cash_refunded_pesewas = ?,
         generated_at = ?
       WHERE id = ?`,
     ).run(
@@ -289,6 +324,7 @@ export function generateDailySummary(
       salesAgg.num, salesAgg.distinct_customers,
       topSkusJson, reorderJson, shiftJson,
       expensesRow.total, JSON.stringify(expensesByCategory),
+      returnsRow.refund, returnsRow.num, cashRefundedRow.total,
       now, id,
     );
   } else {
@@ -304,8 +340,9 @@ export function generateDailySummary(
         num_sales, num_unique_customers,
         top_skus_json, reorder_alerts_json, shift_summaries_json,
         total_expenses_value_pesewas, expenses_by_category_json,
+        total_returns_pesewas, num_returns, cash_refunded_pesewas,
         generated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       id, date, locationId,
       totalRevenue, totalCogs, grossMargin, breakageRow.total, consumptionRow.total,
@@ -314,6 +351,7 @@ export function generateDailySummary(
       salesAgg.num, salesAgg.distinct_customers,
       topSkusJson, reorderJson, shiftJson,
       expensesRow.total, JSON.stringify(expensesByCategory),
+      returnsRow.refund, returnsRow.num, cashRefundedRow.total,
       now,
     );
   }
@@ -325,6 +363,9 @@ export function generateDailySummary(
     totalRevenuePesewas: totalRevenue,
     totalCostOfGoodsSoldPesewas: totalCogs,
     grossMarginPesewas: grossMargin,
+    totalReturnsPesewas: returnsRow.refund,
+    numReturns: returnsRow.num,
+    cashRefundedPesewas: cashRefundedRow.total,
     totalBreakageValuePesewas: breakageRow.total,
     totalConsumptionValuePesewas: consumptionRow.total,
     totalExpensesValuePesewas: expensesRow.total,
@@ -352,6 +393,8 @@ export function getDailySummary(db: DB, date: string, locationId: string): Daily
               total_revenue_pesewas AS totalRevenuePesewas,
               total_cost_of_goods_sold_pesewas AS totalCostOfGoodsSoldPesewas,
               gross_margin_pesewas AS grossMarginPesewas,
+              total_returns_pesewas AS totalReturnsPesewas, num_returns AS numReturns,
+              cash_refunded_pesewas AS cashRefundedPesewas,
               total_breakage_value_pesewas AS totalBreakageValuePesewas,
               total_consumption_value_pesewas AS totalConsumptionValuePesewas,
               cash_count_variance_pesewas AS cashCountVariancePesewas,

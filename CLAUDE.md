@@ -819,3 +819,27 @@ Motion is CSS only and never makes the cashier wait: a new screen fades in
 after it is already taking keys, dialogs animate in but close instantly, and
 `prefers-reduced-motion` switches it all off ("Motion rules" in the design
 doc; `tests/motion.test.tsx`).
+
+## 15. Correcting a sale, and where refunds go
+
+Three ways to fix a sale that's already been rung, all append-only:
+
+| Situation | Path | Money |
+|---|---|---|
+| Missed items, same shift | **Correct** (cashier) | What was paid stays as it was (cash, MoMo with its reference, pay-later on the same customer and due date); the cashier says how the extra is paid. Only for today's sales in a shift that is still open, at that till. After the shift closes, ring the missed items as a new sale. |
+| Wrong sale, customer changed mind | **Void request** → supervisor approves | The requester says whether the sale's cash goes back. If it does, the refund comes out of the requester's own drawer (or the sale's, for a supervisor with no shift) when approved, and that drawer can't close until then. "No cash changes hands" is for a sale rung by mistake. |
+| Some items come back | **Customer return** (supervisor PIN) | Cash refunds come out of the current drawer. |
+
+Every cash refund is a `cash_refunds` row (migration 0056) naming the drawer it
+left. A sale's cash stays counted in the drawer that took it; the refund is
+subtracted from the drawer that paid it (`src/main/services/drawerCash.ts`,
+used by shift close, cash drops, "Cash in tills" and the position report). So a
+refund for a sale from an earlier shift, or from another till, doesn't show as a
+shortage on the wrong cashier.
+
+Revenue and margin in the daily summary, Overview, Sales and Margin reports are
+**net of customer returns**, dated the day of the return. The daily summary shows
+the returns and the cash paid back. Refunds used to be recorded as cash drops
+(notes `customer-refund:…`); those old rows stay as they were.
+
+Verify with `npx vitest --run tests/correctSale.test.ts tests/cash-refunds.test.ts tests/queuedVoids.test.ts`.

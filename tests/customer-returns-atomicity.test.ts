@@ -110,7 +110,7 @@ describe('recordCustomerReturn — atomicity', () => {
     expect(r.creditAllocations).toEqual([{ saleId: creditSaleId, amountPesewas: 800 }]);
   });
 
-  it('CASH return: stock goes up + a negative cash-drop row is written', () => {
+  it('CASH return: stock goes up + a cash refund is recorded in the shift', () => {
     const stockBefore = unitsOnHand(db, starId, L);
 
     const r = recordCustomerReturn(db, {
@@ -122,13 +122,15 @@ describe('recordCustomerReturn — atomicity', () => {
     });
 
     expect(unitsOnHand(db, starId, L)).toBe(stockBefore + 2);
-    expect(r.negativeCashDropId).not.toBeNull();
-    const drop = db.prepare(
-      `SELECT count_type, counted_pesewas, notes FROM cash_counts WHERE id = ?`,
-    ).get(r.negativeCashDropId!) as { count_type: string; counted_pesewas: number; notes: string };
-    expect(drop.count_type).toBe('CASH_DROP');
-    expect(drop.counted_pesewas).toBe(1600);
-    expect(drop.notes).toContain('customer-refund');
+    expect(r.cashRefundId).not.toBeNull();
+    const refund = db.prepare(
+      `SELECT shift_id AS shiftId, amount_pesewas AS amount, source_type AS source, customer_return_id AS returnId
+         FROM cash_refunds WHERE id = ?`,
+    ).get(r.cashRefundId!) as { shiftId: string; amount: number; source: string; returnId: string };
+    expect(refund).toEqual({ shiftId, amount: 1600, source: 'CUSTOMER_RETURN', returnId: r.returnId });
+    // Not a cash drop any more: that read as money taken to the safe.
+    const drops = db.prepare("SELECT COUNT(*) AS n FROM cash_counts WHERE count_type = 'CASH_DROP'").get() as { n: number };
+    expect(drops.n).toBe(0);
   });
 
   it('rolls back ALL writes when a mid-transaction failure occurs', () => {

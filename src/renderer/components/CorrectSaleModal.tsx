@@ -114,9 +114,10 @@ export function CorrectSaleModal({ sale, onCancel, onDone }: {
   const cashGiven = method === 'CASH' && cashGivenRaw.trim() !== '' ? parseCedisToPesewas(cashGivenRaw) ?? 0 : null;
   const cashShort = cashGiven != null && cashGiven < delta;
   const needsReference = method.startsWith('MOMO_') || method === 'BANK_TRANSFER';
+  // The method is in the select beside it; the button stays short enough to fit.
   const collectLabel = method === 'CREDIT'
-    ? `add ${formatMoneyWithCurrency(delta)} to ${sale.customerName ?? 'the account'}`
-    : `collect ${formatMoneyWithCurrency(delta)} by ${methodLabel(method)}`;
+    ? `add ${formatMoneyWithCurrency(delta)} to account`
+    : `collect ${formatMoneyWithCurrency(delta)}`;
 
   async function submit() {
     if (additions.length === 0 || cashShort) return;

@@ -2,7 +2,8 @@
 //
 // Customer returns: distinct from sale voids. The customer brings unsold
 // stock back, we re-shelve it, and make them whole via:
-//   - CASH:    we pay them out of the till; recorded as a NEGATIVE cash drop
+//   - CASH:    we pay them out of the till; recorded as a cash_refunds row
+//              in that shift (see drawerCash.ts)
 //   - CREDIT:  reduce their outstanding sale balance(s) (FIFO) — for credit
 //              customers; partial allocations OK
 //   - STORE:   store credit (future). For now, treat as CREDIT — caller
@@ -54,8 +55,8 @@ export interface RecordReturnResult {
   totalRefundPesewas: number;
   /** Allocations to original sale rows when refundMethod = CREDIT. */
   creditAllocations: Array<{ saleId: string; amountPesewas: number }>;
-  /** When refundMethod = CASH, the negative cash-drop id we created. */
-  negativeCashDropId: string | null;
+  /** When refundMethod = CASH, the cash_refunds row we created. */
+  cashRefundId: string | null;
 }
 
 export function recordCustomerReturn(
@@ -216,7 +217,7 @@ export function recordCustomerReturn(
 
     // Refund accounting.
     let creditAllocations: Array<{ saleId: string; amountPesewas: number }> = [];
-    let negativeCashDropId: string | null = null;
+    let cashRefundId: string | null = null;
 
     if (input.refundMethod === 'CREDIT') {
       // FIFO allocate against the customer's open credit sales: oldest first,
@@ -294,26 +295,25 @@ export function recordCustomerReturn(
       }
       reconcileCustomerBalance(db, input.customerId);
     } else if (input.refundMethod === 'CASH') {
-      // Cash refund -> till loses cash. Recorded as a CASH_DROP-typed
-      // cash_counts row to mirror cashDrops.recordCashDrop, so the daily
-      // summary & shift expected-cash math just work. The notes column
-      // tags it as a customer refund so reports can split.
+      // Cash refund -> the till loses cash. A cash_refunds row in this shift
+      // takes it out of the drawer's expected cash and shows it as a refund
+      // (not money taken to the safe) in the day's figures.
       if (!input.shiftId) {
         throw new Error('recordCustomerReturn: CASH refund requires an open shiftId');
       }
-      const dropId = `cc-${uuidv4()}`;
-      db.prepare(
-        `INSERT INTO cash_counts
-           (id, shift_id, location_id, worker_id, count_type, counted_pesewas,
-            notes, supervisor_id, created_by, updated_by, device_id)
-         VALUES (?, ?, ?, ?, 'CASH_DROP', ?, ?, ?, ?, ?, ?)`,
-      ).run(
-        dropId, input.shiftId, input.locationId, input.workerId, totalRefund,
-        `customer-refund:${input.customerId} — ${input.reason.trim()}`,
-        input.supervisorWorkerId,
-        input.workerId, input.workerId, input.deviceId,
-      );
-      negativeCashDropId = dropId;
+      if (totalRefund > 0) {
+        cashRefundId = `crf-${uuidv4()}`;
+        db.prepare(
+          `INSERT INTO cash_refunds
+             (id, shift_id, location_id, amount_pesewas, source_type, sale_id,
+              customer_return_id, customer_id, reason, paid_by, approved_by, created_by, device_id)
+           VALUES (?, ?, ?, ?, 'CUSTOMER_RETURN', ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).run(
+          cashRefundId, input.shiftId, input.locationId, totalRefund,
+          input.originalSaleId ?? null, returnId, input.customerId, input.reason.trim(),
+          input.workerId, input.supervisorWorkerId, input.workerId, input.deviceId,
+        );
+      }
     }
 
     postCustomerReturnIfActive(db, returnId, input.workerId, input.deviceId);
@@ -322,7 +322,7 @@ export function recordCustomerReturn(
       returnId,
       totalRefundPesewas: totalRefund,
       creditAllocations,
-      negativeCashDropId,
+      cashRefundId,
     };
   })();
 }

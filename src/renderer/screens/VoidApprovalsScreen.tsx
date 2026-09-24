@@ -77,8 +77,11 @@ export default function VoidApprovalsScreen({ onExit, backLabel }: { onExit: () 
     setDeciding(false);
     if (!result.success) { setError(result.error); return; }
     const affected = result.data.payments.map((payment) => payment.method.replace(/_/g, ' ')).join(', ');
+    const cash = result.data.cashRefundPesewas
+      ? ` ${result.data.refundDrawerName ?? 'The cashier'} gives ${formatMoneyWithCurrency(result.data.cashRefundPesewas)} cash back from their drawer; it is recorded there.`
+      : '';
     setMessage(decision === 'APPROVE'
-      ? `Receipt #${result.data.saleId.slice(-8)} is voided. Complete the physical refund/restocking for: ${affected || 'the original tender'}.`
+      ? `Receipt #${result.data.saleId.slice(-8)} is voided. Complete the physical refund/restocking for: ${affected || 'the original tender'}.${cash}`
       : `Request for receipt #${result.data.saleId.slice(-8)} was declined; the sale remains valid.`);
     setSelected(null); setNote('');
     await refresh();
@@ -170,6 +173,13 @@ function ReviewPanel({ request, note, setNote, deciding, onClose, onDecide }: {
             </>}
           </div>
           <p className="text-xs text-text-secondary mt-2">Approval reverses inventory, payment rails, and {request.creditBalanceDeltaPesewas ? `customer credit by ${formatMoneyWithCurrency(Math.abs(request.creditBalanceDeltaPesewas))}` : 'no customer credit'} in the same transaction.</p>
+          {request.payments.some((payment) => payment.method === 'CASH') && (
+            <p className="text-xs mt-2">
+              {request.cashRefundPesewas
+                ? <>Cash back: <span className="font-mono">{formatMoneyWithCurrency(request.cashRefundPesewas)}</span> from {request.refundDrawerName ?? 'the requester'}’s drawer, recorded as a refund in that shift.</>
+                : 'No cash goes back: the requester says no money changed hands.'}
+            </p>
+          )}
         </div>
       </div>
       {request.status === 'PENDING' ? <>

@@ -4,6 +4,15 @@
 // and a NEW set of stock_movements (positive, SALE_VOID_REVERSAL) is
 // appended that brings inventory back to its pre-sale state. This way the
 // void itself is auditable: you can see who voided what, when, why.
+//
+// Cash: a request says whether the customer gets the sale's cash back. If
+// so, the refund is paid on approval from the requester's own drawer (their
+// open shift, or the sale's own shift for a supervisor with none; that
+// drawer can't close until the request is decided) and recorded
+// as a cash_refunds row there; the sale's cash stays counted in the drawer
+// that took it. That keeps both drawers right when the sale was rung in an
+// earlier shift or on another till. With no refund (rung by mistake, no
+// money changed hands) the sale's cash simply drops out. See drawerCash.ts.
 
 import type { Database as DB } from 'better-sqlite3';
 import { v4 as uuidv4 } from 'uuid';
@@ -15,6 +24,7 @@ import {
   reverseSaleJournalIfActive,
 } from './ledger.js';
 import { insertStockMovement } from './stockMovements.js';
+import { getCurrentExpectedCash } from './cashDrops.js';
 import { verifyPin } from './workers.js';
 
 export interface VoidSaleInput {
@@ -79,6 +89,11 @@ export interface SaleVoidRequestSummary {
   totalPesewas: number;
   paymentMethod: string;
   lineCount: number;
+  /** Cash going back to the customer on approval, or null when none. */
+  cashRefundPesewas: number | null;
+  /** The drawer (shift) that pays it, and whose drawer that is. */
+  refundShiftId: string | null;
+  refundDrawerName: string | null;
 }
 
 export interface SaleVoidRequestDetail extends SaleVoidRequestSummary {
@@ -142,11 +157,21 @@ function assertVoidEligibility(db: DB, sale: VoidableSale, today: string): void 
   if (returned) throw new Error('sale void request: sale has a linked customer return');
 }
 
+/** Cash tenders on a sale (the part a refund could hand back). */
+function saleCashPesewas(db: DB, saleId: string): number {
+  return (db.prepare(
+    "SELECT COALESCE(SUM(amount_pesewas), 0) AS n FROM sale_payments WHERE sale_id = ? AND payment_method = 'CASH'",
+  ).get(saleId) as { n: number }).n;
+}
+
 export function createSaleVoidRequest(db: DB, input: {
   saleId: string;
   reason: string;
   requesterWorkerId: string;
   deviceId: string;
+  /** Give the sale's cash back from the requester's drawer. Default true;
+   *  false when no money changed hands. Ignored for a sale with no cash. */
+  refundCash?: boolean;
 }): SaleVoidRequestDetail {
   activeWorker(db, input.requesterWorkerId);
   const reason = input.reason.trim();
@@ -161,16 +186,37 @@ export function createSaleVoidRequest(db: DB, input: {
   ).get(sale.id) as { id: string } | undefined;
   if (existing) throw new Error('sale void request: this sale already has a pending request');
 
+  const saleCash = saleCashPesewas(db, sale.id);
+  let cashRefund: number | null = null;
+  let refundShiftId: string | null = null;
+  if (saleCash > 0 && input.refundCash !== false) {
+    // The requester's own drawer; a supervisor with no shift of their own
+    // pays from the drawer the sale was rung into, while it's still open.
+    const drawer = (db.prepare(
+      'SELECT id FROM shifts WHERE worker_id = ? AND closed_at IS NULL LIMIT 1',
+    ).get(input.requesterWorkerId) ?? db.prepare(
+      'SELECT id FROM shifts WHERE id = ? AND closed_at IS NULL',
+    ).get(sale.shiftId)) as { id: string } | undefined;
+    if (!drawer) {
+      throw new Error(
+        'sale void request: no open drawer to give the cash back from; open a shift, or say no cash changes hands',
+      );
+    }
+    cashRefund = saleCash;
+    refundShiftId = drawer.id;
+  }
+
   const id = `svr-${uuidv4()}`;
   db.transaction(() => {
     db.prepare(
       `INSERT INTO sale_void_requests
          (id, sale_id, location_id, shift_id, requested_by, reason,
-          request_device_id, created_by, updated_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          request_device_id, created_by, updated_by, cash_refund_pesewas, refund_shift_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       id, sale.id, sale.locationId, sale.shiftId, input.requesterWorkerId,
       reason, input.deviceId, input.requesterWorkerId, input.requesterWorkerId,
+      cashRefund, refundShiftId,
     );
     logAudit(db, {
       workerId: input.requesterWorkerId,
@@ -183,6 +229,8 @@ export function createSaleVoidRequest(db: DB, input: {
         locationId: sale.locationId,
         totalPesewas: sale.totalPesewas,
         reason,
+        cashRefundPesewas: cashRefund,
+        refundShiftId,
       },
       deviceId: input.deviceId,
     });
@@ -209,10 +257,12 @@ export function reviewSaleVoidRequest(db: DB, input: {
 
   db.transaction(() => {
     const request = db.prepare(
-      `SELECT id, sale_id AS saleId, requested_by AS requestedBy, reason, status
+      `SELECT id, sale_id AS saleId, requested_by AS requestedBy, reason, status,
+              cash_refund_pesewas AS cashRefundPesewas, refund_shift_id AS refundShiftId
          FROM sale_void_requests WHERE id = ?`,
     ).get(input.requestId) as {
       id: string; saleId: string; requestedBy: string; reason: string; status: VoidRequestStatus;
+      cashRefundPesewas: number | null; refundShiftId: string | null;
     } | undefined;
     if (!request) throw new Error(`sale void request ${input.requestId} not found`);
     if (request.status !== 'PENDING') throw new Error(`sale void request is already ${request.status.toLowerCase()}`);
@@ -244,6 +294,20 @@ export function reviewSaleVoidRequest(db: DB, input: {
     assertVoidEligibility(db, sale, now.slice(0, 10));
     const lines = loadSaleOutflows(db, sale.id);
     if (lines.length === 0) throw new Error('sale void request: sale has no stock movements');
+    if (request.cashRefundPesewas && request.refundShiftId) {
+      const drawer = db.prepare('SELECT closed_at AS closedAt FROM shifts WHERE id = ?')
+        .get(request.refundShiftId) as { closedAt: string | null } | undefined;
+      if (!drawer || drawer.closedAt) {
+        throw new Error('sale void request: the drawer that pays the refund has closed; ask for a new request');
+      }
+      // Measured before the void, while the sale's own cash still counts.
+      const inDrawer = getCurrentExpectedCash(db, request.refundShiftId);
+      if (request.cashRefundPesewas > inDrawer) {
+        throw new Error(
+          `sale void request: the refund (${request.cashRefundPesewas} pesewas) is more than the drawer holds (${inDrawer} pesewas)`,
+        );
+      }
+    }
     const changed = db.prepare(
       `UPDATE sale_void_requests
           SET status = 'APPROVED', reviewed_by = ?, reviewed_at = ?, review_note = ?,
@@ -265,6 +329,18 @@ export function reviewSaleVoidRequest(db: DB, input: {
       deviceId: input.deviceId,
       supervisorApprovalId: reviewer.id,
     });
+    if (request.cashRefundPesewas && request.refundShiftId) {
+      db.prepare(
+        `INSERT INTO cash_refunds
+           (id, shift_id, location_id, amount_pesewas, source_type, sale_id, void_request_id,
+            customer_id, reason, paid_by, approved_by, created_by, device_id)
+         VALUES (?, ?, ?, ?, 'SALE_VOID', ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(
+        `crf-${uuidv4()}`, request.refundShiftId, sale.locationId, request.cashRefundPesewas,
+        sale.id, request.id, sale.customerId, request.reason,
+        request.requestedBy, reviewer.id, reviewer.id, input.deviceId,
+      );
+    }
     logAudit(db, {
       workerId: reviewer.id,
       action: 'SALE_VOID_REQUEST_APPROVED',
@@ -276,6 +352,8 @@ export function reviewSaleVoidRequest(db: DB, input: {
         selfApproved: request.requestedBy === reviewer.id,
         reversalMovementCount: reversal.reversalMovementCount,
         customerBalanceDelta: reversal.customerBalanceDelta,
+        cashRefundPesewas: request.cashRefundPesewas,
+        refundShiftId: request.refundShiftId,
       },
       deviceId: input.deviceId,
     });
@@ -330,13 +408,17 @@ const REQUEST_SUMMARY_SQL = `
          s.created_at AS saleCreatedAt, seller.full_name AS saleWorkerName,
          customer.display_name AS customerName, s.channel,
          s.total_pesewas AS totalPesewas, s.payment_method AS paymentMethod,
-         (SELECT COUNT(*) FROM sale_lines sl WHERE sl.sale_id = s.id) AS lineCount
+         (SELECT COUNT(*) FROM sale_lines sl WHERE sl.sale_id = s.id) AS lineCount,
+         vr.cash_refund_pesewas AS cashRefundPesewas, vr.refund_shift_id AS refundShiftId,
+         drawer_owner.full_name AS refundDrawerName
     FROM sale_void_requests vr
     JOIN sales s ON s.id = vr.sale_id
     JOIN workers requester ON requester.id = vr.requested_by
     JOIN workers seller ON seller.id = s.worker_id
     LEFT JOIN workers reviewer ON reviewer.id = vr.reviewed_by
-    LEFT JOIN customers customer ON customer.id = s.customer_id`;
+    LEFT JOIN customers customer ON customer.id = s.customer_id
+    LEFT JOIN shifts refund_drawer ON refund_drawer.id = vr.refund_shift_id
+    LEFT JOIN workers drawer_owner ON drawer_owner.id = refund_drawer.worker_id`;
 
 export function listSaleVoidRequests(db: DB, input: {
   actorWorkerId: string;
@@ -417,9 +499,11 @@ export function pendingSaleVoidRequestCount(db: DB, actorWorkerId?: string): num
 }
 
 export function assertNoPendingVoidRequestsForShift(db: DB, shiftId: string): void {
+  // Its own sales' requests, and requests whose refund this drawer pays.
   const row = db.prepare(
-    "SELECT COUNT(*) AS n FROM sale_void_requests WHERE shift_id = ? AND status = 'PENDING'",
-  ).get(shiftId) as { n: number };
+    `SELECT COUNT(*) AS n FROM sale_void_requests
+      WHERE (shift_id = ? OR refund_shift_id = ?) AND status = 'PENDING'`,
+  ).get(shiftId, shiftId) as { n: number };
   if (row.n > 0) {
     throw new Error(`shift has ${row.n} pending void request(s); resolve or withdraw them before closing`);
   }
@@ -641,6 +725,8 @@ export interface RecentSale {
   workerName: string;
   customerName: string | null;
   voided: boolean;
+  /** The sale's cash tenders: what a void could hand back. */
+  cashPesewas: number;
   lineCount: number;
   voidRequest: {
     id: string;
@@ -669,7 +755,9 @@ export function listRecentSales(db: DB, limit = 25): RecentSale[] {
               vr.reviewed_at AS voidReviewedAt, vr.review_note AS voidReviewNote,
               requester.full_name AS voidRequesterName,
               reviewer.full_name AS voidReviewerName,
-              (SELECT COUNT(*) FROM sale_lines sl WHERE sl.sale_id = s.id) AS lineCount
+              (SELECT COUNT(*) FROM sale_lines sl WHERE sl.sale_id = s.id) AS lineCount,
+              (SELECT COALESCE(SUM(sp.amount_pesewas), 0) FROM sale_payments sp
+                WHERE sp.sale_id = s.id AND sp.payment_method = 'CASH') AS cashPesewas
          FROM sales s
          JOIN workers w ON w.id = s.worker_id
          LEFT JOIN customers c ON c.id = s.customer_id
@@ -694,6 +782,7 @@ export function listRecentSales(db: DB, limit = 25): RecentSale[] {
       workerName: string;
       customerName: string | null;
       lineCount: number;
+      cashPesewas: number;
       voidRequestId: string | null;
       voidRequestStatus: VoidRequestStatus | null;
       voidRequestReason: string | null;
@@ -714,6 +803,7 @@ export function listRecentSales(db: DB, limit = 25): RecentSale[] {
     customerName: r.customerName,
     voided: r.voided === 1,
     lineCount: r.lineCount,
+    cashPesewas: r.cashPesewas,
     voidRequest: r.voidRequestId && r.voidRequestStatus && r.voidRequestReason
       && r.voidRequestedAt && r.voidRequesterId && r.voidRequesterName
       ? {

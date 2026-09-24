@@ -180,7 +180,8 @@ describe('0054 upgrade on an existing database', () => {
     const contradictoryBefore = byId(contradictory.saleId);
     const outboxBefore = (db.prepare('SELECT COUNT(*) AS n FROM sync_outbox').get() as { n: number }).n;
 
-    expect(runMigrations(db, migrationsDir).applied).toEqual([upgradeMigration]);
+    // Later migrations apply too; 0054 must be the first.
+    expect(runMigrations(db, migrationsDir).applied[0]).toBe(upgradeMigration);
 
     expect(byId(kept.saleId)).toEqual(keptBefore);
     const repaired = byId(contradictory.saleId);
