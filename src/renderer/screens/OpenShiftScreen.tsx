@@ -13,6 +13,7 @@ import { TaskIllustration } from '../components/friendly/TaskIllustration';
 import VoidApprovalsScreen from './VoidApprovalsScreen';
 import VarianceCasesScreen from './VarianceCasesScreen';
 import StockReceiptApprovalsScreen from './StockReceiptApprovalsScreen';
+import { Button } from '../components/ui/button';
 
 export default function OpenShiftScreen() {
   const [raw, setRaw] = useState('');
@@ -151,14 +152,14 @@ export default function OpenShiftScreen() {
           </div>
         )}
         <div className="flex items-center gap-4 mt-4">
-          <button
+          <Button variant="primary"
             type="button"
             onClick={() => void submit()}
             disabled={!valid || submitting}
-            className="btn btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
+            className="disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {submitting ? 'Opening shift…' : 'Open shift'} <span className="kbd">F2</span>
-          </button>
+          </Button>
           {valid && pesewas !== null && (
             <span className="text-text-secondary text-sm">→ Cash counted: <span className="font-mono tnum">GHS {formatMoney(pesewas)}</span></span>
           )}
@@ -171,15 +172,15 @@ export default function OpenShiftScreen() {
         {isSenior && (
           <section className="panel p-5 mt-4 flex flex-wrap items-center justify-between gap-3">
             <div><div className="eyebrow">Management access</div><div className="mt-1">Review void requests without opening an artificial till shift.</div></div>
-            <button className={pendingApprovals > 0 ? 'btn border-warning text-warning' : 'btn btn-quiet'} onClick={() => setShowApprovals(true)}>
+            <Button variant={pendingApprovals > 0 ? 'warning' : 'secondary'} onClick={() => setShowApprovals(true)}>
               Void approvals{pendingApprovals > 0 ? ` · ${pendingApprovals}` : ''}
-            </button>
-            <button className={openVariances > 0 ? 'btn border-warning text-warning' : 'btn btn-quiet'} onClick={() => setShowVarianceCases(true)}>
+            </Button>
+            <Button variant={openVariances > 0 ? 'warning' : 'secondary'} onClick={() => setShowVarianceCases(true)}>
               Variance cases{openVariances > 0 ? ` · ${openVariances}` : ''}
-            </button>
-            <button className={pendingStockApprovals > 0 ? 'btn border-warning text-warning' : 'btn btn-quiet'} onClick={() => setShowStockApprovals(true)}>
+            </Button>
+            <Button variant={pendingStockApprovals > 0 ? 'warning' : 'secondary'} onClick={() => setShowStockApprovals(true)}>
               Stock approvals{pendingStockApprovals > 0 ? ` · ${pendingStockApprovals}` : ''}
-            </button>
+            </Button>
           </section>
         )}
       </main>

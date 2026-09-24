@@ -107,13 +107,60 @@ A strip above the sale screen's search results:
 This needs a small query in the main process (top sellers by units) and
 lands with the sale screen rebuild in Phase 3.
 
+## Components
+
+`src/renderer/components/ui/` holds the shared parts, generated with the
+shadcn CLI on Base UI and rewritten in Harbour's token names. We own this
+code: change a component here and every screen follows. Class names are
+joined with `cn()` from `src/renderer/lib/cn.ts`, so a `className` passed in
+overrides the component's own.
+
+To add one, generate it in a scratch project, not this repo, because the CLI
+rewrites the stylesheet with its own colour names:
+`npx shadcn@latest init -t vite -b base -p nova`, then
+`npx shadcn@latest add <name>`. Copy the file here, swap shadcn's names
+(`primary`, `muted`, `popover`, `ring`, `accent` as a hover grey) for
+Harbour's, import `cn` from `lib/cn`, and give anything that takes a `ref`
+a `forwardRef` (React 18).
+
+| Part | Use it for |
+|---|---|
+| `Button` | Every button. `variant`: `primary` (the one main action), `secondary` (default), `ghost`, `danger`, `success`, `warning`, `destructive` (filled; the confirming step of something irreversible), `link`. `size`: `sm`, `md`, `lg`, `xl`, `icon`. `shortcut="F2"` shows the key and sets `aria-keyshortcuts`. A native `<button>`, so it still submits a form. |
+| `Dialog`, `Sheet` | Anything that takes over the screen until answered. See the rules below. |
+| `Input`, `Textarea`, `Select`, `Checkbox` | Form fields; each needs a visible label. |
+| `Badge` | Status. `tone`: `neutral`, `accent`, `success`, `warning`, `danger`, plus the words. `lib/tones.ts` maps review statuses and severities. |
+| `Card` | A white surface for a group of related content. |
+| `Table` and parts | Data tables; money and quantity cells take `text-right font-mono tnum`. |
+| `Tabs` | `segmented` for switching a view in place, `line` for sections of a screen. |
+| `Tooltip`, `Popover` | Extra explanation, never the only copy of something needed. |
+| `Kbd`, `Separator`, `Skeleton`, `ScrollArea`, `Toaster` | As named. Toasts are for short confirmations only; errors stay inline. |
+
+### Dialog rules
+
+Dialogs keep the till's keyboard contract (`components/ui/dialog.tsx`,
+tested in `tests/ui-components.test.tsx`):
+
+- Only the **topmost** open dialog receives Escape and F1–F12. They are
+  caught before any screen handler, so Escape in a payment dialog can never
+  also clear the sale underneath.
+- While `busy` (saving), Escape, F-keys and outside clicks do nothing.
+- Focus moves inside, stays trapped there, and returns to the opener when
+  the dialog goes away. Point `initialFocus` at the field staff type into
+  first.
+- The page behind is hidden from screen readers; `DialogTitle` names the
+  dialog.
+
+Mount a dialog only while it is open (`{open && <Dialog onClose={…}>…}`), as
+the app always has. The older hand-built dialogs use `hooks/useDialog.ts`,
+which follows the same rules; Phase 3 moves them over.
+
 ## Rollout
 
 | Phase | What changes | State |
 |---|---|---|
 | 0 | Tailwind 4, bundled fonts, no visible change | PR #8 |
 | D | Direction chosen: this document | Done |
-| 1 | Harbour tokens: palette, three themes, fluid type, Geist, corners, motion | This branch |
-| 2 | Shared components in `src/renderer/components/ui/` (shadcn on Base UI) | Next |
-| 3 | Screens move to the components; quick picks; lucide icons; charts on tokens | |
+| 1 | Harbour tokens: palette, three themes, fluid type, Geist, corners, motion | PR #9 |
+| 2 | Shared components; every `.btn` and status badge moved onto them; Edit customer is the first dialog on `Dialog` | This branch |
+| 3 | Screens move to the components (cards, tables, fields, the other dialogs); quick picks; lucide icons; charts on tokens | Next |
 | 4 | Enter/exit motion, view transitions, cart animation | |

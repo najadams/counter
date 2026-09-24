@@ -269,41 +269,6 @@
   }
   .subpanel > h3 { color: rgb(var(--c-text-secondary)); font-size: 0.82rem; font-weight: 650; margin-bottom: 0.55rem; }
   .eyebrow { color: rgb(var(--c-text-tertiary)); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
-  .btn {
-    min-height: 2.5rem;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.45rem;
-    padding: 0.55rem 0.9rem;
-    border: 1px solid rgb(var(--c-border));
-    border-radius: var(--radius);
-    font-size: 0.875rem;
-    font-weight: 650;
-    transition: background-color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard), transform var(--duration-fast) var(--ease-standard);
-  }
-  .btn:hover:not(:disabled) { background: rgb(var(--c-bg-elevated)); border-color: rgb(var(--c-border-strong)); }
-  .btn:active:not(:disabled) { transform: translateY(1px); }
-  .btn:disabled { cursor: not-allowed; opacity: 0.45; }
-  .btn-primary { background: rgb(var(--c-accent)); border-color: rgb(var(--c-accent)); color: rgb(var(--c-text-ink)); }
-  .btn-primary:hover:not(:disabled) { background: rgb(var(--c-accent-light)); border-color: rgb(var(--c-accent-light)); }
-  .btn-quiet { color: rgb(var(--c-text-secondary)); background: transparent; }
-  .status-badge {
-    display: inline-flex;
-    align-items: center;
-    min-height: 1.65rem;
-    padding: 0.18rem 0.55rem;
-    border-radius: 999px;
-    font-size: 0.7rem;
-    font-weight: 750;
-    letter-spacing: 0.025em;
-    text-transform: capitalize;
-    white-space: nowrap;
-  }
-  .status-pending { color: rgb(var(--c-warning)); background: rgb(var(--c-warning) / 0.13); border: 1px solid rgb(var(--c-warning) / 0.35); }
-  .status-approved { color: rgb(var(--c-success)); background: rgb(var(--c-success) / 0.12); border: 1px solid rgb(var(--c-success) / 0.32); }
-  .status-declined, .status-voided { color: rgb(var(--c-danger)); background: rgb(var(--c-danger) / 0.11); border: 1px solid rgb(var(--c-danger) / 0.32); }
-  .status-withdrawn { color: rgb(var(--c-text-secondary)); background: rgb(var(--c-bg-elevated)); border: 1px solid rgb(var(--c-border)); }
   .notice { border: 1px solid rgb(var(--c-border)); border-radius: var(--radius-lg); background: rgb(var(--c-bg-elevated) / 0.55); padding: 0.9rem 1rem; font-size: 0.875rem; }
   .notice-warning { border-color: rgb(var(--c-warning) / 0.45); background: rgb(var(--c-warning) / 0.09); color: rgb(var(--c-warning)); }
   .empty-state { padding: 2.5rem 1rem; text-align: center; color: rgb(var(--c-text-tertiary)); font-size: 0.875rem; }
@@ -366,6 +331,20 @@
   :root[data-theme='contrast'] & {
     background-color: rgb(var(--c-scrim) / 0.40);
   }
+}
+
+/* Elevation. Cards sit just off the page; overlays (dialogs, sheets,
+ * popovers, menus) float clearly above it. High contrast drops shadows and
+ * relies on borders. */
+@utility shadow-card {
+  box-shadow: 0 1px 2px rgb(15 42 51 / 0.06), 0 6px 20px rgb(15 42 51 / 0.07);
+  :root[data-theme='dark'] & { box-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px rgb(0 0 0 / 0.35); }
+  :root[data-theme='contrast'] & { box-shadow: none; }
+}
+@utility shadow-overlay {
+  box-shadow: 0 2px 6px rgb(15 42 51 / 0.08), 0 16px 40px rgb(15 42 51 / 0.18);
+  :root[data-theme='dark'] & { box-shadow: 0 2px 6px rgb(0 0 0 / 0.4), 0 20px 48px rgb(0 0 0 / 0.6); }
+  :root[data-theme='contrast'] & { box-shadow: none; }
 }
 
 /* The sale screen is read from a standing distance, so on counter-PC widths

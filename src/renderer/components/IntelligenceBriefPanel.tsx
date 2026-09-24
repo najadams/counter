@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react';
 import { counter } from '../lib/ipc';
 import { formatMoneyWithCurrency } from '../../shared/lib/money';
 import type { IntelligenceBrief, IntelligenceItem } from '../../shared/types/ipc';
+import { Button } from './ui/button';
+import { Badge } from './ui/badge';
+import { severityTone } from '../lib/tones';
 
 export function IntelligenceBriefPanel({ onOpen }: { onOpen: () => void }) {
   const [brief, setBrief] = useState<IntelligenceBrief | null>(null);
@@ -48,7 +51,7 @@ export function IntelligenceBriefPanel({ onOpen }: { onOpen: () => void }) {
               <div className="font-mono tnum text-warning">{formatMoneyWithCurrency(brief.totalExposurePesewas)}</div>
             </div>
           )}
-          <button onClick={onOpen} className="btn btn-primary">Open intelligence</button>
+          <Button variant="primary" onClick={onOpen}>Open intelligence</Button>
         </div>
       </div>
       {brief.stale && (
@@ -73,9 +76,9 @@ function BriefRow({ item, onOpen }: { item: IntelligenceItem; onOpen: () => void
   const severity = item.severity === 'CRITICAL' ? 'text-danger' : item.severity === 'HIGH' ? 'text-warning' : 'text-text-secondary';
   return (
     <button onClick={onOpen} className="w-full px-4 py-3 text-left grid sm:grid-cols-[auto_1fr_auto] gap-3 items-start">
-      <span className={`status-badge ${item.severity === 'CRITICAL' ? 'status-danger' : item.severity === 'HIGH' ? 'status-pending' : 'status-neutral'}`}>
+      <Badge tone={severityTone(item.severity)}>
         {item.severity}
-      </span>
+      </Badge>
       <span>
         <span className="block font-medium">{item.title}</span>
         <span className="block text-xs text-text-secondary mt-1">{item.recommendation}</span>

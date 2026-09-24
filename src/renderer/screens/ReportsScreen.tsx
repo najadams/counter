@@ -27,6 +27,8 @@ import { counter } from '../lib/ipc';
 import { FeedbackBanner } from '../components/FeedbackBanner';
 import { useSession } from '../store/session';
 import { useReportAccess } from '../store/reportAccess';
+import { Button } from '../components/ui/button';
+import { Badge } from '../components/ui/badge';
 
 type Tab =
   | 'owner-summary' | 'profit' | 'position' | 'management-cash'
@@ -181,20 +183,20 @@ export default function ReportsScreen({
               <input autoFocus type="password" inputMode="numeric" maxLength={6} value={pin}
                 onChange={(event) => setPin(event.target.value.replace(/\D/g, '').slice(0, 6))}
                 placeholder="Your PIN" className="input max-w-44 text-lg font-mono" />
-              <button type="submit" disabled={pin.length < 4 || unlocking} className="btn btn-primary">
+              <Button variant="primary" type="submit" disabled={pin.length < 4 || unlocking}>
                 {unlocking ? 'Unlocking…' : 'Unlock reports'}
-              </button>
+              </Button>
             </div>
           </form>
         ) : <>
         <div className="panel px-4 py-3 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <span className="status-badge status-approved">Reports unlocked</span>
+            <Badge tone="success">Reports unlocked</Badge>
             <span className="text-xs text-text-secondary">
               {remainingMs <= 60_000 ? `Locks in ${Math.max(1, Math.ceil(remainingMs / 1000))}s` : 'Locks after 5 minutes of inactivity'}
             </span>
           </div>
-          <button onClick={() => void lockReports('MANUAL')} className="btn btn-quiet">Lock now</button>
+          <Button variant="secondary" onClick={() => void lockReports('MANUAL')}>Lock now</Button>
         </div>
         <div className="panel p-3 flex flex-col gap-3">
           {isOwner && scopes.includes('OWNER') && (

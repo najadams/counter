@@ -5,6 +5,9 @@ import { FeedbackBanner } from '../components/FeedbackBanner';
 import { counter } from '../lib/ipc';
 import { formatMoneyWithCurrency } from '../../shared/lib/money';
 import type { SaleVoidRequestDetail, SaleVoidRequestSummary } from '../../shared/types/ipc';
+import { Button } from '../components/ui/button';
+import { Badge } from '../components/ui/badge';
+import { reviewStatusTone } from '../lib/tones';
 
 type Tab = 'PENDING' | 'HISTORY';
 
@@ -110,7 +113,7 @@ export default function VoidApprovalsScreen({ onExit, backLabel }: { onExit: () 
                     <td className="max-w-xs">{row.reason}</td>
                     <td className="text-right font-mono tnum">{formatMoneyWithCurrency(row.totalPesewas)}</td>
                     <td><Status status={row.status} /></td>
-                    <td className="text-right"><button className="btn btn-quiet text-xs" onClick={() => void open(row)}>{row.status === 'PENDING' ? 'Review' : 'View'}</button></td>
+                    <td className="text-right"><Button variant="secondary" size="sm" onClick={() => void open(row)}>{row.status === 'PENDING' ? 'Review' : 'View'}</Button></td>
                   </tr>
                 ))}
               </tbody>
@@ -173,9 +176,9 @@ function ReviewPanel({ request, note, setNote, deciding, onClose, onDecide }: {
           <textarea value={note} onChange={(event) => setNote(event.target.value)} maxLength={200} rows={3} className="input mt-1 w-full" placeholder="Why are you approving or declining?" />
         </label>
         <div className="flex flex-wrap gap-3">
-          <button className="btn btn-quiet" onClick={onClose}>Cancel</button>
-          <button className="btn border-danger text-danger" disabled={deciding || note.trim().length < 3} onClick={() => void onDecide('DECLINE')}>Decline request</button>
-          <button className="btn btn-primary" disabled={deciding} onClick={() => void onDecide('APPROVE')}>{deciding ? 'Posting reversal…' : 'Approve and void sale'}</button>
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button variant="danger" disabled={deciding || note.trim().length < 3} onClick={() => void onDecide('DECLINE')}>Decline request</Button>
+          <Button variant="primary" disabled={deciding} onClick={() => void onDecide('APPROVE')}>{deciding ? 'Posting reversal…' : 'Approve and void sale'}</Button>
         </div>
       </> : <div className="notice"><strong>{request.status === 'APPROVED' ? 'Approved' : request.status === 'DECLINED' ? 'Declined' : 'Withdrawn'}</strong>{request.reviewerName ? ` by ${request.reviewerName}` : ''}{request.reviewedAt ? ` on ${new Date(request.reviewedAt).toLocaleString()}` : ''}. {request.reviewNote ?? ''}</div>}
     </section>
@@ -183,7 +186,7 @@ function ReviewPanel({ request, note, setNote, deciding, onClose, onDecide }: {
 }
 
 function Status({ status }: { status: SaleVoidRequestSummary['status'] }) {
-  return <span className={`status-badge status-${status.toLowerCase()}`}>{status.toLowerCase()}</span>;
+  return <Badge tone={reviewStatusTone(status)}>{status.toLowerCase()}</Badge>;
 }
 
 function Info({ label, value }: { label: string; value: string }) {
