@@ -119,6 +119,16 @@ for the GPU on a modest PC). `tests/motion.test.tsx` holds these.
   from chips to three tiles at 32rem of search pane, four at 42rem.
 - Container queries never match inside a dialog (it portals to `<body>`),
   so dialog content uses plain widths or window breakpoints.
+- **The sale screen is window-height on a PC.** From `lg` the screen is
+  exactly `100dvh` and its two panes scroll separately: the search box stays
+  put while quick picks and results scroll under it, and the cart (header,
+  lines, totals, payment) scrolls on its own. A phone keeps one long page.
+  The total and payment are not pinned: at 768px tall there is no room
+  left for cart lines once they are.
+- **Key hints live behind Help.** The sale screen lists its keys in a dialog
+  from the header's Help button or F1 (`SaleKeysDialog.tsx`), not as a row
+  of hints under the search. Buttons still show their own key chips
+  (F4 Cash, F2 Complete) where the key does what the button does.
 
 ## Icons
 
@@ -147,9 +157,13 @@ A strip above the sale screen's search results:
 - **What.** The 8 drinks sold most in the last 30 days at this shop, by
   units, each in its default sale unit. Refreshed when a shift opens.
 - **How.** A tap or click adds one to the cart. **Alt+1 … Alt+8** from the
-  keyboard (digits alone would type into search). Each tile shows its key.
-- **Tile.** Name, size, price in accent-coloured mono, 84px tall, 4 per row
-  on the counter PC. On a phone, a horizontal row of chips under the search.
+  keyboard (digits alone would type into search). The tiles don't draw their
+  keys: the sale screen's key list (Help, F1) names "Alt+1–8" once, and
+  each tile carries its key in `aria-keyshortcuts` for screen readers.
+- **Tile.** Name (up to two lines), unit, price in accent-coloured mono. At
+  least 84px tall (96px in Friendly), 4 per row on the counter PC; every row
+  grows to the tallest tile rather than clipping a long name. On a phone, a
+  horizontal row of chips under the search.
 - **Empty state.** A new shop with no sales yet shows no strip.
 - **Stable.** Fetched once per shift and channel, then held, so tiles and
   their Alt keys don't move under a cashier's hands mid-shift. Alt+N does

@@ -694,8 +694,10 @@ npm run build:friendly    # dist/ for the LAN preview (scripts/serve-lan.ts)
 - **Sign in / open shift / close shift**: "Choose your name", "Enter your PIN",
   "Count the money in the drawer. Enter the amount." with an on-screen
   `NumberPad` that never takes focus from the field, so taps and typing mix.
-- **Selling**: bigger search, names and units; 56px quantity buttons; a large
-  Total; **Take payment** opens the touch checkout on every device (hybrid PCs),
+- **Selling**: bigger search, names and units; 48px quantity buttons; a large
+  Total; the keys are listed behind **Help** (F1) in the header, and on a PC
+  the search side and the cart scroll separately;
+  **Take payment** opens the touch checkout on every device (hybrid PCs),
   while F4/F5/F6, Split payment and F2 stay visible. The checkout shows **Total**,
   **Money received**, **Change to give**, and answers to F4/F5/F6/F2/Esc.
 - **Header**: a large **Home** button with a house picture on every screen that
@@ -810,7 +812,7 @@ them. A dialog opened on top of another must render inside the other's
 `DialogContent`; see "Dialog rules" in the design doc.
 
 The sale screen's **quick picks** — the eight best sellers at this shop over
-30 days, by units, as tiles with Alt+1 … Alt+8 — come from
+30 days, by units, as tiles added with Alt+1 … Alt+8 — come from
 `topSellingProducts()` in `src/main/services/sales.ts` over
 `product:top-sellers`. They are fetched once per shift, so positions don't
 move mid-shift; a shop with no sales shows no strip.

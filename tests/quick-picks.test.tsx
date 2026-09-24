@@ -83,6 +83,13 @@ describe('SaleScreen quick picks', () => {
     const strip = await screen.findByRole('group', { name: 'Quick picks' });
     const star = within(strip).getByRole('button', { name: /Add Star Beer 330ml/ });
     expect(star).toHaveAttribute('aria-keyshortcuts', 'Alt+1');
+    // The keys are announced, not drawn: the tiles carry no key chips, and the
+    // key list behind Help names the range once.
+    expect(strip.querySelector('kbd, .kbd')).toBeNull();
+    expect(screen.queryByText('Alt+1–2')).toBeNull();
+    // Two-line names fit only at tight leading; cn() (tailwind-merge) drops a
+    // leading-* class when a text-* size follows it in the same call.
+    expect(within(star).getByText('Star Beer 330ml')).toHaveClass('leading-tight');
     expect(within(strip).getByText('180.00')).toBeInTheDocument();
 
     fireEvent.click(star);
@@ -93,6 +100,38 @@ describe('SaleScreen quick picks', () => {
       ['star', 2, 'UNIT'],
       ['club', 1, 'CRATE'],
     ]);
+  });
+
+  it('lists the keys behind Help and F1; Esc closes the list, not the sale', async () => {
+    counterMock.topSellers.mockResolvedValue({ success: true, data: { products: [
+      hit('star', 'Star Beer 330ml', 800),
+      hit('club', 'Club Premium 330ml', 18000, 'CRATE'),
+    ] } });
+    useCart.getState().addLine({ productId: 'coke', sku: 'COKE', name: 'Coca-Cola', unitPricePesewas: 500, unitsOnHand: 10 });
+    render(<SaleScreen onExit={vi.fn()} />);
+    await screen.findByRole('group', { name: 'Quick picks' });
+
+    const help = screen.getByRole('button', { name: /Help/ });
+    expect(help).toHaveAttribute('aria-keyshortcuts', 'F1');
+    fireEvent.click(help);
+    let list = await screen.findByRole('dialog', { name: 'Keyboard shortcuts' });
+    expect(within(list).getByText('Alt+1–2')).toBeInTheDocument();
+    expect(within(list).getByText('Complete the sale')).toBeInTheDocument();
+
+    // Escape closes the list and leaves the cart alone (on the sale screen
+    // itself Escape clears the cart).
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+    await act(async () => {});
+    expect(screen.queryByRole('dialog', { name: 'Keyboard shortcuts' })).toBeNull();
+    expect(useCart.getState().lines.map((l) => l.productId)).toEqual(['coke']);
+
+    // F1 opens it from the keyboard, and toggles it shut again.
+    fireEvent.keyDown(window, { key: 'F1' });
+    list = await screen.findByRole('dialog', { name: 'Keyboard shortcuts' });
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'F1' });
+    await act(async () => {});
+    expect(screen.queryByRole('dialog', { name: 'Keyboard shortcuts' })).toBeNull();
+    expect(useCart.getState().lines.map((l) => l.productId)).toEqual(['coke']);
   });
 
   it('ignores Alt+N while a dialog is open', async () => {
