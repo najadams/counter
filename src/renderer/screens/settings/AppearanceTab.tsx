@@ -9,7 +9,7 @@
 // preview.
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { useTheme } from '../../store/theme';
+import { resolveChoice, useTheme } from '../../store/theme';
 import { useSession } from '../../store/session';
 import { counter } from '../../lib/ipc';
 import { ReceiptBody } from '../../components/ReceiptPrintModal';
@@ -21,45 +21,37 @@ import { VAT_ENABLED, extractInclusiveVat } from '../../../shared/lib/vat';
 
 export function AppearanceTab() {
   const choice = useTheme((s) => s.choice);
-  const resolved = useTheme((s) => s.resolved);
   const setChoice = useTheme((s) => s.setChoice);
 
   return (
     <div className="max-w-6xl flex flex-col gap-8">
       <section>
         <h2 className="text-text-secondary uppercase tracking-wider text-xs mb-3">Theme</h2>
-        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
-          <ThemeCard
-            label="Dark"
-            description="Original. Sharp gold on near-black."
-            active={choice === 'dark'}
-            onClick={() => setChoice('dark')}
-            swatch={<Swatch bg="#0A0C10" fg="#EDE8DF" accent="#C9A84C" border="#3A4150" />}
-          />
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
           <ThemeCard
             label="Light"
-            description="Warm parchment. Darker gold for legibility."
+            description="Calm off-white with a sea-teal accent."
             active={choice === 'light'}
             onClick={() => setChoice('light')}
-            swatch={<Swatch bg="#F6F3EB" fg="#1A1C20" accent="#B28A38" border="#A8A394" />}
+            swatch={<Swatch bg="#F3F6F7" fg="#0F2A33" accent="#0B6E83" border="#B8C8CD" />}
           />
           <ThemeCard
-            label="Violet"
-            description="Modern. Cool grey with vivid violet accent."
-            active={choice === 'violet'}
-            onClick={() => setChoice('violet')}
-            swatch={<Swatch bg="#EDEDF3" fg="#121218" accent="#7C3AED" border="#C4C4D2" />}
+            label="Dark"
+            description="The same teal on deep blue-green, for dim shops."
+            active={choice === 'dark'}
+            onClick={() => setChoice('dark')}
+            swatch={<Swatch bg="#0A1316" fg="#E4EDEF" accent="#3CB3C8" border="#34494F" />}
           />
           <ThemeCard
-            label="Sea"
-            description="Calm. Off-white page with a sea-blue accent."
-            active={choice === 'sea'}
-            onClick={() => setChoice('sea')}
-            swatch={<Swatch bg="#F4F7F8" fg="#10232B" accent="#0E7490" border="#A9C0C7" />}
+            label="High contrast"
+            description="Strongest text and borders, for bright sun or low vision."
+            active={choice === 'contrast'}
+            onClick={() => setChoice('contrast')}
+            swatch={<Swatch bg="#FFFFFF" fg="#06161B" accent="#005566" border="#0F2A33" />}
           />
           <ThemeCard
             label="System"
-            description={`Follow OS · currently ${resolved}.`}
+            description={`Follow OS · currently ${resolveChoice('system')}.`}
             active={choice === 'system'}
             onClick={() => setChoice('system')}
             swatch={<DiagonalSwatch />}
@@ -732,19 +724,19 @@ function Swatch({ bg, fg, accent, border }: { bg: string; fg: string; accent: st
 function DiagonalSwatch() {
   return (
     <div className="w-full h-16 border border-border-strong relative overflow-hidden">
-      <div className="absolute inset-0" style={{ background: '#0A0C10' }} />
+      <div className="absolute inset-0" style={{ background: '#0A1316' }} />
       <div
         className="absolute inset-0"
         style={{
-          background: '#F6F3EB',
+          background: '#F3F6F7',
           clipPath: 'polygon(100% 0, 100% 100%, 0 100%)',
         }} />
       <span
         className="absolute left-2 top-2 block w-6 h-3"
-        style={{ background: '#C9A84C' }} />
+        style={{ background: '#3CB3C8' }} />
       <span
         className="absolute right-2 bottom-2 block w-6 h-3"
-        style={{ background: '#B28A38' }} />
+        style={{ background: '#0B6E83' }} />
     </div>
   );
 }
