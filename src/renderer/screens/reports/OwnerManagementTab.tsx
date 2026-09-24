@@ -292,7 +292,14 @@ export function OwnerManagementTab({ view, reportAccessToken }: { view: OwnerMan
       </section>
 
       {error && <FeedbackBanner>{error}</FeedbackBanner>}
-      {quality && <QualityBanner quality={quality} />}
+      {quality && (
+        <QualityBanner
+          quality={quality}
+          onFixCutover={view === 'summary'
+            ? () => document.getElementById('cutover-setup')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            : undefined}
+        />
+      )}
       {(drilldown || drilldownError) && (
         <DrilldownPanel data={drilldown} error={drilldownError} onClose={() => {
           setDrilldown(null); setDrilldownError(null);
@@ -878,7 +885,7 @@ function FinancialControls({ pin, reportAccessToken, data, fixedAssets, shadow, 
             {shadow?.enabled ? 'Stop shadow run' : 'Start shadow run'}
           </Button>
         </ControlBox>
-        <ControlBox title="Controlled cutover">
+        <ControlBox title="Controlled cutover" id="cutover-setup">
           <p className="text-sm text-text-secondary mb-3">
             Close all shifts, seal the prior day, complete a recent stocktake, then enter verified opening balances.
             Counter will use opening equity only as the balancing equity account.
@@ -923,31 +930,87 @@ function FinancialControls({ pin, reportAccessToken, data, fixedAssets, shadow, 
   );
 }
 
-function ControlBox({ title, children }: { title: string; children: React.ReactNode }) {
+function ControlBox({ title, children, id }: {
+  title: string; children: React.ReactNode; id?: string;
+}) {
   return (
-    <div className="bg-bg-deep border border-border p-4">
+    <div id={id} className="bg-bg-deep border border-border p-4 scroll-mt-4">
       <h3 className="text-xs uppercase tracking-wider text-text-tertiary mb-3">{title}</h3>
       {children}
     </div>
   );
 }
 
-function QualityBanner({ quality }: { quality: ManagementDataQuality }) {
-  const tone = quality.status === 'COMPLETE'
-    ? 'border-success/50 bg-success/10'
-    : quality.status === 'PROVISIONAL'
+// The banner answers one question: can the owner trust the numbers below it?
+//
+// It used to print every issue as an identical red bullet, so the single item
+// that needed doing sat among six that did not, and a shop that simply trades
+// daily saw a permanent wall of red. A warning nobody can ever clear is one
+// nobody reads. So: the blocking items lead and carry the action, the hygiene
+// warnings fold away behind a count, and an ordinary open trading day is
+// stated plainly rather than flagged.
+function QualityBanner({ quality, onFixCutover }: {
+  quality: ManagementDataQuality;
+  onFixCutover?: () => void;
+}) {
+  const blocking = quality.issues.filter((issue) => issue.severity === 'BLOCKING');
+  const watch = quality.issues.filter((issue) => issue.severity !== 'BLOCKING');
+  const needsCutover = blocking.some((issue) => issue.code === 'CUTOVER_NOT_ACTIVE');
+
+  const tone = blocking.length > 0
+    ? 'border-danger/50 bg-danger/10'
+    : watch.length > 0
       ? 'border-warning/50 bg-warning/10'
-      : 'border-danger/50 bg-danger/10';
+      : quality.status === 'COMPLETE'
+        ? 'border-success/50 bg-success/10'
+        : 'border-border bg-bg-surface';
+
+  const headline = blocking.length > 0
+    ? (needsCutover ? 'Figures are estimates until cutover' : 'Figures need attention')
+    : watch.length > 0
+      ? `Figures are usable — ${watch.length} thing${watch.length === 1 ? '' : 's'} to keep an eye on`
+      : quality.status === 'COMPLETE'
+        ? 'Figures are fully supported'
+        : 'Figures include today — still trading';
+
+  const detail = blocking.length > 0
+    ? (needsCutover
+        ? 'Profit and sales come from recorded takings. Cash and stock balances are not yet backed by the management ledger.'
+        : 'Some figures below cannot be relied on until these are put right.')
+    : quality.cutoverDate
+      ? `Management ledger active from ${quality.cutoverDate}.`
+      : 'Pre-cutover figures are legacy estimates.';
+
   return (
     <section className={`border p-4 ${tone}`}>
-      <div className="font-semibold">Data quality: {quality.status}</div>
-      <div className="text-sm text-text-secondary mt-1">
-        {quality.cutoverDate ? `Management ledger active from ${quality.cutoverDate}.` : 'Pre-cutover figures are legacy estimates.'}
-      </div>
-      {quality.issues.length > 0 && (
-        <ul className="mt-3 list-disc pl-5 text-sm text-text-secondary space-y-1">
-          {quality.issues.map((issue) => <li key={`${issue.code}-${issue.message}`}>{issue.message}</li>)}
+      <div className="font-semibold">{headline}</div>
+      <div className="text-sm text-text-secondary mt-1">{detail}</div>
+
+      {blocking.length > 0 && (
+        <ul className="mt-3 pl-5 list-disc text-sm space-y-1">
+          {blocking.map((issue) => (
+            <li key={`${issue.code}-${issue.message}`}>{issue.message}</li>
+          ))}
         </ul>
+      )}
+
+      {needsCutover && onFixCutover && (
+        <Button variant="primary" size="sm" className="mt-3 print:hidden" onClick={onFixCutover}>
+          Finish the ledger cutover
+        </Button>
+      )}
+
+      {watch.length > 0 && (
+        <details className="mt-3 text-sm text-text-secondary">
+          <summary className="cursor-pointer">
+            {watch.length} thing{watch.length === 1 ? '' : 's'} to keep an eye on
+          </summary>
+          <ul className="mt-2 pl-5 list-disc space-y-1">
+            {watch.map((issue) => (
+              <li key={`${issue.code}-${issue.message}`}>{issue.message}</li>
+            ))}
+          </ul>
+        </details>
       )}
     </section>
   );

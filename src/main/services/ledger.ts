@@ -1102,7 +1102,21 @@ export function getFinancialDataQuality(
 
   const nowMs = Date.now();
   const accounts = listFinancialAccounts(db, locationId);
+  // An account that has never held a cedi cannot be out of balance, so saying
+  // it was "never reconciled" is noise — and a shop that switches on every
+  // payment provider gets one such line each. Only accounts with posted
+  // activity (or a balance) are worth reconciling.
+  const everUsed = new Set(
+    (db.prepare(
+      `SELECT DISTINCT fa.id AS id
+         FROM financial_accounts fa
+         JOIN journal_lines jl ON jl.ledger_account_id = fa.ledger_account_id
+         JOIN journal_entries je ON je.id = jl.journal_entry_id
+        WHERE fa.location_id = ? AND je.status = 'POSTED'`,
+    ).all(locationId) as Array<{ id: string }>).map((r) => r.id),
+  );
   for (const account of accounts) {
+    if (!everUsed.has(account.id) && account.balancePesewas === 0) continue;
     const maxAgeDays = account.kind === 'TILL' ? 1 : 7;
     const age = account.lastReconciledAt
       ? Math.floor((nowMs - new Date(account.lastReconciledAt).getTime()) / 86_400_000)
@@ -1154,12 +1168,17 @@ export function getFinancialDataQuality(
   if (throughDate) {
     assertDateOnly('report end date', throughDate);
     const today = new Date().toISOString().slice(0, 10);
-    if (throughDate >= today || !isDateSealed(db, locationId, throughDate)) {
+    if (throughDate >= today) {
+      // The shop is still trading; these figures move until the day closes.
+      // That makes the report provisional, but it is not something anyone can
+      // fix, so it does not belong in the list of things to put right.
+      provisional = true;
+    } else if (!isDateSealed(db, locationId, throughDate)) {
       provisional = true;
       issues.push({
         code: 'PERIOD_NOT_SEALED',
         severity: 'WARNING',
-        message: `The period through ${throughDate} is still open or unsealed.`,
+        message: `${throughDate} has finished but was never sealed.`,
       });
     }
   }
