@@ -5,6 +5,12 @@ import { counter } from '../../lib/ipc';
 import { useSession } from '../../store/session';
 import { formatMoneyWithCurrency, parseCedisToPesewas, formatMoney } from '../../../shared/lib/money';
 import { FeedbackBanner } from '../../components/FeedbackBanner';
+import { Button } from '../../components/ui/button';
+import { Dialog, DialogContent, DialogFooter, DialogTitle } from '../../components/ui/dialog';
+import { Field } from '../../components/ui/field';
+import { Input } from '../../components/ui/input';
+import { NativeSelect } from '../../components/ui/native-select';
+import { Textarea } from '../../components/ui/textarea';
 
 interface AdminSupplier {
   id: string;
@@ -212,79 +218,59 @@ function SupplierFormModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-scrim flex items-center justify-center p-6 z-50">
-      <form onSubmit={submit} className="bg-bg-elevated rounded-lg shadow-xl w-full max-w-lg p-6 space-y-4">
-        <h2 className="text-xl font-semibold">{mode === 'add' ? 'Add supplier' : 'Edit supplier'}</h2>
+    <Dialog onClose={onClose} busy={busy}>
+      <DialogContent showCloseButton={false} render={<form onSubmit={submit} />} className="w-[min(32rem,calc(100%-2rem))] gap-4">
+        <DialogTitle className="text-xl">{mode === 'add' ? 'Add supplier' : 'Edit supplier'}</DialogTitle>
 
-        <label className="block">
-          <span className="block text-sm text-text-secondary mb-1">Business name</span>
-          <input autoFocus value={name} onChange={(e) => setName(e.target.value)}
-            className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle" />
-        </label>
+        <Field label="Business name">
+          <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} />
+        </Field>
 
         <div className="grid grid-cols-2 gap-3">
-          <label className="block">
-            <span className="block text-sm text-text-secondary mb-1">Contact person</span>
-            <input value={contactPerson} onChange={(e) => setContactPerson(e.target.value)}
-              className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle" />
-          </label>
-          <label className="block">
-            <span className="block text-sm text-text-secondary mb-1">Phone</span>
-            <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="0244 123 456"
-              className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle" />
-          </label>
+          <Field label="Contact person">
+            <Input value={contactPerson} onChange={(e) => setContactPerson(e.target.value)} />
+          </Field>
+          <Field label="Phone">
+            <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="0244 123 456" />
+          </Field>
         </div>
 
-        <label className="block">
-          <span className="block text-sm text-text-secondary mb-1">Email (optional)</span>
-          <input value={email} onChange={(e) => setEmail(e.target.value)}
-            className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle" />
-        </label>
+        <Field label="Email (optional)">
+          <Input value={email} onChange={(e) => setEmail(e.target.value)} />
+        </Field>
 
         <div className="grid grid-cols-3 gap-3">
-          <label className="block">
-            <span className="block text-sm text-text-secondary mb-1">Terms (days)</span>
-            <input type="number" min={0} value={paymentTermsDays}
-              onChange={(e) => setPaymentTermsDays(parseInt(e.target.value || '0', 10))}
-              className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle" />
-          </label>
-          <label className="block">
-            <span className="block text-sm text-text-secondary mb-1">Credit limit (₵)</span>
-            <input value={creditLimit} onChange={(e) => setCreditLimit(e.target.value)}
-              className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle tabular-nums" />
-          </label>
-          <label className="block">
-            <span className="block text-sm text-text-secondary mb-1">Schedule</span>
-            <select value={paymentSchedule} onChange={(e) => setPaymentSchedule(e.target.value as AdminSupplier['paymentSchedule'])}
-              className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle">
+          <Field label="Terms (days)">
+            <Input type="number" min={0} value={paymentTermsDays}
+              onChange={(e) => setPaymentTermsDays(parseInt(e.target.value || '0', 10))} />
+          </Field>
+          <Field label="Credit limit (₵)">
+            <Input value={creditLimit} onChange={(e) => setCreditLimit(e.target.value)} className="font-mono tnum" />
+          </Field>
+          <Field label="Schedule">
+            <NativeSelect value={paymentSchedule} onChange={(e) => setPaymentSchedule(e.target.value as AdminSupplier['paymentSchedule'])}>
               <option value="ON_RECEIPT">On receipt</option>
               <option value="WEEKLY">Weekly</option>
               <option value="BIWEEKLY">Biweekly</option>
               <option value="MONTHLY">Monthly</option>
               <option value="CUSTOM">Custom</option>
-            </select>
-          </label>
+            </NativeSelect>
+          </Field>
         </div>
 
-        <label className="block">
-          <span className="block text-sm text-text-secondary mb-1">Notes</span>
-          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
-            className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle" />
-        </label>
+        <Field label="Notes">
+          <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
+        </Field>
 
         {err && <FeedbackBanner>{err}</FeedbackBanner>}
 
-        <div className="flex justify-end gap-3 pt-2">
-          <button type="button" onClick={onClose} disabled={busy}
-            className="px-4 py-2 border border-border hover:bg-bg-deep text-sm">
-            Cancel
-          </button>
-          <button type="submit" disabled={busy}
-            className="px-4 py-2 bg-accent text-ink font-semibold hover:bg-accent-light text-sm disabled:opacity-50">
+        <DialogFooter>
+          <Button type="button" onClick={onClose} disabled={busy}>Cancel</Button>
+          <Button type="submit" variant="primary" disabled={busy}>
             {busy ? 'Saving…' : (mode === 'add' ? 'Add supplier' : 'Save changes')}
-          </button>
-        </div>
-      </form>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

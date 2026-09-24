@@ -20,7 +20,7 @@ import {
   type GetDeviceIdResponse, type IpcResponse,
   type ListLoginCandidatesResponse, type PingRequest, type PingResponse,
   type ProductGetStockRequest, type ProductGetStockResponse,
-  type ProductSearchRequest, type ProductSearchResponse,
+  type ProductSearchRequest, type ProductSearchResponse, type ProductTopSellersRequest,
   type SaleCompleteRequest, type SaleCompleteResponse,
   type SaleRepriceLinesRequest, type SaleRepriceLinesResponse,
   type PaperReceiptCreateRequest, type PaperReceiptCreateResponse,
@@ -67,7 +67,7 @@ import { listLoginCandidates, verifyPin } from '../services/workers.js';
 import {
   computeAndCloseShift, getOpenShift, openShift, submitClosingCount,
 } from '../services/shifts.js';
-import { completeSale, getShopHeader, searchProducts } from '../services/sales.js';
+import { completeSale, getShopHeader, searchProducts, topSellingProducts } from '../services/sales.js';
 import {
   createPaperReceiptDraft,
   discardPaperReceiptDraft,
@@ -335,6 +335,10 @@ export function registerIpcHandlers(
   ipcMain.handle(IPC_CHANNELS.PRODUCT_SEARCH, wrap<ProductSearchRequest, ProductSearchResponse>(
     (req) => { requireWorker(); return { products: searchProducts(db, req.query, req.channel, DEFAULT_LOCATION_ID, req.limit) }; },
     IPC_CHANNELS.PRODUCT_SEARCH,
+  ));
+  ipcMain.handle(IPC_CHANNELS.PRODUCT_TOP_SELLERS, wrap<ProductTopSellersRequest, ProductSearchResponse>(
+    (req) => { requireWorker(); return { products: topSellingProducts(db, req.channel, DEFAULT_LOCATION_ID, { limit: Math.min(req.limit ?? 8, 12) }) }; },
+    IPC_CHANNELS.PRODUCT_TOP_SELLERS,
   ));
   ipcMain.handle(IPC_CHANNELS.PRODUCT_GET_STOCK, wrap<ProductGetStockRequest, ProductGetStockResponse>(
     (req) => { requireWorker(); return { unitsOnHand: unitsOnHand(db, req.productId, DEFAULT_LOCATION_ID) }; },

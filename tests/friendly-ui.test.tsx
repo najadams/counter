@@ -18,6 +18,7 @@ const counterMock = vi.hoisted(() => ({
   login: vi.fn(),
   getOpenShift: vi.fn(),
   searchProducts: vi.fn(),
+  topSellers: vi.fn(),
   activationStatus: vi.fn(),
   getBestPricingTier: vi.fn(),
   completeSale: vi.fn(),
@@ -261,6 +262,7 @@ describe('SaleScreen checkout', () => {
     useSession.setState({ shiftId: 'shift-1', workerName: 'Ama', workerRole: 'CASHIER' });
     counterMock.activationStatus.mockResolvedValue({ success: true, data: { salesBlocked: false } });
     counterMock.searchProducts.mockResolvedValue({ success: true, data: { products: [] } });
+    counterMock.topSellers.mockResolvedValue({ success: true, data: { products: [] } });
     counterMock.getBestPricingTier.mockResolvedValue({ success: true, data: { tier: null } });
     counterMock.searchCustomers.mockResolvedValue({ success: true, data: { customers: [] } });
     useCart.getState().clear();
@@ -372,10 +374,11 @@ describe('SaleScreen checkout', () => {
     expect(exit).not.toHaveBeenCalled();
     expect(counterMock.completeSale).not.toHaveBeenCalled();
     expect(screen.queryByRole('dialog', { name: 'Take payment' })).toBeNull();
-    const first = within(dialog).getAllByRole('combobox')[0]!;
-    first.focus();
-    fireEvent.keyDown(first, { key: 'Tab', shiftKey: true });
-    expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'Back to cart' }));
+    // Base UI traps Tab with focus guards around the dialog (they need real
+    // layout, so jsdom can't drive them); what it can check is that focus
+    // starts inside and the sale screen behind is hidden from assistive tech.
+    await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
+    expect(opener.closest('[aria-hidden="true"]')).not.toBeNull();
     fireEvent.keyDown(window, { key: 'Escape' });
     await waitFor(() => expect(document.activeElement).toBe(opener));
     expect(useCart.getState().lines).toHaveLength(1);
@@ -390,7 +393,7 @@ describe('SaleScreen checkout', () => {
     fireEvent.keyDown(window, { key: 'F4' });
     fireEvent.keyDown(window, { key: 'F2' });
     expect(counterMock.completeSale).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: 'Pay later' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Pay later', hidden: true })).toHaveAttribute('aria-pressed', 'true');
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(screen.queryByRole('dialog', { name: 'New customer' })).toBeNull();
     expect(screen.getByRole('dialog', { name: 'Take payment' })).toBeInTheDocument();
@@ -420,7 +423,7 @@ describe('SaleScreen checkout', () => {
     expect(screen.getByLabelText('Money received')).toBeDisabled();
     expect(screen.getByRole('button', { name: 'MoMo' })).toBeDisabled();
     expect(screen.getByRole('button', { name: /Back to cart/ })).toBeDisabled();
-    expect(screen.getByRole('button', { name: /Home/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Home/, hidden: true })).toBeDisabled();
     fireEvent.keyDown(window, { key: 'Escape' });
     fireEvent.keyDown(window, { key: 'F9' });
     expect(screen.getByRole('dialog', { name: 'Take payment' })).toBeInTheDocument();
@@ -458,7 +461,8 @@ describe('SaleScreen checkout', () => {
     fireEvent.keyDown(window, { key: 'F5' });
     fireEvent.keyDown(window, { key: 'F2' });
     expect(counterMock.completeSale).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: 'Cash', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    // The checkout sits behind a modal now, so it is hidden from the accessibility tree.
+    expect(screen.getByRole('button', { name: 'Cash', exact: true, hidden: true })).toHaveAttribute('aria-pressed', 'true');
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(supervisor).not.toBeInTheDocument();
     expect(screen.getByRole('dialog', { name: 'Take payment' })).toBeInTheDocument();

@@ -1,12 +1,17 @@
-import { useDialog } from '../hooks/useDialog';
 // CustomerCreateModal: opened from PaymentModal credit flow when no
 // existing customer matches the search. On success, returns the new
 // customer record so the sale flow can select them.
 
+import { XIcon } from 'lucide-react';
 import { useState } from 'react';
 import { counter } from '../lib/ipc';
 import { formatMoney, parseCedisToPesewas } from '../../shared/lib/money';
 import { FeedbackBanner } from './FeedbackBanner';
+import { Button } from './ui/button';
+import { Dialog, DialogContent, DialogTitle } from './ui/dialog';
+import { Field } from './ui/field';
+import { Input } from './ui/input';
+import { NativeSelect } from './ui/native-select';
 
 const TYPES = [
   { code: 'WALK_IN_REGULAR', label: 'Regular walk-in' },
@@ -90,86 +95,55 @@ export function CustomerCreateModal({
     }
   }
 
-  const dialog = useDialog({ onClose: onCancel, busy: submitting });
-
   return (
-    <div className="fixed inset-0 bg-scrim flex items-center justify-center z-60 overflow-y-auto py-8" onClick={() => { if (!submitting) onCancel(); }}>
-      <div {...dialog} aria-label="New customer" className="bg-bg-surface border border-border w-full max-w-md max-h-[92vh] flex flex-col my-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="px-8 py-5 border-b border-border-subtle flex items-center justify-between shrink-0">
-          <h3 className="text-text-secondary uppercase tracking-wider text-xs">New customer</h3>
-          <button onClick={() => { if (!submitting) onCancel(); }}
-            className="text-text-tertiary hover:text-text-primary text-xl leading-none"
-            aria-label="Close">x</button>
-        </div>
-        {error && (
-          <FeedbackBanner className="mx-8 mt-4 shrink-0">
-            {error}
-          </FeedbackBanner>
-        )}
-        <div className="flex-1 overflow-y-auto px-8 py-6 flex flex-col gap-4">
-          <input autoFocus value={displayName} onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="Name" className="bg-bg-input border border-border-strong px-4 py-3" />
-          <input value={phone} onChange={(e) => setPhone(e.target.value)}
-            placeholder="Phone (e.g. 0244111000)"
-            className="bg-bg-input border border-border-strong px-4 py-3 font-mono" />
-          <select value={customerType} onChange={(e) => setCustomerType(e.target.value as typeof customerType)}
-            className="bg-bg-input border border-border-strong px-4 py-3 text-text-primary">
-            {TYPES.map((t) => <option key={t.code} value={t.code}>{t.label}</option>)}
-          </select>
-          <input value={businessName} onChange={(e) => setBusinessName(e.target.value)}
-            placeholder="Business name (optional)" className="bg-bg-input border border-border-strong px-4 py-3" />
-          <input value={locationDescription} onChange={(e) => setLocationDescription(e.target.value)}
-            placeholder="Location (e.g. Behind GCB Adabraka)"
-            className="bg-bg-input border border-border-strong px-4 py-3" />
+    <Dialog onClose={onCancel} busy={submitting}>
+      <DialogContent showCloseButton={false} className="w-[min(30rem,calc(100%-2rem))] max-h-[92vh] gap-0 p-0">
+        <header className="px-6 py-5 border-b border-border-subtle flex items-center justify-between gap-4">
+          <DialogTitle className="text-xl">New customer</DialogTitle>
+          <Button variant="ghost" size="icon-sm" aria-label="Close" disabled={submitting} onClick={onCancel}><XIcon aria-hidden="true" /></Button>
+        </header>
+        {error && <FeedbackBanner className="mx-6 mt-4">{error}</FeedbackBanner>}
+        <div className="flex-1 overflow-y-auto px-6 py-5 flex flex-col gap-4">
+          <Field label="Name"><Input autoFocus value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="h-11" /></Field>
+          <Field label="Phone"><Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="e.g. 0244111000" className="h-11 font-mono" /></Field>
+          <Field label="Customer type">
+            <NativeSelect value={customerType} onChange={(e) => setCustomerType(e.target.value as typeof customerType)} className="h-11">
+              {TYPES.map((t) => <option key={t.code} value={t.code}>{t.label}</option>)}
+            </NativeSelect>
+          </Field>
+          <Field label="Business name"><Input value={businessName} onChange={(e) => setBusinessName(e.target.value)} placeholder="Optional" className="h-11" /></Field>
+          <Field label="Location"><Input value={locationDescription} onChange={(e) => setLocationDescription(e.target.value)} placeholder="e.g. Behind GCB Adabraka" className="h-11" /></Field>
           <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1">
-              <span className="text-text-secondary uppercase tracking-wider text-xs">Credit limit (cedis)</span>
-              <input value={creditLimit} onChange={(e) => setCreditLimit(e.target.value)}
-                className="bg-bg-input border border-border-strong px-4 py-3 font-mono tnum" />
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-text-secondary uppercase tracking-wider text-xs">Terms (days)</span>
-              <input value={creditTermsDays} onChange={(e) => setCreditTermsDays(e.target.value.replace(/\D/g, ''))}
-                className="bg-bg-input border border-border-strong px-4 py-3 font-mono tnum" />
-            </div>
+            <Field label="Credit limit (cedis)"><Input value={creditLimit} onChange={(e) => setCreditLimit(e.target.value)} className="h-11 font-mono tnum" /></Field>
+            <Field label="Terms (days)"><Input inputMode="numeric" value={creditTermsDays} onChange={(e) => setCreditTermsDays(e.target.value.replace(/\D/g, ''))} className="h-11 font-mono tnum" /></Field>
           </div>
-          <label className="flex items-start gap-3 bg-bg-deep border border-border px-4 py-3 text-sm">
-            <input
-              type="checkbox"
-              checked={cashOnly}
-              onChange={(e) => setCashOnly(e.target.checked)}
-              className="mt-1"
-            />
+          <label className="flex items-start gap-3 rounded-lg bg-bg-surface border border-border px-4 py-3 text-sm">
+            <input type="checkbox" checked={cashOnly} onChange={(e) => setCashOnly(e.target.checked)} className="mt-1 size-4 accent-accent" />
             <span>
               <span className="block text-text-primary">Cash-only account</span>
               <span className="block text-text-tertiary text-xs">Credit tenders are hard-blocked even when a limit is set.</span>
             </span>
           </label>
-          <div className="flex flex-col gap-1">
-            <span className="text-text-secondary uppercase tracking-wider text-xs">Preferred channel</span>
-            <select value={preferredChannel} onChange={(e) => setPreferredChannel(e.target.value as typeof preferredChannel)}
-              className="bg-bg-input border border-border-strong px-4 py-3">
+          <Field label="Preferred channel" hint="When picked at the sale flow, the cart will offer to switch to this channel.">
+            <NativeSelect value={preferredChannel} onChange={(e) => setPreferredChannel(e.target.value as typeof preferredChannel)} className="h-11">
               <option value="">No preference (use cart's channel)</option>
               <option value="WALK_IN">Walk-in</option>
               <option value="WHOLESALE">Wholesale</option>
               <option value="ROUTE">Route</option>
-            </select>
-            <span className="text-text-tertiary text-xs">When picked at the sale flow, the cart will offer to switch to this channel.</span>
-          </div>
+            </NativeSelect>
+          </Field>
           <div className="text-text-tertiary text-xs">
             Limit shown: <span className="font-mono tnum">{formatMoney(parseCedisToPesewas(creditLimit) ?? 0)}</span>.
             Leave 0 for customers without a formal limit.
           </div>
         </div>
-        <div className="px-8 py-4 border-t border-border-subtle flex gap-3 justify-end shrink-0 bg-bg-deep/30">
-          <button onClick={() => { if (!submitting) onCancel(); }} className="px-5 py-3 border border-border hover:bg-bg-elevated">Cancel</button>
-          <button onClick={() => void submit()}
-            disabled={submitting || !displayName.trim() || !phone.trim()}
-            className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40">
+        <footer className="px-6 py-4 border-t border-border-subtle flex gap-3 justify-end">
+          <Button size="lg" disabled={submitting} onClick={onCancel}>Cancel</Button>
+          <Button size="lg" variant="primary" onClick={() => void submit()} disabled={submitting || !displayName.trim() || !phone.trim()}>
             {submitting ? 'Creating…' : 'Create customer'}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </footer>
+      </DialogContent>
+    </Dialog>
   );
 }

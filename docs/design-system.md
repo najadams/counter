@@ -88,9 +88,23 @@ Each is an RGB-channel variable (`--c-*`) used through Tailwind names
 
 ## Icons
 
-Lucide (`lucide-react`, Phase 3), 1.75px stroke, `currentColor`, always
-beside a word. They replace the Unicode glyphs (`×`, `→`, `✓`, `⚠`) in use
-today. Friendly keeps its illustrated pictures.
+Lucide (`lucide-react`), `currentColor`, always beside a word or with an
+`aria-label` when alone (a close cross, a sort chevron). They replaced the
+Unicode glyphs that stood in for controls: back arrows, sort and expand
+chevrons, trend arrows, warnings, checks, the number-pad delete key. Glyphs
+that are typography stay as text: `×` in "2 × 8.00", key labels like `↑`,
+and arrows inside plain sentences ("Settings → Products"). Friendly keeps
+its illustrated pictures.
+
+## Charts
+
+Eight series colours per theme, `--c-chart-1` … `--c-chart-8` (teal, green,
+orange, red, blue, slate, violet, rose), each at least 3:1 against a card —
+`tests/theme-tokens.test.ts` checks. Recharts needs real colour strings, so
+`useChartTheme()` (`src/renderer/lib/chartTheme.ts`) reads the series,
+grid, axis, label and tooltip colours from the live theme and re-reads them
+when the theme changes. A measure keeps one colour everywhere: revenue is
+the accent, profit green, expenses red. Axis numbers use the mono face.
 
 ## Quick picks (from Market)
 
@@ -103,9 +117,15 @@ A strip above the sale screen's search results:
 - **Tile.** Name, size, price in accent-coloured mono, 84px tall, 4 per row
   on the counter PC. On a phone, a horizontal row of chips under the search.
 - **Empty state.** A new shop with no sales yet shows no strip.
+- **Stable.** Fetched once per shift and channel, then held, so tiles and
+  their Alt keys don't move under a cashier's hands mid-shift. Alt+N does
+  nothing while a dialog is open.
 
-This needs a small query in the main process (top sellers by units) and
-lands with the sale screen rebuild in Phase 3.
+Built from `topSellingProducts()` in `src/main/services/sales.ts` (canonical
+units, so a crate of 24 counts as 24; voided sales don't count), the
+`product:top-sellers` channel, and `components/QuickPicks.tsx`. It returns
+exactly the rows search returns, so a tile adds the same cart line a search
+hit would. Tests: `tests/top-sellers.test.ts`, `tests/quick-picks.test.tsx`.
 
 ## Components
 
@@ -127,9 +147,11 @@ a `forwardRef` (React 18).
 |---|---|
 | `Button` | Every button. `variant`: `primary` (the one main action), `secondary` (default), `ghost`, `danger`, `success`, `warning`, `destructive` (filled; the confirming step of something irreversible), `link`. `size`: `sm`, `md`, `lg`, `xl`, `icon`. `shortcut="F2"` shows the key and sets `aria-keyshortcuts`. A native `<button>`, so it still submits a form. |
 | `Dialog`, `Sheet` | Anything that takes over the screen until answered. See the rules below. |
-| `Input`, `Textarea`, `Select`, `Checkbox` | Form fields; each needs a visible label. |
+| `Input`, `Textarea`, `NativeSelect`, `Select`, `Checkbox` | Form fields; each needs a visible label. Prefer `NativeSelect` for short fixed lists (it keeps the browser's type-to-jump keys); `Select` for rich items. |
+| `Field` | A visible label around one control, with an optional hint. Wrapping the control names it without ids. |
+| `Segmented` | Two to four mutually exclusive buttons that switch a view or mode in place (Pending / History). Real buttons with `aria-pressed`. |
 | `Badge` | Status. `tone`: `neutral`, `accent`, `success`, `warning`, `danger`, plus the words. `lib/tones.ts` maps review statuses and severities. |
-| `Card` | A white surface for a group of related content. |
+| `Card` | A white surface for a group of related content. The older `.panel` class is the same card; inside either, give a nested fill `bg-surface` (a recessed well), never `bg-elevated`, which vanishes into the card. |
 | `Table` and parts | Data tables; money and quantity cells take `text-right font-mono tnum`. |
 | `Tabs` | `segmented` for switching a view in place, `line` for sections of a screen. |
 | `Tooltip`, `Popover` | Extra explanation, never the only copy of something needed. |
@@ -149,10 +171,16 @@ tested in `tests/ui-components.test.tsx`):
   first.
 - The page behind is hidden from screen readers; `DialogTitle` names the
   dialog.
+- A dialog that opens on top of another renders **inside** the other's
+  `DialogContent` (supervisor approval inside the checkout, the receipt
+  inside Sale complete). Base UI stacks dialogs by React nesting; side by
+  side, each hides the other and their focus traps compete.
+- Something that must be a direct child of `<body>` (the receipt's print
+  stylesheet) passes `portalProps={{ container: document.body }}`.
 
 Mount a dialog only while it is open (`{open && <Dialog onClose={…}>…}`), as
-the app always has. The older hand-built dialogs use `hooks/useDialog.ts`,
-which follows the same rules; Phase 3 moves them over.
+the app always has. Every dialog in the app now uses `Dialog` or `Sheet`;
+`hooks/useDialog.ts` is gone.
 
 ## Rollout
 
@@ -161,6 +189,7 @@ which follows the same rules; Phase 3 moves them over.
 | 0 | Tailwind 4, bundled fonts, no visible change | PR #8 |
 | D | Direction chosen: this document | Done |
 | 1 | Harbour tokens: palette, three themes, fluid type, Geist, corners, motion | PR #9 |
-| 2 | Shared components; every `.btn` and status badge moved onto them; Edit customer is the first dialog on `Dialog` | This branch |
-| 3 | Screens move to the components (cards, tables, fields, the other dialogs); quick picks; lucide icons; charts on tokens | Next |
+| 2 | Shared components; every `.btn` and status badge moved onto them; Edit customer is the first dialog on `Dialog` | PR #10 |
+| 3 | Every dialog on `Dialog`/`Sheet`; quick picks; lucide icons; charts on tokens; panels as white cards | This branch |
+| 3b | The remaining raw buttons, inputs and tables on screens onto the components; `@container` layouts for sale, home, reports and settings | Next |
 | 4 | Enter/exit motion, view transitions, cart animation | |

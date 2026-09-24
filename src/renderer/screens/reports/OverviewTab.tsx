@@ -1,6 +1,7 @@
 // OverviewTab — the Pass 1 dashboard content, now mounted inside the
 // tabbed ReportsScreen. Pure render of the single reportsOverview bundle.
 
+import { ArrowRightIcon, TrendingDownIcon, TrendingUpIcon, TriangleAlertIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { counter } from '../../lib/ipc';
 import { formatMoney, formatMoneyWithCurrency } from '../../../shared/lib/money';
@@ -101,8 +102,8 @@ export function OverviewTab({
             <div className="flex gap-3 text-xs">
               {data.inventory.belowReorderCount > 0 && (
                 <button onClick={onOpenReorder}
-                  className="text-warning hover:underline">
-                  {data.inventory.belowReorderCount} below reorder →
+                  className="inline-flex items-center gap-1 text-warning hover:underline">
+                  {data.inventory.belowReorderCount} below reorder <ArrowRightIcon aria-hidden="true" className="size-3.5" />
                 </button>
               )}
               {data.inventory.stockoutCount > 0 && (
@@ -208,8 +209,8 @@ export function OverviewTab({
         <div className="flex items-center justify-between">
           <h3 className="text-text-secondary uppercase tracking-wider text-xs">Recent stocktake variance</h3>
           {onOpenStocktake && (
-            <button onClick={onOpenStocktake} className="text-accent text-xs hover:underline">
-              Open stocktake →
+            <button onClick={onOpenStocktake} className="inline-flex items-center gap-1 text-accent text-xs hover:underline">
+              Open stocktake <ArrowRightIcon aria-hidden="true" className="size-3.5" />
             </button>
           )}
         </div>
@@ -283,8 +284,9 @@ function KpiCard({
       <div className="flex items-baseline justify-between">
         {sub && <div className="text-text-tertiary text-xs">{sub}</div>}
         {trend != null && trendLabel && (
-          <div className={`text-xs ${trendClass(trend)}`}>
-            {trend >= 0 ? '▲' : '▼'} {Math.abs(trend).toFixed(1)}% <span className="text-text-tertiary">{trendLabel}</span>
+          <div className={`inline-flex items-center gap-1 text-xs ${trendClass(trend)}`}>
+            {trend >= 0 ? <TrendingUpIcon aria-label="Up" className="size-3.5" /> : <TrendingDownIcon aria-label="Down" className="size-3.5" />}
+            <span className="font-mono tnum">{Math.abs(trend).toFixed(1)}%</span> <span className="text-text-tertiary">{trendLabel}</span>
           </div>
         )}
       </div>
@@ -322,8 +324,9 @@ function ReceivablesCard({ data, onClick }: { data: ReportsOverviewResponse; onC
         <AgingPill label="90+" amount={r.bucket90PlusPesewas} tone="text-danger" />
       </div>
       {ageWarn > 0 && (
-        <div className="text-warning text-xs">
-          ⚠ {formatMoneyWithCurrency(ageWarn)} aged 60+ days — chase these first
+        <div className="flex items-center gap-1.5 text-warning text-xs">
+          <TriangleAlertIcon aria-hidden="true" className="size-3.5 shrink-0" />
+          <span><span className="font-mono tnum">{formatMoneyWithCurrency(ageWarn)}</span> aged 60+ days — chase these first</span>
         </div>
       )}
     </button>
@@ -348,7 +351,7 @@ function PayablesCard({ data, onClick }: { data: ReportsOverviewResponse; onClic
           {p.supplierCount} supplier{p.supplierCount === 1 ? '' : 's'} with a balance
         </div>
       </div>
-      <div className="text-text-tertiary text-xs">Click to open supplier payments →</div>
+      <div className="inline-flex items-center gap-1 text-text-tertiary text-xs">Click to open supplier payments <ArrowRightIcon aria-hidden="true" className="size-3.5" /></div>
     </button>
   );
 }

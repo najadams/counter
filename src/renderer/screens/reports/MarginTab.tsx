@@ -1,6 +1,7 @@
 // MarginTab — net gross-margin breakdown by product and category, plus a
 // "below cost" panel highlighting any lines sold at negative margin.
 
+import { ChevronDownIcon, ChevronUpIcon } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { counter } from '../../lib/ipc';
 import { formatMoney, formatMoneyWithCurrency } from '../../../shared/lib/money';
@@ -286,7 +287,7 @@ function SortHeader<T extends string>({
     <th className="text-right px-4 py-2">
       <button onClick={() => onSort(col)}
         className={`uppercase tracking-wider text-xs ${active ? 'text-accent' : 'hover:text-text-primary'}`}>
-        {label} {active ? (dir === 'desc' ? '▼' : '▲') : ''}
+        <span className="inline-flex items-center gap-1">{label}{active && (dir === 'desc' ? <ChevronDownIcon aria-label="descending" className="size-3.5" /> : <ChevronUpIcon aria-label="ascending" className="size-3.5" />)}</span>
       </button>
     </th>
   );

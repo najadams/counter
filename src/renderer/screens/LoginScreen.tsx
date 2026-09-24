@@ -177,8 +177,8 @@ export default function LoginScreen() {
                     className={[
                       'w-full text-left px-5 py-4 border rounded-lg flex items-center justify-between min-h-14',
                       active
-                        ? 'border-accent bg-bg-elevated text-text-primary'
-                        : 'border-border bg-bg-surface text-text-primary hover:bg-bg-elevated',
+                        ? 'border-accent bg-accent/10 text-text-primary'
+                        : 'border-border bg-bg-elevated text-text-primary hover:bg-bg-surface',
                     ].join(' ')}
                   >
                     <span className="text-base">{c.fullName}</span>

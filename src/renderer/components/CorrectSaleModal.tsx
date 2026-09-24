@@ -5,10 +5,15 @@
 // correctSale (which voids the original + re-rings it + prints one CORRECTED
 // receipt). Additive only: original lines can't be edited here.
 
+import { XIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { counter } from '../lib/ipc';
 import { formatMoney, formatMoneyWithCurrency } from '../../shared/lib/money';
 import { FeedbackBanner } from './FeedbackBanner';
+import { Button } from './ui/button';
+import { Dialog, DialogContent, DialogTitle } from './ui/dialog';
+import { Field } from './ui/field';
+import { Input } from './ui/input';
 
 interface RecentSale {
   id: string; channel: string; totalPesewas: number; workerName: string;
@@ -97,36 +102,37 @@ export function CorrectSaleModal({ sale, onCancel, onDone }: {
     setBusy(false);
     if (!r.success) { setError(r.error); return; }
     const d = r.data;
-    onDone(`Corrected #${sale.id.slice(-6)} → new #${d.newSaleId.slice(-6)}. Collected ${formatMoneyWithCurrency(d.deltaPesewas)} extra.${d.printerFailed ? ' ⚠ Receipt failed — send to counter.' : ''}`);
+    onDone(`Corrected #${sale.id.slice(-6)} → new #${d.newSaleId.slice(-6)}. Collected ${formatMoneyWithCurrency(d.deltaPesewas)} extra.${d.printerFailed ? ' Receipt failed — send to counter.' : ''}`);
   }
 
   return (
-    <div className="fixed inset-0 bg-scrim z-50 flex sm:items-center sm:justify-center" onClick={onCancel}>
+    <Dialog onClose={onCancel} busy={busy}>
       {/* Full-screen + scrollable on a phone (so the keyboard never hides the
           search results or the confirm button); a centred card on desktop. */}
-      <div
-        className="bg-bg-surface w-full h-full sm:h-auto sm:max-w-lg sm:max-h-[90vh] overflow-y-auto p-4 sm:p-6 flex flex-col gap-4 sm:border sm:border-border sm:rounded"
-        onClick={(e) => e.stopPropagation()}
+      <DialogContent
+        showCloseButton={false}
+        className="w-[min(32rem,calc(100%-2rem))] max-h-[90vh] gap-4 max-sm:inset-0 max-sm:h-dvh max-sm:max-h-none max-sm:w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none max-sm:border-0 max-sm:p-4"
       >
         <div className="flex items-center justify-between gap-2">
-          <h3 className="text-text-secondary uppercase tracking-wider text-xs">Correct sale #{sale.id.slice(-6)} — add missed items</h3>
-          <button onClick={onCancel} className="text-text-secondary text-2xl leading-none px-2 sm:hidden" aria-label="Close">×</button>
+          <DialogTitle>Correct sale #{sale.id.slice(-6)} — add missed items</DialogTitle>
+          <Button variant="ghost" size="icon-sm" className="sm:hidden" aria-label="Close" onClick={onCancel}><XIcon aria-hidden="true" /></Button>
         </div>
 
         {/* Add item FIRST so the search box + results sit at the top, above the
             on-screen keyboard, on a phone. */}
-        <label className="text-text-secondary text-xs uppercase tracking-wider">Add a missed item</label>
-        <input
-          autoFocus value={query} onChange={(e) => setQuery(e.target.value)}
-          inputMode="search" placeholder="Search by SKU or name"
-          className="bg-bg-input border border-border-strong px-4 py-3"
-        />
+        <Field label="Add a missed item">
+          <Input
+            autoFocus value={query} onChange={(e) => setQuery(e.target.value)}
+            inputMode="search" placeholder="Search by SKU or name"
+            className="h-12 text-base"
+          />
+        </Field>
         {hits.length > 0 && (
-          <ul className="border border-border max-h-56 overflow-y-auto">
+          <ul className="rounded-lg border border-border max-h-56 overflow-y-auto">
             {hits.map((h) => (
               <li key={h.id}>
-                <button onClick={() => addHit(h)} className="w-full text-left px-3 py-3 border-b border-border last:border-0 hover:bg-bg-elevated active:bg-bg-elevated flex justify-between gap-2">
-                  <span className="min-w-0 truncate">{h.name} <span className="text-text-tertiary text-xs">{h.sku}</span></span>
+                <button onClick={() => addHit(h)} className="w-full text-left px-3 py-3 border-b border-border-subtle last:border-0 hover:bg-bg-surface active:bg-bg-surface flex justify-between gap-2">
+                  <span className="min-w-0 truncate">{h.name} <span className="text-text-tertiary text-xs font-mono">{h.sku}</span></span>
                   <span className="font-mono tnum shrink-0">{formatMoney(h.unitPricePesewas)}</span>
                 </button>
               </li>
@@ -135,13 +141,14 @@ export function CorrectSaleModal({ sale, onCancel, onDone }: {
         )}
 
         {additions.length > 0 && (
-          <ul className="text-sm border border-accent">
+          <ul className="text-sm rounded-lg border border-accent">
             {additions.map((a, i) => (
-              <li key={i} className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border last:border-0">
+              <li key={i} className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border-subtle last:border-0">
                 <span className="flex-1 min-w-0 truncate">{a.name}{a.unitName !== 'UNIT' ? ` (${a.unitName})` : ''}</span>
-                <input type="number" min={0} inputMode="numeric" value={a.quantity}
+                <Input type="number" min={0} inputMode="numeric" value={a.quantity}
+                  aria-label={`Quantity of ${a.name}`}
                   onChange={(e) => setQty(i, Math.floor(Number(e.target.value) || 0))}
-                  className="w-16 bg-bg-input border border-border px-2 py-1 text-right font-mono tnum" />
+                  className="h-8 w-16 px-2 text-right font-mono tnum" />
                 <span className="w-20 text-right font-mono tnum shrink-0">{formatMoney(a.quantity * a.unitPricePesewas)}</span>
               </li>
             ))}
@@ -151,9 +158,9 @@ export function CorrectSaleModal({ sale, onCancel, onDone }: {
         {/* Original lines — context, capped so a long sale doesn't push the
             confirm button off-screen. */}
         <div className="text-text-tertiary text-xs">On the original sale ({formatMoneyWithCurrency(sale.totalPesewas)})</div>
-        <ul className="text-sm border border-border max-h-32 overflow-y-auto">
+        <ul className="text-sm rounded-lg border border-border max-h-32 overflow-y-auto">
           {origLines.map((l, i) => (
-            <li key={i} className="flex justify-between gap-2 px-3 py-2 border-b border-border last:border-0">
+            <li key={i} className="flex justify-between gap-2 px-3 py-2 border-b border-border-subtle last:border-0">
               <span className="min-w-0 truncate">{l.quantity}× {l.productName}{l.unitName !== 'UNIT' ? ` (${l.unitName})` : ''}</span>
               <span className="font-mono tnum text-text-tertiary shrink-0">{formatMoney(l.quantity * l.unitPricePesewas)}</span>
             </li>
@@ -164,24 +171,23 @@ export function CorrectSaleModal({ sale, onCancel, onDone }: {
 
         {/* Totals + confirm pinned to the bottom of the sheet so they're always
             reachable without hunting. */}
-        <div className="mt-auto sm:mt-0 sticky bottom-0 bg-bg-surface pt-3 flex flex-col gap-3">
+        <div className="mt-auto sm:mt-0 sticky bottom-0 bg-bg-modal pt-3 flex flex-col gap-3">
           <div className="flex justify-between text-base border-t border-border pt-3">
             <span className="text-text-secondary">New total</span>
             <span className="font-mono tnum">{formatMoneyWithCurrency(newTotal)}</span>
           </div>
-          <div className="flex justify-between text-sm text-accent">
+          <div className="flex justify-between text-sm font-semibold text-accent">
             <span>Collect now</span>
             <span className="font-mono tnum">{formatMoneyWithCurrency(delta)}</span>
           </div>
           <div className="flex gap-3">
-            <button onClick={onCancel} className="px-5 py-3 border border-border hover:bg-bg-elevated">Cancel</button>
-            <button onClick={() => void submit()} disabled={additions.length === 0 || busy}
-              className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40 flex-1">
+            <Button size="lg" onClick={onCancel} disabled={busy}>Cancel</Button>
+            <Button size="lg" variant="primary" onClick={() => void submit()} disabled={additions.length === 0 || busy} className="flex-1">
               {busy ? 'Correcting…' : `Confirm & collect ${formatMoneyWithCurrency(delta)}`}
-            </button>
+            </Button>
           </div>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

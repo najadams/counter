@@ -7,6 +7,12 @@ import { SupervisorPinModal } from './SupervisorPinModal';
 import { formatMoneyWithCurrency, parseCedisToPesewas } from '../../shared/lib/money';
 import type { DrawingPolicyRow } from '../../shared/types/ipc';
 import { FeedbackBanner } from './FeedbackBanner';
+import { Button } from './ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
+import { Field } from './ui/field';
+import { Input } from './ui/input';
+import { NativeSelect } from './ui/native-select';
+import { Textarea } from './ui/textarea';
 
 const COMMON_RECIPIENTS = ['Owner', 'Bank deposit', 'Supplier payment', 'Other'];
 const CATEGORIES = [
@@ -62,76 +68,75 @@ export function CashDropModal({ shiftId, onClose, onDone }: {
     onDone();
   }
 
+  // The supervisor dialog renders inside this one so the two stack as
+  // parent and child: only the top one answers Escape.
   return (
-    <>
-      <div className="fixed inset-0 bg-scrim flex items-center justify-center z-50" onClick={onClose}>
-        <div className="bg-bg-surface border border-border w-full max-w-md p-8 flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
-          <h3 className="text-text-secondary uppercase tracking-wider text-xs">Cash drop</h3>
+    <Dialog onClose={onClose}>
+      <DialogContent showCloseButton={false} className="w-[min(28rem,calc(100%-2rem))] gap-4 p-8">
+        <DialogHeader>
+          <DialogTitle className="text-xl">Cash drop</DialogTitle>
           {expected !== null && (
-            <div className="text-text-tertiary text-sm">
+            <DialogDescription>
               Current expected cash: <span className="font-mono tnum text-text-primary">{formatMoneyWithCurrency(expected)}</span>
-            </div>
+            </DialogDescription>
           )}
-          <label className="text-text-secondary text-xs uppercase tracking-wider">Amount (cedis)</label>
-          <input autoFocus value={amount} onChange={(e) => setAmount(e.target.value)}
-            placeholder="0.00"
-            className="bg-bg-input border border-border-strong px-4 py-3 text-2xl font-mono tnum text-right" />
-          {amountPesewas !== null && expected !== null && amountPesewas > expected && (
-            <div className="text-danger text-xs">
-              Exceeds expected cash by {formatMoneyWithCurrency(amountPesewas - expected)}.
-            </div>
-          )}
-          <label className="text-text-secondary text-xs uppercase tracking-wider">Category</label>
-          <select
+        </DialogHeader>
+        <Field label="Amount (cedis)">
+          <Input autoFocus value={amount} onChange={(e) => setAmount(e.target.value)}
+            placeholder="0.00" inputMode="decimal"
+            className="h-14 text-2xl font-mono tnum text-right" />
+        </Field>
+        {amountPesewas !== null && expected !== null && amountPesewas > expected && (
+          <div className="text-danger text-xs">
+            Exceeds expected cash by {formatMoneyWithCurrency(amountPesewas - expected)}.
+          </div>
+        )}
+        <Field label="Category">
+          <NativeSelect
             value={category}
             onChange={(e) => { setCategory(e.target.value as typeof category); setDrawingPolicyId(''); }}
-            className="bg-bg-input border border-border-strong px-3 py-3 text-text-primary">
+            className="h-11">
             {CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-          </select>
-          {category !== 'GENERIC_DROP' && (
-            <>
-              <label className="text-text-secondary text-xs uppercase tracking-wider">Drawing policy</label>
-              <select
-                value={drawingPolicyId}
-                onChange={(e) => setDrawingPolicyId(e.target.value)}
-                className="bg-bg-input border border-border-strong px-3 py-3 text-text-primary">
-                <option value="">No recurring policy</option>
-                {policies.filter((p) => p.category === category).map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.beneficiaryName} · {p.cadence.toLowerCase()} cap {formatMoneyWithCurrency(p.limitPesewas)}
-                  </option>
-                ))}
-              </select>
-            </>
-          )}
-          <label className="text-text-secondary text-xs uppercase tracking-wider">Recipient</label>
-          <select value={recipient} onChange={(e) => setRecipient(e.target.value)}
-            className="bg-bg-input border border-border-strong px-3 py-3 text-text-primary">
+          </NativeSelect>
+        </Field>
+        {category !== 'GENERIC_DROP' && (
+          <Field label="Drawing policy">
+            <NativeSelect value={drawingPolicyId} onChange={(e) => setDrawingPolicyId(e.target.value)} className="h-11">
+              <option value="">No recurring policy</option>
+              {policies.filter((p) => p.category === category).map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.beneficiaryName} · {p.cadence.toLowerCase()} cap {formatMoneyWithCurrency(p.limitPesewas)}
+                </option>
+              ))}
+            </NativeSelect>
+          </Field>
+        )}
+        <Field label="Recipient">
+          <NativeSelect value={recipient} onChange={(e) => setRecipient(e.target.value)} className="h-11">
             {COMMON_RECIPIENTS.map((r) => <option key={r}>{r}</option>)}
-          </select>
-          {recipient === 'Other' && (
-            <input value={customRecipient} onChange={(e) => setCustomRecipient(e.target.value)}
-              placeholder="Who?" className="bg-bg-input border border-border-strong px-3 py-2" />
-          )}
-          <textarea value={notes} onChange={(e) => setNotes(e.target.value)}
-            placeholder="Notes (optional)" className="bg-bg-input border border-border-strong px-3 py-2 text-sm" rows={2} />
-          {error && <FeedbackBanner>{error}</FeedbackBanner>}
-          <div className="flex gap-3">
-            <button onClick={onClose} className="px-5 py-3 border border-border hover:bg-bg-elevated">Cancel</button>
-            <button onClick={() => setAskingSupervisor(true)} disabled={!valid}
-              className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed">
-              Get supervisor approval
-            </button>
-          </div>
+          </NativeSelect>
+        </Field>
+        {recipient === 'Other' && (
+          <Input value={customRecipient} onChange={(e) => setCustomRecipient(e.target.value)}
+            aria-label="Recipient name" placeholder="Who?" />
+        )}
+        <Textarea value={notes} onChange={(e) => setNotes(e.target.value)}
+          aria-label="Notes" placeholder="Notes (optional)" rows={2} />
+        {error && <FeedbackBanner>{error}</FeedbackBanner>}
+        <div className="flex gap-3">
+          <Button size="lg" onClick={onClose}>Cancel</Button>
+          <Button size="lg" variant="primary" onClick={() => setAskingSupervisor(true)} disabled={!valid}>
+            Get supervisor approval
+          </Button>
         </div>
-      </div>
-      {askingSupervisor && (
-        <SupervisorPinModal
-          title={`Approve cash drop of ${amountPesewas != null ? formatMoneyWithCurrency(amountPesewas) : ''} to ${finalRecipient}`}
-          onCancel={() => setAskingSupervisor(false)}
-          onApprove={approve}
-        />
-      )}
-    </>
+        {askingSupervisor && (
+          <SupervisorPinModal
+            title={`Approve cash drop of ${amountPesewas != null ? formatMoneyWithCurrency(amountPesewas) : ''} to ${finalRecipient}`}
+            onCancel={() => setAskingSupervisor(false)}
+            onApprove={approve}
+          />
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -6,6 +6,12 @@ import { counter } from '../lib/ipc';
 import { useSession } from '../store/session';
 import { formatMoney, parseCedisToPesewas } from '../../shared/lib/money';
 import { FeedbackBanner } from './FeedbackBanner';
+import { Button } from './ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
+import { Field } from './ui/field';
+import { Input } from './ui/input';
+import { NativeSelect } from './ui/native-select';
+import { Textarea } from './ui/textarea';
 
 const CATEGORIES: Array<{ value: string; label: string }> = [
   { value: 'STAFF_WAGES', label: 'Staff wages' },
@@ -113,66 +119,59 @@ export function ExpenseModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-scrim flex items-center justify-center p-6 z-50">
-      <div className="bg-bg-elevated rounded-lg shadow-xl w-full max-w-lg p-6 space-y-4">
-        <h2 className="text-xl font-semibold">Petty cash expense</h2>
-        <p className="text-sm text-text-tertiary">
-          Cash going OUT of the till for a non-stock purpose (water bill, transport, etc.).
-          For sending cash to the safe or owner, use Cash drop instead.
-        </p>
+    <Dialog onClose={onCancel} busy={submitting}>
+      <DialogContent showCloseButton={false} className="w-[min(32rem,calc(100%-2rem))] gap-4">
+        <DialogHeader>
+          <DialogTitle className="text-xl">Petty cash expense</DialogTitle>
+          <DialogDescription>
+            Cash going OUT of the till for a non-stock purpose (water bill, transport, etc.).
+            For sending cash to the safe or owner, use Cash drop instead.
+          </DialogDescription>
+        </DialogHeader>
 
         <div className="grid grid-cols-2 gap-3">
-          <label className="block">
-            <span className="block text-xs text-text-tertiary mb-1 uppercase tracking-wider">Amount</span>
-            <input value={amountRaw} onChange={(e) => setAmountRaw(e.target.value)}
-              autoFocus placeholder="0.00"
-              className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle font-mono tnum text-right" />
-          </label>
-          <label className="block">
-            <span className="block text-xs text-text-tertiary mb-1 uppercase tracking-wider">Category</span>
-            <select value={category} onChange={(e) => setCategory(e.target.value)}
-              className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle text-sm">
+          <Field label="Amount">
+            <Input value={amountRaw} onChange={(e) => setAmountRaw(e.target.value)}
+              autoFocus placeholder="0.00" inputMode="decimal"
+              className="font-mono tnum text-right" />
+          </Field>
+          <Field label="Category">
+            <NativeSelect value={category} onChange={(e) => setCategory(e.target.value)}>
               {CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-            </select>
-          </label>
+            </NativeSelect>
+          </Field>
         </div>
 
-        <label className="block">
-          <span className="block text-xs text-text-tertiary mb-1 uppercase tracking-wider">Paid to (optional)</span>
-          <input value={payee} onChange={(e) => setPayee(e.target.value)}
-            placeholder="e.g. Ghana Water Company, Kwesi the runner"
-            className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle" />
-        </label>
+        <Field label="Paid to (optional)">
+          <Input value={payee} onChange={(e) => setPayee(e.target.value)}
+            placeholder="e.g. Ghana Water Company, Kwesi the runner" />
+        </Field>
 
         {needsPhoto && (
-          <label className="block">
-            <span className="block text-xs text-text-tertiary mb-1 uppercase tracking-wider">
-              Receipt photo (required for ≥ ₵50)
-            </span>
+          <Field label="Receipt photo (required for ≥ ₵50)" hint={photoBase64 ? <span className="text-success">Photo attached.</span> : undefined}>
             <input type="file" accept="image/*" onChange={onPickPhoto}
-              className="w-full text-sm text-text-secondary" />
-            {photoBase64 && <div className="text-xs text-success mt-1">Photo attached.</div>}
-          </label>
+              className="w-full text-sm text-text-secondary file:mr-3 file:rounded file:border file:border-border-strong file:bg-bg-elevated file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-text-primary" />
+          </Field>
         )}
 
         {needsSupervisor && !cashierIsSupervisor && (
           <div className="space-y-2 border-t border-border-subtle pt-3">
-            <div className="text-xs text-warning uppercase tracking-wider">Supervisor approval required (≥ ₵100)</div>
+            <div className="text-xs font-semibold text-warning uppercase tracking-wider">Supervisor approval required (≥ ₵100)</div>
             <div className="grid grid-cols-2 gap-3">
-              <select
+              <NativeSelect
+                aria-label="Supervisor"
                 value={supervisorWorkerId}
                 onChange={(e) => setSupervisorWorkerId(e.target.value)}
-                onFocus={() => void ensureSupervisors()}
-                className="px-3 py-2 rounded bg-bg-deep border border-border-subtle text-sm">
+                onFocus={() => void ensureSupervisors()}>
                 {supervisors.length === 0 && <option value="">— pick supervisor —</option>}
                 {supervisors.map((s) => <option key={s.id} value={s.id}>{s.fullName} ({s.role})</option>)}
-              </select>
-              <input
+              </NativeSelect>
+              <Input
+                aria-label="Supervisor PIN"
                 type="password" inputMode="numeric" maxLength={6}
                 value={supervisorPin}
                 onChange={(e) => setSupervisorPin(e.target.value.replace(/\D/g, ''))}
-                placeholder="supervisor PIN"
-                className="px-3 py-2 rounded bg-bg-deep border border-border-subtle text-sm" />
+                placeholder="supervisor PIN" />
             </div>
           </div>
         )}
@@ -182,23 +181,19 @@ export function ExpenseModal({
           </div>
         )}
 
-        <label className="block">
-          <span className="block text-xs text-text-tertiary mb-1 uppercase tracking-wider">Notes</span>
-          <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)}
-            className="w-full px-3 py-2 rounded bg-bg-deep border border-border-subtle text-sm" />
-        </label>
+        <Field label="Notes">
+          <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
+        </Field>
 
         {error && <FeedbackBanner>{error}</FeedbackBanner>}
 
-        <div className="flex justify-end gap-3">
-          <button onClick={onCancel} disabled={submitting}
-            className="px-4 py-2 border border-border hover:bg-bg-deep text-sm">Cancel</button>
-          <button onClick={() => void submit()} disabled={submitting || amount == null || amount <= 0}
-            className="px-4 py-2 bg-accent text-ink font-semibold text-sm disabled:opacity-50">
+        <DialogFooter>
+          <Button onClick={onCancel} disabled={submitting}>Cancel</Button>
+          <Button variant="primary" onClick={() => void submit()} disabled={submitting || amount == null || amount <= 0}>
             {submitting ? 'Recording…' : amount != null && amount > 0 ? `Record ${formatMoney(amount)}` : 'Record expense'}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -2,6 +2,7 @@
 // OWNER/FOUNDER gate enforced server-side; the tab still renders for others
 // but the action buttons say "admin only".
 
+import { CheckIcon, PlusIcon, XIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { StockHistoryModal } from '../../components/StockHistoryModal';
 import { counter } from '../../lib/ipc';
@@ -9,6 +10,12 @@ import { useSession } from '../../store/session';
 import { formatMoney, parseCedisToPesewas } from '../../../shared/lib/money';
 import { formatStockCompact } from '../../../shared/lib/units';
 import { FeedbackBanner } from '../../components/FeedbackBanner';
+import { Button } from '../../components/ui/button';
+import { Dialog, DialogContent, DialogTitle } from '../../components/ui/dialog';
+import { Field } from '../../components/ui/field';
+import { Input } from '../../components/ui/input';
+import { NativeSelect } from '../../components/ui/native-select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 
 interface AdminProduct {
   id: string; sku: string; barcode: string | null; name: string;
@@ -353,22 +360,20 @@ function ProductFormModal({ mode, existing, onCancel, onDone }: {
   }
 
   return (
-    <div className="fixed inset-0 bg-scrim flex items-center justify-center z-50 p-4" onClick={onCancel}>
-      <div className="bg-bg-surface border border-border w-full max-w-4xl max-h-[92vh] flex flex-col shadow-2xl" onClick={(e) => e.stopPropagation()}>
+    <Dialog onClose={onCancel} busy={submitting}>
+      <DialogContent showCloseButton={false} className="w-[min(56rem,calc(100%-2rem))] max-h-[92vh] gap-0 p-0">
         {/* Sticky header */}
-        <div className="px-8 py-5 border-b border-border-subtle flex items-center justify-between shrink-0">
+        <header className="px-8 py-5 border-b border-border-subtle flex items-center justify-between gap-4 shrink-0">
           <div>
-            <h3 className="text-text-secondary uppercase tracking-wider text-xs">
+            <DialogTitle className="text-xl">
               {mode === 'add' ? 'Add product' : 'Edit product'}
-            </h3>
+            </DialogTitle>
             {mode === 'edit' && existing && (
-              <div className="text-text-primary text-base font-medium font-mono mt-0.5">{existing.sku}</div>
+              <div className="text-text-secondary text-sm font-mono mt-0.5">{existing.sku}</div>
             )}
           </div>
-          <button onClick={onCancel}
-            className="text-text-tertiary hover:text-text-primary text-xl leading-none"
-            aria-label="Close">✕</button>
-        </div>
+          <Button variant="ghost" size="icon-sm" aria-label="Close" disabled={submitting} onClick={onCancel}><XIcon aria-hidden="true" /></Button>
+        </header>
 
         {modalError && (
           <FeedbackBanner className="mx-8 mt-4 shrink-0">
@@ -380,107 +385,90 @@ function ProductFormModal({ mode, existing, onCancel, onDone }: {
         <div className="flex-1 overflow-y-auto px-8 py-6 flex flex-col gap-5">
         <div className="grid grid-cols-2 gap-3">
           <Field label="SKU">
-            <input value={sku} onChange={(e) => setSku(e.target.value.toUpperCase())}
-              disabled={mode === 'edit'}
-              className="w-full bg-bg-input border border-border-strong px-3 py-2 font-mono disabled:opacity-50" />
+            <Input value={sku} onChange={(e) => setSku(e.target.value.toUpperCase())}
+              disabled={mode === 'edit'} className="font-mono" />
           </Field>
           <Field label="Barcode (optional)">
-            <input value={barcode} onChange={(e) => setBarcode(e.target.value)}
-              className="w-full bg-bg-input border border-border-strong px-3 py-2 font-mono" />
+            <Input value={barcode} onChange={(e) => setBarcode(e.target.value)} className="font-mono" />
           </Field>
         </div>
         <Field label="Name">
-          <input value={name} onChange={(e) => setName(e.target.value)}
-            className="w-full bg-bg-input border border-border-strong px-3 py-2" />
+          <Input value={name} onChange={(e) => setName(e.target.value)} />
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Category">
-            <select value={category} onChange={(e) => setCategory(e.target.value)}
-              className="w-full bg-bg-input border border-border-strong px-3 py-2">
+            <NativeSelect value={category} onChange={(e) => setCategory(e.target.value)}>
               {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
-            </select>
+            </NativeSelect>
           </Field>
           <Field label="Brand (optional)">
-            <input value={brand} onChange={(e) => setBrand(e.target.value)}
-              className="w-full bg-bg-input border border-border-strong px-3 py-2" />
+            <Input value={brand} onChange={(e) => setBrand(e.target.value)} />
           </Field>
         </div>
         <div className="grid grid-cols-3 gap-3">
           <Field label="Pack size (units)">
-            <input value={packSize} onChange={(e) => setPackSize(e.target.value.replace(/\D/g, ''))}
-              className="w-full bg-bg-input border border-border-strong px-3 py-2 font-mono tnum" />
+            <Input value={packSize} onChange={(e) => setPackSize(e.target.value.replace(/\D/g, ''))} className="font-mono tnum" />
           </Field>
           <Field label="Volume (ml)">
-            <input value={volumeMl} onChange={(e) => setVolumeMl(e.target.value.replace(/\D/g, ''))}
-              className="w-full bg-bg-input border border-border-strong px-3 py-2 font-mono tnum" />
+            <Input value={volumeMl} onChange={(e) => setVolumeMl(e.target.value.replace(/\D/g, ''))} className="font-mono tnum" />
           </Field>
           <Field label="Shelf life (days)">
-            <input value={shelfLife} onChange={(e) => setShelfLife(e.target.value.replace(/\D/g, ''))}
-              className="w-full bg-bg-input border border-border-strong px-3 py-2 font-mono tnum" />
+            <Input value={shelfLife} onChange={(e) => setShelfLife(e.target.value.replace(/\D/g, ''))} className="font-mono tnum" />
           </Field>
         </div>
         <div className="grid grid-cols-2 gap-3 items-end">
-          <Field label="Returnable bottle?">
-            <label className="flex items-center gap-2 px-3 py-2 bg-bg-input border border-border-strong">
-              <input type="checkbox" checked={isReturnable} onChange={(e) => setIsReturnable(e.target.checked)} />
+          <div className="flex flex-col gap-1.5 text-sm">
+            <span className="text-text-secondary">Returnable bottle?</span>
+            <label className="flex h-10 items-center gap-2 rounded border border-border-strong bg-bg-input px-3">
+              <input type="checkbox" className="size-4 accent-accent" checked={isReturnable} onChange={(e) => setIsReturnable(e.target.checked)} />
               <span className="text-sm text-text-primary">Has bottle deposit</span>
             </label>
-          </Field>
+          </div>
           <Field label="Deposit (cedis)">
-            <input value={deposit} onChange={(e) => setDeposit(e.target.value)} disabled={!isReturnable}
-              className="w-full bg-bg-input border border-border-strong px-3 py-2 font-mono tnum disabled:opacity-50" />
+            <Input value={deposit} onChange={(e) => setDeposit(e.target.value)} disabled={!isReturnable} className="font-mono tnum" />
           </Field>
         </div>
-        <h4 className="text-text-secondary uppercase tracking-wider text-xs mt-2">Pricing (cedis)</h4>
+        <h4 className="eyebrow mt-2">Pricing (cedis)</h4>
         <div className="grid grid-cols-4 gap-3">
           <Field label="Cost">
-            <input value={cost} onChange={(e) => setCost(e.target.value)}
-              className="w-full bg-bg-input border border-border-strong px-3 py-2 font-mono tnum" />
+            <Input value={cost} onChange={(e) => setCost(e.target.value)} className="font-mono tnum" />
           </Field>
           <Field label="Walk-in">
-            <input value={walkIn} onChange={(e) => setWalkIn(e.target.value)}
-              className="w-full bg-bg-input border border-border-strong px-3 py-2 font-mono tnum" />
+            <Input value={walkIn} onChange={(e) => setWalkIn(e.target.value)} className="font-mono tnum" />
           </Field>
           <Field label="Wholesale">
-            <input value={wholesale} onChange={(e) => setWholesale(e.target.value)}
-              className="w-full bg-bg-input border border-border-strong px-3 py-2 font-mono tnum" />
+            <Input value={wholesale} onChange={(e) => setWholesale(e.target.value)} className="font-mono tnum" />
           </Field>
           <Field label="Route">
-            <input value={route} onChange={(e) => setRoute(e.target.value)}
-              className="w-full bg-bg-input border border-border-strong px-3 py-2 font-mono tnum" />
+            <Input value={route} onChange={(e) => setRoute(e.target.value)} className="font-mono tnum" />
           </Field>
         </div>
         {mode === 'edit' && (
           <Field label="Change reason">
-            <input value={priceReason} onChange={(e) => setPriceReason(e.target.value)}
-              className="w-full bg-bg-input border border-border-strong px-3 py-2" />
+            <Input value={priceReason} onChange={(e) => setPriceReason(e.target.value)} />
           </Field>
         )}
-        <h4 className="text-text-secondary uppercase tracking-wider text-xs mt-2">Replenishment</h4>
+        <h4 className="eyebrow mt-2">Replenishment</h4>
         <div className="grid grid-cols-3 gap-3">
           <Field label="Reorder threshold">
-            <input value={reorderThreshold} onChange={(e) => setReorderThreshold(e.target.value.replace(/\D/g, ''))}
-              className="w-full bg-bg-input border border-border-strong px-3 py-2 font-mono tnum" />
+            <Input value={reorderThreshold} onChange={(e) => setReorderThreshold(e.target.value.replace(/\D/g, ''))} className="font-mono tnum" />
           </Field>
           <Field label="Reorder qty">
-            <input value={reorderQty} onChange={(e) => setReorderQty(e.target.value.replace(/\D/g, ''))}
-              className="w-full bg-bg-input border border-border-strong px-3 py-2 font-mono tnum" />
+            <Input value={reorderQty} onChange={(e) => setReorderQty(e.target.value.replace(/\D/g, ''))} className="font-mono tnum" />
           </Field>
           <Field label="Lead time (days)">
-            <input value={leadTime} onChange={(e) => setLeadTime(e.target.value.replace(/\D/g, ''))}
-              className="w-full bg-bg-input border border-border-strong px-3 py-2 font-mono tnum" />
+            <Input value={leadTime} onChange={(e) => setLeadTime(e.target.value.replace(/\D/g, ''))} className="font-mono tnum" />
           </Field>
         </div>
-        <h4 className="text-text-secondary uppercase tracking-wider text-xs mt-2">Cycle count class</h4>
+        <h4 className="eyebrow mt-2">Cycle count class</h4>
         <div className="grid grid-cols-2 gap-3 items-end">
           <Field label="Count class">
-            <select value={countClass} onChange={(e) => setCountClass(e.target.value as 'A' | 'B' | 'C' | '')}
-              className="w-full bg-bg-input border border-border-strong px-3 py-2">
+            <NativeSelect value={countClass} onChange={(e) => setCountClass(e.target.value as 'A' | 'B' | 'C' | '')}>
               <option value="">— unclassified —</option>
               <option value="A">A — count weekly (top sellers)</option>
               <option value="B">B — count every 2-3 weeks</option>
               <option value="C">C — count monthly (long tail)</option>
-            </select>
+            </NativeSelect>
           </Field>
           <div className="text-xs text-text-tertiary self-center">
             ABC class lets you target a stocktake to just the fast movers
@@ -488,8 +476,8 @@ function ProductFormModal({ mode, existing, onCancel, onDone }: {
           </div>
         </div>
         {mode === 'add' && (
-          <div className="border border-border bg-bg-deep p-4 flex flex-col gap-3">
-            <h4 className="text-text-secondary uppercase tracking-wider text-xs">
+          <div className="rounded-xl border border-border bg-bg-surface p-4 flex flex-col gap-3">
+            <h4 className="eyebrow">
               Sellable / purchasable units (optional)
             </h4>
             <div className="text-text-tertiary text-xs">
@@ -500,92 +488,83 @@ function ProductFormModal({ mode, existing, onCancel, onDone }: {
             </div>
 
             {draftUnits.length > 0 && (
-              <table className="w-full text-sm border border-border-subtle">
-                <thead>
-                  <tr className="text-text-secondary text-xs uppercase tracking-wider bg-bg-surface/60">
-                    <th className="text-left px-3 py-2">Name</th>
-                    <th className="text-right px-3 py-2">Factor</th>
-                    <th className="text-right px-3 py-2">Price (each)</th>
-                    <th className="text-center px-3 py-2">Sale</th>
-                    <th className="text-center px-3 py-2">Purchase</th>
-                    <th className="px-3 py-2"></th>
-                  </tr>
-                </thead>
-                <tbody>
+              <div className="rounded-lg border border-border-subtle bg-bg-elevated">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="px-3">Name</TableHead>
+                    <TableHead className="px-3 text-right">Factor</TableHead>
+                    <TableHead className="px-3 text-right">Price (each)</TableHead>
+                    <TableHead className="px-3 text-center">Sale</TableHead>
+                    <TableHead className="px-3 text-center">Purchase</TableHead>
+                    <TableHead className="px-3"><span className="sr-only">Actions</span></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {draftUnits.map((u, idx) => (
-                    <tr key={idx} className="border-t border-border-subtle">
-                      <td className="font-mono px-3 py-2">{u.unitName}</td>
-                      <td className="text-right font-mono tnum px-3 py-2">× {u.conversionFactor}</td>
-                      <td className="text-right font-mono tnum px-3 py-2">{formatMoney(u.pricePesewas)}</td>
-                      <td className="text-center px-3 py-2">{u.isSaleUnit ? '✓' : '—'}</td>
-                      <td className="text-center px-3 py-2">{u.isPurchaseUnit ? '✓' : '—'}</td>
-                      <td className="text-right px-3 py-2">
-                        <button onClick={() => removeDraftUnit(idx)}
-                          className="text-text-tertiary hover:text-warning text-xs">
-                          remove
-                        </button>
-                      </td>
-                    </tr>
+                    <TableRow key={idx}>
+                      <TableCell className="font-mono px-3 py-2">{u.unitName}</TableCell>
+                      <TableCell className="text-right font-mono tnum px-3 py-2">× {u.conversionFactor}</TableCell>
+                      <TableCell className="text-right font-mono tnum px-3 py-2">{formatMoney(u.pricePesewas)}</TableCell>
+                      <TableCell className="text-center px-3 py-2"><YesNo value={u.isSaleUnit} /></TableCell>
+                      <TableCell className="text-center px-3 py-2"><YesNo value={u.isPurchaseUnit} /></TableCell>
+                      <TableCell className="text-right px-3 py-1">
+                        <Button variant="ghost" size="sm" onClick={() => removeDraftUnit(idx)}>Remove</Button>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
+              </div>
             )}
 
             <div className="flex flex-col gap-3 border-t border-border pt-3">
               <div className="grid grid-cols-[1fr_7rem_9rem] gap-3">
-                <div className="flex flex-col gap-1">
-                  <span className="text-text-secondary text-xs uppercase tracking-wider">Unit name</span>
-                  <input value={du_name} onChange={(e) => setDuName(e.target.value.toUpperCase())}
-                    placeholder="CRATE, PACK, BAG_50KG…"
-                    className="bg-bg-input border border-border-strong px-3 py-2 font-mono" />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <span className="text-text-secondary text-xs uppercase tracking-wider">Factor</span>
-                  <input value={du_factor} onChange={(e) => setDuFactor(e.target.value.replace(/\D/g, ''))}
-                    placeholder="12"
-                    className="bg-bg-input border border-border-strong px-3 py-2 font-mono tnum text-right" />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <span className="text-text-secondary text-xs uppercase tracking-wider">Price (cedis)</span>
-                  <input value={du_price} onChange={(e) => setDuPrice(e.target.value)}
-                    placeholder="180.00"
-                    className="bg-bg-input border border-border-strong px-3 py-2 font-mono tnum text-right" />
-                </div>
+                <Field label="Unit name">
+                  <Input value={du_name} onChange={(e) => setDuName(e.target.value.toUpperCase())}
+                    placeholder="CRATE, PACK, BAG_50KG…" className="font-mono" />
+                </Field>
+                <Field label="Factor">
+                  <Input value={du_factor} onChange={(e) => setDuFactor(e.target.value.replace(/\D/g, ''))}
+                    placeholder="12" className="font-mono tnum text-right" />
+                </Field>
+                <Field label="Price (cedis)">
+                  <Input value={du_price} onChange={(e) => setDuPrice(e.target.value)}
+                    placeholder="180.00" className="font-mono tnum text-right" />
+                </Field>
               </div>
               <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-4 text-sm text-text-secondary">
                   <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" checked={du_sale} onChange={(e) => setDuSale(e.target.checked)} />
+                    <input type="checkbox" className="size-4 accent-accent" checked={du_sale} onChange={(e) => setDuSale(e.target.checked)} />
                     Sellable
                   </label>
                   <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" checked={du_purchase} onChange={(e) => setDuPurchase(e.target.checked)} />
+                    <input type="checkbox" className="size-4 accent-accent" checked={du_purchase} onChange={(e) => setDuPurchase(e.target.checked)} />
                     Purchasable
                   </label>
                 </div>
-                <button type="button" onClick={addDraftUnit}
-                  className="px-4 py-2 border border-border hover:bg-bg-elevated text-sm whitespace-nowrap">
-                  + Add unit
-                </button>
+                <Button type="button" onClick={addDraftUnit}>
+                  <PlusIcon aria-hidden="true" />Add unit
+                </Button>
               </div>
             </div>
             {draftUnits.some((u) => u.isSaleUnit) && (
-              <div className="flex flex-col gap-1 border-t border-border pt-3">
-                <span className="text-text-secondary text-xs uppercase tracking-wider">Default at the till</span>
-                <select value={defaultSaleUnitName} onChange={(e) => setDefaultSaleUnitName(e.target.value)}
-                  className="w-full bg-bg-input border border-border-strong px-3 py-2">
+              <label className="flex flex-col gap-1.5 text-sm border-t border-border pt-3">
+                <span className="text-text-secondary">Default at the till</span>
+                <NativeSelect value={defaultSaleUnitName} onChange={(e) => setDefaultSaleUnitName(e.target.value)}>
                   <option value="">— smallest (canonical)</option>
                   {draftUnits.filter((u) => u.isSaleUnit).map((u) => (
                     <option key={u.unitName} value={u.unitName}>
                       {u.unitName}{u.conversionFactor > 1 ? ` (× ${u.conversionFactor})` : ''}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
                 <span className="text-text-tertiary text-xs">
                   Which size shows up first when a cashier rings up this product.
                   Cashiers can still switch units at the till.
                 </span>
-              </div>
+              </label>
             )}
           </div>
         )}
@@ -602,29 +581,22 @@ function ProductFormModal({ mode, existing, onCancel, onDone }: {
         )}
         </div>
         {/* Sticky footer */}
-        <div className="px-8 py-4 border-t border-border-subtle flex gap-3 justify-end shrink-0 bg-bg-deep/30">
-          <button onClick={onCancel}
-            className="px-5 py-2.5 border border-border hover:bg-bg-elevated text-sm">
-            Cancel
-          </button>
-          <button onClick={() => void submit()}
-            disabled={submitting || !sku.trim() || !name.trim()}
-            className="bg-accent text-ink px-5 py-2.5 font-semibold hover:bg-accent-light disabled:opacity-40 text-sm">
+        <footer className="px-8 py-4 border-t border-border-subtle flex gap-3 justify-end shrink-0">
+          <Button onClick={onCancel} disabled={submitting}>Cancel</Button>
+          <Button variant="primary" onClick={() => void submit()}
+            disabled={submitting || !sku.trim() || !name.trim()}>
             {submitting ? 'Saving…' : (mode === 'add' ? 'Add product' : 'Save changes')}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </footer>
+      </DialogContent>
+    </Dialog>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <span className="text-text-secondary uppercase tracking-wider text-xs">{label}</span>
-      {children}
-    </div>
-  );
+function YesNo({ value }: { value: boolean }) {
+  return value
+    ? <CheckIcon className="mx-auto size-4 text-success" aria-label="Yes" />
+    : <span className="text-text-tertiary" aria-label="No">—</span>;
 }
 
 
@@ -944,8 +916,8 @@ function ProductUnitsEditor({
               <td className="font-mono px-3 py-2">{u.unitName}</td>
               <td className="text-right font-mono tnum px-3 py-2">× {u.conversionFactor}</td>
               <td className="text-right font-mono tnum px-3 py-2">{formatMoney(u.pricePesewas)}</td>
-              <td className="text-center px-3 py-2">{u.isSaleUnit ? '✓' : '—'}</td>
-              <td className="text-center px-3 py-2">{u.isPurchaseUnit ? '✓' : '—'}</td>
+              <td className="text-center px-3 py-2"><YesNo value={u.isSaleUnit} /></td>
+              <td className="text-center px-3 py-2"><YesNo value={u.isPurchaseUnit} /></td>
               <td className="px-3 py-2">{u.active ? <span className="text-success">active</span> : <span className="text-text-tertiary">inactive</span>}</td>
               <td className="text-right px-3 py-2 whitespace-nowrap">
                 <button onClick={() => startEdit(u)} className="text-text-tertiary hover:text-text-primary text-xs">edit</button>
@@ -1035,7 +1007,7 @@ function ProductUnitsEditor({
           </div>
           <div className="flex justify-end items-center gap-3">
             {primarySaved && (
-              <span className="text-success text-xs">✓ Saved</span>
+              <span className="inline-flex items-center gap-1 text-success text-xs"><CheckIcon aria-hidden="true" className="size-3.5" />Saved</span>
             )}
             <button onClick={() => void savePrimaryUnits()} disabled={savingPrimary}
               className="px-4 py-2 border border-border hover:bg-bg-elevated text-xs disabled:opacity-40">

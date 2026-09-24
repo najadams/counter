@@ -64,10 +64,7 @@ export function searchProducts(
   locationId: string,
   limit = 12,
 ): ProductSearchResult[] {
-  const priceCol =
-    channel === 'WHOLESALE' ? 'wholesale_price_pesewas'
-    : channel === 'ROUTE'   ? 'route_price_pesewas'
-    : 'walk_in_price_pesewas';
+  const priceCol = channelPriceColumn(channel);
 
   const trimmed = query.trim();
   let sql: string;
@@ -106,41 +103,85 @@ export function searchProducts(
     params = [like, like, trimmed, skuPrefix, limit];
   }
 
-  const rows = db.prepare(sql).all(...params) as Array<{
-    id: string;
-    sku: string;
-    barcode: string | null;
-    name: string;
-    brand: string | null;
-    category: string;
-    unit_price_pesewas: number;
-    cost_price_pesewas: number;
-    is_returnable: number;
-  }>;
+  const rows = db.prepare(sql).all(...params) as ProductRow[];
+  return rows.map((r) => toSearchResult(db, r, channel, locationId));
+}
 
-  return rows.map((r) => {
-    const def = defaultSaleUnit(db, r.id);
-    // Display price for the default sale unit, scaled to the current channel.
-    // Walk-in returns the unit's stored price directly; wholesale/route
-    // scale proportionally to the product's channel canonical ratio.
-    const displayPrice = priceForUnit(db, r.id, def?.id ?? null, channel);
-    return {
-      id: r.id,
-      sku: r.sku,
-      barcode: r.barcode,
-      name: r.name,
-      brand: r.brand,
-      category: r.category,
-      unitPricePesewas: displayPrice,
-      costPricePesewas: r.cost_price_pesewas,
-      unitsOnHand: unitsOnHand(db, r.id, locationId),
-      isReturnable: r.is_returnable === 1,
-      defaultUnitId: def ? def.id : null,
-      defaultUnitName: def ? def.unitName : 'UNIT',
-      defaultUnitFactor: def ? def.conversionFactor : 1,
-      canonicalChannelPricePesewas: r.unit_price_pesewas,
-    };
-  });
+/**
+ * Quick picks for the sale screen: the products sold most at this location
+ * over the last `days` days, ranked by canonical units (2 crates of 24 count
+ * as 48, not 2). Returned exactly as search returns them — priced for
+ * `channel` in the default sale unit — so a tap adds the same cart line a
+ * search hit would. Voided sales don't count (a corrected sale's original is
+ * voided too); inactive and deleted products are left out.
+ */
+export function topSellingProducts(
+  db: DB,
+  channel: SaleChannel,
+  locationId: string,
+  { days = 30, limit = 8, now = new Date() }: { days?: number; limit?: number; now?: Date } = {},
+): ProductSearchResult[] {
+  const since = new Date(now.getTime() - days * 86_400_000).toISOString();
+  const rows = db.prepare(`
+    SELECT p.id, p.sku, p.barcode, p.name, p.brand, p.category,
+           p.${channelPriceColumn(channel)} AS unit_price_pesewas,
+           p.cost_price_pesewas,
+           p.is_returnable,
+           SUM(sl.quantity * COALESCE(pu.conversion_factor, 1)) AS units_sold
+      FROM sale_lines sl
+      JOIN sales s ON s.id = sl.sale_id
+      JOIN products p ON p.id = sl.product_id
+      LEFT JOIN product_units pu ON pu.id = sl.applied_unit_id
+     WHERE s.voided = 0
+       AND s.location_id = ?
+       AND s.created_at >= ?
+       AND p.active = 1 AND p.deleted_at IS NULL
+     GROUP BY p.id
+     ORDER BY units_sold DESC, p.name ASC
+     LIMIT ?`).all(locationId, since, limit) as ProductRow[];
+  return rows.map((r) => toSearchResult(db, r, channel, locationId));
+}
+
+interface ProductRow {
+  id: string;
+  sku: string;
+  barcode: string | null;
+  name: string;
+  brand: string | null;
+  category: string;
+  unit_price_pesewas: number;
+  cost_price_pesewas: number;
+  is_returnable: number;
+}
+
+function channelPriceColumn(channel: SaleChannel): string {
+  return channel === 'WHOLESALE' ? 'wholesale_price_pesewas'
+    : channel === 'ROUTE' ? 'route_price_pesewas'
+    : 'walk_in_price_pesewas';
+}
+
+function toSearchResult(db: DB, r: ProductRow, channel: SaleChannel, locationId: string): ProductSearchResult {
+  const def = defaultSaleUnit(db, r.id);
+  // Display price for the default sale unit, scaled to the current channel.
+  // Walk-in returns the unit's stored price directly; wholesale/route
+  // scale proportionally to the product's channel canonical ratio.
+  const displayPrice = priceForUnit(db, r.id, def?.id ?? null, channel);
+  return {
+    id: r.id,
+    sku: r.sku,
+    barcode: r.barcode,
+    name: r.name,
+    brand: r.brand,
+    category: r.category,
+    unitPricePesewas: displayPrice,
+    costPricePesewas: r.cost_price_pesewas,
+    unitsOnHand: unitsOnHand(db, r.id, locationId),
+    isReturnable: r.is_returnable === 1,
+    defaultUnitId: def ? def.id : null,
+    defaultUnitName: def ? def.unitName : 'UNIT',
+    defaultUnitFactor: def ? def.conversionFactor : 1,
+    canonicalChannelPricePesewas: r.unit_price_pesewas,
+  };
 }
 
 export interface CompleteSaleLine {

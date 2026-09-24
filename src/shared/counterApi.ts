@@ -66,6 +66,8 @@ export function createCounterApi(invoke: Invoke) {
     // sales
     searchProducts: (query: string, channel: Channel, limit?: number) =>
       invoke<ipc.ProductSearchResponse>(ipc.IPC_CHANNELS.PRODUCT_SEARCH, { query, channel, limit }),
+    topSellers: (channel: Channel, limit?: number) =>
+      invoke<ipc.ProductSearchResponse>(ipc.IPC_CHANNELS.PRODUCT_TOP_SELLERS, { channel, limit }),
     getProductStock: (productId: string) =>
       invoke<ipc.ProductGetStockResponse>(ipc.IPC_CHANNELS.PRODUCT_GET_STOCK, { productId }),
     searchCustomers: (query: string, limit?: number) =>

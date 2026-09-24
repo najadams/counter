@@ -7,6 +7,7 @@ import type { StockReceiptRequestDetail, StockReceiptRequestSummary } from '../.
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { reviewStatusTone } from '../lib/tones';
+import { Segmented } from '../components/ui/segmented';
 
 export default function StockReceiptApprovalsScreen({ onExit, backLabel }: { onExit: () => void; backLabel?: string }) {
   const [tab, setTab] = useState<'PENDING' | 'HISTORY'>('PENDING');
@@ -74,7 +75,8 @@ export default function StockReceiptApprovalsScreen({ onExit, backLabel }: { onE
     <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-8 py-6 flex flex-col gap-5">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div><div className="eyebrow">Senior review queue</div><h1 className="text-2xl font-semibold mt-1">Stock receipt approvals</h1><p className="text-sm text-text-secondary mt-1">Verify the delivery, quantities, purchase units, costs, invoice, PO, and payable before stock is posted.</p></div>
-        <div className="segmented-control"><button className={tab === 'PENDING' ? 'active' : ''} onClick={() => { setTab('PENDING'); setSelected(null); }}>Pending</button><button className={tab === 'HISTORY' ? 'active' : ''} onClick={() => { setTab('HISTORY'); setSelected(null); }}>History</button></div>
+        <Segmented label="Show" value={tab} onChange={(next) => { setTab(next); setSelected(null); }}
+          options={[{ value: 'PENDING', label: 'Pending' }, { value: 'HISTORY', label: 'History' }]} />
       </header>
       {error && <FeedbackBanner>{error}</FeedbackBanner>}
       {message && <div className="notice border-success/50 text-success">{message}</div>}

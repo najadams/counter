@@ -53,7 +53,7 @@ export function PhoneAccessTab() {
           <div className="flex gap-4 items-start border border-border p-4">
             {url && <div className="bg-white p-2 rounded"><QRCodeSVG value={url} size={120} /></div>}
             <div className="flex flex-col gap-1 text-sm min-w-0">
-              <span className="text-success">● On</span>
+              <span className="inline-flex items-center gap-2 font-semibold text-success"><span aria-hidden="true" className="size-2 rounded-full bg-success" />On</span>
               {url ? (
                 <>
                   <span className="text-text-tertiary">Scan the code, or open on the phone:</span>

@@ -1,6 +1,7 @@
 // OpenShiftScreen: capture opening cash count, open a shift.
 // F2 confirms.
 
+import { ArrowRightIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { counter } from '../lib/ipc';
 import { useSession } from '../store/session';
@@ -161,7 +162,7 @@ export default function OpenShiftScreen() {
             {submitting ? 'Opening shift…' : 'Open shift'} <span className="kbd">F2</span>
           </Button>
           {valid && pesewas !== null && (
-            <span className="text-text-secondary text-sm">→ Cash counted: <span className="font-mono tnum">GHS {formatMoney(pesewas)}</span></span>
+            <span className="inline-flex items-center gap-1.5 text-text-secondary text-sm"><ArrowRightIcon aria-hidden="true" className="size-4" />Cash counted: <span className="font-mono tnum">GHS {formatMoney(pesewas)}</span></span>
           )}
         </div>
         {error && (

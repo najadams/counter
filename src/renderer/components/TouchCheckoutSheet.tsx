@@ -9,14 +9,19 @@
 // Cash-first (Approach C): opens on Cash with the exact amount pre-filled and a
 // numeric keypad, so the dominant tender closes in ~2 taps (open -> confirm).
 
-import { useEffect, useMemo, useState } from 'react';
-import { useDialog } from '../hooks/useDialog';
+import { DeleteIcon, XIcon } from 'lucide-react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { counter } from '../lib/ipc';
 import { useCart, type PaymentMethod } from '../store/cart';
 import { formatMoney, formatMoneyWithCurrency, parseCedisToPesewas } from '../../shared/lib/money';
 import { extractInclusiveVat, VAT_ENABLED } from '../../shared/lib/vat';
 import { CustomerCreateModal } from './CustomerCreateModal';
 import { FeedbackBanner } from './FeedbackBanner';
+import { Button } from './ui/button';
+import { Dialog, DialogContent, DialogTitle } from './ui/dialog';
+import { Input } from './ui/input';
+import { Kbd } from './ui/kbd';
+import { Sheet, SheetContent, SheetTitle } from './ui/sheet';
 import { FRIENDLY_UI_ENABLED } from '../../shared/lib/buildFlags';
 import { NumberPad } from './friendly/NumberPad';
 import { TaskIllustration } from './friendly/TaskIllustration';
@@ -41,6 +46,9 @@ interface TouchCheckoutSheetProps {
    *  Esc closes — the same keys as the desktop checkout. */
   keyboardShortcuts?: boolean;
   initialMethod?: PaymentMethod;
+  /** Dialogs that open on top of the checkout (supervisor approval). They
+   *  render inside it so the two stack as parent and child. */
+  children?: ReactNode;
 }
 
 type Tab = 'CASH' | 'MOMO' | 'CREDIT';
@@ -95,13 +103,15 @@ export function TouchCheckoutSheet(p: TouchCheckoutSheetProps): JSX.Element {
   }
 
   const close = () => { if (!p.submitting) p.onClose(); };
-  const dialog = useDialog({ onClose: close, busy: p.submitting, onShortcut: (key) => {
-    if (!p.keyboardShortcuts || showCreate) return;
+  // Only the topmost dialog gets F-keys, so while New customer is open these
+  // never arrive here.
+  const onShortcut = (key: string) => {
+    if (!p.keyboardShortcuts) return;
     if (key === 'F4') setTab('CASH');
     else if (key === 'F5') setTab('MOMO');
     else if (key === 'F6') setTab('CREDIT');
     else if (key === 'F2') confirmAndComplete();
-  } });
+  };
 
   function confirmAndComplete(): void {
     if (!canConfirm || p.submitting) return;
@@ -121,10 +131,12 @@ export function TouchCheckoutSheet(p: TouchCheckoutSheetProps): JSX.Element {
 
   const tabBtn = (t: Tab, label: string): JSX.Element => (
     <button
+      type="button"
       onClick={() => setTab(t)}
+      aria-pressed={t === tab}
       className={[
-        'flex-1 py-3 text-base font-semibold border-b-2',
-        t === tab ? 'border-accent text-accent' : 'border-transparent text-text-secondary',
+        '-mb-px flex-1 py-3 text-base font-semibold border-b-2 transition-colors duration-(--duration-fast)',
+        t === tab ? 'border-accent text-accent' : 'border-transparent text-text-secondary hover:text-text-primary',
       ].join(' ')}
     >
       {label}
@@ -145,22 +157,21 @@ export function TouchCheckoutSheet(p: TouchCheckoutSheetProps): JSX.Element {
       >
         <TaskIllustration name={art} size={48} />
         <span>{label}</span>
-        {p.keyboardShortcuts && <span aria-hidden className="hidden sm:inline-flex"><span className="kbd">{hot}</span></span>}
+        {p.keyboardShortcuts && <span aria-hidden className="hidden sm:inline-flex"><Kbd>{hot}</Kbd></span>}
       </button>
     );
+    // A bottom sheet on a phone, a centred card from the small breakpoint up.
     return (
-      <div className="fixed inset-0 bg-scrim flex items-end sm:items-center justify-center z-50 sm:p-6" onClick={close}>
-        <div
-          {...dialog}
-          aria-labelledby="checkout-title"
-          className="bg-bg-surface border border-border w-full sm:max-w-4xl max-h-[94dvh] overflow-hidden rounded-t-3xl sm:rounded-3xl flex flex-col"
-          onClick={(e) => e.stopPropagation()}
+      <Dialog onClose={close} busy={p.submitting} onShortcut={onShortcut}>
+        <DialogContent
+          showCloseButton={false}
+          className="w-full sm:w-[min(56rem,calc(100%-3rem))] max-h-[94dvh] gap-0 overflow-hidden rounded-t-3xl rounded-b-none bg-bg-surface p-0 sm:rounded-3xl max-sm:top-auto max-sm:bottom-0 max-sm:translate-y-0"
         >
           <div className="shrink-0 px-5 py-3 border-b border-border flex flex-wrap items-center justify-between gap-3">
-            <h2 id="checkout-title" className="text-2xl sm:text-3xl font-bold">Take payment</h2>
-            <button type="button" onClick={close} disabled={p.submitting} className="min-h-14 px-4 rounded-xl border-2 border-border text-lg font-semibold hover:bg-bg-elevated">
-              Back to cart {p.keyboardShortcuts && <span aria-hidden className="hidden sm:inline-flex"><span className="kbd">Esc</span></span>}
-            </button>
+            <DialogTitle className="text-2xl sm:text-3xl font-bold">Take payment</DialogTitle>
+            <Button type="button" size="xl" onClick={close} disabled={p.submitting} className="rounded-xl border-2 border-border text-lg">
+              Back to cart {p.keyboardShortcuts && <span aria-hidden className="hidden sm:inline-flex"><Kbd>Esc</Kbd></span>}
+            </Button>
           </div>
 
           <div className="min-h-0 overflow-y-auto p-5 friendly-checkout-body">
@@ -198,14 +209,15 @@ export function TouchCheckoutSheet(p: TouchCheckoutSheetProps): JSX.Element {
                   inputMode="decimal"
                   className="flex-1 min-w-0 bg-bg-input border-2 border-border-strong rounded-xl px-4 py-3 text-4xl font-mono tnum text-right focus:outline-hidden focus:border-accent"
                 />
-                <button
+                <Button
                   type="button"
+                  size="xl"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => { setCashRaw(formatMoney(p.totalPesewas)); setCashPristine(true); }}
-                  className="min-h-14 px-4 rounded-xl border-2 border-border text-lg font-semibold hover:bg-bg-elevated whitespace-nowrap"
+                  className="rounded-xl border-2 border-border text-lg"
                 >
-                  Exact amount ({formatMoney(p.totalPesewas)})
-                </button>
+                  <span>Exact amount (<span className="font-mono tnum">{formatMoney(p.totalPesewas)}</span>)</span>
+                </Button>
               </div>
               <div
                 aria-live="polite"
@@ -282,7 +294,7 @@ export function TouchCheckoutSheet(p: TouchCheckoutSheetProps): JSX.Element {
                 placeholder="Type a name or phone number"
                 className="bg-bg-input border-2 border-border-strong rounded-xl px-4 py-3 text-2xl focus:outline-hidden focus:border-accent"
               />
-              <button type="button" onClick={() => setShowCreate(true)} className="self-start min-h-14 px-4 rounded-xl border-2 border-border text-lg font-semibold hover:bg-bg-elevated">+ New customer</button>
+              <Button type="button" size="xl" onClick={() => setShowCreate(true)} className="self-start rounded-xl border-2 border-border text-lg">+ New customer</Button>
               <ul className="flex flex-col gap-2 max-h-72 overflow-y-auto">
                 {custHits.length === 0 && custQuery.length > 0 && (
                   <li className="text-lg text-text-secondary px-2 py-2">No customer found. Check the spelling or add a new customer.</li>
@@ -340,54 +352,55 @@ export function TouchCheckoutSheet(p: TouchCheckoutSheetProps): JSX.Element {
           </div>
           <footer className="friendly-checkout-footer relative shrink-0 border-t border-border p-4 bg-bg-surface grid grid-cols-1 sm:grid-cols-[2fr_1fr] gap-3">
 
-          <button
+          <Button
             type="button"
+            variant="primary"
             onClick={confirmAndComplete}
             disabled={!canConfirm || p.submitting}
-            className="min-h-20 rounded-2xl bg-accent text-ink text-3xl font-bold hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed"
+            className="h-auto min-h-20 rounded-2xl text-3xl font-bold"
           >
             {p.submitting ? 'Saving the sale…' : 'Complete sale'}
-            {p.keyboardShortcuts && <span aria-hidden className="hidden sm:inline-flex ml-3"><span className="kbd">F2</span></span>}
-          </button>
-          <button
+            {p.keyboardShortcuts && <span aria-hidden className="hidden sm:inline-flex ml-1"><Kbd onAccent>F2</Kbd></span>}
+          </Button>
+          <Button
             type="button"
+            size="xl"
             disabled={p.submitting}
             onClick={p.onOpenSplit}
-            className="min-h-14 flex items-center justify-center gap-3 rounded-xl border-2 border-border text-lg font-semibold hover:bg-bg-elevated"
+            className="gap-3 rounded-xl border-2 border-border text-lg"
           >
             <TaskIllustration name="split" size={36} />
             Split payment
-          </button>
+          </Button>
           </footer>
-        </div>
-      </div>
+          {p.children}
+        </DialogContent>
+      </Dialog>
     );
   }
 
   return (
-    <div className="fixed inset-0 bg-scrim flex items-end z-50" onClick={close}>
-      <div
-        {...dialog}
-        aria-label="Take payment"
-        className="bg-bg-surface border-t border-border w-full max-h-[90vh] overflow-y-auto rounded-t-2xl p-5 flex flex-col gap-4"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between">
-          <div className="text-text-tertiary text-sm">
-            Total due <span className="font-mono tnum text-text-primary text-lg">{formatMoneyWithCurrency(p.totalPesewas)}</span>
-            {vat && p.totalPesewas > 0 && (
-              <div className="text-text-tertiary text-xs">
-                incl. VAT{' '}
-                <span className="font-mono tnum">
-                  {formatMoney(vat.vatPesewas + vat.nhilPesewas + vat.getfundPesewas)}
-                </span>
-              </div>
-            )}
+    <Sheet onClose={close} busy={p.submitting} onShortcut={onShortcut}>
+      <SheetContent side="bottom" showCloseButton={false} className="max-h-[90dvh] gap-4 p-5">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <SheetTitle>Take payment</SheetTitle>
+            <div className="text-text-tertiary text-sm">
+              Total due <span className="font-mono tnum text-text-primary text-lg">{formatMoneyWithCurrency(p.totalPesewas)}</span>
+              {vat && p.totalPesewas > 0 && (
+                <div className="text-text-tertiary text-xs">
+                  incl. VAT{' '}
+                  <span className="font-mono tnum">
+                    {formatMoney(vat.vatPesewas + vat.nhilPesewas + vat.getfundPesewas)}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
-          <button onClick={close} className="text-text-secondary text-2xl leading-none px-2" aria-label="Close">×</button>
+          <Button variant="ghost" size="icon" onClick={close} disabled={p.submitting} aria-label="Close"><XIcon aria-hidden="true" /></Button>
         </div>
 
-        <div className="flex border-b border-border">
+        <div role="group" aria-label="Payment method" className="flex border-b border-border">
           {tabBtn('CASH', 'Cash')}
           {tabBtn('MOMO', 'MoMo')}
           {tabBtn('CREDIT', 'Credit')}
@@ -396,33 +409,33 @@ export function TouchCheckoutSheet(p: TouchCheckoutSheetProps): JSX.Element {
         {tab === 'CASH' && (
           <>
             <div className="flex items-center justify-between gap-3">
-              <input
+              <Input
+                aria-label="Cash received"
                 value={cashRaw}
                 onChange={(e) => setCashRaw(e.target.value)}
                 inputMode="decimal"
-                className="bg-bg-input border border-border-strong px-4 py-3 text-3xl font-mono tnum text-right flex-1 min-w-0"
+                className="h-14 flex-1 text-3xl font-mono tnum text-right"
               />
-              <button
-                onClick={() => setCashRaw(formatMoney(p.totalPesewas))}
-                className="px-4 py-3 border border-border text-text-primary hover:bg-bg-elevated whitespace-nowrap"
-              >
+              <Button size="xl" className="text-base" onClick={() => setCashRaw(formatMoney(p.totalPesewas))}>
                 Exact
-              </button>
+              </Button>
             </div>
             {change != null && change >= 0 && (
               <div className="text-text-secondary text-base">Change <span className="font-mono tnum text-text-primary text-xl">{formatMoneyWithCurrency(change)}</span></div>
             )}
             {change != null && change < 0 && (
-              <div className="text-danger text-base">Short by {formatMoneyWithCurrency(-change)}</div>
+              <div className="text-danger text-base">Short by <span className="font-mono tnum">{formatMoneyWithCurrency(-change)}</span></div>
             )}
             <div className="grid grid-cols-3 gap-2">
               {['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫'].map((k) => (
                 <button
                   key={k}
+                  type="button"
                   onClick={() => pressKey(k)}
-                  className="py-4 text-2xl font-mono border border-border bg-bg-deep text-text-primary hover:bg-bg-elevated active:bg-bg-elevated"
+                  aria-label={k === '⌫' ? 'Delete' : undefined}
+                  className="flex items-center justify-center rounded-lg py-4 text-2xl font-mono border border-border bg-bg-elevated text-text-primary hover:bg-bg-surface active:bg-bg-surface"
                 >
-                  {k}
+                  {k === '⌫' ? <DeleteIcon aria-hidden="true" className="size-6" /> : k}
                 </button>
               ))}
             </div>
@@ -431,47 +444,54 @@ export function TouchCheckoutSheet(p: TouchCheckoutSheetProps): JSX.Element {
 
         {tab === 'MOMO' && (
           <>
-            <div className="grid grid-cols-3 gap-2">
+            <div role="group" aria-label="MoMo network" className="grid grid-cols-3 gap-2">
               {(['MOMO_MTN', 'MOMO_VODAFONE', 'MOMO_AIRTELTIGO'] as const).map((m) => (
                 <button
                   key={m}
+                  type="button"
+                  aria-pressed={m === momoProvider}
                   onClick={() => setMomoProvider(m)}
                   className={[
-                    'px-3 py-3 border text-base',
-                    m === momoProvider ? 'bg-bg-elevated border-accent text-accent' : 'border-border bg-bg-deep text-text-primary',
+                    'rounded-lg px-3 py-3 border text-base font-semibold',
+                    m === momoProvider ? 'bg-accent/10 border-accent text-accent' : 'border-border bg-bg-elevated text-text-primary',
                   ].join(' ')}
                 >
                   {m === 'MOMO_MTN' ? 'MTN' : m === 'MOMO_VODAFONE' ? 'Telecel' : 'AirtelTigo'}
                 </button>
               ))}
             </div>
-            <label className="text-text-secondary text-xs uppercase tracking-wider">Transaction reference</label>
-            <input
-              value={refRaw}
-              onChange={(e) => setRefRaw(e.target.value)}
-              inputMode="numeric"
-              placeholder="e.g. 7812345678"
-              className="bg-bg-input border border-border-strong px-4 py-3 font-mono text-lg"
-            />
+            <label className="flex flex-col gap-1.5 text-sm text-text-secondary">
+              Transaction reference
+              <Input
+                value={refRaw}
+                onChange={(e) => setRefRaw(e.target.value)}
+                inputMode="numeric"
+                placeholder="e.g. 7812345678"
+                className="h-12 font-mono text-lg"
+              />
+            </label>
           </>
         )}
 
         {tab === 'CREDIT' && (
           <>
-            <input
+            <Input
+              aria-label="Find customer"
               value={custQuery}
               onChange={(e) => setCustQuery(e.target.value)}
               placeholder="Search customer, company, or phone"
-              className="bg-bg-input border border-border-strong px-4 py-3 text-lg"
+              className="h-12 text-lg"
             />
-            <button onClick={() => setShowCreate(true)} className="self-start text-accent text-sm">+ New customer</button>
-            <ul className="flex flex-col max-h-52 overflow-y-auto">
+            <Button variant="link" className="self-start" onClick={() => setShowCreate(true)}>+ New customer</Button>
+            <ul className="flex flex-col max-h-52 overflow-y-auto rounded-lg border border-border">
               {custHits.length === 0 && custQuery.length > 0 && (
                 <li className="text-text-tertiary text-sm px-2 py-2">No matches.</li>
               )}
               {custHits.map((c) => (
                 <li key={c.id}>
                   <button
+                    type="button"
+                    aria-pressed={p.customer?.id === c.id}
                     onClick={() => p.setCustomer({
                       id: c.id, displayName: c.displayName, businessName: c.businessName, phone: c.phone,
                       currentBalancePesewas: c.currentBalancePesewas,
@@ -479,14 +499,14 @@ export function TouchCheckoutSheet(p: TouchCheckoutSheetProps): JSX.Element {
                       preferredChannel: (c as { preferredChannel?: 'WALK_IN' | 'WHOLESALE' | 'ROUTE' | null }).preferredChannel ?? null,
                     })}
                     className={[
-                      'w-full text-left px-4 py-3 border-b border-border',
-                      p.customer?.id === c.id ? 'bg-bg-elevated' : 'bg-bg-deep',
+                      'w-full text-left px-4 py-3 border-b border-border-subtle',
+                      p.customer?.id === c.id ? 'bg-accent/10' : 'bg-bg-elevated hover:bg-bg-surface',
                     ].join(' ')}
                   >
                     <div className="text-text-primary">{c.displayName}</div>
                     {c.businessName && <div className="text-text-secondary text-xs">{c.businessName}</div>}
                     <div className="text-text-tertiary text-xs">
-                      {c.phone} · balance {formatMoneyWithCurrency(c.currentBalancePesewas)}
+                      {c.phone} · balance <span className="font-mono tnum">{formatMoneyWithCurrency(c.currentBalancePesewas)}</span>
                       {c.cashOnly ? ' · cash only' : ''}
                     </div>
                   </button>
@@ -516,19 +536,21 @@ export function TouchCheckoutSheet(p: TouchCheckoutSheetProps): JSX.Element {
           <FeedbackBanner>{p.error}</FeedbackBanner>
         )}
 
-        <button onClick={p.onOpenSplit} className="text-text-tertiary text-sm underline self-start">Split payment instead</button>
+        <Button variant="link" className="self-start text-text-secondary" onClick={p.onOpenSplit} disabled={p.submitting}>Split payment instead</Button>
 
-        <button
+        <Button
+          variant="primary"
+          size="xl"
           onClick={confirmAndComplete}
           disabled={!canConfirm || p.submitting}
-          className="bg-accent text-ink py-4 text-lg font-semibold rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {p.submitting ? 'Completing…' : 'Confirm & complete'}
-        </button>
+        </Button>
         {tab === 'CREDIT' && p.customer?.cashOnly && (
           <div className="text-danger text-sm">This customer is marked cash-only. Use cash, MoMo, or split without credit.</div>
         )}
-      </div>
-    </div>
+        {p.children}
+      </SheetContent>
+    </Sheet>
   );
 }

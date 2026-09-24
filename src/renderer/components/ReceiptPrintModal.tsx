@@ -1,4 +1,3 @@
-import { useDialog } from '../hooks/useDialog';
 // ReceiptPrintModal — on-screen receipt preview with a Print button that
 // opens the OS print dialog via window.print().
 //
@@ -10,12 +9,14 @@ import { useDialog } from '../hooks/useDialog';
 //
 // ReceiptBody is the pure renderer; the AppearanceTab preview reuses it.
 
-import { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { PrinterIcon } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { type SaleReceipt } from '../../shared/lib/receipt';
 import { formatMoneyWithCurrency } from '../../shared/lib/money';
 import { counter } from '../lib/ipc';
 import type { ReceiptConfigResponse } from '../../shared/types/ipc';
+import { Button } from './ui/button';
+import { Dialog, DialogContent } from './ui/dialog';
 
 const FALLBACK_CONFIG: ReceiptConfigResponse = {
   shopName: 'COUNTER SHOP',
@@ -315,32 +316,30 @@ export function ReceiptPrintModal({ receipt, onClose, amountPaidPesewas, amountO
     window.print();
   }
 
-  const printBtnRef = useRef<HTMLButtonElement>(null);
-  const closeBtnRef = useRef<HTMLButtonElement>(null);
-
-  const dialog = useDialog({ onClose, onShortcut: (key) => { if (key === 'F8') doPrint(); } });
-
   // Print CSS — continuous-roll page sized to the paper width, zero
   // margin so the OS doesn't break the receipt into separate pages.
   const printCss = `
     @media print {
       @page { size: ${config.paperWidthMm}mm auto; margin: 0; }
       html, body { background: white !important; margin: 0 !important; padding: 0 !important; }
-      /* The overlay is portaled to <body>, so every OTHER top-level node can be
-         removed from layout outright. This MUST be display:none, not
-         visibility:hidden — visibility hides pixels but keeps the box, so the
-         whole app's height was still being laid out and printed as a long blank
-         leader before the receipt. That was the "white space before the
-         receipt" bug. */
+      /* The dialog's portal is a direct child of <body>, so every OTHER
+         top-level node can be removed from layout outright. This MUST be
+         display:none, not visibility:hidden — visibility hides pixels but
+         keeps the box, so the whole app's height was still being laid out and
+         printed as a long blank leader before the receipt. That was the
+         "white space before the receipt" bug. */
       body > *:not(.receipt-print-overlay) { display: none !important; }
       .receipt-print-overlay {
         position: static !important;
-        background: white !important;
-        padding: 0 !important;
-        inset: auto !important;
         display: block !important;
       }
+      /* The scrim and focus guards beside the card. */
+      .receipt-print-overlay > :not(.receipt-print-card) { display: none !important; }
       .receipt-print-card {
+        position: static !important;
+        translate: none !important;
+        transform: none !important;
+        inset: auto !important;
         box-shadow: none !important;
         border: none !important;
         border-radius: 0 !important;
@@ -361,38 +360,31 @@ export function ReceiptPrintModal({ receipt, onClose, amountPaidPesewas, amountO
   // Screen preview width — approximate the paper roll in CSS px (96dpi → ~3.78 px/mm).
   const previewPx = Math.round(config.paperWidthMm * 3.78);
 
-  // Portaled to <body> so the print stylesheet can display:none every sibling.
-  // Nested inside the app tree there is no selector that removes the ancestors'
-  // layout without also removing the receipt.
-  return createPortal(
-    <div className="fixed inset-0 bg-scrim flex items-center justify-center p-4 z-70 receipt-print-overlay" onClick={onClose}>
-      <style>{printCss}</style>
-      <div {...dialog} aria-label="Receipt preview"
-        className="receipt-print-card bg-white text-gray-900 rounded-lg shadow-2xl max-h-[90vh] overflow-auto"
+  // The portal goes straight into <body> — even when this opens from inside
+  // another dialog — so the print stylesheet can display:none every sibling.
+  // Nested inside the app tree there is no selector that removes the
+  // ancestors' layout without also removing the receipt.
+  return (
+    <Dialog onClose={onClose} onShortcut={(key) => { if (key === 'F8') doPrint(); }}>
+      <DialogContent
+        aria-label="Receipt preview"
+        showCloseButton={false}
+        portalProps={{ container: document.body, className: 'receipt-print-overlay' }}
+        className="receipt-print-card max-h-[90vh] w-auto max-w-[calc(100%-2rem)] gap-0 overflow-auto bg-white p-0 text-gray-900"
         style={{ width: `${previewPx + 20}px` }}
-        onClick={(e) => e.stopPropagation()}
       >
-        {/* Toolbar (hidden on print) */}
-        <div className="receipt-print-controls flex items-center justify-between gap-3 px-4 py-3 border-b border-gray-200 bg-gray-50 sticky top-0">
-          <span className="text-xs uppercase tracking-wider text-gray-500">
+        <style>{printCss}</style>
+        {/* Toolbar (hidden on print). Themed like the app; the paper below
+            stays white in every theme. */}
+        <div className="receipt-print-controls sticky top-0 z-10 flex items-center justify-between gap-3 px-4 py-3 border-b border-border bg-bg-surface text-text-primary">
+          <span className="text-xs font-mono uppercase tracking-wider text-text-secondary">
             Receipt #{receipt.receiptId.slice(-8)}
           </span>
           <div className="flex gap-2">
-            <button
-              ref={printBtnRef}
-              onClick={doPrint}
-              className="px-4 py-1.5 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700"
-              disabled={!configLoaded}
-            >
-              Print
-            </button>
-            <button
-              ref={closeBtnRef}
-              onClick={onClose}
-              className="px-4 py-1.5 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-100"
-            >
-              Close
-            </button>
+            <Button variant="primary" size="sm" onClick={doPrint} disabled={!configLoaded}>
+              <PrinterIcon aria-hidden="true" />Print
+            </Button>
+            <Button size="sm" onClick={onClose}>Close</Button>
           </div>
         </div>
 
@@ -406,8 +398,7 @@ export function ReceiptPrintModal({ receipt, onClose, amountPaidPesewas, amountO
             amountOutstandingPesewas={amountOutstandingPesewas}
           />
         </div>
-      </div>
-    </div>,
-    document.body,
+      </DialogContent>
+    </Dialog>
   );
 }

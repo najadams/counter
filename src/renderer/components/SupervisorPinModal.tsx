@@ -1,9 +1,12 @@
-import { useDialog } from '../hooks/useDialog';
 // Reusable supervisor PIN approval modal.
 // Used by void-sale and stock-receive flows.
 
 import { useEffect, useState } from 'react';
 import { counter } from '../lib/ipc';
+import { Button } from './ui/button';
+import { Dialog, DialogContent } from './ui/dialog';
+import { Input } from './ui/input';
+import { NativeSelect } from './ui/native-select';
 
 interface SupervisorOption { id: string; fullName: string; role: string }
 
@@ -39,12 +42,12 @@ export function SupervisorPinModal({
     onApprove(supervisorId, pin);
   }
 
-  const dialog = useDialog({ onClose: onCancel, busy: false });
-
+  // The accessible name stays "Supervisor approval" whatever the action is;
+  // the title says what is being approved.
   return (
-    <div className="fixed inset-0 bg-scrim flex items-center justify-center z-50" onClick={onCancel}>
-      <div {...dialog} aria-label="Supervisor approval" className="bg-bg-surface border border-border w-full max-w-md p-8 flex flex-col gap-5" onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-text-secondary uppercase tracking-wider text-xs">{title}</h3>
+    <Dialog onClose={onCancel}>
+      <DialogContent aria-label="Supervisor approval" showCloseButton={false} className="w-[min(28rem,calc(100%-2rem))] gap-5 p-8">
+        <h3 className="eyebrow">{title}</h3>
         {candidates.length === 0 && (
           <div className="text-text-tertiary text-sm">
             No active supervisor accounts. Cannot approve this action.
@@ -52,38 +55,34 @@ export function SupervisorPinModal({
         )}
         {candidates.length > 0 && (
           <>
-            <label className="text-text-secondary text-xs uppercase tracking-wider">Supervisor</label>
-            <select
-              value={supervisorId}
-              onChange={(e) => setSupervisorId(e.target.value)}
-              className="bg-bg-input border border-border-strong px-4 py-3 text-text-primary"
-            >
-              {candidates.map((c) => (
-                <option key={c.id} value={c.id}>{c.fullName} · {c.role}</option>
-              ))}
-            </select>
-            <label className="text-text-secondary text-xs uppercase tracking-wider">Supervisor PIN</label>
-            <input
-              type="password"
-              inputMode="numeric"
-              autoFocus
-              value={pin}
-              maxLength={6}
-              onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
-              onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
-              className="bg-bg-input border border-border-strong px-4 py-3 text-2xl font-mono tnum tracking-[0.5em] text-center"
-            />
+            <label className="flex flex-col gap-1.5 text-sm text-text-secondary">
+              Supervisor
+              <NativeSelect value={supervisorId} onChange={(e) => setSupervisorId(e.target.value)} className="h-12 text-base">
+                {candidates.map((c) => (
+                  <option key={c.id} value={c.id}>{c.fullName} · {c.role}</option>
+                ))}
+              </NativeSelect>
+            </label>
+            <label className="flex flex-col gap-1.5 text-sm text-text-secondary">
+              Supervisor PIN
+              <Input
+                type="password"
+                inputMode="numeric"
+                autoFocus
+                value={pin}
+                maxLength={6}
+                onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+                onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
+                className="h-14 text-2xl font-mono tnum tracking-[0.5em] text-center"
+              />
+            </label>
           </>
         )}
         <div className="flex gap-3 mt-2">
-          <button onClick={onCancel} className="px-5 py-3 border border-border text-text-primary hover:bg-bg-elevated">Cancel</button>
-          <button
-            onClick={submit}
-            disabled={candidates.length === 0 || pin.length < 4}
-            className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40 disabled:cursor-not-allowed"
-          >Approve</button>
+          <Button size="lg" onClick={onCancel}>Cancel</Button>
+          <Button size="lg" variant="primary" onClick={submit} disabled={candidates.length === 0 || pin.length < 4}>Approve</Button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

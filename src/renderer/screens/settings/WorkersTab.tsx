@@ -6,6 +6,11 @@ import { counter } from '../../lib/ipc';
 import { useSession } from '../../store/session';
 import { formatMoneyWithCurrency } from '../../../shared/lib/money';
 import { FeedbackBanner } from '../../components/FeedbackBanner';
+import { Button } from '../../components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../../components/ui/dialog';
+import { Field } from '../../components/ui/field';
+import { Input } from '../../components/ui/input';
+import { NativeSelect } from '../../components/ui/native-select';
 
 interface AdminWorker {
   id: string; fullName: string; phone: string; role: string; active: boolean;
@@ -188,14 +193,15 @@ export function WorkersTab() {
         />
       )}
       {regeneratedCode && (
-        <div className="fixed inset-0 bg-scrim flex items-center justify-center p-6 z-50">
-          <div className="bg-bg-surface rounded-lg shadow-xl w-full max-w-lg p-6 space-y-4 border border-border">
-            <h2 className="text-xl font-semibold">New recovery code</h2>
+        // Shown once: nothing but "Done" (after the tick) closes it.
+        <Dialog disablePointerDismissal>
+          <DialogContent showCloseButton={false} className="w-[min(32rem,calc(100%-2rem))] gap-4">
+            <DialogTitle className="text-xl">New recovery code</DialogTitle>
             <p className="text-sm text-text-secondary">
               The previous recovery code has been invalidated. Write the new code
               below somewhere safe — this is the only time it will be shown.
             </p>
-            <div className="bg-bg-deep border-2 border-accent rounded p-6 text-center">
+            <div className="bg-bg-surface border-2 border-accent rounded-xl p-6 text-center">
               <div className="text-xs text-text-tertiary uppercase tracking-wider mb-2">Recovery code</div>
               <div className="font-mono text-2xl font-bold tracking-widest break-all">{regeneratedCode}</div>
               <div className="text-xs text-text-tertiary mt-3">
@@ -203,19 +209,19 @@ export function WorkersTab() {
               </div>
             </div>
             <label className="flex items-center gap-3 text-sm">
-              <input type="checkbox" checked={regenAck} onChange={(e) => setRegenAck(e.target.checked)} />
+              <input type="checkbox" className="size-4 accent-accent" checked={regenAck} onChange={(e) => setRegenAck(e.target.checked)} />
               I have written this new code down somewhere safe.
             </label>
             <div className="flex justify-end gap-3 pt-2">
-              <button
+              <Button
+                variant="primary"
                 disabled={!regenAck}
-                onClick={() => { setRegeneratedCode(null); setRegenAck(false); flash('Recovery code regenerated.', 'info'); }}
-                className="px-4 py-2 bg-accent text-ink font-semibold text-sm disabled:opacity-50">
+                onClick={() => { setRegeneratedCode(null); setRegenAck(false); flash('Recovery code regenerated.', 'info'); }}>
                 Done
-              </button>
+              </Button>
             </div>
-          </div>
-        </div>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );
@@ -242,33 +248,38 @@ function AddWorkerModal({ onCancel, onAdded, onError }: { onCancel: () => void; 
   }
 
   return (
-    <div className="fixed inset-0 bg-scrim flex items-center justify-center z-50" onClick={onCancel}>
-      <div className="bg-bg-surface border border-border w-full max-w-md p-8 flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-text-secondary uppercase tracking-wider text-xs">Add worker</h3>
-        <input autoFocus value={fullName} onChange={(e) => setFullName(e.target.value)}
-          placeholder="Full name" className="bg-bg-input border border-border-strong px-4 py-3" />
-        <input value={phone} onChange={(e) => setPhone(e.target.value)}
-          placeholder="Phone (e.g. 0555547998)" className="bg-bg-input border border-border-strong px-4 py-3 font-mono" />
-        <select value={role} onChange={(e) => setRole(e.target.value as typeof ROLE_OPTIONS[number])}
-          className="bg-bg-input border border-border-strong px-4 py-3">
-          {ROLE_OPTIONS.map((r) => <option key={r}>{r}</option>)}
-        </select>
-        <input type="password" inputMode="numeric" value={pin} maxLength={6}
-          onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
-          placeholder="PIN (4-6 digits)"
-          className="bg-bg-input border border-border-strong px-4 py-3 font-mono tnum tracking-[0.5em] text-center" />
-        <input value={salary} onChange={(e) => setSalary(e.target.value.replace(/\D/g, ''))}
-          placeholder="Monthly salary in pesewas (e.g. 150000 = GHS 1500)"
-          className="bg-bg-input border border-border-strong px-4 py-3 font-mono tnum" />
+    <Dialog onClose={onCancel} busy={submitting}>
+      <DialogContent showCloseButton={false} className="w-[min(28rem,calc(100%-2rem))] gap-4 p-8">
+        <DialogTitle className="text-xl">Add worker</DialogTitle>
+        <Field label="Full name">
+          <Input autoFocus value={fullName} onChange={(e) => setFullName(e.target.value)} className="h-11" />
+        </Field>
+        <Field label="Phone">
+          <Input value={phone} onChange={(e) => setPhone(e.target.value)}
+            placeholder="e.g. 0555547998" className="h-11 font-mono" />
+        </Field>
+        <Field label="Role">
+          <NativeSelect value={role} onChange={(e) => setRole(e.target.value as typeof ROLE_OPTIONS[number])} className="h-11">
+            {ROLE_OPTIONS.map((r) => <option key={r}>{r}</option>)}
+          </NativeSelect>
+        </Field>
+        <Field label="PIN (4-6 digits)">
+          <Input type="password" inputMode="numeric" value={pin} maxLength={6}
+            onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+            className="h-11 font-mono tnum tracking-[0.5em] text-center" />
+        </Field>
+        <Field label="Monthly salary (pesewas)" hint="e.g. 150000 = GHS 1500">
+          <Input value={salary} onChange={(e) => setSalary(e.target.value.replace(/\D/g, ''))}
+            inputMode="numeric" className="h-11 font-mono tnum" />
+        </Field>
         <div className="flex gap-3 mt-2">
-          <button onClick={onCancel} className="px-5 py-3 border border-border hover:bg-bg-elevated">Cancel</button>
-          <button onClick={() => void submit()} disabled={submitting || pin.length < 4 || !fullName.trim()}
-            className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40">
+          <Button size="lg" onClick={onCancel} disabled={submitting}>Cancel</Button>
+          <Button size="lg" variant="primary" onClick={() => void submit()} disabled={submitting || pin.length < 4 || !fullName.trim()}>
             {submitting ? 'Adding…' : 'Add worker'}
-          </button>
+          </Button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -279,23 +290,20 @@ function ResetPinModal({ worker, onCancel, onDone, onError }: { worker: AdminWor
     if (!r.success) onError(r.error); else onDone();
   }
   return (
-    <div className="fixed inset-0 bg-scrim flex items-center justify-center z-50" onClick={onCancel}>
-      <div className="bg-bg-surface border border-border w-full max-w-md p-8 flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-text-secondary uppercase tracking-wider text-xs">Reset PIN — {worker.fullName}</h3>
-        <input autoFocus type="password" inputMode="numeric" value={pin} maxLength={6}
-          onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
-          placeholder="New PIN (4-6 digits)"
-          className="bg-bg-input border border-border-strong px-4 py-3 font-mono tnum tracking-[0.5em] text-center" />
-        <div className="text-text-tertiary text-xs">All active lockouts on this worker will be cleared.</div>
+    <Dialog onClose={onCancel}>
+      <DialogContent showCloseButton={false} className="w-[min(28rem,calc(100%-2rem))] gap-4 p-8">
+        <DialogTitle className="text-xl">Reset PIN — {worker.fullName}</DialogTitle>
+        <Field label="New PIN (4-6 digits)" hint="All active lockouts on this worker will be cleared.">
+          <Input autoFocus type="password" inputMode="numeric" value={pin} maxLength={6}
+            onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+            className="h-12 font-mono tnum tracking-[0.5em] text-center" />
+        </Field>
         <div className="flex gap-3">
-          <button onClick={onCancel} className="px-5 py-3 border border-border hover:bg-bg-elevated">Cancel</button>
-          <button onClick={() => void submit()} disabled={pin.length < 4}
-            className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40">
-            Reset
-          </button>
+          <Button size="lg" onClick={onCancel}>Cancel</Button>
+          <Button size="lg" variant="primary" onClick={() => void submit()} disabled={pin.length < 4}>Reset</Button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -306,24 +314,24 @@ function TerminateModal({ worker, onCancel, onDone, onError }: { worker: AdminWo
     if (!r.success) onError(r.error); else onDone();
   }
   return (
-    <div className="fixed inset-0 bg-scrim flex items-center justify-center z-50" onClick={onCancel}>
-      <div className="bg-bg-surface border border-border w-full max-w-md p-8 flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-text-secondary uppercase tracking-wider text-xs">Terminate — {worker.fullName}</h3>
-        <div className="text-text-tertiary text-sm">
-          This is permanent. The worker stays in the database with all historical attribution intact, but cannot log in again.
-        </div>
-        <input autoFocus value={reason} onChange={(e) => setReason(e.target.value)}
-          placeholder="Reason (e.g. resigned, fired for theft)"
-          className="bg-bg-input border border-border-strong px-4 py-3" />
+    <Dialog onClose={onCancel}>
+      <DialogContent showCloseButton={false} className="w-[min(28rem,calc(100%-2rem))] gap-4 p-8">
+        <DialogHeader>
+          <DialogTitle className="text-xl">Terminate — {worker.fullName}</DialogTitle>
+          <DialogDescription>
+            This is permanent. The worker stays in the database with all historical attribution intact, but cannot log in again.
+          </DialogDescription>
+        </DialogHeader>
+        <Field label="Reason">
+          <Input autoFocus value={reason} onChange={(e) => setReason(e.target.value)}
+            placeholder="e.g. resigned, fired for theft" className="h-11" />
+        </Field>
         <div className="flex gap-3">
-          <button onClick={onCancel} className="px-5 py-3 border border-border hover:bg-bg-elevated">Cancel</button>
-          <button onClick={() => void submit()} disabled={reason.trim().length < 3}
-            className="bg-danger text-ink px-5 py-3 font-semibold disabled:opacity-40">
-            Terminate
-          </button>
+          <Button size="lg" onClick={onCancel}>Cancel</Button>
+          <Button size="lg" variant="destructive" onClick={() => void submit()} disabled={reason.trim().length < 3}>Terminate</Button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -335,25 +343,24 @@ function ChangeMyPinModal({ onCancel, onDone, onError }: { onCancel: () => void;
     if (!r.success) onError(r.error); else onDone();
   }
   return (
-    <div className="fixed inset-0 bg-scrim flex items-center justify-center z-50" onClick={onCancel}>
-      <div className="bg-bg-surface border border-border w-full max-w-md p-8 flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-text-secondary uppercase tracking-wider text-xs">Change my PIN</h3>
-        <input type="password" inputMode="numeric" value={oldPin} maxLength={6}
-          onChange={(e) => setOldPin(e.target.value.replace(/\D/g, ''))}
-          placeholder="Old PIN"
-          className="bg-bg-input border border-border-strong px-4 py-3 font-mono tnum tracking-[0.5em] text-center" />
-        <input type="password" inputMode="numeric" value={newPin} maxLength={6}
-          onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
-          placeholder="New PIN (4-6 digits)"
-          className="bg-bg-input border border-border-strong px-4 py-3 font-mono tnum tracking-[0.5em] text-center" />
+    <Dialog onClose={onCancel}>
+      <DialogContent showCloseButton={false} className="w-[min(28rem,calc(100%-2rem))] gap-4 p-8">
+        <DialogTitle className="text-xl">Change my PIN</DialogTitle>
+        <Field label="Old PIN">
+          <Input autoFocus type="password" inputMode="numeric" value={oldPin} maxLength={6}
+            onChange={(e) => setOldPin(e.target.value.replace(/\D/g, ''))}
+            className="h-12 font-mono tnum tracking-[0.5em] text-center" />
+        </Field>
+        <Field label="New PIN (4-6 digits)">
+          <Input type="password" inputMode="numeric" value={newPin} maxLength={6}
+            onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
+            className="h-12 font-mono tnum tracking-[0.5em] text-center" />
+        </Field>
         <div className="flex gap-3">
-          <button onClick={onCancel} className="px-5 py-3 border border-border hover:bg-bg-elevated">Cancel</button>
-          <button onClick={() => void submit()} disabled={oldPin.length < 4 || newPin.length < 4}
-            className="bg-accent text-ink px-5 py-3 font-semibold hover:bg-accent-light disabled:opacity-40">
-            Update
-          </button>
+          <Button size="lg" onClick={onCancel}>Cancel</Button>
+          <Button size="lg" variant="primary" onClick={() => void submit()} disabled={oldPin.length < 4 || newPin.length < 4}>Update</Button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -40,6 +40,7 @@ import VoidApprovalsScreen from './VoidApprovalsScreen';
 import VarianceCasesScreen from './VarianceCasesScreen';
 import StockReceiptApprovalsScreen from './StockReceiptApprovalsScreen';
 import { FeedbackBanner } from '../components/FeedbackBanner';
+import { Kbd } from '../components/ui/kbd';
 import { IntelligenceBriefPanel } from '../components/IntelligenceBriefPanel';
 import IntelligenceScreen from './IntelligenceScreen';
 import { useCart } from '../store/cart';
@@ -402,7 +403,7 @@ export default function HomeScreen({ onReactivate }: { onReactivate?: () => void
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <button type="button" onClick={() => { setStep('idle'); setCounted(''); setError(null); }}
-                    className="min-h-16 rounded-xl border-2 border-border text-xl font-semibold hover:bg-bg-elevated">Cancel</button>
+                    className="min-h-16 rounded-xl border-2 border-border text-xl font-semibold hover:bg-bg-surface">Cancel</button>
                   <button type="button" onClick={() => void submitCountAndClose()}
                     disabled={closing || voidCounts.currentShiftPendingCount > 0 || (pendingReprints.length > 0 && !reprintAck)}
                     title={pendingReprints.length > 0 && !reprintAck ? 'Resolve pending receipts or acknowledge first' : ''}
@@ -564,7 +565,7 @@ function LanJoinCard() {
   if (!isDesktopHost || !access || !access.exposed || access.urls.length === 0) return null;
   const joinUrl = access.urls[0]!; // length checked above
   return (
-    <div className="bg-bg-surface border border-border px-6 py-5 flex items-center gap-5">
+    <div className="panel px-6 py-5 flex items-center gap-5">
       <div className="bg-white p-2 rounded shrink-0">
         <QRCodeSVG value={joinUrl} size={96} />
       </div>
@@ -582,8 +583,8 @@ function ActionRow({ kind = 'default', label, hot, caption, onClick }: {
 }) {
   const cls =
     kind === 'primary' ? 'bg-accent text-ink border border-accent hover:bg-accent-light shadow-xs'
-    : kind === 'warn'  ? 'panel border-warning text-warning hover:bg-bg-elevated'
-    : 'panel text-text-primary hover:bg-bg-elevated hover:border-border-strong';
+    : kind === 'warn'  ? 'panel border-warning text-warning hover:bg-warning/5'
+    : 'panel text-text-primary hover:border-accent hover:bg-accent/5';
   return (
     <button onClick={onClick}
       className={`flex items-center justify-between px-6 py-5 text-left rounded-xl min-h-24 transition-colors ${cls}`}>
@@ -591,7 +592,7 @@ function ActionRow({ kind = 'default', label, hot, caption, onClick }: {
         <div className={`text-sm font-semibold ${kind === 'primary' ? 'opacity-90' : 'text-text-primary'}`}>{label}</div>
         <div className={`mt-1 text-base ${kind === 'primary' ? '' : 'text-text-primary'}`}>{caption}</div>
       </div>
-      {hot && <span className={`kbd ${kind === 'primary' ? 'bg-bg-deep text-accent border-accent' : ''}`}>{hot}</span>}
+      {hot && <Kbd onAccent={kind === 'primary'}>{hot}</Kbd>}
     </button>
   );
 }

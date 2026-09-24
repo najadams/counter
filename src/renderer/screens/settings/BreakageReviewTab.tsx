@@ -6,6 +6,7 @@ import { counter } from '../../lib/ipc';
 import { useSession } from '../../store/session';
 import { formatMoneyWithCurrency } from '../../../shared/lib/money';
 import { FeedbackBanner } from '../../components/FeedbackBanner';
+import { Dialog, DialogContent } from '../../components/ui/dialog';
 
 interface Row {
   id: string; productId: string; productName: string; productSku: string;
@@ -161,19 +162,23 @@ export function BreakageReviewTab() {
       </div>
 
       {openPhoto && (
-        <div onClick={() => setOpenPhoto(null)}
-          className="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-6 cursor-pointer">
-          <div className="max-w-4xl max-h-full flex flex-col gap-2">
+        <Dialog onClose={() => setOpenPhoto(null)}>
+          <DialogContent
+            aria-label="Breakage photo"
+            showCloseButton={false}
+            onClick={() => setOpenPhoto(null)}
+            className="w-auto max-w-[min(56rem,calc(100%-2rem))] max-h-[calc(100dvh-2rem)] cursor-pointer items-center gap-2 border-0 bg-transparent p-0 shadow-none"
+          >
             <img src={openPhoto.src} alt="breakage"
-              className="max-w-full max-h-[85vh] rounded shadow-2xl object-contain" />
-            <div className="text-text-secondary text-sm text-center">
+              className="max-w-full max-h-[85vh] rounded-xl shadow-overlay object-contain" />
+            <div className="rounded-lg bg-bg-modal px-3 py-2 text-text-secondary text-sm text-center">
               {openPhoto.row.productName} · qty {openPhoto.row.quantity} ·
               loss {formatMoneyWithCurrency(openPhoto.row.totalLossPesewas)} ·
               by {openPhoto.row.workerName} · {new Date(openPhoto.row.createdAt).toLocaleString()}
+              <div className="text-text-tertiary text-xs">click anywhere to close</div>
             </div>
-            <div className="text-text-tertiary text-xs text-center">click anywhere to close</div>
-          </div>
-        </div>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

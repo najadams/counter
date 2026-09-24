@@ -32,6 +32,7 @@ export const IPC_CHANNELS = {
 
   // Sales
   PRODUCT_SEARCH: 'product:search',
+  PRODUCT_TOP_SELLERS: 'product:top-sellers',
   PRODUCT_GET_STOCK: 'product:get-stock',
   CUSTOMER_SEARCH: 'customer:search',
   SALE_COMPLETE: 'sale:complete',
@@ -344,6 +345,8 @@ export interface ShiftCloseResponse {
 export type SaleChannel = 'WALK_IN' | 'WHOLESALE' | 'ROUTE';
 
 export interface ProductSearchRequest { query: string; channel: SaleChannel; limit?: number }
+/** The sale screen's quick picks: best sellers by units, last 30 days, this shop. */
+export interface ProductTopSellersRequest { channel: SaleChannel; limit?: number }
 // Unit fields come from product_units (migration 0029): defaultUnitId is the
 // smallest active sellable unit; defaultUnitFactor converts display-unit
 // quantities to canonical for stock movements; canonicalChannelPricePesewas

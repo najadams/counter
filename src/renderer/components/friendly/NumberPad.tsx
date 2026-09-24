@@ -5,6 +5,8 @@
 // Keys never take focus (mousedown is prevented), so a cashier can tap a few
 // digits and carry on typing without clicking back into the field.
 
+import { DeleteIcon } from 'lucide-react';
+
 export function applyNumberPadKey(
   current: string,
   key: string,
@@ -57,7 +59,7 @@ export function NumberPad({
             aria-label={k === 'back' ? 'Delete last digit' : k === 'clear' ? 'Clear' : k === '.' ? 'Decimal point' : k}
             className="min-h-16 rounded-xl border-2 border-border bg-bg-elevated text-text-primary text-3xl font-semibold tnum hover:border-border-strong active:bg-bg-surface disabled:opacity-40"
           >
-            {k === 'back' ? '⌫' : k === 'clear' ? <span className="text-lg">Clear</span> : k}
+            {k === 'back' ? <DeleteIcon aria-hidden="true" className="mx-auto size-8" /> : k === 'clear' ? <span className="text-lg">Clear</span> : k}
           </button>
         ))}
       </div>

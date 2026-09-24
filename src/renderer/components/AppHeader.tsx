@@ -5,6 +5,7 @@
 // somewhere else pass `backLabel` (e.g. "Back to customers"). F9 stays the
 // keyboard shortcut either way — the screens own that handler.
 
+import { ArrowLeftIcon } from 'lucide-react';
 import { useSession } from '../store/session';
 import { formatMoneyWithCurrency } from '../../shared/lib/money';
 import { FRIENDLY_UI_ENABLED } from '../../shared/lib/buildFlags';
@@ -37,7 +38,7 @@ export function AppHeader({ subtitle, onBack, backLabel = 'Home', backDisabled =
             >
               {goesHome
                 ? <TaskIllustration name="home" size={44} />
-                : <span aria-hidden className="w-11 text-center text-3xl leading-none">←</span>}
+                : <ArrowLeftIcon aria-hidden="true" className="size-8 mx-1.5" />}
               <span>{backLabel}</span>
               <span aria-hidden className="hidden sm:inline-flex"><span className="kbd">F9</span></span>
             </button>
@@ -75,7 +76,7 @@ export function AppHeader({ subtitle, onBack, backLabel = 'Home', backDisabled =
             title={`${goesHome ? 'Back to home' : backLabel} (F9)`}
             className="flex items-center gap-1.5 shrink-0 border border-border text-text-secondary hover:text-text-primary hover:bg-bg-elevated px-2.5 py-1.5 text-sm"
           >
-            <span aria-hidden>←</span>
+            <ArrowLeftIcon aria-hidden="true" className="size-4" />
             <span className="hidden sm:inline">{goesHome ? 'Back' : backLabel}</span>
             <span className="kbd hidden sm:inline">F9</span>
           </button>
