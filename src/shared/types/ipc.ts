@@ -2021,6 +2021,20 @@ export interface ReceiptTestPrinterRequest {
   station: 'counter' | 'door';
 }
 
+// --- Payment settings (which ways of moving money the shop uses) ---------
+
+export const IPC_CHANNELS_PAYMENT_SETTINGS = {
+  PAYMENT_SETTINGS_GET: 'payment-settings:get',
+  PAYMENT_SETTINGS_SET: 'payment-settings:set',
+} as const;
+
+export interface PaymentSettingsResponse {
+  /** False hides Bank transfer as a payment choice and empty bank accounts in owner reports. */
+  bankInUse: boolean;
+}
+
+export type PaymentSettingsSetRequest = PaymentSettingsResponse;
+
 export interface ReceiptTestPrinterResponse {
   ok: boolean;
   printed: boolean;
@@ -3160,6 +3174,17 @@ export interface ManagementPositionResponse {
   equity: { totalPesewas: number; lines: ManagementLine[] };
   workingCapitalPesewas: number; currentRatioBps: number | null;
   equationDifferencePesewas: number; integrityOk: boolean;
+  /** Kept profit and free cash. Null before the ledger cutover. */
+  keptAndFree: ManagementKeptAndFree | null;
+}
+export interface ManagementKeptAndFree {
+  cutoverDate: string;
+  profitSinceCutoverPesewas: number; ownerDrawingsPesewas: number; profitKeptPesewas: number;
+  cashOnHandPesewas: number; notCountedRecentlyPesewas: number; cashAccounts: ManagementLine[];
+  overdueBillsPesewas: number; dueNext7DaysPesewas: number; dueNext30DaysPesewas: number;
+  undatedBillsPesewas: number; taxOwedPesewas: number;
+  freeCashAfter7DaysPesewas: number; freeCashAfter30DaysPesewas: number;
+  bankInUse: boolean;
 }
 export interface ManagementCashflowResponse {
   generatedAt: string; fromDate: string; toDate: string; locationId: string;

@@ -3768,6 +3768,57 @@ export function registerReceiptConfigHandlers(
   );
 }
 
+// --- Payment settings handlers -------------------------------------------
+
+import {
+  IPC_CHANNELS_PAYMENT_SETTINGS,
+  type PaymentSettingsResponse, type PaymentSettingsSetRequest,
+} from '../../shared/types/ipc.js';
+import { getPaymentSettings, setPaymentSettings } from '../services/paymentSettings.js';
+
+export function registerPaymentSettingsHandlers(
+  ipcMain: IpcRegistrar,
+  db: import('better-sqlite3').Database,
+  deviceId: string,
+): void {
+  // Read — any signed-in worker: checkout needs to know whether to offer
+  // Bank transfer.
+  ipcMain.handle(IPC_CHANNELS_PAYMENT_SETTINGS.PAYMENT_SETTINGS_GET,
+    wrap<void, PaymentSettingsResponse>(
+      () => {
+        requireWorker();
+        return getPaymentSettings(db);
+      },
+      IPC_CHANNELS_PAYMENT_SETTINGS.PAYMENT_SETTINGS_GET,
+    ),
+  );
+
+  // Write — OWNER/FOUNDER only. How the shop banks is the owner's call.
+  ipcMain.handle(IPC_CHANNELS_PAYMENT_SETTINGS.PAYMENT_SETTINGS_SET,
+    wrap<PaymentSettingsSetRequest, PaymentSettingsResponse>(
+      (req) => {
+        const w = requireWorker();
+        if (w.role !== 'OWNER' && w.role !== 'FOUNDER') {
+          throw new Error('Only OWNER or FOUNDER can change payment settings.');
+        }
+        const before = getPaymentSettings(db);
+        const after = setPaymentSettings(db, { bankInUse: req.bankInUse });
+        logAudit(db, {
+          workerId: w.workerId,
+          action: 'PAYMENT_SETTINGS_CHANGED',
+          entityType: 'device_config',
+          entityId: 'payments',
+          beforeValue: before,
+          afterValue: after,
+          deviceId,
+        });
+        return after;
+      },
+      IPC_CHANNELS_PAYMENT_SETTINGS.PAYMENT_SETTINGS_SET,
+    ),
+  );
+}
+
 // --- Sync provisioning + status (Phase 3 multi-shop) -----------------------
 export function registerSyncHandlers(ipcMain: IpcRegistrar, db: DB, deviceId: string): void {
   ipcMain.handle(IPC_CHANNELS_SYNC.SYNC_GET_STATUS, wrap<void, SyncStatus>(

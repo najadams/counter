@@ -566,6 +566,12 @@ export function createCounterApi(invoke: Invoke) {
     receiptTestPrinter: (req: ipc.ReceiptTestPrinterRequest) =>
       invoke<ipc.ReceiptTestPrinterResponse>(ipc.IPC_CHANNELS_RECEIPT.RECEIPT_TEST_PRINTER, req),
 
+    // --- Payment settings (does the shop use a bank?) ---
+    paymentSettingsGet: () =>
+      invoke<ipc.PaymentSettingsResponse>(ipc.IPC_CHANNELS_PAYMENT_SETTINGS.PAYMENT_SETTINGS_GET, {}),
+    paymentSettingsSet: (req: ipc.PaymentSettingsSetRequest) =>
+      invoke<ipc.PaymentSettingsResponse>(ipc.IPC_CHANNELS_PAYMENT_SETTINGS.PAYMENT_SETTINGS_SET, req),
+
     // --- Phase 4 workstream C: WhatsApp pending orders (accept/reject) ---
     pendingOrdersList: () =>
       invoke<ipc.PendingOrdersListResponse>(ipc.IPC_CHANNELS_PENDING_ORDERS.PENDING_ORDERS_LIST, {}),

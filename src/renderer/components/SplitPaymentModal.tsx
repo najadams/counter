@@ -8,6 +8,7 @@ import { PlusIcon, XIcon } from 'lucide-react';
 import { useState } from 'react';
 import { FRIENDLY_UI_ENABLED } from '../../shared/lib/buildFlags';
 import { formatMoney, formatMoneyWithCurrency, parseCedisToPesewas } from '../../shared/lib/money';
+import { useBankInUse } from '../store/paymentSettings';
 import { FeedbackBanner } from './FeedbackBanner';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogTitle } from './ui/dialog';
@@ -66,6 +67,10 @@ export function SplitPaymentModal({
     { id: 'r2', method: 'MOMO_MTN', amountRaw: '', reference: '', cashGivenRaw: '' },
   ]);
   const [error, setError] = useState<string | null>(null);
+  const bankInUse = useBankInUse();
+  const methodOptions = bankInUse
+    ? METHOD_OPTIONS
+    : METHOD_OPTIONS.filter((m) => m.value !== 'BANK_TRANSFER');
 
   const tenderTotal = rows.reduce((sum, r) => {
     const v = parseCedisToPesewas(r.amountRaw);
@@ -149,7 +154,7 @@ export function SplitPaymentModal({
             <section key={r.id} aria-label={`Payment ${index + 1}`} className="rounded-xl border-2 border-border bg-bg-elevated p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label className="flex flex-col gap-1 text-lg">Payment method
                 <NativeSelect value={r.method} onChange={(e) => update(r.id, { method: e.target.value as TenderMethod })} className="h-14 rounded-lg text-lg">
-                  {METHOD_OPTIONS.map((m) => <option key={m.value} value={m.value}>{m.value === 'CREDIT' ? 'Pay later' : m.value === 'MOMO_VODAFONE' ? 'MoMo (Telecel)' : m.label}</option>)}
+                  {methodOptions.map((m) => <option key={m.value} value={m.value}>{m.value === 'CREDIT' ? 'Pay later' : m.value === 'MOMO_VODAFONE' ? 'MoMo (Telecel)' : m.label}</option>)}
                 </NativeSelect>
               </label>
               <label className="flex flex-col gap-1 text-lg">Amount (GHS)
@@ -199,7 +204,7 @@ export function SplitPaymentModal({
                 aria-label={`Payment ${index + 1} method`}
                 value={r.method}
                 onChange={(e) => update(r.id, { method: e.target.value as TenderMethod })}>
-                {METHOD_OPTIONS.map((m) => (
+                {methodOptions.map((m) => (
                   <option key={m.value} value={m.value}>{m.label}</option>
                 ))}
               </NativeSelect>

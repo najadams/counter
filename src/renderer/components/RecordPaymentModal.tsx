@@ -4,6 +4,7 @@
 import { ArrowRightIcon } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { counter } from '../lib/ipc';
+import { useBankInUse } from '../store/paymentSettings';
 import { formatMoney, formatMoneyWithCurrency, parseCedisToPesewas } from '../../shared/lib/money';
 import { FeedbackBanner } from './FeedbackBanner';
 import { Button } from './ui/button';
@@ -35,6 +36,7 @@ export function RecordPaymentModal({
   const [openSales, setOpenSales] = useState<OpenSale[]>([]);
   const [amount, setAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<typeof PAYMENT_METHODS[number]['code']>('CASH');
+  const bankInUse = useBankInUse();
   const [paymentReference, setPaymentReference] = useState('');
   const [notes, setNotes] = useState('');
   const [mode, setMode] = useState<'fifo' | 'manual'>('fifo');
@@ -135,7 +137,7 @@ export function RecordPaymentModal({
           </Field>
           <Field label="Method">
             <NativeSelect value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as typeof paymentMethod)} className="h-14 text-base">
-              {PAYMENT_METHODS.map((m) => <option key={m.code} value={m.code}>{m.label}</option>)}
+              {PAYMENT_METHODS.filter((m) => bankInUse || m.code !== 'BANK_TRANSFER').map((m) => <option key={m.code} value={m.code}>{m.label}</option>)}
             </NativeSelect>
           </Field>
         </div>

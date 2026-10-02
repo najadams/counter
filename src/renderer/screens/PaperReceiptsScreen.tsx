@@ -3,6 +3,7 @@ import { AppHeader } from '../components/AppHeader';
 import { FeedbackBanner } from '../components/FeedbackBanner';
 import { counter } from '../lib/ipc';
 import { useCart } from '../store/cart';
+import { useBankInUse } from '../store/paymentSettings';
 import { formatMoney, formatMoneyWithCurrency, parseCedisToPesewas } from '../../shared/lib/money';
 import type {
   PaperReceiptDetail,
@@ -39,6 +40,7 @@ export default function PaperReceiptsScreen({ onExit, onOpenAtTill }: { onExit: 
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [channel, setChannel] = useState<SaleChannel>('WALK_IN');
   const [paymentMethod, setPaymentMethod] = useState<string>('CASH');
+  const bankInUse = useBankInUse();
   const [paymentReference, setPaymentReference] = useState('');
   const [lines, setLines] = useState<PaperReceiptLineDraft[]>([]);
   const [busy, setBusy] = useState(false);
@@ -344,7 +346,10 @@ export default function PaperReceiptsScreen({ onExit, onOpenAtTill }: { onExit: 
                   </Field>
                   <Field label="Payment">
                     <NativeSelect value={paymentMethod} disabled={!canEdit} onChange={(e) => setPaymentMethod(e.target.value)}>
-                      {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
+                      {PAYMENT_METHODS
+                        // A draft already marked as a bank transfer keeps its choice.
+                        .filter((m) => m !== 'BANK_TRANSFER' || bankInUse || paymentMethod === 'BANK_TRANSFER')
+                        .map((m) => <option key={m} value={m}>{m}</option>)}
                     </NativeSelect>
                   </Field>
                   <Field label="Reference">

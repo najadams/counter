@@ -878,3 +878,30 @@ app with its own empty database.
 
 Publishing a release (§2a, tag `vX.Y.Z`) is what makes the notice appear. Drafts
 and pre-releases are ignored.
+
+## 17. Kept and free — what the owner can actually spend
+
+Reports → Owner Summary opens with a **Kept and free** card (also on the Position
+tab, in the printed pack and the CSV). It answers two questions as of the "As of"
+date, from the ledger cutover onward; before the cutover it only points to it.
+
+- **Profit kept** = profit since the cutover − what the owner took out. It includes
+  money tied up in stock and in credit customers owe.
+- **Free cash** = money in every till, safe, bank and MoMo account − overdue bills −
+  bills with no due date − tax collected but not yet paid (VAT build) − bills due in
+  the next 7 or 30 days. Money in an account that hasn't been counted recently (till
+  1 day, others 7) is still counted, with a note.
+
+Computed in `getManagementBalanceSheet` (`keptAndFree`,
+`src/main/services/managementReports.ts`), using the same bill list as the
+Obligations tab (`openObligationRows`).
+
+**Settings → Payments** has one switch: *This shop pays and gets paid through a
+bank* (`device_config.bank_in_use`, on unless switched off; OWNER/FOUNDER only,
+audited as `PAYMENT_SETTINGS_CHANGED`). Off hides Bank transfer from checkout,
+sale corrections, customer, supplier and tax payments and paper receipts, and drops
+an **empty** bank account from the owner reports. A bank account that still holds
+money is always counted. It is a preference, not a control: main never refuses a
+bank transfer, and past ones stay in the records.
+
+Verify with `npx vitest --run tests/ownerManagementPack.test.ts tests/paymentSettings.test.ts tests/kept-and-free-ui.test.tsx`.
