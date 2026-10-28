@@ -38,6 +38,7 @@ import LoginScreen from '../src/renderer/screens/LoginScreen';
 import SaleScreen from '../src/renderer/screens/SaleScreen';
 import { useCart } from '../src/renderer/store/cart';
 import { useSession } from '../src/renderer/store/session';
+import { useBusiness } from '../src/renderer/store/business';
 
 const NO_COUNTS: FriendlyHomeCounts = {
   pendingOrders: 0, myVoidRequests: 0, reviewableVoidRequests: 0,
@@ -56,6 +57,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   useCart.getState().clear();
+  useBusiness.getState().setSettings({ profile: 'DRINKS', emptiesInUse: true });
 });
 
 describe('build flag', () => {
@@ -143,6 +145,13 @@ describe('FriendlyHomeMenu', () => {
     const main = screen.getByRole('region', { name: 'Main actions' });
     const labels = within(main).getAllByRole('button').map((b) => b.getAttribute('aria-label'));
     expect(labels).toEqual(['Sell drinks', 'Customers', 'Money out', 'Receive stock', 'Recent sales', 'Today’s summary']);
+  });
+
+  it('says items, not drinks, in a shop that sells something else', () => {
+    useBusiness.getState().setSettings({ profile: 'HARDWARE', emptiesInUse: false });
+    render(<FriendlyHomeMenu isSenior={false} cartItemCount={0} counts={NO_COUNTS} onNavigate={vi.fn()} onCloseShift={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'Sell items' })).toBeInTheDocument();
+    expect(screen.queryByText(/drink/i)).toBeNull();
   });
 
   it('keeps extra actions in collapsed groups that open on demand', () => {

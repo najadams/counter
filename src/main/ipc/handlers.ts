@@ -4059,3 +4059,112 @@ export function registerAppInfoHandlers(
     IPC_CHANNELS_APP.APP_OPEN_DOWNLOAD_PAGE,
   ));
 }
+
+// --- Business profile and product category handlers ----------------------
+
+import {
+  IPC_CHANNELS_BUSINESS,
+  type BusinessSettingsResponse, type BusinessSetSettingsRequest,
+  type CategoryListResponse, type CategoryAddRequest, type CategoryUpdateRequest,
+  type ProductCategoryItem,
+} from '../../shared/types/ipc.js';
+import {
+  getBusinessSettings, setBusinessSettings,
+  listProductCategories, addProductCategory, updateProductCategory,
+} from '../services/businessProfile.js';
+
+function requireOwnerOrFounder(what: string): { workerId: string; fullName: string; role: string } {
+  const w = requireWorker();
+  if (w.role !== 'OWNER' && w.role !== 'FOUNDER') {
+    throw new Error(`Only OWNER or FOUNDER can ${what}.`);
+  }
+  return w;
+}
+
+export function registerBusinessHandlers(
+  ipcMain: IpcRegistrar,
+  db: import('better-sqlite3').Database,
+  deviceId: string,
+): void {
+  // Read — any signed-in worker: every screen's wording depends on it.
+  ipcMain.handle(IPC_CHANNELS_BUSINESS.BUSINESS_GET_SETTINGS,
+    wrap<void, BusinessSettingsResponse>(
+      () => {
+        requireWorker();
+        return getBusinessSettings(db);
+      },
+      IPC_CHANNELS_BUSINESS.BUSINESS_GET_SETTINGS,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_BUSINESS.BUSINESS_SET_SETTINGS,
+    wrap<BusinessSetSettingsRequest, BusinessSettingsResponse>(
+      (req) => {
+        const w = requireOwnerOrFounder('change what the shop sells');
+        const before = getBusinessSettings(db);
+        const after = setBusinessSettings(db, req);
+        logAudit(db, {
+          workerId: w.workerId,
+          action: 'BUSINESS_SETTINGS_CHANGED',
+          entityType: 'device_config',
+          entityId: 'business',
+          beforeValue: before,
+          afterValue: after,
+          deviceId,
+        });
+        return after;
+      },
+      IPC_CHANNELS_BUSINESS.BUSINESS_SET_SETTINGS,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_BUSINESS.CATEGORY_LIST,
+    wrap<void, CategoryListResponse>(
+      () => {
+        requireWorker();
+        return { categories: listProductCategories(db) };
+      },
+      IPC_CHANNELS_BUSINESS.CATEGORY_LIST,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_BUSINESS.CATEGORY_ADD,
+    wrap<CategoryAddRequest, ProductCategoryItem>(
+      (req) => {
+        const w = requireOwnerOrFounder('add product categories');
+        const row = addProductCategory(db, { label: req.label, actorId: w.workerId });
+        logAudit(db, {
+          workerId: w.workerId,
+          action: 'PRODUCT_CATEGORY_ADDED',
+          entityType: 'product_categories',
+          entityId: row.code,
+          afterValue: row,
+          deviceId,
+        });
+        return row;
+      },
+      IPC_CHANNELS_BUSINESS.CATEGORY_ADD,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_BUSINESS.CATEGORY_UPDATE,
+    wrap<CategoryUpdateRequest, ProductCategoryItem>(
+      (req) => {
+        const w = requireOwnerOrFounder('change product categories');
+        const before = listProductCategories(db).find((c) => c.code === req.code) ?? null;
+        const row = updateProductCategory(db, { ...req, actorId: w.workerId });
+        logAudit(db, {
+          workerId: w.workerId,
+          action: 'PRODUCT_CATEGORY_CHANGED',
+          entityType: 'product_categories',
+          entityId: row.code,
+          beforeValue: before,
+          afterValue: row,
+          deviceId,
+        });
+        return row;
+      },
+      IPC_CHANNELS_BUSINESS.CATEGORY_UPDATE,
+    ),
+  );
+}

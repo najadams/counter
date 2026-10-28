@@ -11,6 +11,7 @@ import { useState, type ReactNode } from 'react';
 import { formatMoneyWithCurrency } from '../../../shared/lib/money';
 import { ActionTile } from './ActionTile';
 import { TaskIllustration, type IllustrationName } from './TaskIllustration';
+import { useVocabulary } from '../../store/business';
 
 export type FriendlyDestination =
   | 'sale' | 'customers' | 'moneyOut' | 'stock' | 'void' | 'summary'
@@ -46,12 +47,13 @@ export function FriendlyHomeMenu({
   isSenior, cartItemCount, counts, onNavigate, onCloseShift,
 }: {
   isSenior: boolean;
-  /** Units in the unfinished cart; > 0 turns "Sell drinks" into "Continue sale". */
+  /** Units in the unfinished cart; > 0 turns "Sell items" into "Continue sale". */
   cartItemCount: number;
   counts: FriendlyHomeCounts;
   onNavigate: (destination: FriendlyDestination) => void;
   onCloseShift: () => void;
 }) {
+  const words = useVocabulary();
   const [open, setOpen] = useState<Record<GroupId, boolean>>(readOpenGroups);
   function toggle(id: GroupId) {
     setOpen((prev) => {
@@ -74,10 +76,10 @@ export function FriendlyHomeMenu({
           size="regular"
           kind="primary"
           illustration="sell"
-          label={continuing ? 'Continue sale' : 'Sell drinks'}
+          label={continuing ? 'Continue sale' : `Sell ${words.items}`}
           caption={continuing
             ? `${cartItemCount} ${cartItemCount === 1 ? 'item is' : 'items are'} waiting in the cart.`
-            : 'Find drinks, add them to the cart, take payment.'}
+            : `Find ${words.items}, add them to the cart, take payment.`}
           hot="F1"
           onClick={() => onNavigate('sale')}
         />
@@ -116,7 +118,7 @@ export function FriendlyHomeMenu({
         <MenuGroup id="stock" title="Stock tools" illustration="stock-tools" badge={stockBadge} open={open.stock} onToggle={toggle}>
           <ActionTile size="compact" illustration="stock-tools" label="Count stock" caption="Stocktake" hot="F4" onClick={() => onNavigate('stocktake')} />
           <ActionTile size="compact" illustration="breakage" label="Damaged stock" caption="Report breakage with a photo" hot="F7" onClick={() => onNavigate('breakage')} />
-          <ActionTile size="compact" illustration="drink" label="Staff drinks" caption="Log a drink a worker took" hot="F3" onClick={() => onNavigate('consumption')} />
+          <ActionTile size="compact" illustration="drink" label={words.staffUse} caption={words.staffUseCaption} hot="F3" onClick={() => onNavigate('consumption')} />
           {isSenior && (
             <ActionTile
               size="compact" illustration="approvals" label="Approve deliveries"

@@ -52,10 +52,12 @@ import { NumberPad } from '../components/friendly/NumberPad';
 import { TaskIllustration } from '../components/friendly/TaskIllustration';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
+import { useVocabulary } from '../store/business';
 
 type View = 'home' | 'sale' | 'void' | 'voidApprovals' | 'varianceCases' | 'stockApprovals' | 'breakage' | 'consumption' | 'stock' | 'settings' | 'stocktake' | 'summary' | 'customers' | 'reports' | 'intelligence' | 'pendingOrders' | 'moneyOut' | 'paperReceipts';
 
 export default function HomeScreen({ onReactivate }: { onReactivate?: () => void } = {}) {
+  const words = useVocabulary();
   const shiftId = useSession((s) => s.shiftId);
   const opening = useSession((s) => s.shiftOpeningCashPesewas);
   const clearShift = useSession((s) => s.clearShift);
@@ -317,7 +319,7 @@ export default function HomeScreen({ onReactivate }: { onReactivate?: () => void
                 onClick={() => setView('pendingOrders')}
               />
               <ActionRow label="Money out" hot="F2" caption="Expenses, drawings, supplier payments, tax payments." onClick={() => setView('moneyOut')} />
-              <ActionRow label="Drink" hot="F3" caption="Log worker consumption." onClick={() => setView('consumption')} />
+              <ActionRow label={words.staffUse} hot="F3" caption="Log worker consumption." onClick={() => setView('consumption')} />
               <ActionRow label="Stocktake" hot="F4" caption="Physical count + shrinkage measure." onClick={() => setView('stocktake')} />
               <ActionRow label="Reports" caption="Overview dashboard: revenue, margin, cash, who owes you." onClick={() => setView('reports')} />
               <ActionRow label="Daily summary" hot="F5" caption="Revenue, margin, shrinkage, alerts." onClick={() => setView('summary')} />

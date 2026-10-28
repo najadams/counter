@@ -558,6 +558,18 @@ export function createCounterApi(invoke: Invoke) {
     catalogImportApply: (req: ipc.CatalogImportApplyRequest) =>
       invoke<ipc.CatalogImportApplyResponse>(ipc.IPC_CHANNELS_CATALOG.CATALOG_IMPORT_APPLY, req),
 
+    // --- Business profile and product categories ---
+    businessGetSettings: () =>
+      invoke<ipc.BusinessSettingsResponse>(ipc.IPC_CHANNELS_BUSINESS.BUSINESS_GET_SETTINGS, {}),
+    businessSetSettings: (req: ipc.BusinessSetSettingsRequest) =>
+      invoke<ipc.BusinessSettingsResponse>(ipc.IPC_CHANNELS_BUSINESS.BUSINESS_SET_SETTINGS, req),
+    categoryList: () =>
+      invoke<ipc.CategoryListResponse>(ipc.IPC_CHANNELS_BUSINESS.CATEGORY_LIST, {}),
+    categoryAdd: (req: ipc.CategoryAddRequest) =>
+      invoke<ipc.ProductCategoryItem>(ipc.IPC_CHANNELS_BUSINESS.CATEGORY_ADD, req),
+    categoryUpdate: (req: ipc.CategoryUpdateRequest) =>
+      invoke<ipc.ProductCategoryItem>(ipc.IPC_CHANNELS_BUSINESS.CATEGORY_UPDATE, req),
+
     // --- Receipt customization ---
     receiptGetConfig: () =>
       invoke<ipc.ReceiptConfigResponse>(ipc.IPC_CHANNELS_RECEIPT.RECEIPT_GET_CONFIG, {}),

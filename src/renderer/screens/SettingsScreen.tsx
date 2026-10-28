@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { AppHeader } from '../components/AppHeader';
 import { WorkersTab } from './settings/WorkersTab';
 import { ProductsTab } from './settings/ProductsTab';
+import { ShopTab } from './settings/ShopTab';
 import { PricingTiersTab } from './settings/PricingTiersTab';
 import { SuppliersTab } from './settings/SuppliersTab';
 import { SupplierPaymentsTab } from './settings/SupplierPaymentsTab';
@@ -22,7 +23,7 @@ import { RunbookPrintScreen } from './RunbookPrintScreen';
 import { Button } from '../components/ui/button';
 import { NavTab } from '../components/ui/nav-tab';
 
-type Tab = 'workers' | 'products' | 'tiers' | 'suppliers' | 'supplier-pay' | 'audit' | 'breakage' | 'reprints' | 'exceptions' | 'reorder' | 'appearance' | 'backups' | 'transfer' | 'sync' | 'phone' | 'about';
+type Tab = 'workers' | 'shop' | 'products' | 'tiers' | 'suppliers' | 'supplier-pay' | 'audit' | 'breakage' | 'reprints' | 'exceptions' | 'reorder' | 'appearance' | 'backups' | 'transfer' | 'sync' | 'phone' | 'about';
 
 export default function SettingsScreen({ onExit }: { onExit: () => void }) {
   const [tab, setTab] = useState<Tab>('workers');
@@ -58,6 +59,7 @@ export default function SettingsScreen({ onExit }: { onExit: () => void }) {
         <div className="flex flex-wrap items-center justify-between gap-y-2 gap-x-4">
           <div className="flex flex-wrap min-w-0">
             <TabBtn active={tab === 'workers'} onClick={() => setTab('workers')}>Workers</TabBtn>
+            <TabBtn active={tab === 'shop'} onClick={() => setTab('shop')}>Shop type</TabBtn>
             <TabBtn active={tab === 'products'} onClick={() => setTab('products')}>Products</TabBtn>
             <TabBtn active={tab === 'tiers'} onClick={() => setTab('tiers')}>Pricing tiers</TabBtn>
             <TabBtn active={tab === 'suppliers'} onClick={() => setTab('suppliers')}>Suppliers</TabBtn>
@@ -89,6 +91,7 @@ export default function SettingsScreen({ onExit }: { onExit: () => void }) {
          *  to grow past the viewport. */}
         <div className="min-w-0">
           {tab === 'workers' && <WorkersTab />}
+          {tab === 'shop' && <ShopTab />}
           {tab === 'products' && <ProductsTab />}
           {tab === 'tiers' && <PricingTiersTab />}
           {tab === 'suppliers' && <SuppliersTab />}

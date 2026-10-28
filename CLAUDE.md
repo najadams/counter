@@ -124,7 +124,8 @@ copying `node_modules` across OS lines does not.
      `C:\Users\<user>\AppData\Roaming\Counter\counter.db`
    - Apply every bundled migration
    - Show the **first-run owner setup wizard** — enter dad's name, phone,
-     and PIN. This becomes the OWNER account.
+     and PIN, and pick what the shop sells (§19). This becomes the OWNER
+     account.
 4. Log in with the OWNER PIN. Open Settings → Workers to add cashiers
    and supervisors. Settings → Suppliers to seed beverage suppliers.
    Settings → Products to add the catalog. Then run an Opening Stock
@@ -878,3 +879,38 @@ app with its own empty database.
 
 Publishing a release (§2a, tag `vX.Y.Z`) is what makes the notice appear. Drafts
 and pre-releases are ignored.
+
+## 19. Shops that don't sell drinks
+
+Counter began in a beverage shop and now also runs provisions, hardware and
+cosmetics shops. Nothing about money, stock or the books differs between them;
+what differs is wording, starter categories and whether empties show.
+
+**The shop type** is picked in first-run setup (*What does your shop sell?*) and
+changed in Settings → **Shop type** (OWNER/FOUNDER, audited as
+`BUSINESS_SETTINGS_CHANGED`). It's stored in `device_config.business_profile`;
+an install with none is a drinks shop, so existing shops see no change. The
+profiles, their starter categories and their words ("Sell drinks" / "Sell
+items", "Staff drinks" / "Staff use") live in
+`src/shared/lib/businessProfile.ts`; the renderer reads them through
+`useVocabulary()` in `src/renderer/store/business.ts`. Unlike VAT and Friendly
+this is a runtime setting, not a build: one installer serves every kind of shop.
+
+**Categories** are the shop's own list (`product_categories`, migration 0057),
+managed in Settings → Shop type or from the product form (*New category…*).
+Products store the code (`NAILS_SCREWS`); the label is free to change. Hiding a
+category only takes it off the product form. Migration 0057 rebuilt `products`
+to drop the old beverage-only `CHECK`; there is deliberately no foreign key to
+`product_categories`, so a catalog row from HQ or an import with a code this
+shop hasn't added still lands and shows under a readable name.
+
+**Empties** (`device_config.empties_in_use`, defaulting to on for drinks shops
+only) show or hide the returnable/deposit fields on products. A product that
+already has a deposit always shows it. It is a preference: main never refuses a
+returnable product.
+
+Not done yet: categories don't sync down from HQ as a list (the codes on
+products do), the Friendly pictures are still bottles and crates, and the
+walk-in / wholesale / route price names are fixed.
+
+Verify with `npx vitest --run tests/businessProfile.test.ts tests/friendly-ui.test.tsx tests/productsAdmin.test.ts`.

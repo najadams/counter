@@ -46,6 +46,8 @@ import { chimeSuccess, chimeWarning, flashBody } from '../lib/feedback';
 import { FRIENDLY_UI_ENABLED } from '../../shared/lib/buildFlags';
 import { TaskIllustration } from '../components/friendly/TaskIllustration';
 import { Segmented } from '../components/ui/segmented';
+import { useCategoryLabel, useVocabulary } from '../store/business';
+import { withArticle } from '../../shared/lib/businessProfile';
 
 /** Door-printer failure on a phone sale: the cashier must walk the customer to
  *  the counter for the exit-token before they leave. Blocking + can't-miss on
@@ -101,6 +103,8 @@ interface ProductHit {
 }
 
 export default function SaleScreen({ onExit }: { onExit: () => void }) {
+  const words = useVocabulary();
+  const categoryLabel = useCategoryLabel();
   const shiftId = useSession((s) => s.shiftId)!;
   const channel = useCart((s) => s.channel);
   const lines = useCart((s) => s.lines);
@@ -718,7 +722,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
     // side and the cart scroll separately; on a phone it is one long page.
     <div className={`min-h-screen lg:h-dvh lg:overflow-hidden bg-bg-deep text-text-primary flex flex-col ${FRIENDLY_UI_ENABLED ? '' : 'sale-type'}`}>
       <AppHeader
-        subtitle={FRIENDLY_UI_ENABLED ? 'Sell drinks' : 'sale'}
+        subtitle={FRIENDLY_UI_ENABLED ? `Sell ${words.items}` : 'sale'}
         onBack={() => { if (!submitLockRef.current) onExit(); }}
         backDisabled={submitting}
         actions={(FRIENDLY_UI_ENABLED || !isTouch) && (
@@ -753,7 +757,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
             {FRIENDLY_UI_ENABLED && (
               <label htmlFor="sale-search" className="flex items-center gap-2.5 mb-2">
                 <TaskIllustration name="sell" size={40} />
-                <span className="text-xl font-semibold">Find a drink</span>
+                <span className="text-xl font-semibold">Find {withArticle(words.item)}</span>
               </label>
             )}
             <div className="flex gap-2">
@@ -786,7 +790,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
           <QuickPicks picks={quickPicks} onPick={(i) => addQuickPick.current(i)} announceKeys={!isTouch} />
           <ul className="overflow-y-auto max-h-[45vh] lg:max-h-none lg:overflow-visible">
             {hits.length === 0 && (
-              <li className={FRIENDLY_UI_ENABLED ? 'px-5 py-5 text-lg text-text-secondary' : 'px-6 py-4 text-text-tertiary'}>{FRIENDLY_UI_ENABLED ? (query.trim() === '' ? 'Type a drink name above to find it.' : 'No drinks match. Check the spelling, or try fewer letters.') : 'No products match.'}</li>
+              <li className={FRIENDLY_UI_ENABLED ? 'px-5 py-5 text-lg text-text-secondary' : 'px-6 py-4 text-text-tertiary'}>{FRIENDLY_UI_ENABLED ? (query.trim() === '' ? `Type ${withArticle(words.item)} name above to find it.` : `No ${words.items} match. Check the spelling, or try fewer letters.`) : 'No products match.'}</li>
             )}
             {hits.map((p, i) => {
               const active = i === hitIdx;
@@ -824,7 +828,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
                   >
                     <div className="min-w-0">
                       <div className="text-text-primary truncate">{p.name}</div>
-                      <div className="text-text-tertiary text-xs">{p.sku} · {p.category}</div>
+                      <div className="text-text-tertiary text-xs">{p.sku} · {categoryLabel(p.category)}</div>
                     </div>
                     <div className={`tnum text-sm ${lowStock ? 'text-danger' : 'text-text-secondary'}`}>
                       {p.unitsOnHand} on hand
@@ -906,7 +910,7 @@ export default function SaleScreen({ onExit }: { onExit: () => void }) {
           </div>
           <ul className="flex-1 overflow-y-auto max-h-[40vh] lg:max-h-none lg:overflow-visible">
             {lines.length === 0 && (
-              <li className={FRIENDLY_UI_ENABLED ? 'px-5 py-5 text-lg text-text-secondary' : 'px-6 py-6 text-text-tertiary'}>{FRIENDLY_UI_ENABLED ? 'The cart is empty. Tap a drink to add it.' : 'Empty.'}</li>
+              <li className={FRIENDLY_UI_ENABLED ? 'px-5 py-5 text-lg text-text-secondary' : 'px-6 py-6 text-text-tertiary'}>{FRIENDLY_UI_ENABLED ? `The cart is empty. Tap ${withArticle(words.item)} to add it.` : 'Empty.'}</li>
             )}
             {/* LIFO: newest line at the top. Visual only — submit/receipt keep
                 scan order. Reverse a copy so the store array isn't mutated. */}
