@@ -1371,7 +1371,26 @@ export interface ProductUnitIdRequest { unitId: string }
 export const IPC_CHANNELS_S11 = {
   SETUP_NEEDS_OWNER: 'setup:needs-owner',
   SETUP_CREATE_OWNER: 'setup:create-owner',
+  SETUP_BOOKS_OPTIONS: 'setup:books-options',
+  SETUP_START_BOOKS: 'setup:start-books',
 } as const;
+
+/** What first-run setup needs to offer "Start the books". OWNER/FOUNDER only. */
+export interface SetupBooksOptionsResponse {
+  /** False when the books already run, or the shop already has records to reconcile. */
+  canStart: boolean;
+  reason: string | null;
+  bankInUse: boolean;
+  accounts: Array<{ id: string; name: string; kind: 'TILL' | 'SAFE' | 'BANK' | 'MOMO' | 'OTHER_CASH' }>;
+}
+export interface SetupStartBooksRequest {
+  bankInUse: boolean;
+  startingMoney: Array<{ financialAccountId: string; amountPesewas: number }>;
+}
+export interface SetupStartBooksResponse {
+  cutoverDate: string;
+  openingEquityPesewas: number;
+}
 
 export interface SetupNeedsOwnerResponse { needsOwner: boolean }
 
@@ -3118,10 +3137,26 @@ export interface ManagementCutoverPreviewResponse {
     code: string; name: string; accountClass: string; normalBalance: 'DEBIT' | 'CREDIT';
   }>;
   issues: ManagementDataQuality['issues'];
+  /** The day that must be sealed before this start date. */
+  priorDate: string;
+  /** False for a shop with no sales, stock, shifts or balances yet. */
+  hasTradingHistory: boolean;
+  /** Opening figures Counter can read from its own records. */
+  suggestedBalances: ManagementCutoverSuggestion[];
+}
+export interface ManagementCutoverSuggestion {
+  ledgerAccountId: string;
+  code: string;
+  label: string;
+  amountPesewas: number;
+  /** True when the figure must equal Counter's own record and can't be edited. */
+  locked: boolean;
+  note: string;
 }
 export interface ManagementCutoverActivateResponse {
   cutoverId: string;
-  openingJournalEntryId: string;
+  /** Null when the shop started with no balances at all. */
+  openingJournalEntryId: string | null;
   openingEquityPesewas: number;
 }
 export interface ManagementShadowRequest extends ReportReadAccess { locationId?: string }

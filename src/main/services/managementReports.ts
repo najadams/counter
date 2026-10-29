@@ -10,6 +10,7 @@ import { DEFAULT_LOCATION_ID } from '../../shared/lib/constants.js';
 import { creditPrincipalExpr } from './customerCredit.js';
 import {
   LEDGER_CODES,
+  type CutoverPreview,
   getFinancialDataQuality,
   listFinancialAccounts,
   saleLineNetCostSql,
@@ -18,6 +19,8 @@ import {
 } from './ledger.js';
 import { logAudit } from '../db/audit.js';
 import { getPaymentSettings } from './paymentSettings.js';
+import { getTaxBalanceAsOf } from './reports.js';
+import { VAT_ENABLED } from '../../shared/lib/vat.js';
 
 export type ReportBasis = 'ACCRUAL' | 'CASH';
 
@@ -482,6 +485,72 @@ export interface ManagementBalanceSheetResult {
  * overdue bills, bills with no due date and tax collected but not yet paid all
  * count against it.
  */
+export interface CutoverSuggestion {
+  ledgerAccountId: string;
+  code: string;
+  label: string;
+  amountPesewas: number;
+  /** True when the figure must equal Counter's own record and can't be edited. */
+  locked: boolean;
+  note: string;
+}
+
+/**
+ * Opening figures for "Start the books" that Counter can read from its own
+ * records, as they stood when the start date began. Stock must equal the
+ * stock records, so it is locked. The rest are filled in for the owner to
+ * check: left at zero, customer and supplier debts would go below zero the
+ * first time an old one was paid.
+ */
+export function suggestedOpeningBalances(db: DB, preview: CutoverPreview): CutoverSuggestion[] {
+  const { locationId, cutoverDate, priorDate } = preview;
+  const boundary = `${cutoverDate}T00:00:00.000Z`;
+  const accountId = (code: string) => (db.prepare(
+    'SELECT id FROM ledger_accounts WHERE location_id = ? AND code = ? AND active = 1',
+  ).get(locationId, code) as { id: string } | undefined)?.id;
+  const receivables = (db.prepare(
+    `SELECT COALESCE(SUM(outstanding), 0) AS total FROM (
+       SELECT MAX(0, ${creditPrincipalExpr('s')} -
+         COALESCE((SELECT SUM(amount_pesewas) FROM customer_payment_allocations
+                   WHERE sale_id = s.id AND created_at < ?), 0)) AS outstanding
+         FROM sales s WHERE s.location_id = ? AND s.is_credit = 1
+           AND s.voided = 0 AND s.created_at < ?
+     )`,
+  ).get(boundary, locationId, boundary) as { total: number }).total;
+  const supplierPayables = (db.prepare(
+    `SELECT COALESCE(SUM(MAX(0, si.total_pesewas - COALESCE((
+       SELECT SUM(a.amount_pesewas) FROM supplier_invoice_payment_allocations a
+        WHERE a.supplier_invoice_id = si.id AND a.created_at < ?
+     ), 0))), 0) AS total
+       FROM supplier_invoices si
+      WHERE si.status != 'VOID' AND si.invoice_date < ?`,
+  ).get(boundary, cutoverDate) as { total: number }).total;
+  const customerCredits = Math.abs((db.prepare(
+    `SELECT COALESCE(SUM(current_balance_pesewas), 0) AS total
+       FROM customers WHERE deleted_at IS NULL AND current_balance_pesewas < 0`,
+  ).get() as { total: number }).total);
+  const taxOwed = VAT_ENABLED ? Math.max(0, getTaxBalanceAsOf(db, locationId, boundary)) : 0;
+
+  const out: CutoverSuggestion[] = [];
+  const add = (code: string, label: string, amountPesewas: number, locked: boolean, note: string, always: boolean) => {
+    const id = accountId(code);
+    if (id && (always || amountPesewas > 0)) {
+      out.push({ ledgerAccountId: id, code, label, amountPesewas, locked, note });
+    }
+  };
+  add(LEDGER_CODES.INVENTORY, 'Stock at cost', preview.derivedInventoryPesewas, true,
+    `From the stock records up to ${priorDate}. It has to match them, so it can't be changed here.`, true);
+  add(LEDGER_CODES.AR, 'Customers owe the shop', receivables, false,
+    `Unpaid credit sales before ${cutoverDate}.`, true);
+  add(LEDGER_CODES.AP_TRADE, 'The shop owes suppliers', supplierPayables, false,
+    `Unpaid supplier invoices before ${cutoverDate}.`, true);
+  add(LEDGER_CODES.CUSTOMER_CREDITS, 'Customer credit the shop holds', customerCredits, false,
+    'Customers who paid ahead, as recorded now.', false);
+  add(LEDGER_CODES.TAX_PAYABLE, 'Tax collected, not yet paid', taxOwed, false,
+    `VAT, NHIL and GETFund before ${cutoverDate}, less what was paid.`, false);
+  return out;
+}
+
 export interface KeptAndFree {
   cutoverDate: string;
   profitSinceCutoverPesewas: number;

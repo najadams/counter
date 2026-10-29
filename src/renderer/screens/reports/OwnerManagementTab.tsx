@@ -11,7 +11,6 @@ import type {
   ManagementIncomeStatementResponse,
   ManagementKeptAndFree,
   ManagementAccountsListResponse,
-  ManagementCutoverPreviewResponse,
   ManagementObligationsResponse,
   ManagementPositionResponse,
   ManagementRiskConfigResponse,
@@ -31,6 +30,7 @@ import { NativeSelect } from '../../components/ui/native-select';
 import { Input } from '../../components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { ReportSkeleton } from '../../components/ReportSkeleton';
+import { StartTheBooksPanel } from './StartTheBooksPanel';
 
 export type OwnerManagementView =
   | 'summary' | 'profit' | 'position' | 'cash'
@@ -360,6 +360,7 @@ export function OwnerManagementTab({ view, reportAccessToken }: { view: OwnerMan
           data={accountData}
           fixedAssets={fixedAssets?.assets ?? []}
           shadow={shadow}
+          onBooksStarted={load}
           onRefresh={async () => {
             const [accounts, assets, shadowStatus] = await Promise.all([
               counter.managementAccounts({ reportAccessToken }), counter.managementFixedAssets({ reportAccessToken }),
@@ -391,13 +392,14 @@ export function OwnerManagementTab({ view, reportAccessToken }: { view: OwnerMan
   );
 }
 
-function FinancialControls({ pin, reportAccessToken, data, fixedAssets, shadow, onRefresh, onPinConsumed }: {
+function FinancialControls({ pin, reportAccessToken, data, fixedAssets, shadow, onRefresh, onBooksStarted, onPinConsumed }: {
   pin: string;
   reportAccessToken: string;
   data: ManagementAccountsListResponse;
   fixedAssets: ManagementFixedAssetsListResponse['assets'];
   shadow: ManagementShadowResponse | null;
   onRefresh: () => Promise<void>;
+  onBooksStarted: () => Promise<void>;
   onPinConsumed: () => void;
 }) {
   const [message, setMessage] = useState<string | null>(null);
@@ -419,9 +421,6 @@ function FinancialControls({ pin, reportAccessToken, data, fixedAssets, shadow, 
   const [transferAmount, setTransferAmount] = useState('');
   const [reconcileId, setReconcileId] = useState(data.accounts[0]?.id ?? '');
   const [observed, setObserved] = useState('');
-  const [cutoverDate, setCutoverDate] = useState(today);
-  const [balances, setBalances] = useState<Record<string, string>>({});
-  const [preview, setPreview] = useState<ManagementCutoverPreviewResponse | null>(null);
   const [expenseCategory, setExpenseCategory] = useState('RENT');
   const [expensePayee, setExpensePayee] = useState('');
   const [expenseAmount, setExpenseAmount] = useState('');
@@ -451,14 +450,6 @@ function FinancialControls({ pin, reportAccessToken, data, fixedAssets, shadow, 
   const cutoverActive = data.dataQuality.cutoverDate != null;
   const bankInUse = useBankInUse();
   const moneyAccounts = withoutIdleBank(data.accounts, bankInUse);
-  const idleBankLedgerIds = new Set(data.accounts
-    .filter((account) => !moneyAccounts.includes(account))
-    .map((account) => account.ledgerAccountId));
-  const balanceAccounts = data.ledgerAccounts.filter((account) =>
-    (account.accountClass === 'ASSET'
-      || account.accountClass === 'LIABILITY'
-      || account.accountClass === 'EQUITY')
-    && !idleBankLedgerIds.has(account.id));
 
   async function runMutation<T>(operation: () => Promise<T>): Promise<T> {
     try { return await operation(); } finally { onPinConsumed(); }
@@ -526,41 +517,12 @@ function FinancialControls({ pin, reportAccessToken, data, fixedAssets, shadow, 
     }
   }
 
-  function cutoverBalances() {
-    return balanceAccounts.map((account) => ({
-      ledgerAccountId: account.id,
-      amountPesewas: Math.max(0, Math.round(Number(balances[account.id] || 0) * 100)),
-    }));
-  }
-
-  async function previewCutover() {
-    const result = await counter.managementCutoverPreview({
-      cutoverDate, balances: cutoverBalances(), reportAccessToken,
-    });
-    if (!result.success) return setMessage(result.error);
-    setPreview(result.data);
-    setMessage(result.data.issues.length === 0
-      ? 'Opening position is ready to activate.'
-      : 'Resolve every blocking issue before activation.');
-  }
-
   async function toggleShadow(enabled: boolean) {
     const result = await runMutation(() => counter.managementSetShadow({ enabled, pin }));
     setMessage(result.success
       ? enabled ? 'Shadow ledger started. Operational events will now be dual-posted for comparison.' : 'Shadow ledger stopped.'
       : result.error);
     if (result.success) await onRefresh();
-  }
-
-  async function activateCutover() {
-    const result = await runMutation(() => counter.managementCutoverActivate({
-      cutoverDate, balances: cutoverBalances(), pin,
-      notes: 'Activated through Owner Management Pack',
-    }));
-    if (!result.success) return setMessage(result.error);
-    setMessage(`Ledger activated. Opening equity is ${formatMoneyWithCurrency(result.data.openingEquityPesewas)}.`);
-    setPreview(null);
-    await onRefresh();
   }
 
   async function createExpense() {
@@ -906,44 +868,9 @@ function FinancialControls({ pin, reportAccessToken, data, fixedAssets, shadow, 
             {shadow?.enabled ? 'Stop shadow run' : 'Start shadow run'}
           </Button>
         </ControlBox>
-        <ControlBox title="Controlled cutover" id="cutover-setup">
-          <p className="text-sm text-text-secondary mb-3">
-            Close all shifts, seal the prior day, complete a recent stocktake, then enter verified opening balances.
-            Counter will use opening equity only as the balancing equity account.
-          </p>
-          <Input className="mb-3 px-2" type="date" value={cutoverDate} onChange={(e) => { setCutoverDate(e.target.value); setPreview(null); }} />
-          <div className="grid @xl:grid-cols-2 @4xl:grid-cols-3 gap-2">
-            {balanceAccounts.map((account) => (
-              <label key={account.id} className="text-xs text-text-secondary">
-                {account.name} <span className="text-text-tertiary">({account.code})</span>
-                <Input className="mt-1 px-2" value={balances[account.id] ?? ''}
-                  onChange={(e) => {
-                    setBalances((current) => ({ ...current, [account.id]: e.target.value }));
-                    setPreview(null);
-                  }}
-                  inputMode="decimal" placeholder="GH¢ 0.00" />
-              </label>
-            ))}
-          </div>
-          {preview && (
-            <div className="mt-3 border border-border p-3 text-sm">
-              <div>Debits {formatMoneyWithCurrency(preview.debitPesewas)} · Credits {formatMoneyWithCurrency(preview.creditPesewas)}</div>
-              <div>Opening equity {formatMoneyWithCurrency(preview.openingEquityPesewas)}</div>
-              {preview.issues.map((issue) => (
-                <div key={issue.code} className={issue.severity === 'BLOCKING' ? 'text-danger' : 'text-warning'}>
-                  {issue.message}
-                </div>
-              ))}
-            </div>
-          )}
-          <div className="flex gap-2 mt-3">
-            <Button onClick={() => void previewCutover()}>Preview opening position</Button>
-            {preview && !preview.issues.some((issue) => issue.severity === 'BLOCKING') && (
-              <Button variant="primary" onClick={() => void activateCutover()}>
-                Activate balanced ledger
-              </Button>
-            )}
-          </div>
+        <ControlBox title="Start the books" id="cutover-setup">
+          <StartTheBooksPanel data={data} pin={pin} reportAccessToken={reportAccessToken}
+            onPinConsumed={onPinConsumed} onStarted={onBooksStarted} />
         </ControlBox>
         </>
       )}
@@ -987,7 +914,7 @@ function QualityBanner({ quality, onFixCutover }: {
         : 'border-border bg-bg-surface';
 
   const headline = blocking.length > 0
-    ? (needsCutover ? 'Figures are estimates until cutover' : 'Figures need attention')
+    ? (needsCutover ? 'Figures are estimates until the books start' : 'Figures need attention')
     : watch.length > 0
       ? `Figures are usable — ${watch.length} thing${watch.length === 1 ? '' : 's'} to keep an eye on`
       : quality.status === 'COMPLETE'
@@ -996,11 +923,11 @@ function QualityBanner({ quality, onFixCutover }: {
 
   const detail = blocking.length > 0
     ? (needsCutover
-        ? 'Profit and sales come from recorded takings. Cash and stock balances are not yet backed by the management ledger.'
+        ? 'Profit and sales come from recorded takings. Cash and stock balances are not yet backed by the shop\'s books.'
         : 'Some figures below cannot be relied on until these are put right.')
     : quality.cutoverDate
-      ? `Management ledger active from ${quality.cutoverDate}.`
-      : 'Pre-cutover figures are legacy estimates.';
+      ? `The books have run since ${quality.cutoverDate}.`
+      : 'Figures from before the books started are estimates.';
 
   return (
     <section className={`border p-4 ${tone}`}>
@@ -1017,7 +944,7 @@ function QualityBanner({ quality, onFixCutover }: {
 
       {needsCutover && onFixCutover && (
         <Button variant="primary" size="sm" className="mt-3 print:hidden" onClick={onFixCutover}>
-          Finish the ledger cutover
+          Start the books
         </Button>
       )}
 
@@ -1093,11 +1020,11 @@ export function KeptAndFreeView({ data, compact, onFixCutover }: {
   if (!data) {
     return (
       <ReportSection title={KEPT_AND_FREE_TITLE}
-        answer="Shown after the ledger cutover. Until then Counter can't see every place the money is kept, so it can't say how much is free.">
+        answer="Shown once the shop's books have started. Until then Counter can't see every place the money is kept, so it can't say how much is free.">
         {onFixCutover && (
           <div>
             <Button variant="primary" size="sm" className="print:hidden" onClick={onFixCutover}>
-              Finish the ledger cutover
+              Start the books
             </Button>
           </div>
         )}

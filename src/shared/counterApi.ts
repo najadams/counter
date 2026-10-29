@@ -283,6 +283,10 @@ export function createCounterApi(invoke: Invoke) {
       invoke<ipc.SetupNeedsOwnerResponse>(ipc.IPC_CHANNELS_S11.SETUP_NEEDS_OWNER, {}),
     setupCreateOwner: (req: ipc.SetupCreateOwnerRequest) =>
       invoke<ipc.SetupCreateOwnerResponse>(ipc.IPC_CHANNELS_S11.SETUP_CREATE_OWNER, req),
+    setupBooksOptions: () =>
+      invoke<ipc.SetupBooksOptionsResponse>(ipc.IPC_CHANNELS_S11.SETUP_BOOKS_OPTIONS, {}),
+    setupStartBooks: (req: ipc.SetupStartBooksRequest) =>
+      invoke<ipc.SetupStartBooksResponse>(ipc.IPC_CHANNELS_S11.SETUP_START_BOOKS, req),
 
     // --- Session 11: suppliers admin ---
     listSuppliersForAdmin: () =>

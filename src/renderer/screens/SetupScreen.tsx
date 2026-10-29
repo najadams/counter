@@ -1,14 +1,20 @@
 // SetupScreen — first-run owner bootstrap.
 //
 // Shown when the database has no human workers (only the SYSTEM row).
-// Creates the first OWNER, auto-logs them in, then App.tsx routes them
-// into the open-shift flow.
+// Creates the first OWNER, auto-logs them in, shows the recovery code, then
+// offers to start the shop's books with the money it opens with — a new shop
+// has nothing to reconcile, so its reports can be real from the first sale.
+// Then App.tsx routes them into the open-shift flow.
 
 import { useState } from 'react';
 import { counter } from '../lib/ipc';
 import { useSession } from '../store/session';
+import { usePaymentSettings } from '../store/paymentSettings';
+import { parseCedisToPesewas } from '../../shared/lib/money';
+import type { SetupBooksOptionsResponse } from '../../shared/types/ipc';
 import { FeedbackBanner } from '../components/FeedbackBanner';
 import { Button } from '../components/ui/button';
+import { Checkbox } from '../components/ui/checkbox';
 import { Input } from '../components/ui/input';
 
 export default function SetupScreen() {
@@ -25,6 +31,10 @@ export default function SetupScreen() {
     workerId: string; fullName: string; role: string; recoveryCode: string;
   } | null>(null);
   const [acknowledgedRecovery, setAcknowledgedRecovery] = useState(false);
+  const [books, setBooks] = useState<SetupBooksOptionsResponse | null>(null);
+  const [bankInUse, setBankInUse] = useState(true);
+  const [money, setMoney] = useState<Record<string, string>>({});
+  const [booksErr, setBooksErr] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,7 +63,40 @@ export default function SetupScreen() {
     });
   };
 
-  function continueAfterRecovery() {
+  async function continueAfterRecovery() {
+    if (!created) return;
+    setBusy(true);
+    const options = await counter.setupBooksOptions().catch(() => null);
+    setBusy(false);
+    if (options?.success && options.data.canStart) {
+      setBankInUse(options.data.bankInUse);
+      setBooks(options.data);
+      return;
+    }
+    enterCounter();
+  }
+
+  const startingAccounts = (books?.accounts ?? []).filter((account) => bankInUse || account.kind !== 'BANK');
+
+  async function startBooks() {
+    setBooksErr(null);
+    const startingMoney = [];
+    for (const account of startingAccounts) {
+      const raw = (money[account.id] ?? '').trim();
+      if (!raw) continue;
+      const amountPesewas = parseCedisToPesewas(raw);
+      if (amountPesewas == null) return setBooksErr(`Enter ${account.name} in cedis, like 250.00.`);
+      startingMoney.push({ financialAccountId: account.id, amountPesewas });
+    }
+    setBusy(true);
+    const res = await counter.setupStartBooks({ bankInUse, startingMoney });
+    setBusy(false);
+    if (!res.success) return setBooksErr(res.error);
+    usePaymentSettings.setState({ bankInUse, loaded: true });
+    enterCounter();
+  }
+
+  function enterCounter() {
     if (!created) return;
     useSession.setState({
       workerId: created.workerId,
@@ -63,6 +106,58 @@ export default function SetupScreen() {
       loginAttemptsRemaining: null,
       loginLockedUntil: null,
     });
+  }
+
+  if (created && books) {
+    return (
+      <div className="min-h-screen bg-bg-deep text-text-primary flex items-center justify-center p-6">
+        <div className="w-full max-w-lg bg-bg-elevated rounded-lg shadow-lg p-8 space-y-5">
+          <div>
+            <h1 className="text-2xl font-bold mb-1">Start the shop's books</h1>
+            <p className="text-sm text-text-tertiary">
+              Counter keeps the shop's books from today, so profit and cash are real figures from
+              the first sale. Count the money the shop starts with. Leave a place blank if it is
+              empty. Stock comes in later, through Receive stock → Opening stock.
+            </p>
+          </div>
+
+          <label className="flex items-start gap-3 text-sm">
+            <Checkbox className="mt-0.5" checked={bankInUse}
+              onCheckedChange={(checked) => setBankInUse(checked === true)} />
+            <span>This shop pays and gets paid through a bank
+              <small className="block text-xs text-text-secondary">
+                Turn this off if the shop only uses cash and MoMo. You can change it later in Settings → Payments.
+              </small>
+            </span>
+          </label>
+
+          <div className="grid grid-cols-2 gap-3">
+            {startingAccounts.map((account) => (
+              <label key={account.id} className="block">
+                <span className="block text-sm text-text-secondary mb-1">{account.name}</span>
+                <Input className="font-mono" inputMode="decimal" placeholder="GH¢ 0.00"
+                  value={money[account.id] ?? ''}
+                  onChange={(e) => setMoney((current) => ({ ...current, [account.id]: e.target.value }))} />
+              </label>
+            ))}
+          </div>
+
+          {booksErr && <FeedbackBanner>{booksErr}</FeedbackBanner>}
+
+          <Button variant="primary" size="lg" className="w-full" disabled={busy}
+            onClick={() => void startBooks()}>
+            {busy ? 'Starting…' : 'Start the books'}
+          </Button>
+          <Button className="w-full" disabled={busy} onClick={enterCounter}>
+            Not now
+          </Button>
+          <p className="text-xs text-text-tertiary">
+            If you skip this, start them later from Reports → Owner Summary. Once the shop has sold
+            something, that also needs a sealed day and a stocktake.
+          </p>
+        </div>
+      </div>
+    );
   }
 
   if (created) {
@@ -106,9 +201,9 @@ export default function SetupScreen() {
           </label>
 
           <Button variant="primary" size="lg" className="w-full"
-            onClick={continueAfterRecovery}
-            disabled={!acknowledgedRecovery}>
-            Continue to Counter
+            onClick={() => void continueAfterRecovery()}
+            disabled={!acknowledgedRecovery || busy}>
+            Continue
           </Button>
         </div>
       </div>

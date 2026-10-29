@@ -72,8 +72,8 @@ describe('kept and free card', () => {
   it('points to the ledger cutover before there is anything to show', () => {
     const onFixCutover = vi.fn();
     render(<KeptAndFreeView data={null} compact onFixCutover={onFixCutover} />);
-    expect(screen.getByText(/Shown after the ledger cutover/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Finish the ledger cutover' }));
+    expect(screen.getByText(/Shown once the shop's books have started/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Start the books' }));
     expect(onFixCutover).toHaveBeenCalledOnce();
   });
 });

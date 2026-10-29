@@ -125,6 +125,9 @@ copying `node_modules` across OS lines does not.
    - Apply every bundled migration
    - Show the **first-run owner setup wizard** — enter dad's name, phone,
      and PIN. This becomes the OWNER account.
+   - After the recovery code, offer to **start the shop's books** (§18): tick
+     whether the shop banks, type the money in the till, safe and MoMo, and
+     Counter's reports are real figures from the first sale.
 4. Log in with the OWNER PIN. Open Settings → Workers to add cashiers
    and supervisors. Settings → Suppliers to seed beverage suppliers.
    Settings → Products to add the catalog. Then run an Opening Stock
@@ -883,7 +886,7 @@ and pre-releases are ignored.
 
 Reports → Owner Summary opens with a **Kept and free** card (also on the Position
 tab, in the printed pack and the CSV). It answers two questions as of the "As of"
-date, from the ledger cutover onward; before the cutover it only points to it.
+date, from the day the books started (§18); before that it only points there.
 
 - **Profit kept** = profit since the cutover − what the owner took out. It includes
   money tied up in stock and in credit customers owe.
@@ -905,3 +908,39 @@ money is always counted. It is a preference, not a control: main never refuses a
 bank transfer, and past ones stay in the records.
 
 Verify with `npx vitest --run tests/ownerManagementPack.test.ts tests/paymentSettings.test.ts tests/kept-and-free-ui.test.tsx`.
+
+## 18. Starting the books (the ledger cutover)
+
+Counter's management ledger only runs once the shop's books are **started**.
+Before that, profit comes from recorded takings and the cash, stock and
+position figures are labelled estimates. Starting writes one opening journal
+(money, stock, debts) balanced against opening-balance equity, and every sale,
+payment and stock move posts to the books from then on.
+
+**A new shop** starts them in first-run setup (§3), straight after the recovery
+code: *Start the shop's books* asks whether the shop banks and how much money is
+in each place. Counter refuses if the shop already has sales, stock, shifts,
+expenses or customer/supplier balances (`tradingHistory`, `startBooksForNewShop`
+in `src/main/services/ledger.ts`). "Not now" skips it; the guided panel below
+still works later, and needs no sealed day or stocktake until the shop trades.
+
+**A shop that already trades** uses Reports → Owner Summary → *Start the books*
+(`StartTheBooksPanel.tsx`). It lists what stands in the way, with the fix:
+every shift closed (the owner's own too — Reports is reachable without a shift
+from the open-shift screen, Management access → Reports), the day before sealed
+(a button), a stocktake within 30 days. The owner counts the money in each
+place; Counter fills in stock at cost (locked — it must equal the stock
+records), what customers owe and what the shop owes suppliers
+(`suggestedOpeningBalances` in `managementReports.ts`); loans, deposits and
+equipment sit under *Other balances*. Start needs the owner's PIN.
+
+Start on a morning before the first shift. A day that already had sales or
+deliveries is refused (`TRADED_BEFORE_START`) because those would never reach
+the books — start the next day instead.
+
+Opening Stock entered after the books start posts as stock the owner brought
+in (Dr inventory, Cr opening-balance equity — `postOpeningStockIfActive`), not
+as profit.
+
+Verify with `npx vitest --run tests/startTheBooks.test.ts tests/start-the-books-ui.test.tsx tests/ownerManagementPack.test.ts`.
+

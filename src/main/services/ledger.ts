@@ -1015,7 +1015,7 @@ export function getFinancialDataQuality(
     issues.push({
       code: 'CUTOVER_NOT_ACTIVE',
       severity: 'BLOCKING',
-      message: 'The management ledger has not completed a balanced cutover.',
+      message: "The shop's books haven't been started yet.",
     });
   }
 
@@ -1153,7 +1153,11 @@ export function getFinancialDataQuality(
   const stocktakeAge = latestStocktake.completedAt
     ? Math.floor((nowMs - new Date(latestStocktake.completedAt).getTime()) / 86_400_000)
     : null;
-  if (stocktakeAge == null || stocktakeAge > 30) {
+  // A shop that has never held stock has nothing to count yet.
+  const everStocked = !!db.prepare(
+    'SELECT 1 FROM stock_movements WHERE location_id = ? LIMIT 1',
+  ).get(locationId);
+  if (everStocked && (stocktakeAge == null || stocktakeAge > 30)) {
     issues.push({
       code: 'STALE_STOCKTAKE',
       severity: 'WARNING',
@@ -1211,6 +1215,38 @@ export interface CutoverPreview {
     amountPesewas: number;
   }>;
   issues: DataQualityIssue[];
+  /** The day that must be sealed before this start date. */
+  priorDate: string;
+  /** Stock at cost from the stock records up to priorDate; INVENTORY must equal it. */
+  derivedInventoryPesewas: number;
+  /** False for a shop with no sales, stock, shifts or balances yet. */
+  hasTradingHistory: boolean;
+}
+
+/**
+ * What a shop has already recorded. A shop with none of it has nothing to
+ * reconcile, so its books can start without a sealed day or a stocktake.
+ */
+export function tradingHistory(db: DB, locationId = DEFAULT_LOCATION_ID): string[] {
+  const any = (sql: string, ...args: unknown[]) => !!db.prepare(sql).get(...args);
+  const found: string[] = [];
+  if (any('SELECT 1 FROM sales WHERE location_id = ? LIMIT 1', locationId)) found.push('sales');
+  if (any('SELECT 1 FROM stock_movements WHERE location_id = ? LIMIT 1', locationId)) found.push('stock');
+  if (any('SELECT 1 FROM shifts WHERE location_id = ? LIMIT 1', locationId)) found.push('shifts');
+  if (any('SELECT 1 FROM supplier_invoices LIMIT 1')
+    || any('SELECT 1 FROM supplier_payments LIMIT 1')
+    || any('SELECT 1 FROM suppliers WHERE deleted_at IS NULL AND current_balance_pesewas != 0 LIMIT 1')) {
+    found.push('supplier balances');
+  }
+  if (any('SELECT 1 FROM customer_payments LIMIT 1')
+    || any('SELECT 1 FROM customers WHERE deleted_at IS NULL AND current_balance_pesewas != 0 LIMIT 1')) {
+    found.push('customer balances');
+  }
+  if (any('SELECT 1 FROM petty_cash_expenses WHERE location_id = ? LIMIT 1', locationId)
+    || any('SELECT 1 FROM business_expenses WHERE location_id = ? LIMIT 1', locationId)) {
+    found.push('expenses');
+  }
+  return found;
 }
 
 export function previewFinancialCutover(
@@ -1236,17 +1272,37 @@ export function previewFinancialCutover(
     issues.push({
       code: 'OPEN_SHIFTS',
       severity: 'BLOCKING',
-      message: `${openShifts} shift(s) must be closed before cutover.`,
+      message: `Close the ${openShifts} open shift(s) first.`,
     });
   }
   const cutover = new Date(`${input.cutoverDate}T12:00:00`);
   cutover.setDate(cutover.getDate() - 1);
   const priorDate = cutover.toISOString().slice(0, 10);
-  if (!isDateSealed(db, locationId, priorDate)) {
+  const hasTradingHistory = tradingHistory(db, locationId).length > 0;
+  const tradedBeforeStart = db.prepare(
+    `SELECT COUNT(*) AS count, MAX(date(sm.created_at)) AS latest
+       FROM stock_movements sm
+      WHERE sm.location_id = ? AND date(sm.created_at) >= ?
+        AND NOT EXISTS (
+          SELECT 1 FROM inventory_valuation_movements ivm WHERE ivm.stock_movement_id = sm.id
+        )`,
+  ).get(locationId, input.cutoverDate) as { count: number; latest: string | null };
+  if (tradedBeforeStart.count > 0) {
+    // Those sales and deliveries happened before the books existed, so they
+    // would never reach them. Starting a day later keeps every one out.
+    const next = new Date(`${tradedBeforeStart.latest}T00:00:00.000Z`);
+    next.setUTCDate(next.getUTCDate() + 1);
+    issues.push({
+      code: 'TRADED_BEFORE_START',
+      severity: 'BLOCKING',
+      message: `${tradedBeforeStart.count} sale or stock record(s) on or after ${input.cutoverDate} came before the books started. Start the books on ${next.toISOString().slice(0, 10)} or later.`,
+    });
+  }
+  if (hasTradingHistory && !isDateSealed(db, locationId, priorDate)) {
     issues.push({
       code: 'PRIOR_DAY_NOT_SEALED',
       severity: 'BLOCKING',
-      message: `Seal ${priorDate} before activating the ${input.cutoverDate} cutover.`,
+      message: `Seal ${priorDate}, the day before the books start.`,
     });
   }
   const latestStocktake = db.prepare(
@@ -1260,13 +1316,13 @@ export function previewFinancialCutover(
           - new Date(latestStocktake.completedAt).getTime()) / 86_400_000,
       )
     : null;
-  if (stocktakeAgeDays == null || stocktakeAgeDays > 30) {
+  if (hasTradingHistory && (stocktakeAgeDays == null || stocktakeAgeDays > 30)) {
     issues.push({
       code: 'RECENT_STOCKTAKE_REQUIRED',
       severity: 'BLOCKING',
       message: stocktakeAgeDays == null
-        ? 'Complete a physical stocktake before activation.'
-        : `The supporting stocktake is ${stocktakeAgeDays} days old; it must be within 30 days.`,
+        ? 'Count the stock with a stocktake first.'
+        : `The last stocktake is ${stocktakeAgeDays} days old; count the stock again (within 30 days).`,
     });
   }
   const shadow = verifyLedgerShadow(db, locationId);
@@ -1332,6 +1388,9 @@ export function previewFinancialCutover(
     openingEquityPesewas: openingEquity,
     balances,
     issues,
+    priorDate,
+    derivedInventoryPesewas: derivedInventory,
+    hasTradingHistory,
   };
 }
 
@@ -1346,14 +1405,85 @@ export function activateFinancialCutover(
     pin: string;
     deviceId: string;
   },
-): { cutoverId: string; openingJournalEntryId: string; openingEquityPesewas: number } {
+): { cutoverId: string; openingJournalEntryId: string | null; openingEquityPesewas: number } {
   requireOwnerPin(db, input.actorWorkerId, input.pin, input.deviceId);
   const preview = previewFinancialCutover(db, input);
   const blockers = preview.issues.filter((issue) => issue.severity === 'BLOCKING');
   if (blockers.length > 0) throw new Error(blockers.map((issue) => issue.message).join(' '));
+  const committed = commitFinancialCutover(db, {
+    preview,
+    notes: input.notes ?? null,
+    automatic: false,
+    actorWorkerId: input.actorWorkerId,
+    deviceId: input.deviceId,
+  });
+  return { ...committed, openingEquityPesewas: preview.openingEquityPesewas };
+}
+
+/**
+ * Starts the books for a shop that has recorded nothing yet, straight from
+ * first-run setup. There is nothing to reconcile, so it needs no sealed day,
+ * stocktake or PIN — the owner has just set one. It refuses a shop with any
+ * history; those go through activateFinancialCutover.
+ */
+export function startBooksForNewShop(
+  db: DB,
+  input: {
+    locationId?: string;
+    startingMoney: Array<{ financialAccountId: string; amountPesewas: number }>;
+    actorWorkerId: string;
+    deviceId: string;
+  },
+): { cutoverId: string; cutoverDate: string; openingEquityPesewas: number } {
+  requireOwnerFounder(db, input.actorWorkerId);
+  const locationId = input.locationId ?? DEFAULT_LOCATION_ID;
+  const history = tradingHistory(db, locationId);
+  if (history.length > 0) {
+    throw new Error(
+      `This shop already has ${history.join(', ')}. Start the books from Reports → Owner Summary instead.`,
+    );
+  }
+  const seen = new Set<string>();
+  const balances: CutoverBalanceInput[] = [];
+  for (const money of input.startingMoney) {
+    if (!Number.isInteger(money.amountPesewas) || money.amountPesewas < 0) {
+      throw new Error('starting money must be whole pesewas, zero or more');
+    }
+    if (seen.has(money.financialAccountId)) throw new Error('each money account can be given once');
+    seen.add(money.financialAccountId);
+    if (money.amountPesewas === 0) continue;
+    const account = financialAccount(db, money.financialAccountId);
+    if (account.locationId !== locationId) throw new Error(`${account.name} belongs to another location`);
+    balances.push({ ledgerAccountId: account.ledgerAccountId, amountPesewas: money.amountPesewas });
+  }
+  const cutoverDate = new Date().toISOString().slice(0, 10);
+  const preview = previewFinancialCutover(db, { locationId, cutoverDate, balances });
+  const blockers = preview.issues.filter((issue) => issue.severity === 'BLOCKING');
+  if (blockers.length > 0) throw new Error(blockers.map((issue) => issue.message).join(' '));
+  const { cutoverId } = commitFinancialCutover(db, {
+    preview,
+    notes: 'Started with the shop at first-run setup',
+    automatic: true,
+    actorWorkerId: input.actorWorkerId,
+    deviceId: input.deviceId,
+  });
+  return { cutoverId, cutoverDate, openingEquityPesewas: preview.openingEquityPesewas };
+}
+
+function commitFinancialCutover(
+  db: DB,
+  input: {
+    preview: CutoverPreview;
+    notes: string | null;
+    automatic: boolean;
+    actorWorkerId: string;
+    deviceId: string;
+  },
+): { cutoverId: string; openingJournalEntryId: string | null } {
+  const { preview } = input;
   const cutoverId = `fc-${uuidv4()}`;
-  const occurredAt = `${input.cutoverDate}T00:00:00.000Z`;
-  let openingJournalEntryId = '';
+  const occurredAt = `${preview.cutoverDate}T00:00:00.000Z`;
+  let openingJournalEntryId: string | null = null;
   db.transaction(() => {
     const lines: JournalLineInput[] = preview.balances
       .filter((balance) => balance.amountPesewas > 0)
@@ -1371,9 +1501,10 @@ export function activateFinancialCutover(
     } else if (difference < 0) {
       lines.push({ accountCode: LEDGER_CODES.OPENING_EQUITY, debitPesewas: Math.abs(difference) });
     }
-    openingJournalEntryId = postJournal(db, {
+    // A shop starting with nothing at all has no opening balances to post.
+    if (lines.length > 0) openingJournalEntryId = postJournal(db, {
       locationId: preview.locationId,
-      businessDate: input.cutoverDate,
+      businessDate: preview.cutoverDate,
       occurredAt,
       sourceType: 'FINANCIAL_CUTOVER',
       sourceId: cutoverId,
@@ -1393,7 +1524,7 @@ export function activateFinancialCutover(
         WHERE p.active = 1 AND p.deleted_at IS NULL
         GROUP BY p.id
        HAVING quantity > 0`,
-    ).all(input.cutoverDate, preview.locationId) as Array<{
+    ).all(preview.cutoverDate, preview.locationId) as Array<{
       productId: string; unitCostPesewas: number; quantity: number;
     }>;
     for (const item of openingInventory) {
@@ -1425,7 +1556,7 @@ export function activateFinancialCutover(
       ).run(
         `fr-opening-${uuidv4()}`, preview.locationId, moneyAccount.id, occurredAt,
         balance.amountPesewas, balance.amountPesewas,
-        'Owner-verified cutover balance', input.actorWorkerId,
+        input.automatic ? 'Counted at first-run setup' : 'Owner-verified cutover balance', input.actorWorkerId,
         input.actorWorkerId, input.deviceId,
       );
       db.prepare(
@@ -1441,7 +1572,7 @@ export function activateFinancialCutover(
          created_by, updated_by, device_id
        ) VALUES (?, ?, ?, 'ACTIVE', ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
-      cutoverId, preview.locationId, input.cutoverDate, openingJournalEntryId,
+      cutoverId, preview.locationId, preview.cutoverDate, openingJournalEntryId,
       new Date().toISOString(), input.actorWorkerId, input.notes?.trim() || null,
       input.actorWorkerId, input.actorWorkerId, input.deviceId,
     );
@@ -1457,14 +1588,15 @@ export function activateFinancialCutover(
       entityId: cutoverId,
       afterValue: {
         locationId: preview.locationId,
-        cutoverDate: input.cutoverDate,
+        cutoverDate: preview.cutoverDate,
         openingJournalEntryId,
         openingEquityPesewas: preview.openingEquityPesewas,
+        automatic: input.automatic,
       },
       deviceId: input.deviceId,
     });
   })();
-  return { cutoverId, openingJournalEntryId, openingEquityPesewas: preview.openingEquityPesewas };
+  return { cutoverId, openingJournalEntryId };
 }
 
 // --- Structured operating records ----------------------------------------
@@ -2951,6 +3083,50 @@ export function recordInventoryValuationMovement(
     balanceValuePesewas,
     averageUnitCostPesewas,
   };
+}
+
+/**
+ * Opening Stock is stock the owner already had, not a purchase, so no
+ * supplier invoice carries it into the books. Without this journal the
+ * valuation ledger rises while INVENTORY stays put, and the books disagree
+ * from the first sale. Call after the receipt's valuation movements exist.
+ */
+export function postOpeningStockIfActive(
+  db: DB,
+  input: {
+    locationId: string;
+    stockMovementIds: string[];
+    actorWorkerId: string;
+    deviceId: string;
+  },
+): string | null {
+  if (input.stockMovementIds.length === 0 || !isLedgerPostingEnabled(db, input.locationId)) return null;
+  let total = 0;
+  for (const id of input.stockMovementIds) {
+    const row = db.prepare(
+      'SELECT value_delta_pesewas AS value FROM inventory_valuation_movements WHERE stock_movement_id = ?',
+    ).get(id) as { value: number } | undefined;
+    if (!row) throw new Error(`opening stock ${id} has no valuation entry`);
+    total += row.value;
+  }
+  if (total <= 0) return null;
+  const first = db.prepare('SELECT created_at AS occurredAt FROM stock_movements WHERE id = ?')
+    .get(input.stockMovementIds[0]) as { occurredAt: string };
+  return postJournal(db, {
+    locationId: input.locationId,
+    businessDate: businessDate(first.occurredAt),
+    occurredAt: first.occurredAt,
+    sourceType: 'OPENING_STOCK',
+    sourceId: input.stockMovementIds[0]!,
+    postingType: 'OPENING_STOCK',
+    description: 'Opening stock the owner brought in',
+    actorWorkerId: input.actorWorkerId,
+    deviceId: input.deviceId,
+    lines: [
+      { accountCode: LEDGER_CODES.INVENTORY, debitPesewas: total },
+      { accountCode: LEDGER_CODES.OPENING_EQUITY, creditPesewas: total },
+    ],
+  }).journalEntryId;
 }
 
 export function valueStockMovementAndPostLossIfActive(
