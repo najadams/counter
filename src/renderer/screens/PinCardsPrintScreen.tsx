@@ -10,15 +10,16 @@ import { useEffect, useState } from 'react';
 import { counter } from '../lib/ipc';
 import { FeedbackBanner } from '../components/FeedbackBanner';
 import { Button } from '../components/ui/button';
+import { useVocabulary } from '../store/business';
 
 interface Worker {
   id: string; fullName: string; phone: string; role: string; active: boolean;
 }
 
-const F_KEYS: Array<{ k: string; t: string }> = [
+const fKeys = (staffUse: string): Array<{ k: string; t: string }> => [
   { k: 'F1',  t: 'Sale' },
   { k: 'F2',  t: 'Cash drop' },
-  { k: 'F3',  t: 'Drink (consumption)' },
+  { k: 'F3',  t: staffUse },
   { k: 'F4',  t: 'Stocktake' },
   { k: 'F5',  t: 'Daily summary' },
   { k: 'F6',  t: 'Customers / debts' },
@@ -30,6 +31,7 @@ const F_KEYS: Array<{ k: string; t: string }> = [
 ];
 
 export function PinCardsPrintScreen({ onExit }: { onExit: () => void }) {
+  const F_KEYS = fKeys(useVocabulary().staffUse);
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [shopName] = useState<string>('Counter');
   const [error, setError] = useState<string | null>(null);

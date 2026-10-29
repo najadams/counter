@@ -17,6 +17,7 @@ import { NativeSelect } from '../../components/ui/native-select';
 import { Input } from '../../components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { ReportSkeleton } from '../../components/ReportSkeleton';
+import { useCategoryLabel } from '../../store/business';
 
 type Filter = 'all' | 'belowReorder' | 'stockout' | 'inStock';
 type Sort =
@@ -25,6 +26,7 @@ type Sort =
   | 'dos' | 'lastSold';
 
 export function InventoryTab({ reportAccessToken }: { reportAccessToken: string }) {
+  const categoryLabel = useCategoryLabel();
   const [velocityWindow, setVelocityWindow] = useState(30);
   const [data, setData] = useState<ReportsInventoryResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -182,7 +184,7 @@ export function InventoryTab({ reportAccessToken }: { reportAccessToken: string 
                         <div>{r.name}</div>
                         <div className="text-text-tertiary text-xs font-mono">{r.sku}</div>
                       </TableCell>
-                      <TableCell className="px-4 py-2 text-text-tertiary text-xs">{r.category}</TableCell>
+                      <TableCell className="px-4 py-2 text-text-tertiary text-xs">{categoryLabel(r.category)}</TableCell>
                       <TableCell className={`px-4 py-2 text-right font-mono tabular-nums ${r.stockout ? 'text-danger' : r.belowReorder ? 'text-warning' : ''}`}>
                         {r.unitsOnHand}
                         {r.reorderThreshold > 0 && (

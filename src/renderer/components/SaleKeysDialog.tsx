@@ -6,6 +6,7 @@
 import { FRIENDLY_UI_ENABLED } from '../../shared/lib/buildFlags';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import { Kbd } from './ui/kbd';
+import { useVocabulary } from '../store/business';
 
 export interface SaleKey {
   keys: string[];
@@ -13,10 +14,10 @@ export interface SaleKey {
 }
 
 /** What each key does on the sale screen, in the order a sale runs. */
-export function saleKeys(quickPickCount: number): SaleKey[] {
+export function saleKeys(quickPickCount: number, item = 'drink'): SaleKey[] {
   return [
     { keys: ['↑', '↓'], action: 'Move through the list' },
-    { keys: ['Enter'], action: FRIENDLY_UI_ENABLED ? 'Add the highlighted drink' : 'Add the highlighted product' },
+    { keys: ['Enter'], action: FRIENDLY_UI_ENABLED ? `Add the highlighted ${item}` : 'Add the highlighted product' },
     ...(quickPickCount > 0 ? [{ keys: [`Alt+1–${quickPickCount}`], action: 'Add a quick pick' }] : []),
     { keys: ['F4'], action: 'Pay with cash' },
     { keys: ['F5'], action: 'Pay with MoMo' },
@@ -30,6 +31,7 @@ export function saleKeys(quickPickCount: number): SaleKey[] {
 }
 
 export function SaleKeysDialog({ quickPickCount, onClose }: { quickPickCount: number; onClose: () => void }) {
+  const words = useVocabulary();
   return (
     <Dialog onClose={onClose} onShortcut={(key) => { if (key === 'F1') onClose(); }}>
       <DialogContent className={FRIENDLY_UI_ENABLED ? 'w-[min(36rem,calc(100%-2rem))]' : undefined}>
@@ -44,7 +46,7 @@ export function SaleKeysDialog({ quickPickCount, onClose }: { quickPickCount: nu
         <dl className={FRIENDLY_UI_ENABLED
           ? 'grid grid-cols-[auto_1fr] items-center gap-x-5 gap-y-2.5 text-lg'
           : 'grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-2 text-sm'}>
-          {saleKeys(quickPickCount).map(({ keys, action }) => (
+          {saleKeys(quickPickCount, words.item).map(({ keys, action }) => (
             <div key={action} className="contents">
               <dt className="flex gap-1">
                 {keys.map((k) => <Kbd key={k} className={FRIENDLY_UI_ENABLED ? 'h-7 min-w-8 px-2 text-sm' : 'h-6 min-w-7 px-2 text-xs'}>{k}</Kbd>)}

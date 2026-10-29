@@ -19,16 +19,16 @@ import type { Database as DB } from 'better-sqlite3';
 import { v4 as uuidv4 } from 'uuid';
 import { normalizePhone } from '../../shared/lib/phone.js';
 import { logAudit } from '../db/audit.js';
+import { fallbackCategoryLabel } from '../../shared/lib/businessProfile.js';
 import type {
   CatalogCustomer, CatalogCustomerPriceOverride, CatalogExportPayload,
   CatalogImportTableReport, CatalogPricingTier, CatalogProduct,
   CatalogProductUnit, CatalogSupplier, CatalogTable,
 } from '../../shared/types/ipc.js';
 
-const VALID_CATEGORIES = new Set([
-  'BEER', 'WINE', 'SPIRITS', 'SOFT_DRINK', 'WATER', 'JUICE',
-  'ENERGY_DRINK', 'MIXER', 'NON_BEVERAGE', 'OTHER',
-]);
+// Category codes are owner-defined now (migration 0057). An import may bring
+// codes this shop hasn't added; they're accepted and get a category row.
+const CATEGORY_CODE = /^[A-Z0-9_]{1,40}$/;
 const VALID_CUSTOMER_TYPES = new Set(['WALK_IN_REGULAR', 'WHOLESALE', 'ROUTE', 'STAFF_FAMILY']);
 const VALID_CHANNELS = new Set(['WALK_IN', 'WHOLESALE', 'ROUTE']);
 const VALID_TIER_CHANNELS = new Set(['WALK_IN', 'WHOLESALE', 'ROUTE', 'ALL']);
@@ -308,6 +308,10 @@ function importProducts(
   const findByBarcode = db.prepare(
     `SELECT id FROM products WHERE barcode = ? AND deleted_at IS NULL`,
   );
+  const ensureCategory = db.prepare(
+    `INSERT INTO product_categories (code, label, sort_order, created_by, updated_by)
+     VALUES (?, ?, 900, ?, ?) ON CONFLICT(code) DO NOTHING`,
+  );
   const insert = db.prepare(
     `INSERT INTO products (
        id, sku, barcode, name, category, brand, pack_size_units, unit_volume_ml,
@@ -336,9 +340,10 @@ function importProducts(
   for (const row of rows) {
     const sku = (row.sku ?? '').trim();
     if (!sku) { skip(r, 'product missing sku'); continue; }
-    if (!VALID_CATEGORIES.has(row.category)) {
+    if (!CATEGORY_CODE.test(row.category ?? '')) {
       skip(r, `product '${sku}': invalid category '${row.category}'`); continue;
     }
+    ensureCategory.run(row.category, fallbackCategoryLabel(row.category), opts.actorWorkerId, opts.actorWorkerId);
     if (row.countClass !== null && !VALID_COUNT_CLASSES.has(row.countClass)) {
       skip(r, `product '${sku}': invalid countClass '${row.countClass}'`); continue;
     }

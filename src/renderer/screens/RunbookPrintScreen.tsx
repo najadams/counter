@@ -2,8 +2,11 @@
 // One double-sided A4 ideally; cashier reference behind the till.
 
 import { Button } from '../components/ui/button';
+import { useVocabulary } from '../store/business';
+import { withArticle } from '../../shared/lib/businessProfile';
 
 export function RunbookPrintScreen({ onExit }: { onExit: () => void }) {
+  const words = useVocabulary();
   return (
     <>
       <style>{`
@@ -66,7 +69,7 @@ export function RunbookPrintScreen({ onExit }: { onExit: () => void }) {
         <div className="keys-grid">
           <span className="grid-pair"><span className="kbd">F1</span><span>Sell to a customer</span><span className="kbd">F7</span><span>Report breakage (with photo)</span></span>
           <span className="grid-pair"><span className="kbd">F2</span><span>Hand cash to owner / safe</span><span className="kbd">F8</span><span>Receive stock from supplier</span></span>
-          <span className="grid-pair"><span className="kbd">F3</span><span>Log a drink you took</span><span className="kbd">F10</span><span>Close shift (cash count)</span></span>
+          <span className="grid-pair"><span className="kbd">F3</span><span>Log {withArticle(words.item)} you took</span><span className="kbd">F10</span><span>Close shift (cash count)</span></span>
           <span className="grid-pair"><span className="kbd">F4</span><span>Stocktake (count physical stock)</span><span className="kbd">F11</span><span>See recent sales / void one</span></span>
           <span className="grid-pair"><span className="kbd">F5</span><span>Daily summary report</span><span className="kbd">F12</span><span>Settings (admin only)</span></span>
           <span className="grid-pair"><span className="kbd">F6</span><span>Customers — debts and payments</span><span className="kbd">Esc</span><span>Cancel / go back</span></span>
@@ -136,7 +139,7 @@ export function RunbookPrintScreen({ onExit }: { onExit: () => void }) {
         </ul>
 
         <div className="callout">
-          <strong>Honesty rules.</strong> The system records every sale, void, drink, and breakage with your name on it.
+          <strong>Honesty rules.</strong> The system records every sale, void, {words.item} you took, and breakage with your name on it.
           Do not try to delete or hide entries — the audit log keeps the original. If you make an honest mistake,
           tell the supervisor immediately. Mistakes are fixable; cover-ups are not.
         </div>

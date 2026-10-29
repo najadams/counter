@@ -4,6 +4,7 @@
 // owns the real server). Run: npx tsx scripts/serve-lan.ts
 //
 // Login with the dev fixtures: worker "dev-counter-1", PIN 1234.
+// SERVE_LAN_FRESH=1 skips the fixtures, so the first-run setup screen shows.
 
 import Database from 'better-sqlite3';
 import path from 'node:path';
@@ -26,7 +27,7 @@ import {
   registerReportsHandlers, registerCatalogTransferHandlers,
   registerReceiptConfigHandlers, registerPaymentSettingsHandlers,
   registerSyncHandlers, registerPendingOrdersHandlers,
-  registerActivationHandlers,
+  registerActivationHandlers, registerBusinessHandlers,
 } from '../src/main/ipc/handlers.js';
 import { startHttpServer } from '../src/main/http/server.js';
 import type { App } from 'electron';
@@ -42,7 +43,7 @@ const app = { getPath: () => os.tmpdir(), getVersion: () => '0.0.0-lan' } as unk
 const db = new Database(':memory:');
 db.pragma('foreign_keys = ON');
 runMigrations(db, migrationsDir);
-runSeed(db, { includeDevFixtures: true });
+runSeed(db, { includeDevFixtures: process.env['SERVE_LAN_FRESH'] !== '1' });
 
 const r = new HandlerRegistry();
 registerIpcHandlers(r, db, deviceId, app);
@@ -72,6 +73,7 @@ registerReportsHandlers(r, db, deviceId);
 registerCatalogTransferHandlers(r, db, app, deviceId);
 registerReceiptConfigHandlers(r, db, deviceId);
 registerPaymentSettingsHandlers(r, db, deviceId);
+registerBusinessHandlers(r, db, deviceId);
 registerSyncHandlers(r, db, deviceId);
 registerPendingOrdersHandlers(r, db, deviceId);
 registerActivationHandlers(r, db, deviceId, os.tmpdir());

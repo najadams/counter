@@ -44,17 +44,8 @@ export interface Worker {
   deletedReason: string | null;
 }
 
-export type ProductCategory =
-  | 'BEER'
-  | 'WINE'
-  | 'SPIRITS'
-  | 'SOFT_DRINK'
-  | 'WATER'
-  | 'JUICE'
-  | 'ENERGY_DRINK'
-  | 'MIXER'
-  | 'NON_BEVERAGE'
-  | 'OTHER';
+/** A product_categories code (migration 0057): the shop's own list, e.g. 'BEER' or 'NAILS_SCREWS'. */
+export type ProductCategory = string;
 
 export interface Product {
   id: UUID;

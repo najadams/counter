@@ -51,6 +51,7 @@ async function createOwnerAndSaveCode() {
   const pins = document.querySelectorAll('input[type="password"]');
   fireEvent.change(pins[0]!, { target: { value: '4321' } });
   fireEvent.change(pins[1]!, { target: { value: '4321' } });
+  fireEvent.click(screen.getByRole('radio', { name: /^Drinks/ }));
   fireEvent.click(screen.getByRole('button', { name: 'Create owner account' }));
   fireEvent.click(await screen.findByLabelText('I have written this code down somewhere safe.'));
   fireEvent.click(screen.getByRole('button', { name: 'Continue' }));

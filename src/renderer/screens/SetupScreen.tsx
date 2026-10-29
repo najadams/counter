@@ -16,15 +16,20 @@ import { FeedbackBanner } from '../components/FeedbackBanner';
 import { Button } from '../components/ui/button';
 import { Checkbox } from '../components/ui/checkbox';
 import { Input } from '../components/ui/input';
+import { cn } from '../lib/cn';
+import {
+  BUSINESS_PROFILES, BUSINESS_PROFILE_DEFS, type BusinessProfile,
+} from '../../shared/lib/businessProfile';
 
 export default function SetupScreen() {
-  const setupCreateOwner = async (full: string, phone: string, pin: string) =>
-    counter.setupCreateOwner({ fullName: full, phone, pin });
+  const setupCreateOwner = async (full: string, phone: string, pin: string, businessProfile: BusinessProfile) =>
+    counter.setupCreateOwner({ fullName: full, phone, pin, businessProfile });
 
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [pin, setPin] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [profile, setProfile] = useState<BusinessProfile | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [created, setCreated] = useState<{
@@ -44,9 +49,10 @@ export default function SetupScreen() {
     if (!phone.trim()) return setErr('Phone number is required.');
     if (!/^\d{4,6}$/.test(pin)) return setErr('PIN must be 4–6 digits.');
     if (pin !== confirm) return setErr('PIN and confirmation do not match.');
+    if (!profile) return setErr('Choose what your shop sells.');
 
     setBusy(true);
-    const res = await setupCreateOwner(fullName.trim(), phone.trim(), pin);
+    const res = await setupCreateOwner(fullName.trim(), phone.trim(), pin, profile);
     setBusy(false);
 
     if (!res.success) {
@@ -271,6 +277,35 @@ export default function SetupScreen() {
               onChange={(e) => setConfirm(e.target.value.replace(/\D/g, ''))} />
           </label>
         </div>
+
+        <fieldset>
+          <legend className="block text-sm text-text-secondary mb-1">What does your shop sell?</legend>
+          <div className="grid gap-2" role="radiogroup" aria-label="What does your shop sell?">
+            {BUSINESS_PROFILES.map((p) => {
+              const def = BUSINESS_PROFILE_DEFS[p];
+              const selected = profile === p;
+              return (
+                <button
+                  key={p}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  onClick={() => setProfile(p)}
+                  className={cn(
+                    'text-left rounded border px-3 py-2 transition-colors',
+                    selected ? 'border-accent bg-accent/10' : 'border-border hover:border-border-strong',
+                  )}
+                >
+                  <span className="block text-sm font-medium text-text-primary">{def.label}</span>
+                  <span className="block text-xs text-text-tertiary">{def.hint}</span>
+                </button>
+              );
+            })}
+          </div>
+          <span className="block text-xs text-text-tertiary mt-1">
+            Sets your starting product categories and the words on screen. You can change it later in Settings.
+          </span>
+        </fieldset>
 
         {err && (
           <FeedbackBanner>

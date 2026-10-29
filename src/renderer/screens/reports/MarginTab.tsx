@@ -12,10 +12,12 @@ import { FeedbackBanner } from '../../components/FeedbackBanner';
 import { Button } from '../../components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { ReportSkeleton } from '../../components/ReportSkeleton';
+import { useCategoryLabel } from '../../store/business';
 
 type ProductSort = 'margin' | 'revenue' | 'marginBps' | 'units';
 
 export function MarginTab({ reportAccessToken }: { reportAccessToken: string }) {
+  const categoryLabel = useCategoryLabel();
   const [range, setRange] = useState<DateRange>(defaultDateRange());
   const [data, setData] = useState<ReportsMarginResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -195,7 +197,7 @@ export function MarginTab({ reportAccessToken }: { reportAccessToken: string }) 
                         <div>{p.name}</div>
                         <div className="text-text-tertiary text-xs font-mono">{p.sku}</div>
                       </TableCell>
-                      <TableCell className="px-4 py-2 text-text-tertiary text-xs">{p.category}</TableCell>
+                      <TableCell className="px-4 py-2 text-text-tertiary text-xs">{categoryLabel(p.category)}</TableCell>
                       <TableCell className="px-4 py-2 text-right font-mono tabular-nums">{p.unitsSold}</TableCell>
                       <TableCell className="px-4 py-2 text-right font-mono tabular-nums">{formatMoney(p.revenuePesewas)}</TableCell>
                       <TableCell className="px-4 py-2 text-right font-mono tabular-nums text-text-tertiary">
@@ -239,7 +241,7 @@ export function MarginTab({ reportAccessToken }: { reportAccessToken: string }) 
                 <TableBody>
                   {data.byCategory.map((c) => (
                     <TableRow key={c.category}>
-                      <TableCell className="px-4 py-2">{c.category}</TableCell>
+                      <TableCell className="px-4 py-2">{categoryLabel(c.category)}</TableCell>
                       <TableCell className="px-4 py-2 text-right font-mono tabular-nums">{c.productCount}</TableCell>
                       <TableCell className="px-4 py-2 text-right font-mono tabular-nums">{c.unitsSold}</TableCell>
                       <TableCell className="px-4 py-2 text-right font-mono tabular-nums">{formatMoney(c.revenuePesewas)}</TableCell>
