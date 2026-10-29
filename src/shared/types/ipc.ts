@@ -1379,6 +1379,8 @@ export interface SetupCreateOwnerRequest {
   fullName: string;
   phone: string;
   pin: string;
+  /** BusinessProfile — what the shop sells. Omitted = DRINKS. */
+  businessProfile?: string;
 }
 export interface SetupCreateOwnerResponse {
   workerId: string;
@@ -1980,6 +1982,40 @@ export interface BackupHeartbeat {
   /** True if no heartbeat file has ever been written (never backed up). */
   neverBackedUp: boolean;
 }
+
+// --- Business profile and product categories ---------------------------
+
+export const IPC_CHANNELS_BUSINESS = {
+  BUSINESS_GET_SETTINGS: 'business:get-settings',
+  BUSINESS_SET_SETTINGS: 'business:set-settings',
+  CATEGORY_LIST: 'category:list',
+  CATEGORY_ADD: 'category:add',
+  CATEGORY_UPDATE: 'category:update',
+} as const;
+
+export interface BusinessSettingsResponse {
+  profile: import('../lib/businessProfile.js').BusinessProfile;
+  /** Show the empties / bottle deposit fields on products. */
+  emptiesInUse: boolean;
+}
+
+export interface BusinessSetSettingsRequest {
+  profile?: string;
+  emptiesInUse?: boolean;
+}
+
+export interface ProductCategoryItem {
+  code: string;
+  label: string;
+  sortOrder: number;
+  /** Inactive = hidden from the product form; products keep it. */
+  active: boolean;
+  productCount: number;
+}
+
+export interface CategoryListResponse { categories: ProductCategoryItem[] }
+export interface CategoryAddRequest { label: string }
+export interface CategoryUpdateRequest { code: string; label?: string; active?: boolean }
 
 // --- Receipt customization (shop header / footer / layout) ---------------
 

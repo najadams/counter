@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import { StockHistoryModal } from '../../components/StockHistoryModal';
 import { counter } from '../../lib/ipc';
 import { useSession } from '../../store/session';
+import { useBusiness, useCategoryLabel } from '../../store/business';
 import { formatMoney, parseCedisToPesewas } from '../../../shared/lib/money';
 import { formatStockCompact } from '../../../shared/lib/units';
 import { FeedbackBanner } from '../../components/FeedbackBanner';
@@ -38,10 +39,8 @@ interface AdminProduct {
   units: Array<{ id: string; unitName: string; conversionFactor: number }>;
 }
 
-const CATEGORIES = [
-  'BEER', 'WINE', 'SPIRITS', 'SOFT_DRINK', 'WATER', 'JUICE',
-  'ENERGY_DRINK', 'MIXER', 'NON_BEVERAGE', 'OTHER',
-] as const;
+// Picks the "new category" entry in the category select.
+const NEW_CATEGORY = '__new__';
 
 export function ProductsTab() {
   const myRole = useSession((s) => s.workerRole);
@@ -55,12 +54,14 @@ export function ProductsTab() {
   const [historyFor, setHistoryFor] = useState<AdminProduct | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const categoryLabel = useCategoryLabel();
+  const loadCategories = useBusiness((s) => s.loadCategories);
 
   async function refresh() {
     const r = await counter.adminListProducts();
     if (r.success) setProducts(r.data.products);
   }
-  useEffect(() => { void refresh(); }, []);
+  useEffect(() => { void refresh(); void loadCategories(); }, [loadCategories]);
 
   function flash(message: string, kind: 'info' | 'error') {
     if (kind === 'info') { setInfo(message); setError(null); setTimeout(() => setInfo(null), 4000); }
@@ -131,7 +132,7 @@ export function ProductsTab() {
                     <div>{p.name}</div>
                     <div className="text-text-tertiary text-xs">{p.sku}{p.brand ? ` · ${p.brand}` : ''}</div>
                   </TableCell>
-                  <TableCell className="px-3 py-2">{p.category}</TableCell>
+                  <TableCell className="px-3 py-2">{categoryLabel(p.category)}</TableCell>
                   <TableCell className="px-3 py-2 text-right font-mono tnum">{formatMoney(p.costPricePesewas)}</TableCell>
                   <TableCell className={`px-3 py-2 text-right font-mono tnum ${lowMargin ? 'text-danger' : ''}`}>{formatMoney(p.walkInPricePesewas)}</TableCell>
                   <TableCell className="px-3 py-2 text-right font-mono tnum">{formatMoney(p.wholesalePricePesewas)}</TableCell>
@@ -203,7 +204,27 @@ function ProductFormModal({ mode, existing, onCancel, onDone }: {
 }) {
   const [sku, setSku] = useState(existing?.sku ?? '');
   const [name, setName] = useState(existing?.name ?? '');
-  const [category, setCategory] = useState(existing?.category ?? 'BEER');
+  const categories = useBusiness((s) => s.categories);
+  const loadCategories = useBusiness((s) => s.loadCategories);
+  const emptiesInUse = useBusiness((s) => s.emptiesInUse);
+  const sellsDrinks = useBusiness((s) => s.profile === 'DRINKS');
+  // Hidden categories stay selectable on a product already filed under one.
+  const categoryOptions = categories.filter((c) => c.active || c.code === existing?.category);
+  const [category, setCategory] = useState(
+    existing?.category ?? categoryOptions.find((c) => c.code !== 'OTHER')?.code ?? 'OTHER',
+  );
+  const [newCategory, setNewCategory] = useState<string | null>(null);
+  // Empties stay visible on a product that already has a deposit, so switching
+  // them off never hides money that's recorded.
+  const showEmpties = emptiesInUse || (existing?.isReturnable ?? false);
+
+  async function addCategory(label: string) {
+    const r = await counter.categoryAdd({ label });
+    if (!r.success) { setModalError(r.error); return; }
+    await loadCategories();
+    setCategory(r.data.code);
+    setNewCategory(null);
+  }
   const [brand, setBrand] = useState(existing?.brand ?? '');
   const [barcode, setBarcode] = useState(existing?.barcode ?? '');
   const [packSize, setPackSize] = useState(String(existing?.packSizeUnits ?? 1));
@@ -394,27 +415,46 @@ function ProductFormModal({ mode, existing, onCancel, onDone }: {
           <Input value={name} onChange={(e) => setName(e.target.value)} />
         </Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Category">
-            <NativeSelect value={category} onChange={(e) => setCategory(e.target.value)}>
-              {CATEGORIES.map((c) => <option key={c}>{c}</option>)}
-            </NativeSelect>
-          </Field>
+          {newCategory === null ? (
+            <Field label="Category">
+              <NativeSelect value={category} onChange={(e) => {
+                if (e.target.value === NEW_CATEGORY) setNewCategory('');
+                else setCategory(e.target.value);
+              }}>
+                {categoryOptions.map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
+                {!categoryOptions.some((c) => c.code === category) && <option value={category}>{category}</option>}
+                <option value={NEW_CATEGORY}>New category…</option>
+              </NativeSelect>
+            </Field>
+          ) : (
+            <Field label="New category">
+              <div className="flex gap-2">
+                <Input autoFocus value={newCategory} onChange={(e) => setNewCategory(e.target.value)}
+                  placeholder="e.g. Roofing sheets" aria-label="New category name"
+                  onKeyDown={(e) => { if (e.key === 'Enter' && newCategory.trim()) void addCategory(newCategory); }} />
+                <Button variant="secondary" disabled={!newCategory.trim()} onClick={() => void addCategory(newCategory)}>Add</Button>
+                <Button variant="ghost" onClick={() => setNewCategory(null)}>Cancel</Button>
+              </div>
+            </Field>
+          )}
           <Field label="Brand (optional)">
             <Input value={brand} onChange={(e) => setBrand(e.target.value)} />
           </Field>
         </div>
-        <div className="grid grid-cols-3 gap-3">
+        <div className={sellsDrinks ? 'grid grid-cols-3 gap-3' : 'grid grid-cols-2 gap-3'}>
           <Field label="Pack size (units)">
             <Input value={packSize} onChange={(e) => setPackSize(e.target.value.replace(/\D/g, ''))} className="font-mono tnum" />
           </Field>
-          <Field label="Volume (ml)">
-            <Input value={volumeMl} onChange={(e) => setVolumeMl(e.target.value.replace(/\D/g, ''))} className="font-mono tnum" />
-          </Field>
+          {sellsDrinks && (
+            <Field label="Volume (ml)">
+              <Input value={volumeMl} onChange={(e) => setVolumeMl(e.target.value.replace(/\D/g, ''))} className="font-mono tnum" />
+            </Field>
+          )}
           <Field label="Shelf life (days)">
             <Input value={shelfLife} onChange={(e) => setShelfLife(e.target.value.replace(/\D/g, ''))} className="font-mono tnum" />
           </Field>
         </div>
-        <div className="grid grid-cols-2 gap-3 items-end">
+        {showEmpties && <div className="grid grid-cols-2 gap-3 items-end">
           <div className="flex flex-col gap-1.5 text-sm">
             <span className="text-text-secondary">Returnable bottle?</span>
             <label className="flex h-10 items-center gap-2 rounded border border-border-strong bg-bg-input px-3">
@@ -425,7 +465,7 @@ function ProductFormModal({ mode, existing, onCancel, onDone }: {
           <Field label="Deposit (cedis)">
             <Input value={deposit} onChange={(e) => setDeposit(e.target.value)} disabled={!isReturnable} className="font-mono tnum" />
           </Field>
-        </div>
+        </div>}
         <h4 className="eyebrow mt-2">Pricing (cedis)</h4>
         <div className="grid grid-cols-4 gap-3">
           <Field label="Cost">
@@ -479,10 +519,10 @@ function ProductFormModal({ mode, existing, onCancel, onDone }: {
               Sellable / purchasable units (optional)
             </h4>
             <div className="text-text-tertiary text-xs">
-              Add CRATE, PACK, BAG_50KG, etc. now and they'll be created with the
+              Add BOX, PACK, BAG_50KG, etc. now and they'll be created with the
               product in one go. You can also add them later from the edit view.
               Stock is tracked in the canonical single unit; each row's factor
-              multiplies in (e.g. CRATE × 12 means one crate = 12 bottles).
+              multiplies in (e.g. BOX × 12 means one box = 12 pieces).
             </div>
 
             {draftUnits.length > 0 && (
@@ -520,7 +560,7 @@ function ProductFormModal({ mode, existing, onCancel, onDone }: {
               <div className="grid grid-cols-[1fr_7rem_9rem] gap-3">
                 <Field label="Unit name">
                   <Input value={du_name} onChange={(e) => setDuName(e.target.value.toUpperCase())}
-                    placeholder="CRATE, PACK, BAG_50KG…" className="font-mono" />
+                    placeholder="BOX, PACK, BAG_50KG…" className="font-mono" />
                 </Field>
                 <Field label="Factor">
                   <Input value={du_factor} onChange={(e) => setDuFactor(e.target.value.replace(/\D/g, ''))}
@@ -858,9 +898,9 @@ function ProductUnitsEditor({
       <div>
         <h4 className="text-text-secondary uppercase tracking-wider text-xs mb-1.5">Sellable / purchasable units</h4>
         <div className="text-text-tertiary text-xs leading-relaxed">
-          Define every way you transact this product — BOTTLE, CRATE, BAG_50KG.
+          Define every way you transact this product — PIECE, BOX, BAG_50KG.
           Stock is tracked in the smallest unit; the factor is how many smallest-units
-          are in that row (CRATE × 12 = 12 bottles per crate). If you only ever sell
+          are in that row (BOX × 12 = 12 pieces per box). If you only ever sell
           whole boxes, just add ONE row with factor 1.
         </div>
       </div>
@@ -928,7 +968,7 @@ function ProductUnitsEditor({
           <div className="flex flex-col gap-1">
             <span className="text-text-secondary text-xs uppercase tracking-wider">Unit name</span>
             <Input className="font-mono" value={draftName} onChange={(e) => setDraftName(e.target.value.toUpperCase())}
-              placeholder="CRATE, PACK, BAG_50KG…" />
+              placeholder="BOX, PACK, BAG_50KG…" />
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-text-secondary text-xs uppercase tracking-wider">Factor</span>

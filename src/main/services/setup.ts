@@ -10,6 +10,8 @@ import { generateRecoveryCode } from './recovery.js';
 import { v4 as uuidv4 } from 'uuid';
 import { logAudit } from '../db/audit.js';
 import { normalizePhone } from '../../shared/lib/phone.js';
+import { isBusinessProfile } from '../../shared/lib/businessProfile.js';
+import { applyBusinessProfileAtSetup } from './businessProfile.js';
 import {
   PIN_BCRYPT_ROUNDS,
   DEFAULT_CONSUMPTION_ALLOWANCE_UNITS,
@@ -31,6 +33,8 @@ export interface CreateFirstOwnerInput {
   phone: string;
   pin: string;
   deviceId: string;
+  /** What the shop sells; picks starter categories and wording. Omitted = DRINKS. */
+  businessProfile?: string;
 }
 
 export function createFirstOwner(
@@ -46,6 +50,8 @@ export function createFirstOwner(
   const phone = normalizePhone(input.phone);
   if (!phone) throw new Error(`invalid phone '${input.phone}'`);
   if (!/^\d{4,6}$/.test(input.pin)) throw new Error('PIN must be 4–6 digits');
+  const businessProfile = input.businessProfile ?? 'DRINKS';
+  if (!isBusinessProfile(businessProfile)) throw new Error(`unknown business profile '${businessProfile}'`);
 
   const workerId = `w-${uuidv4()}`;
   const pinHash = bcrypt.hashSync(input.pin, PIN_BCRYPT_ROUNDS);
@@ -83,9 +89,12 @@ export function createFirstOwner(
         fullName: input.fullName.trim(),
         phone,
         role: 'OWNER',
+        businessProfile,
       },
       deviceId: input.deviceId,
     });
+
+    applyBusinessProfileAtSetup(db, businessProfile, SYSTEM_ID);
   });
 
   tx();

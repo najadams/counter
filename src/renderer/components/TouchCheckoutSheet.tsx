@@ -25,6 +25,7 @@ import { Sheet, SheetContent, SheetTitle } from './ui/sheet';
 import { FRIENDLY_UI_ENABLED } from '../../shared/lib/buildFlags';
 import { NumberPad } from './friendly/NumberPad';
 import { TaskIllustration } from './friendly/TaskIllustration';
+import { useVocabulary } from '../store/business';
 
 type Cust = ReturnType<typeof useCart.getState>['customer'];
 
@@ -54,6 +55,7 @@ interface TouchCheckoutSheetProps {
 type Tab = 'CASH' | 'MOMO' | 'CREDIT';
 
 export function TouchCheckoutSheet(p: TouchCheckoutSheetProps): JSX.Element {
+  const words = useVocabulary();
   const [tab, setTab] = useState<Tab>(p.initialMethod === 'CREDIT' ? 'CREDIT' : p.initialMethod?.startsWith('MOMO_') ? 'MOMO' : 'CASH');
   const [cashRaw, setCashRaw] = useState(formatMoney(p.totalPesewas)); // exact preset
   const [refRaw, setRefRaw] = useState(p.paymentReference);
@@ -280,7 +282,7 @@ export function TouchCheckoutSheet(p: TouchCheckoutSheetProps): JSX.Element {
 
           {tab === 'CREDIT' && (
             <>
-              <p className="text-xl">The customer takes the drinks now and pays later. Choose who.</p>
+              <p className="text-xl">The customer takes the {words.items} now and pays later. Choose who.</p>
               <label htmlFor="checkout-customer" className="sr-only">Find customer</label>
               <Input className="border-2 rounded-xl text-2xl h-auto py-3 px-4"
                 id="checkout-customer"

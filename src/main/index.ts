@@ -235,6 +235,7 @@ app.whenReady().then(async () => {
   handlers.registerReportsHandlers(registry, db, deviceId);
   handlers.registerCatalogTransferHandlers(registry, db, app, deviceId);
   handlers.registerReceiptConfigHandlers(registry, db, deviceId);
+  handlers.registerBusinessHandlers(registry, db, deviceId);
   handlers.registerSyncHandlers(registry, db, deviceId);
   handlers.registerPendingOrdersHandlers(registry, db, deviceId);
   handlers.registerIntelligenceHandlers(registry, db, deviceId);

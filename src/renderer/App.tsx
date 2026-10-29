@@ -15,6 +15,7 @@ import LoginScreen from './screens/LoginScreen';
 import OpenShiftScreen from './screens/OpenShiftScreen';
 import HomeScreen from './screens/HomeScreen';
 import SetupScreen from './screens/SetupScreen';
+import { useBusiness } from './store/business';
 import ActivationScreen from './screens/ActivationScreen';
 
 export default function App() {
@@ -26,6 +27,13 @@ export default function App() {
   const [activated, setActivated] = useState<boolean | null>(null);
   const [reactivating, setReactivating] = useState(false);
   const [bootError, setBootError] = useState<string | null>(null);
+  const loadBusiness = useBusiness((s) => s.load);
+
+  // What the shop sells sets the wording on every screen; read it per sign-in
+  // so a change in Settings reaches the next worker without a restart.
+  useEffect(() => {
+    if (workerId) void loadBusiness();
+  }, [workerId, loadBusiness]);
 
   useEffect(() => {
     let cancelled = false;

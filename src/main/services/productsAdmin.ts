@@ -1,18 +1,16 @@
 // Products administration. OWNER/FOUNDER only — pricing decisions live here
 // and they're high-leverage. The schema's CHECK constraints already enforce
-// non-negative prices and a closed category vocabulary; this layer adds the
-// before/after diff for the audit log.
+// non-negative prices; this layer checks the category is one the shop has
+// (product_categories, migration 0057) and adds the before/after diff for the
+// audit log.
 
 import type { Database as DB } from 'better-sqlite3';
 import { v4 as uuidv4 } from 'uuid';
 import { logAudit } from '../db/audit.js';
+import { isKnownProductCategory } from './businessProfile.js';
 
 const ADMIN_ROLES = new Set(['OWNER', 'FOUNDER']);
 
-const VALID_CATEGORIES = new Set([
-  'BEER', 'WINE', 'SPIRITS', 'SOFT_DRINK', 'WATER', 'JUICE',
-  'ENERGY_DRINK', 'MIXER', 'NON_BEVERAGE', 'OTHER',
-]);
 
 function requireAdmin(db: DB, actorId: string): void {
   const w = db
@@ -79,7 +77,7 @@ export function addProduct(db: DB, input: AddProductInput): AddProductResult {
   requireAdmin(db, input.actorWorkerId);
   if (!input.sku.trim()) throw new Error('sku required');
   if (!input.name.trim()) throw new Error('name required');
-  if (!VALID_CATEGORIES.has(input.category)) {
+  if (!isKnownProductCategory(db, input.category)) {
     throw new Error(`invalid category '${input.category}'`);
   }
   for (const [key, value] of Object.entries({
@@ -304,7 +302,8 @@ export function updateProduct(db: DB, input: UpdateProductInput): { warnings: st
   if (!existing) throw new Error(`product ${input.productId} not found`);
   if (existing['active'] === 0) throw new Error('product is inactive — reactivate first');
 
-  if (input.fields.category && !VALID_CATEGORIES.has(input.fields.category)) {
+  if (input.fields.category && input.fields.category !== existing['category']
+      && !isKnownProductCategory(db, input.fields.category)) {
     throw new Error(`invalid category '${input.fields.category}'`);
   }
 
