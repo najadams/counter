@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { counter } from '../../lib/ipc';
+import { useBankInUse } from '../../store/paymentSettings';
 import { formatMoney, formatMoneyWithCurrency, parseCedisToPesewas } from '../../../shared/lib/money';
 import type { ReportsTaxesResponse, ReportsTaxPaymentRecordRequest } from '../../../shared/types/ipc';
 import { DateRangePicker, defaultDateRange, type DateRange } from '../../components/DateRangePicker';
@@ -34,6 +35,7 @@ export function TaxesTab({ reportAccessToken }: { reportAccessToken: string }) {
   const [paymentNotes, setPaymentNotes] = useState('');
   const [paymentPin, setPaymentPin] = useState('');
   const [savingPayment, setSavingPayment] = useState(false);
+  const bankInUse = useBankInUse();
 
   async function load() {
     setLoading(true);
@@ -49,7 +51,7 @@ export function TaxesTab({ reportAccessToken }: { reportAccessToken: string }) {
   function openPaymentForm() {
     const balance = Math.max(0, data?.taxBalancePesewas ?? data?.netVatPayablePesewas ?? 0);
     setPaymentAmount(formatMoney(balance));
-    setPaymentMethod('BANK_TRANSFER');
+    setPaymentMethod(bankInUse ? 'BANK_TRANSFER' : 'CASH');
     setPaymentReference('');
     setPaymentDate(todayInputDate());
     setPaymentNotes('');
@@ -150,7 +152,7 @@ export function TaxesTab({ reportAccessToken }: { reportAccessToken: string }) {
                   <NativeSelect
                     value={paymentMethod}
                     onChange={(e) => setPaymentMethod(e.target.value as TaxPaymentMethod)}>
-                    {PAYMENT_METHODS.map((method) => (
+                    {PAYMENT_METHODS.filter((method) => bankInUse || method.code !== 'BANK_TRANSFER').map((method) => (
                       <option key={method.code} value={method.code}>{method.label}</option>
                     ))}
                   </NativeSelect>

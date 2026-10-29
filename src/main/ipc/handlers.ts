@@ -1384,10 +1384,13 @@ export function registerSession9Handlers(
 
 import { assertSalesAllowed } from '../services/activation.js';
 import { createFirstOwner, needsOwnerSetup } from '../services/setup.js';
+import { isLedgerActive, startBooksForNewShop, tradingHistory } from '../services/ledger.js';
 import {
   IPC_CHANNELS_S11,
+  type SetupBooksOptionsResponse,
   type SetupCreateOwnerRequest, type SetupCreateOwnerResponse,
   type SetupNeedsOwnerResponse,
+  type SetupStartBooksRequest, type SetupStartBooksResponse,
 } from '../../shared/types/ipc.js';
 
 export function registerSession11Handlers(
@@ -1412,6 +1415,62 @@ export function registerSession11Handlers(
         return { workerId, fullName: req.fullName.trim(), role: 'OWNER', recoveryCode };
       },
       IPC_CHANNELS_S11.SETUP_CREATE_OWNER,
+    ),
+  );
+
+  // Straight after the first owner exists: start the books with whatever
+  // money the shop opens with, so its reports are real from the first sale.
+  ipcMain.handle(IPC_CHANNELS_S11.SETUP_BOOKS_OPTIONS,
+    wrap<void, SetupBooksOptionsResponse>(
+      () => {
+        const w = requireWorker();
+        if (w.role !== 'OWNER' && w.role !== 'FOUNDER') {
+          throw new Error('Only OWNER or FOUNDER can start the books.');
+        }
+        const history = tradingHistory(db);
+        const reason = isLedgerActive(db)
+          ? 'The books are already running.'
+          : history.length > 0
+            ? `This shop already has ${history.join(', ')}. Start the books from Reports → Owner Summary.`
+            : null;
+        return {
+          canStart: reason == null,
+          reason,
+          bankInUse: getPaymentSettings(db).bankInUse,
+          accounts: listFinancialAccounts(db).map((account) => ({
+            id: account.id, name: account.name, kind: account.kind,
+          })),
+        };
+      },
+      IPC_CHANNELS_S11.SETUP_BOOKS_OPTIONS,
+    ),
+  );
+
+  ipcMain.handle(IPC_CHANNELS_S11.SETUP_START_BOOKS,
+    wrap<SetupStartBooksRequest, SetupStartBooksResponse>(
+      (req) => {
+        const w = requireWorker();
+        const started = startBooksForNewShop(db, {
+          startingMoney: req.startingMoney,
+          actorWorkerId: w.workerId,
+          deviceId,
+        });
+        const before = getPaymentSettings(db);
+        if (before.bankInUse !== req.bankInUse) {
+          const after = setPaymentSettings(db, { bankInUse: req.bankInUse });
+          logAudit(db, {
+            workerId: w.workerId,
+            action: 'PAYMENT_SETTINGS_CHANGED',
+            entityType: 'device_config',
+            entityId: 'payments',
+            beforeValue: before,
+            afterValue: after,
+            deviceId,
+          });
+        }
+        return { cutoverDate: started.cutoverDate, openingEquityPesewas: started.openingEquityPesewas };
+      },
+      IPC_CHANNELS_S11.SETUP_START_BOOKS,
     ),
   );
 }
@@ -2754,6 +2813,7 @@ import {
   getManagementCashflow,
   getManagementDrilldown,
   runDownsideScenario,
+  suggestedOpeningBalances,
 } from '../services/managementReports.js';
 import {
   lockReportAccess,
@@ -3160,11 +3220,12 @@ export function registerReportsHandlers(
       (req) => {
         const w = requireWorker();
         authorizeRead(w.workerId, req.reportAccessToken, 'OWNER');
-        return previewFinancialCutover(db, {
+        const preview = previewFinancialCutover(db, {
           locationId: req.locationId,
           cutoverDate: req.cutoverDate,
           balances: req.balances,
         });
+        return { ...preview, suggestedBalances: suggestedOpeningBalances(db, preview) };
       },
       IPC_CHANNELS_REPORTS.MANAGEMENT_CUTOVER_PREVIEW,
     ),
@@ -3764,6 +3825,57 @@ export function registerReceiptConfigHandlers(
         return { ok: false, printed: false, error: `${result.reason}: ${result.message}` };
       },
       IPC_CHANNELS_RECEIPT.RECEIPT_TEST_PRINTER,
+    ),
+  );
+}
+
+// --- Payment settings handlers -------------------------------------------
+
+import {
+  IPC_CHANNELS_PAYMENT_SETTINGS,
+  type PaymentSettingsResponse, type PaymentSettingsSetRequest,
+} from '../../shared/types/ipc.js';
+import { getPaymentSettings, setPaymentSettings } from '../services/paymentSettings.js';
+
+export function registerPaymentSettingsHandlers(
+  ipcMain: IpcRegistrar,
+  db: import('better-sqlite3').Database,
+  deviceId: string,
+): void {
+  // Read — any signed-in worker: checkout needs to know whether to offer
+  // Bank transfer.
+  ipcMain.handle(IPC_CHANNELS_PAYMENT_SETTINGS.PAYMENT_SETTINGS_GET,
+    wrap<void, PaymentSettingsResponse>(
+      () => {
+        requireWorker();
+        return getPaymentSettings(db);
+      },
+      IPC_CHANNELS_PAYMENT_SETTINGS.PAYMENT_SETTINGS_GET,
+    ),
+  );
+
+  // Write — OWNER/FOUNDER only. How the shop banks is the owner's call.
+  ipcMain.handle(IPC_CHANNELS_PAYMENT_SETTINGS.PAYMENT_SETTINGS_SET,
+    wrap<PaymentSettingsSetRequest, PaymentSettingsResponse>(
+      (req) => {
+        const w = requireWorker();
+        if (w.role !== 'OWNER' && w.role !== 'FOUNDER') {
+          throw new Error('Only OWNER or FOUNDER can change payment settings.');
+        }
+        const before = getPaymentSettings(db);
+        const after = setPaymentSettings(db, { bankInUse: req.bankInUse });
+        logAudit(db, {
+          workerId: w.workerId,
+          action: 'PAYMENT_SETTINGS_CHANGED',
+          entityType: 'device_config',
+          entityId: 'payments',
+          beforeValue: before,
+          afterValue: after,
+          deviceId,
+        });
+        return after;
+      },
+      IPC_CHANNELS_PAYMENT_SETTINGS.PAYMENT_SETTINGS_SET,
     ),
   );
 }

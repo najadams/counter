@@ -1371,7 +1371,26 @@ export interface ProductUnitIdRequest { unitId: string }
 export const IPC_CHANNELS_S11 = {
   SETUP_NEEDS_OWNER: 'setup:needs-owner',
   SETUP_CREATE_OWNER: 'setup:create-owner',
+  SETUP_BOOKS_OPTIONS: 'setup:books-options',
+  SETUP_START_BOOKS: 'setup:start-books',
 } as const;
+
+/** What first-run setup needs to offer "Start the books". OWNER/FOUNDER only. */
+export interface SetupBooksOptionsResponse {
+  /** False when the books already run, or the shop already has records to reconcile. */
+  canStart: boolean;
+  reason: string | null;
+  bankInUse: boolean;
+  accounts: Array<{ id: string; name: string; kind: 'TILL' | 'SAFE' | 'BANK' | 'MOMO' | 'OTHER_CASH' }>;
+}
+export interface SetupStartBooksRequest {
+  bankInUse: boolean;
+  startingMoney: Array<{ financialAccountId: string; amountPesewas: number }>;
+}
+export interface SetupStartBooksResponse {
+  cutoverDate: string;
+  openingEquityPesewas: number;
+}
 
 export interface SetupNeedsOwnerResponse { needsOwner: boolean }
 
@@ -2056,6 +2075,20 @@ export type ReceiptSetConfigRequest = ReceiptConfigResponse;
 export interface ReceiptTestPrinterRequest {
   station: 'counter' | 'door';
 }
+
+// --- Payment settings (which ways of moving money the shop uses) ---------
+
+export const IPC_CHANNELS_PAYMENT_SETTINGS = {
+  PAYMENT_SETTINGS_GET: 'payment-settings:get',
+  PAYMENT_SETTINGS_SET: 'payment-settings:set',
+} as const;
+
+export interface PaymentSettingsResponse {
+  /** False hides Bank transfer as a payment choice and empty bank accounts in owner reports. */
+  bankInUse: boolean;
+}
+
+export type PaymentSettingsSetRequest = PaymentSettingsResponse;
 
 export interface ReceiptTestPrinterResponse {
   ok: boolean;
@@ -3140,10 +3173,26 @@ export interface ManagementCutoverPreviewResponse {
     code: string; name: string; accountClass: string; normalBalance: 'DEBIT' | 'CREDIT';
   }>;
   issues: ManagementDataQuality['issues'];
+  /** The day that must be sealed before this start date. */
+  priorDate: string;
+  /** False for a shop with no sales, stock, shifts or balances yet. */
+  hasTradingHistory: boolean;
+  /** Opening figures Counter can read from its own records. */
+  suggestedBalances: ManagementCutoverSuggestion[];
+}
+export interface ManagementCutoverSuggestion {
+  ledgerAccountId: string;
+  code: string;
+  label: string;
+  amountPesewas: number;
+  /** True when the figure must equal Counter's own record and can't be edited. */
+  locked: boolean;
+  note: string;
 }
 export interface ManagementCutoverActivateResponse {
   cutoverId: string;
-  openingJournalEntryId: string;
+  /** Null when the shop started with no balances at all. */
+  openingJournalEntryId: string | null;
   openingEquityPesewas: number;
 }
 export interface ManagementShadowRequest extends ReportReadAccess { locationId?: string }
@@ -3196,6 +3245,17 @@ export interface ManagementPositionResponse {
   equity: { totalPesewas: number; lines: ManagementLine[] };
   workingCapitalPesewas: number; currentRatioBps: number | null;
   equationDifferencePesewas: number; integrityOk: boolean;
+  /** Kept profit and free cash. Null before the ledger cutover. */
+  keptAndFree: ManagementKeptAndFree | null;
+}
+export interface ManagementKeptAndFree {
+  cutoverDate: string;
+  profitSinceCutoverPesewas: number; ownerDrawingsPesewas: number; profitKeptPesewas: number;
+  cashOnHandPesewas: number; notCountedRecentlyPesewas: number; cashAccounts: ManagementLine[];
+  overdueBillsPesewas: number; dueNext7DaysPesewas: number; dueNext30DaysPesewas: number;
+  undatedBillsPesewas: number; taxOwedPesewas: number;
+  freeCashAfter7DaysPesewas: number; freeCashAfter30DaysPesewas: number;
+  bankInUse: boolean;
 }
 export interface ManagementCashflowResponse {
   generatedAt: string; fromDate: string; toDate: string; locationId: string;

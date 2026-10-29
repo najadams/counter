@@ -283,6 +283,10 @@ export function createCounterApi(invoke: Invoke) {
       invoke<ipc.SetupNeedsOwnerResponse>(ipc.IPC_CHANNELS_S11.SETUP_NEEDS_OWNER, {}),
     setupCreateOwner: (req: ipc.SetupCreateOwnerRequest) =>
       invoke<ipc.SetupCreateOwnerResponse>(ipc.IPC_CHANNELS_S11.SETUP_CREATE_OWNER, req),
+    setupBooksOptions: () =>
+      invoke<ipc.SetupBooksOptionsResponse>(ipc.IPC_CHANNELS_S11.SETUP_BOOKS_OPTIONS, {}),
+    setupStartBooks: (req: ipc.SetupStartBooksRequest) =>
+      invoke<ipc.SetupStartBooksResponse>(ipc.IPC_CHANNELS_S11.SETUP_START_BOOKS, req),
 
     // --- Session 11: suppliers admin ---
     listSuppliersForAdmin: () =>
@@ -577,6 +581,12 @@ export function createCounterApi(invoke: Invoke) {
       invoke<ipc.ReceiptConfigResponse>(ipc.IPC_CHANNELS_RECEIPT.RECEIPT_SET_CONFIG, req),
     receiptTestPrinter: (req: ipc.ReceiptTestPrinterRequest) =>
       invoke<ipc.ReceiptTestPrinterResponse>(ipc.IPC_CHANNELS_RECEIPT.RECEIPT_TEST_PRINTER, req),
+
+    // --- Payment settings (does the shop use a bank?) ---
+    paymentSettingsGet: () =>
+      invoke<ipc.PaymentSettingsResponse>(ipc.IPC_CHANNELS_PAYMENT_SETTINGS.PAYMENT_SETTINGS_GET, {}),
+    paymentSettingsSet: (req: ipc.PaymentSettingsSetRequest) =>
+      invoke<ipc.PaymentSettingsResponse>(ipc.IPC_CHANNELS_PAYMENT_SETTINGS.PAYMENT_SETTINGS_SET, req),
 
     // --- Phase 4 workstream C: WhatsApp pending orders (accept/reject) ---
     pendingOrdersList: () =>

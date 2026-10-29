@@ -9,6 +9,8 @@ import type { Database as DB } from 'better-sqlite3';
 import { DEFAULT_LOCATION_ID } from '../../shared/lib/constants.js';
 import { creditPrincipalExpr } from './customerCredit.js';
 import {
+  LEDGER_CODES,
+  type CutoverPreview,
   getFinancialDataQuality,
   listFinancialAccounts,
   saleLineNetCostSql,
@@ -16,6 +18,9 @@ import {
   type FinancialAccountRow,
 } from './ledger.js';
 import { logAudit } from '../db/audit.js';
+import { getPaymentSettings } from './paymentSettings.js';
+import { getTaxBalanceAsOf } from './reports.js';
+import { VAT_ENABLED } from '../../shared/lib/vat.js';
 
 export type ReportBasis = 'ACCRUAL' | 'CASH';
 
@@ -469,6 +474,172 @@ export interface ManagementBalanceSheetResult {
   currentRatioBps: number | null;
   equationDifferencePesewas: number;
   integrityOk: boolean;
+  /** Kept profit and free cash. Null before the ledger cutover. */
+  keptAndFree: KeptAndFree | null;
+}
+
+/**
+ * The two owner questions the statements answer only in pieces: how much of
+ * the profit has the business kept, and how much of the money on hand is free
+ * to spend once the bills that are coming due are paid. Free cash is cautious:
+ * overdue bills, bills with no due date and tax collected but not yet paid all
+ * count against it.
+ */
+export interface CutoverSuggestion {
+  ledgerAccountId: string;
+  code: string;
+  label: string;
+  amountPesewas: number;
+  /** True when the figure must equal Counter's own record and can't be edited. */
+  locked: boolean;
+  note: string;
+}
+
+/**
+ * Opening figures for "Start the books" that Counter can read from its own
+ * records, as they stood when the start date began. Stock must equal the
+ * stock records, so it is locked. The rest are filled in for the owner to
+ * check: left at zero, customer and supplier debts would go below zero the
+ * first time an old one was paid.
+ */
+export function suggestedOpeningBalances(db: DB, preview: CutoverPreview): CutoverSuggestion[] {
+  const { locationId, cutoverDate, priorDate } = preview;
+  const boundary = `${cutoverDate}T00:00:00.000Z`;
+  const accountId = (code: string) => (db.prepare(
+    'SELECT id FROM ledger_accounts WHERE location_id = ? AND code = ? AND active = 1',
+  ).get(locationId, code) as { id: string } | undefined)?.id;
+  const receivables = (db.prepare(
+    `SELECT COALESCE(SUM(outstanding), 0) AS total FROM (
+       SELECT MAX(0, ${creditPrincipalExpr('s')} -
+         COALESCE((SELECT SUM(amount_pesewas) FROM customer_payment_allocations
+                   WHERE sale_id = s.id AND created_at < ?), 0)) AS outstanding
+         FROM sales s WHERE s.location_id = ? AND s.is_credit = 1
+           AND s.voided = 0 AND s.created_at < ?
+     )`,
+  ).get(boundary, locationId, boundary) as { total: number }).total;
+  const supplierPayables = (db.prepare(
+    `SELECT COALESCE(SUM(MAX(0, si.total_pesewas - COALESCE((
+       SELECT SUM(a.amount_pesewas) FROM supplier_invoice_payment_allocations a
+        WHERE a.supplier_invoice_id = si.id AND a.created_at < ?
+     ), 0))), 0) AS total
+       FROM supplier_invoices si
+      WHERE si.status != 'VOID' AND si.invoice_date < ?`,
+  ).get(boundary, cutoverDate) as { total: number }).total;
+  const customerCredits = Math.abs((db.prepare(
+    `SELECT COALESCE(SUM(current_balance_pesewas), 0) AS total
+       FROM customers WHERE deleted_at IS NULL AND current_balance_pesewas < 0`,
+  ).get() as { total: number }).total);
+  const taxOwed = VAT_ENABLED ? Math.max(0, getTaxBalanceAsOf(db, locationId, boundary)) : 0;
+
+  const out: CutoverSuggestion[] = [];
+  const add = (code: string, label: string, amountPesewas: number, locked: boolean, note: string, always: boolean) => {
+    const id = accountId(code);
+    if (id && (always || amountPesewas > 0)) {
+      out.push({ ledgerAccountId: id, code, label, amountPesewas, locked, note });
+    }
+  };
+  add(LEDGER_CODES.INVENTORY, 'Stock at cost', preview.derivedInventoryPesewas, true,
+    `From the stock records up to ${priorDate}. It has to match them, so it can't be changed here.`, true);
+  add(LEDGER_CODES.AR, 'Customers owe the shop', receivables, false,
+    `Unpaid credit sales before ${cutoverDate}.`, true);
+  add(LEDGER_CODES.AP_TRADE, 'The shop owes suppliers', supplierPayables, false,
+    `Unpaid supplier invoices before ${cutoverDate}.`, true);
+  add(LEDGER_CODES.CUSTOMER_CREDITS, 'Customer credit the shop holds', customerCredits, false,
+    'Customers who paid ahead, as recorded now.', false);
+  add(LEDGER_CODES.TAX_PAYABLE, 'Tax collected, not yet paid', taxOwed, false,
+    `VAT, NHIL and GETFund before ${cutoverDate}, less what was paid.`, false);
+  return out;
+}
+
+export interface KeptAndFree {
+  cutoverDate: string;
+  profitSinceCutoverPesewas: number;
+  ownerDrawingsPesewas: number;
+  profitKeptPesewas: number;
+  cashOnHandPesewas: number;
+  notCountedRecentlyPesewas: number;
+  cashAccounts: ManagementLine[];
+  overdueBillsPesewas: number;
+  dueNext7DaysPesewas: number;
+  dueNext30DaysPesewas: number;
+  undatedBillsPesewas: number;
+  taxOwedPesewas: number;
+  freeCashAfter7DaysPesewas: number;
+  freeCashAfter30DaysPesewas: number;
+  bankInUse: boolean;
+}
+
+function buildKeptAndFree(
+  db: DB,
+  locationId: string,
+  cutoverDate: string,
+  asOfDate: string,
+  rows: LedgerAmountRow[],
+  currentEarnings: number,
+): KeptAndFree {
+  const amountOf = (code: string) => rows.find((row) => row.code === code)?.amountPesewas ?? 0;
+  const profitSinceCutover = currentEarnings + amountOf(LEDGER_CODES.RETAINED_EARNINGS);
+  // Owner drawings is contra-equity, so its row arrives already negated.
+  const ownerDrawings = -amountOf(LEDGER_CODES.OWNER_DRAWINGS);
+
+  const { bankInUse } = getPaymentSettings(db);
+  const cashRows = rows.filter((row) => row.accountSubtype === 'CASH');
+  const cashByCode = new Map(cashRows.map((row) => [row.code, row.amountPesewas]));
+  const cashOnHand = cashRows.reduce((sum, row) => sum + row.amountPesewas, 0);
+  const accounts = listFinancialAccounts(db, locationId, true);
+  const listedCodes = new Set<string>();
+  const cashAccounts: ManagementLine[] = [];
+  let notCounted = 0;
+  for (const account of accounts) {
+    if (!cashByCode.has(account.ledgerCode)) continue;
+    const amount = cashByCode.get(account.ledgerCode)!;
+    listedCodes.add(account.ledgerCode);
+    if (amount === 0 && (!account.active || (!bankInUse && account.kind === 'BANK'))) continue;
+    // An empty account has nothing to count, so it is never flagged.
+    const counted = amount === 0 || isRecentlyCounted(account, asOfDate);
+    if (!counted) notCounted += Math.max(0, amount);
+    cashAccounts.push({
+      code: account.ledgerCode,
+      label: account.name,
+      amountPesewas: amount,
+      note: counted ? null : 'Not counted recently',
+    });
+  }
+  for (const row of cashRows) {
+    if (listedCodes.has(row.code) || row.amountPesewas === 0) continue;
+    notCounted += Math.max(0, row.amountPesewas);
+    cashAccounts.push({
+      code: row.code, label: row.name, amountPesewas: row.amountPesewas, note: 'Not counted recently',
+    });
+  }
+
+  const bills = openObligationRows(db, locationId, asOfDate);
+  const sumBills = (keep: (row: ObligationReportRow) => boolean) =>
+    bills.filter(keep).reduce((sum, row) => sum + row.outstandingPesewas, 0);
+  const overdue = sumBills((row) => row.bucket === 'OVERDUE');
+  const due7 = sumBills((row) => row.daysUntilDue != null && row.daysUntilDue >= 0 && row.daysUntilDue <= 7);
+  const due30 = sumBills((row) => row.daysUntilDue != null && row.daysUntilDue >= 0 && row.daysUntilDue <= 30);
+  const undated = sumBills((row) => row.bucket === 'NO_DUE_DATE');
+  const taxOwed = Math.max(0, amountOf(LEDGER_CODES.TAX_PAYABLE));
+  const alwaysOwed = overdue + undated + taxOwed;
+
+  return {
+    cutoverDate,
+    profitSinceCutoverPesewas: profitSinceCutover,
+    ownerDrawingsPesewas: ownerDrawings,
+    profitKeptPesewas: profitSinceCutover - ownerDrawings,
+    cashOnHandPesewas: cashOnHand,
+    notCountedRecentlyPesewas: notCounted,
+    cashAccounts,
+    overdueBillsPesewas: overdue,
+    dueNext7DaysPesewas: due7,
+    dueNext30DaysPesewas: due30,
+    undatedBillsPesewas: undated,
+    taxOwedPesewas: taxOwed,
+    freeCashAfter7DaysPesewas: cashOnHand - alwaysOwed - due7,
+    freeCashAfter30DaysPesewas: cashOnHand - alwaysOwed - due30,
+    bankInUse,
+  };
 }
 
 function ledgerBalancesAsOf(db: DB, locationId: string, fromDate: string, asOfDate: string): LedgerAmountRow[] {
@@ -563,6 +734,7 @@ export function getManagementBalanceSheet(
       currentRatioBps: payables > 0 ? Math.round((assets * 10_000) / payables) : null,
       equationDifferencePesewas: 0,
       integrityOk: true,
+      keptAndFree: null,
     };
   }
 
@@ -633,6 +805,9 @@ export function getManagementBalanceSheet(
       : null,
     equationDifferencePesewas: difference,
     integrityOk: difference === 0,
+    keptAndFree: buildKeptAndFree(
+      db, locationId, cutover.cutoverDate, input.asOfDate, rows, currentEarnings,
+    ),
   };
 }
 
@@ -835,6 +1010,59 @@ export function getDebtMaturity(
     : requireManagementAccess(db, input, 'DEBT_MATURITY', {
       asOfDate: input.asOfDate,
     });
+  const rows = openObligationRows(db, locationId, input.asOfDate);
+  const bucketOrder: MaturityBucket[] = [
+    'OVERDUE', 'DUE_0_7', 'DUE_8_30', 'DUE_31_60', 'DUE_61_90', 'DUE_90_PLUS', 'NO_DUE_DATE',
+  ];
+  const buckets = bucketOrder.map((bucket) => {
+    const matching = rows.filter((row) => row.bucket === bucket);
+    return {
+      bucket,
+      amountPesewas: matching.reduce((sum, row) => sum + row.outstandingPesewas, 0),
+      count: matching.length,
+    };
+  });
+  const total = rows.reduce((sum, row) => sum + row.outstandingPesewas, 0);
+  const overdue = rows.filter((row) => row.bucket === 'OVERDUE')
+    .reduce((sum, row) => sum + row.outstandingPesewas, 0);
+  const due7 = rows.filter((row) => row.daysUntilDue != null && row.daysUntilDue >= 0 && row.daysUntilDue <= 7)
+    .reduce((sum, row) => sum + row.outstandingPesewas, 0);
+  const due30 = rows.filter((row) => row.daysUntilDue != null && row.daysUntilDue >= 0 && row.daysUntilDue <= 30)
+    .reduce((sum, row) => sum + row.outstandingPesewas, 0);
+  const reconciledCash = listFinancialAccounts(db, locationId)
+    .filter((account) => isRecentlyCounted(account, input.asOfDate))
+    .reduce((sum, account) => sum + Math.max(0, account.balancePesewas), 0);
+  return {
+    generatedAt: new Date().toISOString(),
+    asOfDate: input.asOfDate,
+    locationId,
+    dataQuality: getFinancialDataQuality(db, {
+      locationId, asOfDate: input.asOfDate, reportKind: 'OBLIGATIONS',
+    }),
+    rows,
+    buckets,
+    totalOutstandingPesewas: total,
+    overduePesewas: overdue,
+    dueNext7DaysPesewas: due7,
+    dueNext30DaysPesewas: due30,
+    availableReconciledCashPesewas: reconciledCash,
+    cashCoverageBps: due30 > 0 ? Math.round((reconciledCash * 10_000) / due30) : null,
+    projectedCoverageBps: due30 > 0 && input.projectedCashPesewas != null
+      ? Math.round((input.projectedCashPesewas * 10_000) / due30)
+      : null,
+  };
+}
+
+/** A till must have been counted within a day, any other account within a week. */
+function isRecentlyCounted(account: FinancialAccountRow, asOfDate: string): boolean {
+  if (!account.lastReconciledAt) return false;
+  const nowMs = new Date(`${asOfDate}T23:59:59.999Z`).getTime();
+  const age = Math.floor((nowMs - new Date(account.lastReconciledAt).getTime()) / 86_400_000);
+  return age <= (account.kind === 'TILL' ? 1 : 7);
+}
+
+/** Every bill still owed (obligations plus legacy supplier invoices), bucketed by due date. */
+function openObligationRows(db: DB, locationId: string, asOfDate: string): ObligationReportRow[] {
   const unified = db.prepare(
     `SELECT o.id, o.obligation_type AS obligationType, o.creditor_name AS creditorName,
             o.source_type AS sourceType, o.source_id AS sourceId,
@@ -861,9 +1089,9 @@ export function getDebtMaturity(
              AND o.source_id = si.id
         )`,
   ).all(locationId) as Array<Omit<ObligationReportRow, 'outstandingPesewas' | 'disputed' | 'bucket' | 'daysUntilDue'>>;
-  const rows: ObligationReportRow[] = [...unified, ...legacySupplier]
-    .map((row) => {
-      const due = maturityBucket(input.asOfDate, row.dueDate);
+  return [...unified, ...legacySupplier]
+    .map((row): ObligationReportRow => {
+      const due = maturityBucket(asOfDate, row.dueDate);
       return {
         ...row,
         outstandingPesewas: Math.max(0, row.principalPesewas + row.interestPesewas - row.paidPesewas),
@@ -873,51 +1101,6 @@ export function getDebtMaturity(
     })
     .filter((row) => row.outstandingPesewas > 0)
     .sort((a, b) => (a.dueDate ?? '9999-12-31').localeCompare(b.dueDate ?? '9999-12-31'));
-  const bucketOrder: MaturityBucket[] = [
-    'OVERDUE', 'DUE_0_7', 'DUE_8_30', 'DUE_31_60', 'DUE_61_90', 'DUE_90_PLUS', 'NO_DUE_DATE',
-  ];
-  const buckets = bucketOrder.map((bucket) => {
-    const matching = rows.filter((row) => row.bucket === bucket);
-    return {
-      bucket,
-      amountPesewas: matching.reduce((sum, row) => sum + row.outstandingPesewas, 0),
-      count: matching.length,
-    };
-  });
-  const total = rows.reduce((sum, row) => sum + row.outstandingPesewas, 0);
-  const overdue = rows.filter((row) => row.bucket === 'OVERDUE')
-    .reduce((sum, row) => sum + row.outstandingPesewas, 0);
-  const due7 = rows.filter((row) => row.daysUntilDue != null && row.daysUntilDue >= 0 && row.daysUntilDue <= 7)
-    .reduce((sum, row) => sum + row.outstandingPesewas, 0);
-  const due30 = rows.filter((row) => row.daysUntilDue != null && row.daysUntilDue >= 0 && row.daysUntilDue <= 30)
-    .reduce((sum, row) => sum + row.outstandingPesewas, 0);
-  const nowMs = new Date(`${input.asOfDate}T23:59:59.999Z`).getTime();
-  const reconciledCash = listFinancialAccounts(db, locationId)
-    .filter((account) => {
-      if (!account.lastReconciledAt) return false;
-      const age = Math.floor((nowMs - new Date(account.lastReconciledAt).getTime()) / 86_400_000);
-      return age <= (account.kind === 'TILL' ? 1 : 7);
-    })
-    .reduce((sum, account) => sum + Math.max(0, account.balancePesewas), 0);
-  return {
-    generatedAt: new Date().toISOString(),
-    asOfDate: input.asOfDate,
-    locationId,
-    dataQuality: getFinancialDataQuality(db, {
-      locationId, asOfDate: input.asOfDate, reportKind: 'OBLIGATIONS',
-    }),
-    rows,
-    buckets,
-    totalOutstandingPesewas: total,
-    overduePesewas: overdue,
-    dueNext7DaysPesewas: due7,
-    dueNext30DaysPesewas: due30,
-    availableReconciledCashPesewas: reconciledCash,
-    cashCoverageBps: due30 > 0 ? Math.round((reconciledCash * 10_000) / due30) : null,
-    projectedCoverageBps: due30 > 0 && input.projectedCashPesewas != null
-      ? Math.round((input.projectedCashPesewas * 10_000) / due30)
-      : null,
-  };
 }
 
 type ConcentrationDimension = 'CUSTOMER' | 'PRODUCT' | 'SUPPLIER' | 'CATEGORY' | 'PAYMENT_RAIL';

@@ -12,6 +12,7 @@ import { getUnit } from './productUnits.js';
 import { assertNotSealed } from './periods.js';
 import {
   isLedgerPostingEnabled,
+  postOpeningStockIfActive,
   postSupplierInvoiceIfActive,
   recordInventoryValuationMovement,
 } from './ledger.js';
@@ -424,6 +425,14 @@ export function receiveStock(
         recordInventoryValuationMovement(db, {
           stockMovementId: movementId,
           exactInboundValuePesewas: landedByMovement.get(movementId),
+          actorWorkerId: input.workerId,
+          deviceId: input.deviceId,
+        });
+      }
+      if (input.isOpeningStock) {
+        postOpeningStockIfActive(db, {
+          locationId: input.locationId,
+          stockMovementIds: movementIds,
           actorWorkerId: input.workerId,
           deviceId: input.deviceId,
         });

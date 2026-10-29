@@ -14,6 +14,7 @@ import { TaskIllustration } from '../components/friendly/TaskIllustration';
 import VoidApprovalsScreen from './VoidApprovalsScreen';
 import VarianceCasesScreen from './VarianceCasesScreen';
 import StockReceiptApprovalsScreen from './StockReceiptApprovalsScreen';
+import ReportsScreen from './ReportsScreen';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 
@@ -22,6 +23,9 @@ export default function OpenShiftScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showApprovals, setShowApprovals] = useState(false);
+  // Reports without a till shift: starting the books needs every shift
+  // closed, including the owner's own, so they must be reachable from here.
+  const [showReports, setShowReports] = useState(false);
   const [pendingApprovals, setPendingApprovals] = useState(0);
   const [showVarianceCases, setShowVarianceCases] = useState(false);
   const [openVariances, setOpenVariances] = useState(0);
@@ -80,6 +84,7 @@ export default function OpenShiftScreen() {
   }
 
   if (showApprovals) return <VoidApprovalsScreen onExit={() => setShowApprovals(false)} backLabel="Back to open shift" />;
+  if (showReports) return <ReportsScreen onExit={() => setShowReports(false)} />;
   if (showVarianceCases) return <VarianceCasesScreen onExit={() => setShowVarianceCases(false)} backLabel="Back to open shift" />;
   if (showStockApprovals) return <StockReceiptApprovalsScreen onExit={() => setShowStockApprovals(false)} backLabel="Back to open shift" />;
 
@@ -169,7 +174,7 @@ export default function OpenShiftScreen() {
         )}
         {isSenior && (
           <section className="panel p-5 mt-4 flex flex-wrap items-center justify-between gap-3">
-            <div><div className="eyebrow">Management access</div><div className="mt-1">Review void requests without opening an artificial till shift.</div></div>
+            <div><div className="eyebrow">Management access</div><div className="mt-1">Review void requests and reports without opening an artificial till shift.</div></div>
             <Button variant={pendingApprovals > 0 ? 'warning' : 'secondary'} onClick={() => setShowApprovals(true)}>
               Void approvals{pendingApprovals > 0 ? ` · ${pendingApprovals}` : ''}
             </Button>
@@ -179,6 +184,7 @@ export default function OpenShiftScreen() {
             <Button variant={pendingStockApprovals > 0 ? 'warning' : 'secondary'} onClick={() => setShowStockApprovals(true)}>
               Stock approvals{pendingStockApprovals > 0 ? ` · ${pendingStockApprovals}` : ''}
             </Button>
+            <Button variant="secondary" onClick={() => setShowReports(true)}>Reports</Button>
           </section>
         )}
       </main>

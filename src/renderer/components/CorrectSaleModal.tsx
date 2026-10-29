@@ -11,6 +11,7 @@
 import { XIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { counter } from '../lib/ipc';
+import { useBankInUse } from '../store/paymentSettings';
 import { formatMoney, formatMoneyWithCurrency, parseCedisToPesewas } from '../../shared/lib/money';
 import { FeedbackBanner } from './FeedbackBanner';
 import { Button } from './ui/button';
@@ -62,6 +63,9 @@ export function CorrectSaleModal({ sale, onCancel, onDone }: {
   const [cashGivenRaw, setCashGivenRaw] = useState('');
   const [reference, setReference] = useState('');
   const [allowUnrecordedStock, setAllowUnrecordedStock] = useState(false);
+  // A sale that was itself a bank transfer keeps the choice even when the
+  // shop has said it doesn't bank.
+  const offerBank = useBankInUse() || sale.paymentMethod === 'BANK_TRANSFER';
 
   useEffect(() => {
     void counter.getSaleLines(sale.id).then((r) => {
@@ -228,7 +232,10 @@ export function CorrectSaleModal({ sale, onCancel, onDone }: {
           <div className="grid grid-cols-2 gap-3">
             <Field label="Extra paid by">
               <NativeSelect value={method} onChange={(e) => setMethod(e.target.value as ExtraMethod)} disabled={busy}>
-                {EXTRA_METHODS.filter((m) => m.value !== 'CREDIT' || sale.customerName).map((m) => (
+                {EXTRA_METHODS
+                  .filter((m) => m.value !== 'CREDIT' || sale.customerName)
+                  .filter((m) => m.value !== 'BANK_TRANSFER' || offerBank)
+                  .map((m) => (
                   <option key={m.value} value={m.value}>{m.label}</option>
                 ))}
               </NativeSelect>

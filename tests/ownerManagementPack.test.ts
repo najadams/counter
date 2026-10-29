@@ -6,7 +6,8 @@ import { runMigrations } from '../src/main/db/migrations';
 import { runSeed } from '../src/main/db/seed';
 import { openShift } from '../src/main/services/shifts';
 import { completeSaleCore } from '../src/main/services/sales';
-import { inputTaxForCost, vatForSale } from '../src/shared/lib/vat';
+import { VAT_ENABLED, inputTaxForCost, vatForSale } from '../src/shared/lib/vat';
+import { setPaymentSettings } from '../src/main/services/paymentSettings';
 import {
   activateFinancialCutover,
   createAccountTransfer,
@@ -584,5 +585,117 @@ describe('owner management ledger foundation', () => {
     });
     expect(drilldown.rows).toHaveLength(1);
     expect(drilldown.rows[0]).toMatchObject({ sourceType: 'SALE', sourceId: expect.any(String), amountPesewas: expectedNetSales });
+  });
+});
+
+describe('kept profit and free cash', () => {
+  const access = () => ({ actorWorkerId: OWNER, pin: PIN, deviceId: DEVICE, locationId: LOCATION });
+
+  function unpaidBill(payee: string, amountPesewas: number, dueDate: string | null) {
+    createBusinessExpense(db, {
+      locationId: LOCATION, category: 'UTILITIES', payee, incurredDate: cutoverDate,
+      dueDate, amountPesewas, actorWorkerId: OWNER, deviceId: DEVICE,
+    });
+  }
+
+  it('is not offered before the ledger cutover', () => {
+    const position = getManagementBalanceSheet(db, { ...access(), asOfDate: cutoverDate });
+    expect(position.legacyEstimate).toBe(true);
+    expect(position.keptAndFree).toBeNull();
+  });
+
+  it('subtracts drawings from profit, and every bill coming due from the money on hand', () => {
+    activate(10_000);
+    const till = (db.prepare(
+      'SELECT id FROM financial_accounts WHERE ledger_account_id = ?',
+    ).get(ledgerAccountId('CASH_TILL_DEFAULT')) as { id: string }).id;
+    const shiftId = openShift(db, {
+      workerId: CASHIER, locationId: LOCATION, shiftType: 'COUNTER',
+      openingCashPesewas: 0, financialAccountId: till, deviceId: DEVICE,
+    }).shiftId;
+    completeSaleCore(db, {
+      shiftId, workerId: CASHIER, workerName: 'Dev Counter', locationId: LOCATION,
+      channel: 'WALK_IN', lines: [{ productId, quantity: 1, unitPricePesewas: 800 }],
+      paymentMethod: 'CASH', cashGivenPesewas: 800, deviceId: DEVICE, shopName: 'Kept Shop',
+    });
+    postJournal(db, {
+      locationId: LOCATION, businessDate: cutoverDate, occurredAt: `${cutoverDate}T13:00:00.000Z`,
+      sourceType: 'TEST_DRAWING', sourceId: 'drawing-1', postingType: 'OWNER_DRAWING',
+      description: 'Owner took cash home', actorWorkerId: OWNER, deviceId: DEVICE,
+      lines: [
+        { accountCode: 'OWNER_DRAWINGS', debitPesewas: 200 },
+        { accountCode: 'CASH_TILL_DEFAULT', creditPesewas: 200 },
+      ],
+    });
+    const asOfDate = addDays(cutoverDate, 10);
+    unpaidBill('Overdue water', 100, addDays(cutoverDate, 3));
+    unpaidBill('Due in 5 days', 150, addDays(asOfDate, 5));
+    unpaidBill('Due in 20 days', 250, addDays(asOfDate, 20));
+    unpaidBill('Due in 40 days', 999, addDays(asOfDate, 40));
+    unpaidBill('No due date', 70, null);
+
+    const position = getManagementBalanceSheet(db, { ...access(), asOfDate });
+    const kept = position.keptAndFree!;
+    const tax = vatForSale(800);
+    const netSales = 800 - tax.vatPesewas - tax.nhilPesewas - tax.getfundPesewas;
+    const cogs = inputTaxForCost(productCost).taxablePesewas;
+    const profit = netSales - cogs - (100 + 150 + 250 + 999 + 70);
+    const taxOwed = Math.max(0,
+      position.liabilities.lines.find((line) => line.code === 'TAX_PAYABLE')?.amountPesewas ?? 0);
+    const cash = 10_000 + 800 - 200;
+
+    expect(position.integrityOk).toBe(true);
+    // The VAT build collects tax on the sale that isn't the shop's to spend.
+    if (VAT_ENABLED) expect(taxOwed).toBeGreaterThan(0);
+    expect(kept).toMatchObject({
+      cutoverDate,
+      profitSinceCutoverPesewas: profit,
+      ownerDrawingsPesewas: 200,
+      profitKeptPesewas: profit - 200,
+      cashOnHandPesewas: cash,
+      notCountedRecentlyPesewas: cash,
+      overdueBillsPesewas: 100,
+      dueNext7DaysPesewas: 150,
+      dueNext30DaysPesewas: 400,
+      undatedBillsPesewas: 70,
+      taxOwedPesewas: taxOwed,
+      freeCashAfter7DaysPesewas: cash - 100 - 70 - taxOwed - 150,
+      freeCashAfter30DaysPesewas: cash - 100 - 70 - taxOwed - 400,
+      bankInUse: true,
+    });
+    expect(position.equity.lines.find((line) => line.code === 'CURRENT_EARNINGS')?.amountPesewas)
+      .toBe(profit);
+    expect(kept.cashAccounts.find((line) => line.code === 'CASH_TILL_DEFAULT'))
+      .toMatchObject({ amountPesewas: cash, note: 'Not counted recently' });
+    expect(kept.cashAccounts.find((line) => line.code === 'CASH_SAFE_DEFAULT'))
+      .toMatchObject({ amountPesewas: 0, note: null });
+  });
+
+  it('leaves an empty bank out when the shop does not bank, but always counts a bank holding money', () => {
+    activate(10_000);
+    const bankLine = () => getManagementBalanceSheet(db, { ...access(), asOfDate: cutoverDate })
+      .keptAndFree!.cashAccounts.find((line) => line.code === 'CASH_BANK_DEFAULT');
+
+    expect(bankLine()).toMatchObject({ amountPesewas: 0 });
+    setPaymentSettings(db, { bankInUse: false });
+    expect(bankLine()).toBeUndefined();
+
+    const bank = (db.prepare(
+      'SELECT id FROM financial_accounts WHERE ledger_account_id = ?',
+    ).get(ledgerAccountId('CASH_BANK_DEFAULT')) as { id: string }).id;
+    createLiabilityAgreement(db, {
+      locationId: LOCATION, kind: 'BANK_LOAN', creditorName: 'Kept Bank',
+      originalPrincipalPesewas: 1200, receivedFinancialAccountId: bank,
+      startDate: cutoverDate,
+      schedule: [{ dueDate: addDays(cutoverDate, 20), principalPesewas: 1200, interestPesewas: 0 }],
+      actorWorkerId: OWNER, deviceId: DEVICE,
+    });
+    const kept = getManagementBalanceSheet(db, { ...access(), asOfDate: cutoverDate }).keptAndFree!;
+    expect(kept.bankInUse).toBe(false);
+    expect(kept.cashAccounts.find((line) => line.code === 'CASH_BANK_DEFAULT'))
+      .toMatchObject({ amountPesewas: 1200 });
+    expect(kept.cashOnHandPesewas).toBe(11_200);
+    expect(kept.dueNext30DaysPesewas).toBe(1200);
+    expect(kept.freeCashAfter30DaysPesewas).toBe(10_000 - kept.taxOwedPesewas);
   });
 });

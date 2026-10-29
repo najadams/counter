@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react';
 import { counter } from '../../lib/ipc';
 import { formatMoneyWithCurrency } from '../../../shared/lib/money';
+import { VAT_ENABLED } from '../../../shared/lib/vat';
+import { useBankInUse } from '../../store/paymentSettings';
 import type {
   ManagementCashflowResponse,
   ManagementConcentrationResponse,
   ManagementDataQuality,
   ManagementDownsideResponse,
   ManagementIncomeStatementResponse,
+  ManagementKeptAndFree,
   ManagementAccountsListResponse,
-  ManagementCutoverPreviewResponse,
   ManagementObligationsResponse,
   ManagementPositionResponse,
   ManagementRiskConfigResponse,
@@ -28,6 +30,7 @@ import { NativeSelect } from '../../components/ui/native-select';
 import { Input } from '../../components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { ReportSkeleton } from '../../components/ReportSkeleton';
+import { StartTheBooksPanel } from './StartTheBooksPanel';
 
 export type OwnerManagementView =
   | 'summary' | 'profit' | 'position' | 'cash'
@@ -74,6 +77,7 @@ export function OwnerManagementTab({ view, reportAccessToken }: { view: OwnerMan
   const [drilldownError, setDrilldownError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const bankInUse = useBankInUse();
 
   async function load() {
     if (loading) return;
@@ -312,6 +316,15 @@ export function OwnerManagementTab({ view, reportAccessToken }: { view: OwnerMan
         </section>
       )}
       <div className={view === 'summary' ? 'contents print:hidden' : 'contents'}>
+      {data?.position && (view === 'summary' || view === 'position') && (
+        <KeptAndFreeView
+          data={data.position.keptAndFree}
+          compact={view === 'summary'}
+          onFixCutover={view === 'summary'
+            ? () => document.getElementById('cutover-setup')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            : undefined}
+        />
+      )}
       {data?.profit && (view === 'summary' || view === 'profit') && <ProfitView data={data.profit} compact={view === 'summary'} onDrilldown={openDrilldown} />}
       {data?.position && (view === 'summary' || view === 'position') && <PositionView data={data.position} compact={view === 'summary'} onDrilldown={openDrilldown} />}
       {data?.cash && (view === 'summary' || view === 'cash') && <CashView data={data.cash} compact={view === 'summary'} onDrilldown={openDrilldown} />}
@@ -320,7 +333,7 @@ export function OwnerManagementTab({ view, reportAccessToken }: { view: OwnerMan
           data={data.obligations}
           compact={view === 'summary'}
           pin={pin}
-          accounts={accountData?.accounts ?? []}
+          accounts={withoutIdleBank(accountData?.accounts ?? [], bankInUse)}
           onPaid={load}
           onPinConsumed={() => setPin('')}
           onDrilldown={openDrilldown}
@@ -347,6 +360,7 @@ export function OwnerManagementTab({ view, reportAccessToken }: { view: OwnerMan
           data={accountData}
           fixedAssets={fixedAssets?.assets ?? []}
           shadow={shadow}
+          onBooksStarted={load}
           onRefresh={async () => {
             const [accounts, assets, shadowStatus] = await Promise.all([
               counter.managementAccounts({ reportAccessToken }), counter.managementFixedAssets({ reportAccessToken }),
@@ -365,6 +379,7 @@ export function OwnerManagementTab({ view, reportAccessToken }: { view: OwnerMan
         <div className="hidden print:block">
           <h1 className="text-2xl mb-1">Counter Owner Management Pack</h1>
           <p className="text-sm mb-5">{range.fromDate} to {range.toDate} · position as of {asOfDate}</p>
+          <KeptAndFreeView data={data.position.keptAndFree} compact={false} />
           <ProfitView data={data.profit} compact={false} onDrilldown={openDrilldown} />
           <PositionView data={data.position} compact={false} onDrilldown={openDrilldown} />
           <CashView data={data.cash} compact={false} onDrilldown={openDrilldown} />
@@ -377,13 +392,14 @@ export function OwnerManagementTab({ view, reportAccessToken }: { view: OwnerMan
   );
 }
 
-function FinancialControls({ pin, reportAccessToken, data, fixedAssets, shadow, onRefresh, onPinConsumed }: {
+function FinancialControls({ pin, reportAccessToken, data, fixedAssets, shadow, onRefresh, onBooksStarted, onPinConsumed }: {
   pin: string;
   reportAccessToken: string;
   data: ManagementAccountsListResponse;
   fixedAssets: ManagementFixedAssetsListResponse['assets'];
   shadow: ManagementShadowResponse | null;
   onRefresh: () => Promise<void>;
+  onBooksStarted: () => Promise<void>;
   onPinConsumed: () => void;
 }) {
   const [message, setMessage] = useState<string | null>(null);
@@ -405,9 +421,6 @@ function FinancialControls({ pin, reportAccessToken, data, fixedAssets, shadow, 
   const [transferAmount, setTransferAmount] = useState('');
   const [reconcileId, setReconcileId] = useState(data.accounts[0]?.id ?? '');
   const [observed, setObserved] = useState('');
-  const [cutoverDate, setCutoverDate] = useState(today);
-  const [balances, setBalances] = useState<Record<string, string>>({});
-  const [preview, setPreview] = useState<ManagementCutoverPreviewResponse | null>(null);
   const [expenseCategory, setExpenseCategory] = useState('RENT');
   const [expensePayee, setExpensePayee] = useState('');
   const [expenseAmount, setExpenseAmount] = useState('');
@@ -435,10 +448,8 @@ function FinancialControls({ pin, reportAccessToken, data, fixedAssets, shadow, 
   const [capitalAccountId, setCapitalAccountId] = useState(data.accounts[0]?.id ?? '');
   const [capitalAmount, setCapitalAmount] = useState('');
   const cutoverActive = data.dataQuality.cutoverDate != null;
-  const balanceAccounts = data.ledgerAccounts.filter((account) =>
-    account.accountClass === 'ASSET'
-    || account.accountClass === 'LIABILITY'
-    || account.accountClass === 'EQUITY');
+  const bankInUse = useBankInUse();
+  const moneyAccounts = withoutIdleBank(data.accounts, bankInUse);
 
   async function runMutation<T>(operation: () => Promise<T>): Promise<T> {
     try { return await operation(); } finally { onPinConsumed(); }
@@ -506,41 +517,12 @@ function FinancialControls({ pin, reportAccessToken, data, fixedAssets, shadow, 
     }
   }
 
-  function cutoverBalances() {
-    return balanceAccounts.map((account) => ({
-      ledgerAccountId: account.id,
-      amountPesewas: Math.max(0, Math.round(Number(balances[account.id] || 0) * 100)),
-    }));
-  }
-
-  async function previewCutover() {
-    const result = await counter.managementCutoverPreview({
-      cutoverDate, balances: cutoverBalances(), reportAccessToken,
-    });
-    if (!result.success) return setMessage(result.error);
-    setPreview(result.data);
-    setMessage(result.data.issues.length === 0
-      ? 'Opening position is ready to activate.'
-      : 'Resolve every blocking issue before activation.');
-  }
-
   async function toggleShadow(enabled: boolean) {
     const result = await runMutation(() => counter.managementSetShadow({ enabled, pin }));
     setMessage(result.success
       ? enabled ? 'Shadow ledger started. Operational events will now be dual-posted for comparison.' : 'Shadow ledger stopped.'
       : result.error);
     if (result.success) await onRefresh();
-  }
-
-  async function activateCutover() {
-    const result = await runMutation(() => counter.managementCutoverActivate({
-      cutoverDate, balances: cutoverBalances(), pin,
-      notes: 'Activated through Owner Management Pack',
-    }));
-    if (!result.success) return setMessage(result.error);
-    setMessage(`Ledger activated. Opening equity is ${formatMoneyWithCurrency(result.data.openingEquityPesewas)}.`);
-    setPreview(null);
-    await onRefresh();
   }
 
   async function createExpense() {
@@ -656,7 +638,7 @@ function FinancialControls({ pin, reportAccessToken, data, fixedAssets, shadow, 
       <div className="grid @4xl:grid-cols-2 gap-4">
         <ControlBox title="Money-location accounts">
           <div className="space-y-2 mb-3">
-            {data.accounts.map((account) => (
+            {moneyAccounts.map((account) => (
               <div key={account.id} className="flex justify-between gap-3 text-sm border-b border-border-subtle pb-2">
                 <span>{account.name} <span className="text-text-tertiary">({account.kind})</span></span>
                 <span className="font-mono">{formatMoneyWithCurrency(account.balancePesewas)}</span>
@@ -709,13 +691,14 @@ function FinancialControls({ pin, reportAccessToken, data, fixedAssets, shadow, 
           <div className="grid grid-cols-1 @xl:grid-cols-3 gap-2">
             <NativeSelect className="px-2" value={mapMethod} onChange={(e) => setMapMethod(e.target.value)}>
               {['CASH', 'MOMO_MTN', 'MOMO_VODAFONE', 'MOMO_AIRTELTIGO', 'BANK_TRANSFER']
+                .filter((method) => bankInUse || method !== 'BANK_TRANSFER')
                 .map((method) => <option key={method}>{method}</option>)}
             </NativeSelect>
             <NativeSelect className="px-2" value={mapDirection} onChange={(e) => setMapDirection(e.target.value as 'IN' | 'OUT')}>
               <option value="IN">Incoming</option><option value="OUT">Outgoing</option>
             </NativeSelect>
             <NativeSelect className="px-2" value={mapAccountId} onChange={(e) => setMapAccountId(e.target.value)}>
-              {data.accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
+              {moneyAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
             </NativeSelect>
           </div>
           <Button className="mt-2" onClick={() => void saveMapping()}>Save mapping</Button>
@@ -724,10 +707,10 @@ function FinancialControls({ pin, reportAccessToken, data, fixedAssets, shadow, 
         <ControlBox title="Internal transfer">
           <div className="grid grid-cols-1 @xl:grid-cols-3 gap-2">
             <NativeSelect className="px-2" value={fromId} onChange={(e) => setFromId(e.target.value)}>
-              {data.accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
+              {moneyAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
             </NativeSelect>
             <NativeSelect className="px-2" value={toId} onChange={(e) => setToId(e.target.value)}>
-              {data.accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
+              {moneyAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
             </NativeSelect>
             <Input className="px-2" value={transferAmount} onChange={(e) => setTransferAmount(e.target.value)}
               inputMode="decimal" placeholder="GH¢ amount" />
@@ -739,7 +722,7 @@ function FinancialControls({ pin, reportAccessToken, data, fixedAssets, shadow, 
         <ControlBox title="Reconcile account">
           <div className="grid grid-cols-1 @xl:grid-cols-2 gap-2">
             <NativeSelect className="px-2" value={reconcileId} onChange={(e) => setReconcileId(e.target.value)}>
-              {data.accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
+              {moneyAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
             </NativeSelect>
             <Input className="px-2" value={observed} onChange={(e) => setObserved(e.target.value)}
               inputMode="decimal" placeholder="Counted/statement GH¢" />
@@ -762,7 +745,7 @@ function FinancialControls({ pin, reportAccessToken, data, fixedAssets, shadow, 
             <Input className="px-2" type="date" value={expenseDueDate} onChange={(e) => setExpenseDueDate(e.target.value)} />
             <NativeSelect className="col-span-2 px-2" value={expenseAccountId} onChange={(e) => setExpenseAccountId(e.target.value)}>
               <option value="">Unpaid — create obligation</option>
-              {data.accounts.map((account) => <option key={account.id} value={account.id}>Paid from {account.name}</option>)}
+              {moneyAccounts.map((account) => <option key={account.id} value={account.id}>Paid from {account.name}</option>)}
             </NativeSelect>
           </div>
           <Button className="mt-2" onClick={() => void createExpense()} disabled={!(Number(expenseAmount) > 0)}>Record expense</Button>
@@ -781,7 +764,7 @@ function FinancialControls({ pin, reportAccessToken, data, fixedAssets, shadow, 
             <Input className="px-2" type="date" value={loanStartDate} onChange={(e) => setLoanStartDate(e.target.value)} />
             <NativeSelect className="col-span-2 px-2" value={loanReceivedAccountId} onChange={(e) => setLoanReceivedAccountId(e.target.value)}>
               <option value="">Opening/existing loan — no cash receipt</option>
-              {data.accounts.map((account) => <option key={account.id} value={account.id}>Receive into {account.name}</option>)}
+              {moneyAccounts.map((account) => <option key={account.id} value={account.id}>Receive into {account.name}</option>)}
             </NativeSelect>
             <Textarea className="col-span-2 min-h-24 font-mono text-xs px-2" value={loanScheduleCsv} onChange={(e) => setLoanScheduleCsv(e.target.value)}
               placeholder={'One installment per line:\n2026-08-31, 1000.00, 75.00'} />
@@ -803,7 +786,7 @@ function FinancialControls({ pin, reportAccessToken, data, fixedAssets, shadow, 
               placeholder="Useful life, months" inputMode="numeric" />
             <NativeSelect className="px-2" value={assetAccountId} onChange={(e) => setAssetAccountId(e.target.value)}>
               <option value="">Unpaid asset bill</option>
-              {data.accounts.map((account) => <option key={account.id} value={account.id}>Pay from {account.name}</option>)}
+              {moneyAccounts.map((account) => <option key={account.id} value={account.id}>Pay from {account.name}</option>)}
             </NativeSelect>
             {!assetAccountId && (
               <>
@@ -834,7 +817,7 @@ function FinancialControls({ pin, reportAccessToken, data, fixedAssets, shadow, 
                 <Input className="px-2" value={assetProceeds} onChange={(e) => setAssetProceeds(e.target.value)}
                   placeholder="Disposal proceeds GH¢" inputMode="decimal" />
                 <NativeSelect className="col-span-2 px-2" value={assetProceedsAccountId} onChange={(e) => setAssetProceedsAccountId(e.target.value)}>
-                  {data.accounts.filter((account) => account.active).map((account) => (
+                  {moneyAccounts.filter((account) => account.active).map((account) => (
                     <option key={account.id} value={account.id}>Receive proceeds into {account.name}</option>
                   ))}
                 </NativeSelect>
@@ -854,7 +837,7 @@ function FinancialControls({ pin, reportAccessToken, data, fixedAssets, shadow, 
         <ControlBox title="Owner capital contribution">
           <div className="grid grid-cols-2 gap-2">
             <NativeSelect className="px-2" value={capitalAccountId} onChange={(e) => setCapitalAccountId(e.target.value)}>
-              {data.accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
+              {moneyAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
             </NativeSelect>
             <Input className="px-2" value={capitalAmount} onChange={(e) => setCapitalAmount(e.target.value)}
               inputMode="decimal" placeholder="GH¢ amount" />
@@ -885,44 +868,9 @@ function FinancialControls({ pin, reportAccessToken, data, fixedAssets, shadow, 
             {shadow?.enabled ? 'Stop shadow run' : 'Start shadow run'}
           </Button>
         </ControlBox>
-        <ControlBox title="Controlled cutover" id="cutover-setup">
-          <p className="text-sm text-text-secondary mb-3">
-            Close all shifts, seal the prior day, complete a recent stocktake, then enter verified opening balances.
-            Counter will use opening equity only as the balancing equity account.
-          </p>
-          <Input className="mb-3 px-2" type="date" value={cutoverDate} onChange={(e) => { setCutoverDate(e.target.value); setPreview(null); }} />
-          <div className="grid @xl:grid-cols-2 @4xl:grid-cols-3 gap-2">
-            {balanceAccounts.map((account) => (
-              <label key={account.id} className="text-xs text-text-secondary">
-                {account.name} <span className="text-text-tertiary">({account.code})</span>
-                <Input className="mt-1 px-2" value={balances[account.id] ?? ''}
-                  onChange={(e) => {
-                    setBalances((current) => ({ ...current, [account.id]: e.target.value }));
-                    setPreview(null);
-                  }}
-                  inputMode="decimal" placeholder="GH¢ 0.00" />
-              </label>
-            ))}
-          </div>
-          {preview && (
-            <div className="mt-3 border border-border p-3 text-sm">
-              <div>Debits {formatMoneyWithCurrency(preview.debitPesewas)} · Credits {formatMoneyWithCurrency(preview.creditPesewas)}</div>
-              <div>Opening equity {formatMoneyWithCurrency(preview.openingEquityPesewas)}</div>
-              {preview.issues.map((issue) => (
-                <div key={issue.code} className={issue.severity === 'BLOCKING' ? 'text-danger' : 'text-warning'}>
-                  {issue.message}
-                </div>
-              ))}
-            </div>
-          )}
-          <div className="flex gap-2 mt-3">
-            <Button onClick={() => void previewCutover()}>Preview opening position</Button>
-            {preview && !preview.issues.some((issue) => issue.severity === 'BLOCKING') && (
-              <Button variant="primary" onClick={() => void activateCutover()}>
-                Activate balanced ledger
-              </Button>
-            )}
-          </div>
+        <ControlBox title="Start the books" id="cutover-setup">
+          <StartTheBooksPanel data={data} pin={pin} reportAccessToken={reportAccessToken}
+            onPinConsumed={onPinConsumed} onStarted={onBooksStarted} />
         </ControlBox>
         </>
       )}
@@ -966,7 +914,7 @@ function QualityBanner({ quality, onFixCutover }: {
         : 'border-border bg-bg-surface';
 
   const headline = blocking.length > 0
-    ? (needsCutover ? 'Figures are estimates until cutover' : 'Figures need attention')
+    ? (needsCutover ? 'Figures are estimates until the books start' : 'Figures need attention')
     : watch.length > 0
       ? `Figures are usable — ${watch.length} thing${watch.length === 1 ? '' : 's'} to keep an eye on`
       : quality.status === 'COMPLETE'
@@ -975,11 +923,11 @@ function QualityBanner({ quality, onFixCutover }: {
 
   const detail = blocking.length > 0
     ? (needsCutover
-        ? 'Profit and sales come from recorded takings. Cash and stock balances are not yet backed by the management ledger.'
+        ? 'Profit and sales come from recorded takings. Cash and stock balances are not yet backed by the shop\'s books.'
         : 'Some figures below cannot be relied on until these are put right.')
     : quality.cutoverDate
-      ? `Management ledger active from ${quality.cutoverDate}.`
-      : 'Pre-cutover figures are legacy estimates.';
+      ? `The books have run since ${quality.cutoverDate}.`
+      : 'Figures from before the books started are estimates.';
 
   return (
     <section className={`border p-4 ${tone}`}>
@@ -996,7 +944,7 @@ function QualityBanner({ quality, onFixCutover }: {
 
       {needsCutover && onFixCutover && (
         <Button variant="primary" size="sm" className="mt-3 print:hidden" onClick={onFixCutover}>
-          Finish the ledger cutover
+          Start the books
         </Button>
       )}
 
@@ -1055,6 +1003,86 @@ function DrilldownPanel({ data, error, onClose }: {
   );
 }
 
+/** When the shop says it doesn't bank, an empty bank account is only noise. */
+function withoutIdleBank<T extends { kind: string; balancePesewas: number }>(
+  accounts: T[], bankInUse: boolean,
+): T[] {
+  return bankInUse
+    ? accounts
+    : accounts.filter((account) => account.kind !== 'BANK' || account.balancePesewas !== 0);
+}
+
+const KEPT_AND_FREE_TITLE = 'Kept and free — how much is ours, and how much can we spend?';
+
+export function KeptAndFreeView({ data, compact, onFixCutover }: {
+  data: ManagementKeptAndFree | null; compact: boolean; onFixCutover?: () => void;
+}) {
+  if (!data) {
+    return (
+      <ReportSection title={KEPT_AND_FREE_TITLE}
+        answer="Shown once the shop's books have started. Until then Counter can't see every place the money is kept, so it can't say how much is free.">
+        {onFixCutover && (
+          <div>
+            <Button variant="primary" size="sm" className="print:hidden" onClick={onFixCutover}>
+              Start the books
+            </Button>
+          </div>
+        )}
+      </ReportSection>
+    );
+  }
+  const money = formatMoneyWithCurrency;
+  const free = data.freeCashAfter30DaysPesewas;
+  const kept = data.profitKeptPesewas;
+  const answer = (kept >= 0
+    ? `Since ${data.cutoverDate} the shop has kept ${money(kept)} of its profit. `
+    : `Since ${data.cutoverDate} the shop is ${money(-kept)} behind: losses and what the owner took out are more than the profit. `)
+    + (free >= 0
+      ? `${money(free)} of the ${money(data.cashOnHandPesewas)} on hand is free after bills due in the next 30 days.`
+      : `Bills due in the next 30 days are ${money(-free)} more than the ${money(data.cashOnHandPesewas)} on hand.`);
+  const keptLines = [
+    { code: 'PROFIT_SINCE_CUTOVER', label: `Profit since ${data.cutoverDate}`, amountPesewas: data.profitSinceCutoverPesewas },
+    { code: 'OWNER_DRAWINGS', label: 'Less taken out by the owner', amountPesewas: -data.ownerDrawingsPesewas },
+    { code: 'PROFIT_KEPT', label: 'Profit kept', amountPesewas: data.profitKeptPesewas },
+  ];
+  const freeLines = [
+    {
+      code: 'CASH_ON_HAND', label: 'Money on hand', amountPesewas: data.cashOnHandPesewas,
+      note: data.notCountedRecentlyPesewas > 0
+        ? `${money(data.notCountedRecentlyPesewas)} of this hasn't been counted recently.`
+        : null,
+    },
+    { code: 'OVERDUE', label: 'Less overdue bills', amountPesewas: -data.overdueBillsPesewas },
+    { code: 'UNDATED', label: 'Less bills with no due date', amountPesewas: -data.undatedBillsPesewas },
+    ...(VAT_ENABLED || data.taxOwedPesewas > 0
+      ? [{ code: 'TAX_OWED', label: 'Less tax collected, not yet paid', amountPesewas: -data.taxOwedPesewas }]
+      : []),
+    { code: 'DUE_30', label: 'Less bills due in the next 30 days', amountPesewas: -data.dueNext30DaysPesewas },
+    { code: 'FREE_30', label: 'Free after 30 days of bills', amountPesewas: free },
+  ];
+  return (
+    <ReportSection title={KEPT_AND_FREE_TITLE} answer={answer}>
+      <CardGrid className="grid-cols-2 @4xl:grid-cols-4" items={[
+        ['Profit kept', data.profitKeptPesewas],
+        ['Money on hand', data.cashOnHandPesewas],
+        ['Free after 7 days of bills', data.freeCashAfter7DaysPesewas],
+        ['Free after 30 days of bills', free],
+      ]} />
+      <div className="grid @4xl:grid-cols-2 gap-3">
+        <LineTable title="Kept" lines={keptLines} />
+        <LineTable title="Free" lines={freeLines} />
+      </div>
+      {!compact && data.cashAccounts.length > 0 && (
+        <LineTable title="Where the money is" lines={data.cashAccounts} />
+      )}
+      <p className="text-sm text-text-secondary">
+        Kept profit includes money tied up in stock and in credit customers still owe. Free cash is what
+        can be spent now.
+      </p>
+    </ReportSection>
+  );
+}
+
 function ProfitView({ data, compact, onDrilldown }: {
   data: ManagementIncomeStatementResponse; compact: boolean;
   onDrilldown: (req: Omit<ManagementDrilldownRequest, 'reportAccessToken'>) => Promise<void>;
@@ -1108,6 +1136,7 @@ function CashView({ data, compact, onDrilldown }: {
   data: ManagementCashflowResponse; compact: boolean;
   onDrilldown: (req: Omit<ManagementDrilldownRequest, 'reportAccessToken'>) => Promise<void>;
 }) {
+  const bankInUse = useBankInUse();
   return (
     <ReportSection title="Cash — where is the actual money?"
       answer={`Ending cash is ${formatMoneyWithCurrency(data.endingCashPesewas)}. Opening cash plus external flow ${data.integrityOk ? 'reconciles exactly' : 'does not reconcile'}.`}>
@@ -1117,7 +1146,7 @@ function CashView({ data, compact, onDrilldown }: {
         ['Ending cash', data.endingCashPesewas],
       ]} />
       {!compact && (
-        <LineTable title="Money by location" lines={data.accounts.map((account) => ({
+        <LineTable title="Money by location" lines={withoutIdleBank(data.accounts, bankInUse).map((account) => ({
           code: account.id, label: `${account.name}${account.lastReconciledAt ? '' : ' — unreconciled'}`,
           amountPesewas: account.balancePesewas,
         }))} onDrilldown={(line) => onDrilldown({
@@ -1418,9 +1447,11 @@ function ReportSection({ title, answer, children }: {
   );
 }
 
-function CardGrid({ items }: { items: Array<[string, number]> }) {
+function CardGrid({ items, className = 'grid-cols-2 @4xl:grid-cols-3' }: {
+  items: Array<[string, number]>; className?: string;
+}) {
   return (
-    <div className="grid grid-cols-2 @4xl:grid-cols-3 gap-3">
+    <div className={`grid ${className} gap-3`}>
       {items.map(([label, amount]) => (
         <div key={label} className="bg-bg-deep border border-border p-3">
           <div className="text-xs uppercase text-text-tertiary">{label}</div>
@@ -1467,6 +1498,23 @@ function exportPackCsv(data: Partial<LoadedPack>, fromDate: string, toDate: stri
       { section: 'Profit', label: 'Operating profit', amountPesewas: a.operatingProfitPesewas, note: '' },
       { section: 'Profit', label: 'Net management profit', amountPesewas: a.netManagementProfitPesewas, note: '' },
       { section: 'Profit', label: 'Cash operating surplus', amountPesewas: data.profit.cash.cashOperatingSurplusPesewas, note: '' },
+    );
+  }
+  const kept = data.position?.keptAndFree;
+  if (kept) {
+    rows.push(
+      { section: 'Kept and free', label: 'Profit since cutover', amountPesewas: kept.profitSinceCutoverPesewas, note: `Cutover ${kept.cutoverDate}` },
+      { section: 'Kept and free', label: 'Taken out by the owner', amountPesewas: kept.ownerDrawingsPesewas, note: '' },
+      { section: 'Kept and free', label: 'Profit kept', amountPesewas: kept.profitKeptPesewas, note: '' },
+      { section: 'Kept and free', label: 'Money on hand', amountPesewas: kept.cashOnHandPesewas, note: '' },
+      { section: 'Kept and free', label: 'Not counted recently', amountPesewas: kept.notCountedRecentlyPesewas, note: 'Included in money on hand' },
+      { section: 'Kept and free', label: 'Overdue bills', amountPesewas: kept.overdueBillsPesewas, note: '' },
+      { section: 'Kept and free', label: 'Bills with no due date', amountPesewas: kept.undatedBillsPesewas, note: '' },
+      { section: 'Kept and free', label: 'Tax collected, not yet paid', amountPesewas: kept.taxOwedPesewas, note: '' },
+      { section: 'Kept and free', label: 'Bills due in the next 7 days', amountPesewas: kept.dueNext7DaysPesewas, note: '' },
+      { section: 'Kept and free', label: 'Bills due in the next 30 days', amountPesewas: kept.dueNext30DaysPesewas, note: '' },
+      { section: 'Kept and free', label: 'Free after 7 days of bills', amountPesewas: kept.freeCashAfter7DaysPesewas, note: '' },
+      { section: 'Kept and free', label: 'Free after 30 days of bills', amountPesewas: kept.freeCashAfter30DaysPesewas, note: '' },
     );
   }
   if (data.position) {

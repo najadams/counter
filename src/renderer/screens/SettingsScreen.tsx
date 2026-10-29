@@ -8,6 +8,7 @@ import { ShopTab } from './settings/ShopTab';
 import { PricingTiersTab } from './settings/PricingTiersTab';
 import { SuppliersTab } from './settings/SuppliersTab';
 import { SupplierPaymentsTab } from './settings/SupplierPaymentsTab';
+import { PaymentsTab } from './settings/PaymentsTab';
 import { AuditLogTab } from './settings/AuditLogTab';
 import { BreakageReviewTab } from './settings/BreakageReviewTab';
 import { ReprintQueueTab } from './settings/ReprintQueueTab';
@@ -23,7 +24,7 @@ import { RunbookPrintScreen } from './RunbookPrintScreen';
 import { Button } from '../components/ui/button';
 import { NavTab } from '../components/ui/nav-tab';
 
-type Tab = 'workers' | 'shop' | 'products' | 'tiers' | 'suppliers' | 'supplier-pay' | 'audit' | 'breakage' | 'reprints' | 'exceptions' | 'reorder' | 'appearance' | 'backups' | 'transfer' | 'sync' | 'phone' | 'about';
+type Tab = 'workers' | 'shop' | 'products' | 'tiers' | 'suppliers' | 'supplier-pay' | 'payments' | 'audit' | 'breakage' | 'reprints' | 'exceptions' | 'reorder' | 'appearance' | 'backups' | 'transfer' | 'sync' | 'phone' | 'about';
 
 export default function SettingsScreen({ onExit }: { onExit: () => void }) {
   const [tab, setTab] = useState<Tab>('workers');
@@ -64,6 +65,7 @@ export default function SettingsScreen({ onExit }: { onExit: () => void }) {
             <TabBtn active={tab === 'tiers'} onClick={() => setTab('tiers')}>Pricing tiers</TabBtn>
             <TabBtn active={tab === 'suppliers'} onClick={() => setTab('suppliers')}>Suppliers</TabBtn>
             <TabBtn active={tab === 'supplier-pay'} onClick={() => setTab('supplier-pay')}>Supplier payments</TabBtn>
+            <TabBtn active={tab === 'payments'} onClick={() => setTab('payments')}>Payments</TabBtn>
             <TabBtn active={tab === 'audit'} onClick={() => setTab('audit')}>Audit log</TabBtn>
             <TabBtn active={tab === 'breakage'} onClick={() => setTab('breakage')}>Breakage review</TabBtn>
             <TabBtn active={tab === 'reprints'} onClick={() => setTab('reprints')}>Reprint queue</TabBtn>
@@ -96,6 +98,7 @@ export default function SettingsScreen({ onExit }: { onExit: () => void }) {
           {tab === 'tiers' && <PricingTiersTab />}
           {tab === 'suppliers' && <SuppliersTab />}
           {tab === 'supplier-pay' && <SupplierPaymentsTab />}
+          {tab === 'payments' && <PaymentsTab />}
           {tab === 'audit' && <AuditLogTab />}
           {tab === 'breakage' && <BreakageReviewTab />}
           {tab === 'reprints' && <ReprintQueueTab />}

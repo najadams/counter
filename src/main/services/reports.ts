@@ -2209,7 +2209,8 @@ function getOpenTillCashAsOf(db: DB, locationId: string, toExclusiveISO: string)
   return total;
 }
 
-function getTaxBalanceAsOf(db: DB, locationId: string, toExclusiveISO: string): number {
+/** Tax collected and not yet paid before `toExclusiveISO`; negative is a credit. */
+export function getTaxBalanceAsOf(db: DB, locationId: string, toExclusiveISO: string): number {
   const output = db
     .prepare(
       `SELECT COALESCE(SUM(vat_pesewas + nhil_pesewas + getfund_pesewas), 0) AS total

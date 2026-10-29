@@ -25,7 +25,8 @@ import {
   registerBackupHandlers, registerStatementHandlers, registerCpoHandlers,
   registerReturnsHandlers, registerSupplierPaymentsHandlers,
   registerReportsHandlers, registerCatalogTransferHandlers,
-  registerReceiptConfigHandlers, registerSyncHandlers, registerPendingOrdersHandlers,
+  registerReceiptConfigHandlers, registerPaymentSettingsHandlers,
+  registerSyncHandlers, registerPendingOrdersHandlers,
   registerActivationHandlers, registerBusinessHandlers,
 } from '../src/main/ipc/handlers.js';
 import { startHttpServer } from '../src/main/http/server.js';
@@ -71,6 +72,7 @@ registerSupplierPaymentsHandlers(r, db, deviceId);
 registerReportsHandlers(r, db, deviceId);
 registerCatalogTransferHandlers(r, db, app, deviceId);
 registerReceiptConfigHandlers(r, db, deviceId);
+registerPaymentSettingsHandlers(r, db, deviceId);
 registerBusinessHandlers(r, db, deviceId);
 registerSyncHandlers(r, db, deviceId);
 registerPendingOrdersHandlers(r, db, deviceId);

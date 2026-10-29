@@ -10,6 +10,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { counter } from '../../lib/ipc';
 import { useSession } from '../../store/session';
+import { useBankInUse } from '../../store/paymentSettings';
 import { formatMoneyWithCurrency, parseCedisToPesewas } from '../../../shared/lib/money';
 import type {
   SupplierInvoiceRow, SupplierPaymentRow, SupplierStatementRow,
@@ -312,6 +313,7 @@ function RecordPaymentModal({
   const [supplierId, setSupplierId] = useState(presetSupplierId ?? (suppliers[0]?.id ?? ''));
   const [amountStr, setAmountStr] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<string>('CASH');
+  const bankInUse = useBankInUse();
   const [reference, setReference] = useState('');
   const [paidAtDate, setPaidAtDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState('');
@@ -371,7 +373,7 @@ function RecordPaymentModal({
 
         <Field label="Payment method">
           <NativeSelect value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
-            {PAYMENT_METHODS.map((m) => (
+            {PAYMENT_METHODS.filter((m) => bankInUse || m.code !== 'BANK_TRANSFER').map((m) => (
               <option key={m.code} value={m.code}>{m.label}</option>
             ))}
           </NativeSelect>
