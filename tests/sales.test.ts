@@ -15,6 +15,7 @@ import { completeSale, searchProducts, getShopHeader } from '../src/main/service
 import { _setPrinter, _resetPrinter } from '../src/main/printer/printer';
 import { unitsOnHand } from '../src/main/services/stockMovements';
 import { formatReceipt } from '../src/main/printer/receipt';
+import { humanizeError } from '../src/renderer/lib/ipc';
 
 const __filename = fileURLToPath(import.meta.url);
 const migrationsDir = path.resolve(path.dirname(__filename), '../migrations');
@@ -176,6 +177,19 @@ describe('completeSale — atomicity', () => {
     expect(rowCount('sales')).toBe(before.sales);
     expect(rowCount('sale_lines')).toBe(before.lines);
     expect(rowCount('stock_movements')).toBe(before.sm);
+  });
+
+  it('names a product switched off while it sat in the cart', async () => {
+    const star = pickProduct('STAR-330');
+    db.prepare('UPDATE products SET active = 0 WHERE id = ?').run(star.id);
+    const err = await completeSale(db, {
+      shiftId, workerId: W, workerName: 'Naj', locationId: L, channel: 'WALK_IN',
+      lines: [{ productId: star.id, quantity: 1, unitPricePesewas: 800 }],
+      paymentMethod: 'CASH', cashGivenPesewas: 800,
+      deviceId: D, shopName: 'TEST',
+    }).catch((e: Error) => e);
+    expect((err as Error).message).toBe(`completeSale: "${star.name}" is no longer for sale (switched off in Products)`);
+    expect(humanizeError((err as Error).message)).toMatch(new RegExp(`^"${star.name}" has been switched off in Products`));
   });
 
   it('mid-transaction failure rolls back partial line writes', async () => {

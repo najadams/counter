@@ -51,6 +51,12 @@ interface ErrorPattern {
 }
 
 const ERROR_PATTERNS: ErrorPattern[] = [
+  { match: /^completeSale: "(.+)" is no longer for sale \((deleted|switched off) in Products\)/,
+    replace: (m) =>
+      `"${m[1]}" has been ${m[2]} in Products, so it can't be sold. Remove it from the cart, ` +
+      `or ask the owner to switch it back on, then search for it again.` },
+  { match: /^completeSale: product \S+ not found$/,
+    replace: () => 'One item in the cart is no longer in the product list. Remove it, search for it again and re-add it.' },
   { match: /^FOREIGN KEY constraint failed/i,
     replace: () => "That action references a record that doesn't exist or has been removed. Refresh and try again." },
   { match: /^UNIQUE constraint failed:\s*(\w+\.\w+)/i,

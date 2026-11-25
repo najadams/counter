@@ -13,6 +13,7 @@ import { PIN_BCRYPT_ROUNDS, DEFAULT_LOCATION_ID } from '../../shared/lib/constan
 import { createFirstOwner, needsOwnerSetup } from './setup.js';
 import { addProduct } from './productsAdmin.js';
 import { receiveStock } from './stockReceipts.js';
+import { unitsOnHand } from './stockMovements.js';
 import { computeAndCloseShift, openShift, submitClosingCount } from './shifts.js';
 import { completeSaleCore, type CompleteSaleLine } from './sales.js';
 import { generateDailySummary } from './dailySummaries.js';
@@ -300,7 +301,7 @@ function ensureSales(
         DAILY_SALES_CAP_PESEWAS - 1 - dailyTotal,
       );
       if (remaining <= 0) break;
-      const plan = salePlanForCatalog(saleProducts, day, idx, remaining);
+      const plan = salePlanForCatalog(db, saleProducts, day, idx, remaining);
       if (!plan) break;
       const result = completeSaleCore(db, {
         shiftId,
@@ -362,7 +363,7 @@ function ensureTodayShiftAndSales(
     const idx = existingCount + n;
     const remaining = Math.min(desired - dailyTotal, DAILY_SALES_CAP_PESEWAS - 1 - dailyTotal);
     if (remaining <= 0) break;
-    const plan = salePlanForCatalog(saleProducts, 0, idx, remaining);
+    const plan = salePlanForCatalog(db, saleProducts, 0, idx, remaining);
     if (!plan) break;
     const result = completeSaleCore(db, {
       shiftId,
@@ -630,46 +631,57 @@ function loadSeededProductsFromDb(db: DB): SeededProduct[] {
 }
 
 function salePlanForCatalog(
+  db: DB,
   products: SeededProduct[],
   day: number,
   idx: number,
   remainingPesewas: number,
 ): { lines: CompleteSaleLine[]; totalPesewas: number } | null {
+  // Sell only what is recorded on hand: the sale guard refuses anything more,
+  // and the refresh timer keeps selling long after the opening stock runs low.
+  const onHand = new Map<string, number>();
+  const stockLeft = (productId: string): number => {
+    if (!onHand.has(productId)) onHand.set(productId, unitsOnHand(db, productId, DEFAULT_LOCATION_ID));
+    return onHand.get(productId)!;
+  };
+  const take = (product: SeededProduct, wanted: number, budget: number): CompleteSaleLine | null => {
+    const unit = preferredSaleUnit(product);
+    const quantity = Math.min(
+      wanted,
+      Math.floor(budget / unit.pricePesewas),
+      Math.floor(stockLeft(product.productId) / unit.conversionFactor),
+    );
+    if (quantity <= 0) return null;
+    onHand.set(product.productId, stockLeft(product.productId) - quantity * unit.conversionFactor);
+    return { productId: product.productId, quantity, unitId: unit.unitId, unitPricePesewas: unit.pricePesewas };
+  };
+
   const lines: CompleteSaleLine[] = [];
   let totalPesewas = 0;
   for (const item of salePatternForCatalog(products.length, day, idx)) {
     const product = products[item.productIndex];
     if (!product) continue;
-    const unit = preferredSaleUnit(product);
-    const available = remainingPesewas - totalPesewas;
-    const quantity = Math.min(item.quantity, Math.floor(available / unit.pricePesewas));
-    if (quantity <= 0) continue;
-    lines.push({
-      productId: product.productId,
-      quantity,
-      unitId: unit.unitId,
-      unitPricePesewas: unit.pricePesewas,
-    });
-    totalPesewas += quantity * unit.pricePesewas;
+    const line = take(product, item.quantity, remainingPesewas - totalPesewas);
+    if (!line) continue;
+    lines.push(line);
+    totalPesewas += line.quantity * line.unitPricePesewas;
   }
 
   if (lines.length === 0) {
-    const product = products.find((p) => preferredSaleUnit(p).pricePesewas <= remainingPesewas);
-    if (!product) return null;
-    const unit = preferredSaleUnit(product);
-    lines.push({
-      productId: product.productId,
-      quantity: 1,
-      unitId: unit.unitId,
-      unitPricePesewas: unit.pricePesewas,
-    });
-    totalPesewas = unit.pricePesewas;
+    for (const product of products) {
+      const line = take(product, 1, remainingPesewas);
+      if (!line) continue;
+      lines.push(line);
+      totalPesewas = line.unitPricePesewas;
+      break;
+    }
+    if (lines.length === 0) return null;
   }
 
   return { lines, totalPesewas };
 }
 
-function preferredSaleUnit(product: SeededProduct): { unitId: string | null; pricePesewas: number } {
+function preferredSaleUnit(product: SeededProduct): { unitId: string | null; pricePesewas: number; conversionFactor: number } {
   let bestIndex = 0;
   for (let idx = 1; idx < product.units.length; idx++) {
     const best = product.units[bestIndex]!;
@@ -681,6 +693,7 @@ function preferredSaleUnit(product: SeededProduct): { unitId: string | null; pri
   return {
     unitId: product.unitIds[bestIndex] ?? product.unitIds[0] ?? null,
     pricePesewas: Math.max(1, unit?.pricePesewas ?? product.walkInPesewas),
+    conversionFactor: Math.max(1, unit?.conversionFactor ?? 1),
   };
 }
 

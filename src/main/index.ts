@@ -156,7 +156,12 @@ app.whenReady().then(async () => {
   if (COUNTERS_DECOY_ENABLED) {
     log.info('[counters] decoy build enabled; using isolated Counters DB with synthetic low-volume data');
     const decoySeed = await import('./services/decoySeed.js');
-    decoySeed.ensureCountersDecoySeed(db, deviceId, userData);
+    // Synthetic data must never keep the till from opening.
+    try {
+      decoySeed.ensureCountersDecoySeed(db, deviceId, userData);
+    } catch (err) {
+      log.error('[counters] decoy seed failed:', err);
+    }
     countersDecoyRefreshTimer = setInterval(() => {
       try {
         decoySeed.refreshCountersDecoyData(db, deviceId);

@@ -67,4 +67,31 @@ describe('Counters weekday-only camouflage records', () => {
     ).get();
     expect(after).toEqual(before);
   });
+
+  it('keeps selling within recorded stock once the opening stock runs low', () => {
+    // v0.4.3's sale guard refused the decoy's own sales once stock ran out,
+    // and the boot-time seed took the whole app down with it.
+    vi.setSystemTime(new Date('2026-07-30T12:00:00.000Z'));
+    ensureCountersDecoySeed(db, 'decoy-test-device', tempDir);
+
+    // Leave one smallest unit of everything.
+    const rows = db.prepare(
+      'SELECT product_id AS productId, location_id AS locationId, SUM(quantity) AS onHand FROM stock_movements GROUP BY product_id, location_id',
+    ).all() as Array<{ productId: string; locationId: string; onHand: number }>;
+    for (const r of rows) {
+      db.prepare('UPDATE stock_movements SET quantity = quantity - ? WHERE id = (SELECT id FROM stock_movements WHERE product_id = ? AND location_id = ? AND quantity > 0 ORDER BY created_at LIMIT 1)')
+        .run(r.onHand - 1, r.productId, r.locationId);
+    }
+
+    for (let minute = 0; minute < 60; minute += 10) {
+      vi.setSystemTime(new Date(`2026-07-31T10:${String(minute).padStart(2, '0')}:00.000Z`));
+      expect(() => refreshCountersDecoyData(db, 'decoy-test-device')).not.toThrow();
+    }
+    const negative = db.prepare(
+      'SELECT COUNT(*) AS n FROM (SELECT SUM(quantity) AS q FROM stock_movements GROUP BY product_id, location_id) WHERE q < 0',
+    ).get() as { n: number };
+    expect(negative.n).toBe(0);
+    const unrecorded = db.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action = 'SALE_UNRECORDED_STOCK'").get() as { n: number };
+    expect(unrecorded.n).toBe(0);
+  });
 });

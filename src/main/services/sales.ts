@@ -382,7 +382,17 @@ export function completeSaleCore(
       | { name: string; cost_price_pesewas: number; is_returnable: number }
       | undefined;
     if (!p) {
-      throw new Error(`completeSale: product ${line.productId} not found or inactive`);
+      // Usually switched off in Products (or removed by an import) after the
+      // cashier added it — the cart line outlives the product. Name it, so the
+      // till can say which line to remove instead of showing an id.
+      const gone = db
+        .prepare(`SELECT name, deleted_at FROM products WHERE id = ?`)
+        .get(line.productId) as { name: string; deleted_at: string | null } | undefined;
+      if (!gone) throw new Error(`completeSale: product ${line.productId} not found`);
+      throw new Error(
+        `completeSale: "${gone.name}" is no longer for sale ` +
+          `(${gone.deleted_at ? 'deleted' : 'switched off'} in Products)`,
+      );
     }
     productRows.set(line.productId, {
       name: p.name,
