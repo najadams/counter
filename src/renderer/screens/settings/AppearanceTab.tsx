@@ -14,12 +14,13 @@ import { useSession } from '../../store/session';
 import { counter } from '../../lib/ipc';
 import { ReceiptBody } from '../../components/ReceiptPrintModal';
 import type {
-  ReceiptConfigResponse, ReceiptDensity, ReceiptPaperWidth,
+  ReceiptConfigResponse, ReceiptDensity, ReceiptInstalledPrinter, ReceiptPaperWidth,
 } from '../../../shared/types/ipc';
 import type { SaleReceipt } from '../../../shared/lib/receipt';
 import { VAT_ENABLED, extractInclusiveVat } from '../../../shared/lib/vat';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
+import { NativeSelect } from '../../components/ui/native-select';
 
 export function AppearanceTab() {
   const choice = useTheme((s) => s.choice);
@@ -115,6 +116,45 @@ function ReceiptSection(): JSX.Element {
   const [saving, setSaving] = useState(false);
   const [testingStation, setTestingStation] = useState<'counter' | 'door' | null>(null);
   const [message, setMessage] = useState<InlineMessage | null>(null);
+  const [printers, setPrinters] = useState<PrinterList>({ loading: false, list: [], error: null, canSetupUsb: false });
+  const [settingUpUsb, setSettingUpUsb] = useState(false);
+
+  async function loadPrinters(): Promise<ReceiptInstalledPrinter[]> {
+    setPrinters((p) => ({ ...p, loading: true }));
+    const r = await counter.receiptListPrinters();
+    if (!r.success) {
+      setPrinters({ loading: false, list: [], error: r.error, canSetupUsb: false });
+      return [];
+    }
+    setPrinters({ loading: false, list: r.data.printers, error: r.data.error ?? null, canSetupUsb: r.data.canSetupUsb });
+    return r.data.printers;
+  }
+
+  useEffect(() => {
+    if (isOwner) void loadPrinters();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOwner]);
+
+  async function setupUsbPrinter() {
+    setSettingUpUsb(true);
+    setMessage(null);
+    const r = await counter.receiptSetupUsbPrinter();
+    setSettingUpUsb(false);
+    if (!r.success) {
+      setMessage({ kind: 'danger', text: r.error });
+      return;
+    }
+    if (!r.data.ok) {
+      setMessage({ kind: 'danger', text: r.data.message });
+      return;
+    }
+    await loadPrinters();
+    patch('counterPrinterInterface', `printer:${r.data.printerName}`);
+    setMessage({
+      kind: 'success',
+      text: `"${r.data.printerName}" is ready on ${r.data.port}. Press Test print on the Counter printer.`,
+    });
+  }
 
   useEffect(() => {
     void (async () => {
@@ -269,7 +309,11 @@ function ReceiptSection(): JSX.Element {
               onChange={(v) => patch('counterPrinterInterface', v || null)}
               onTest={() => void testPrinter('counter')}
               testing={testingStation === 'counter'}
-              disabled={saving}
+              disabled={saving || settingUpUsb}
+              printers={printers}
+              onRefreshPrinters={() => void loadPrinters()}
+              onSetupUsb={() => void setupUsbPrinter()}
+              settingUpUsb={settingUpUsb}
             />
             <PrinterSetupField
               label="Door printer"
@@ -278,7 +322,11 @@ function ReceiptSection(): JSX.Element {
               onChange={(v) => patch('doorPrinterInterface', v || null)}
               onTest={() => void testPrinter('door')}
               testing={testingStation === 'door'}
-              disabled={saving}
+              disabled={saving || settingUpUsb}
+              printers={printers}
+              onRefreshPrinters={() => void loadPrinters()}
+              onSetupUsb={() => void setupUsbPrinter()}
+              settingUpUsb={settingUpUsb}
             />
           </FormGroup>
 
@@ -450,10 +498,18 @@ function TextField({
   );
 }
 
-type PrinterMode = 'default' | 'network' | 'windows' | 'advanced';
+type PrinterMode = 'same' | 'default' | 'network' | 'windows' | 'advanced';
+
+interface PrinterList {
+  loading: boolean;
+  list: ReceiptInstalledPrinter[];
+  error: string | null;
+  canSetupUsb: boolean;
+}
 
 function defaultPrinterMode(station: 'counter' | 'door'): PrinterMode {
-  return station === 'door' ? 'network' : 'windows';
+  // An empty Door printer prints on the Counter printer (main/printer.ts).
+  return station === 'door' ? 'same' : 'windows';
 }
 
 function printerModeFor(value: string, station: 'counter' | 'door'): PrinterMode {
@@ -461,6 +517,11 @@ function printerModeFor(value: string, station: 'counter' | 'door'): PrinterMode
   if (value.startsWith('tcp://')) return 'network';
   if (value.startsWith('printer:')) return 'windows';
   return value ? 'advanced' : defaultPrinterMode(station);
+}
+
+function printerOptionLabel(p: ReceiptInstalledPrinter): string {
+  const tags = [p.usb ? 'USB' : null, p.isDefault ? 'default' : null, p.offline ? 'offline' : null].filter(Boolean);
+  return tags.length ? `${p.name} · ${tags.join(' · ')}` : p.name;
 }
 
 function parseNetworkPrinter(value: string): { host: string; port: number } {
@@ -477,6 +538,7 @@ function parseWindowsPrinter(value: string): string {
 
 function PrinterSetupField({
   label, station, value, onChange, onTest, testing, disabled,
+  printers, onRefreshPrinters, onSetupUsb, settingUpUsb,
 }: {
   label: string;
   station: 'counter' | 'door';
@@ -485,11 +547,17 @@ function PrinterSetupField({
   onTest: () => void;
   testing: boolean;
   disabled: boolean;
+  printers: PrinterList;
+  onRefreshPrinters: () => void;
+  onSetupUsb: () => void;
+  settingUpUsb: boolean;
 }): JSX.Element {
   const [mode, setMode] = useState<PrinterMode>(() => printerModeFor(value, station));
 
   useEffect(() => {
-    setMode(printerModeFor(value, station));
+    // A cleared field keeps the type being filled in (USB with nothing picked
+    // yet, a network IP being retyped) instead of jumping to the default.
+    setMode((m) => (value || m === 'same' || m === 'default' ? printerModeFor(value, station) : m));
   }, [station, value]);
 
   const net = parseNetworkPrinter(value);
@@ -521,7 +589,7 @@ function PrinterSetupField({
         <Button size="sm"
           type="button"
           onClick={onTest}
-          disabled={disabled || testing || !value.trim()}>
+          disabled={disabled || testing || (!value.trim() && station === 'counter')}>
           {testing ? 'Testing…' : 'Test print'}
         </Button>
       </div>
@@ -532,19 +600,36 @@ function PrinterSetupField({
         onChange={(next) => {
           setMode(next);
           if (next === 'default') onChange('printer:auto');
+          if (next === 'same') onChange('');
+          if (next === 'windows' && !value.startsWith('printer:')) {
+            // One printer on this computer, or one plugged in by USB: pick it.
+            const usb = printers.list.filter((p) => p.usb);
+            const only = usb.length === 1 ? usb[0] : printers.list.length === 1 ? printers.list[0] : undefined;
+            onChange(only ? `printer:${only.name}` : '');
+          }
         }}
         options={[
-          { value: 'default', label: 'Default', hint: 'Windows default printer' },
-          { value: 'network', label: 'Network IP', hint: 'Most door printers' },
-          { value: 'windows', label: 'Windows printer', hint: 'Installed driver' },
+          ...(station === 'door'
+            ? [{ value: 'same' as const, label: 'Same as Counter', hint: 'One printer for the shop' }]
+            : []),
+          { value: 'windows', label: 'USB / installed', hint: 'Plugged into this computer' },
+          { value: 'network', label: 'Network IP', hint: 'Ethernet or Wi‑Fi printer' },
+          { value: 'default', label: 'Default', hint: "This computer's default printer" },
           { value: 'advanced', label: 'Advanced', hint: 'Raw interface' },
         ]}
       />
 
+      {mode === 'same' && (
+        <div className="text-xs text-text-tertiary border border-border-subtle bg-bg-deep px-3 py-2">
+          Phone and tablet sales print on the Counter printer. Choose another type only if the door has its own printer.
+        </div>
+      )}
+
       {mode === 'default' && (
         <div className="text-xs text-text-tertiary border border-border-subtle bg-bg-deep px-3 py-2">
-          Uses the printer set as default in Windows. For a door printer, install it in Windows first,
-          set it as the default printer, then use Test print.
+          Uses the default printer of the computer running Counter. Phones and tablets print here too:
+          their receipts come out of this computer's printer. Install the printer's driver, set it as
+          the default printer, then use Test print.
         </div>
       )}
 
@@ -569,12 +654,15 @@ function PrinterSetupField({
       )}
 
       {mode === 'windows' && (
-        <TextField
-          label="Windows printer name"
-          value={windowsName}
-          onChange={setWindowsName}
-          placeholder="Counter Receipt Printer"
-          hint="Use the exact printer name from Windows Printers & scanners."
+        <InstalledPrinterPicker
+          station={station}
+          name={windowsName}
+          onPick={setWindowsName}
+          printers={printers}
+          onRefresh={onRefreshPrinters}
+          onSetupUsb={onSetupUsb}
+          settingUpUsb={settingUpUsb}
+          disabled={disabled}
         />
       )}
 
@@ -586,6 +674,72 @@ function PrinterSetupField({
           placeholder={station === 'door' ? 'tcp://192.168.1.50:9100' : 'printer:Counter'}
           hint="Examples: tcp://192.168.1.50:9100 or printer:Counter"
         />
+      )}
+    </div>
+  );
+}
+
+function InstalledPrinterPicker({
+  station, name, onPick, printers, onRefresh, onSetupUsb, settingUpUsb, disabled,
+}: {
+  station: 'counter' | 'door';
+  name: string;
+  onPick: (name: string) => void;
+  printers: PrinterList;
+  onRefresh: () => void;
+  onSetupUsb: () => void;
+  settingUpUsb: boolean;
+  disabled: boolean;
+}): JSX.Element {
+  const known = printers.list.some((p) => p.name === name);
+  const hasUsb = printers.list.some((p) => p.usb);
+  return (
+    <div className="space-y-2">
+      <label className="block text-sm">
+        <span className="text-text-secondary">Printer on this computer</span>
+        <div className="mt-1 flex gap-2">
+          <NativeSelect
+            aria-label={`${station === 'door' ? 'Door' : 'Counter'} printer on this computer`}
+            value={name}
+            onChange={(e) => onPick(e.target.value)}
+            disabled={disabled || printers.loading}
+            className="flex-1 min-w-0"
+          >
+            <option value="">{printers.loading ? 'Looking for printers…' : 'Choose a printer…'}</option>
+            {printers.list.map((p) => (
+              <option key={p.name} value={p.name}>{printerOptionLabel(p)}</option>
+            ))}
+            {name && !known && !printers.loading && (
+              <option value={name}>{name} · not found on this computer</option>
+            )}
+          </NativeSelect>
+          <Button size="sm" type="button" variant="secondary" onClick={onRefresh} disabled={disabled || printers.loading}>
+            Refresh
+          </Button>
+        </div>
+        <span className="block text-xs text-text-tertiary mt-1">
+          Counter prints straight to this printer. It doesn't need to be the default. Phone sales print here too.
+        </span>
+      </label>
+
+      {printers.error && (
+        <div className="text-xs text-rose-400">Couldn't list printers: {printers.error}</div>
+      )}
+
+      {!printers.loading && !hasUsb && (
+        <div className="text-xs text-text-tertiary border border-border-subtle bg-bg-deep px-3 py-2 space-y-2">
+          <div>
+            {printers.list.length === 0 ? 'No printers are installed on this computer.' : 'No USB printer is installed.'}{' '}
+            {printers.canSetupUsb
+              ? 'Plug in the receipt printer, switch it on, then set it up here — no driver needed. Windows will ask for permission once.'
+              : 'Plug in the receipt printer and add it in this computer\'s printer settings, then press Refresh.'}
+          </div>
+          {printers.canSetupUsb && (
+            <Button size="sm" type="button" onClick={onSetupUsb} disabled={disabled || settingUpUsb}>
+              {settingUpUsb ? 'Waiting for Windows…' : 'Set up USB receipt printer'}
+            </Button>
+          )}
+        </div>
       )}
     </div>
   );

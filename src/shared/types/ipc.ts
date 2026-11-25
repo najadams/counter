@@ -2042,6 +2042,8 @@ export const IPC_CHANNELS_RECEIPT = {
   RECEIPT_GET_CONFIG: 'receipt:get-config',
   RECEIPT_SET_CONFIG: 'receipt:set-config',
   RECEIPT_TEST_PRINTER: 'receipt:test-printer',
+  RECEIPT_LIST_PRINTERS: 'receipt:list-printers',
+  RECEIPT_SETUP_USB_PRINTER: 'receipt:setup-usb-printer',
 } as const;
 
 export type ReceiptPaperWidth = 58 | 80;
@@ -2095,6 +2097,27 @@ export interface ReceiptTestPrinterResponse {
   printed: boolean;
   error?: string;
 }
+
+/** A printer installed on the computer running Counter (the host). */
+export interface ReceiptInstalledPrinter {
+  name: string;
+  isDefault: boolean;
+  offline: boolean;
+  port: string;
+  usb: boolean;
+}
+
+export interface ReceiptListPrintersResponse {
+  printers: ReceiptInstalledPrinter[];
+  /** Set when the OS could not be asked; the list is then empty. */
+  error?: string;
+  /** Only the Windows host offers one-click USB setup. */
+  canSetupUsb: boolean;
+}
+
+export type ReceiptSetupUsbPrinterResponse =
+  | { ok: true; printerName: string; port: string; created: boolean }
+  | { ok: false; reason: 'NOT_WINDOWS' | 'NO_USB_PORT' | 'CANCELLED' | 'NOT_ON_HOST' | 'ERROR'; message: string };
 
 // --- Wave C.1: Printable customer statement ------------------------------
 

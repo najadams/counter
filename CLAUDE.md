@@ -136,14 +136,49 @@ copying `node_modules` across OS lines does not.
 
 ### Receipt printer
 
-The thermal printer driver is configured in the OS, not in Counter.
-Counter calls into `node-thermal-printer` against the default Windows
-printer. On a fresh PC:
+Counter prints from the host PC only. Phones and tablets on the LAN (§9)
+never print themselves: their sales print on the host's **Door printer**,
+desktop sales on the **Counter printer** (Settings → Receipt → Printers).
+A Door printer left on **Same as Counter** (empty) prints on the Counter
+printer, so a one-printer shop sets one printer and is done. With neither set,
+prints fail and queue for reprint. Each takes one of:
 
-1. Install the printer's vendor driver.
-2. Set the thermal printer as the **default** printer (Settings →
-   Bluetooth & devices → Printers).
-3. Print a Windows test page; if that works, Counter's print path works.
+| Setting | Interface | Use |
+|---|---|---|
+| USB / installed | `printer:<OS name>` | Picked from a list of the printers installed on the host. It doesn't need to be the OS default. |
+| Network IP | `tcp://192.168.1.50:9100` | Ethernet/Wi‑Fi printer. Reserve its IP on the router. Needs a local network, not internet. |
+| Default | `printer:auto` | Whatever the host's OS default printer is |
+
+`printer:` specs go **raw through the OS spooler** (`src/main/printer/spooler.ts`):
+on Windows a PowerShell call to winspool `WritePrinter` (datatype RAW), on
+macOS/Linux `lp -o raw`. node-thermal-printer's own `printer:` interface needs
+a native driver module Counter doesn't ship, so it is never used. A missing
+printer, a paused/offline queue or a stuck spooler (10 s,
+`COUNTER_PRINTER_SPOOL_TIMEOUT_MS`) fails the print and queues a reprint. A
+`tcp://` printer is probed with a 1.5 s socket timeout instead.
+
+**A USB receipt printer needs no vendor driver.** Counter sends raw ESC/POS, so
+on Windows, when no USB printer is installed, Settings offers **Set up USB
+receipt printer**. It adds a printer called **Counter Receipt** on the first
+free `USB00x` port with Windows' built-in *Generic / Text Only* driver. Windows
+creates that port when the printer is plugged in, driver or not. This raises
+one administrator (UAC) prompt, so it only runs from the counter PC itself,
+never from a phone. It is audited as `PRINTER_USB_SETUP`.
+
+On a fresh counter PC:
+
+1. Plug in the receipt printer and switch it on.
+2. Settings → Receipt → Printers → Counter printer: pick it from the list. If
+   it isn't there, press **Set up USB receipt printer** and answer **Yes**.
+3. Press **Test print**. Leave the Door printer on **Same as Counter** unless
+   the door has its own printer.
+
+If a vendor driver is already installed, the printer is in the list under its
+own name. Pick that instead. A Windows "offline" flag isn't always accurate
+for USB printers. If Test print succeeds but nothing comes out, check the
+Windows print queue.
+
+Verify with `npx vitest --run tests/printer-spooler.test.ts tests/printer-picker-ui.test.tsx`.
 
 If the printer is offline at sale time the receipt is queued in the
 `pending_receipt_reprints` table — see Settings → Reprint queue.

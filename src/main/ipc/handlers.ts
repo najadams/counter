@@ -3745,9 +3745,11 @@ import {
   IPC_CHANNELS_RECEIPT,
   type ReceiptConfigResponse, type ReceiptSetConfigRequest,
   type ReceiptTestPrinterRequest, type ReceiptTestPrinterResponse,
+  type ReceiptListPrintersResponse, type ReceiptSetupUsbPrinterResponse,
 } from '../../shared/types/ipc.js';
 import { getReceiptConfig, setReceiptConfig } from '../services/receiptConfig.js';
 import { setPrinterInterfaceSpecs } from '../printer/printer.js';
+import { listSpoolerPrinters, setupWindowsUsbPrinter } from '../printer/spooler.js';
 
 function receiptTestSlip(station: 'counter' | 'door'): import('../../shared/lib/receipt.js').SaleReceipt {
   return {
@@ -3825,6 +3827,51 @@ export function registerReceiptConfigHandlers(
         return { ok: false, printed: false, error: `${result.reason}: ${result.message}` };
       },
       IPC_CHANNELS_RECEIPT.RECEIPT_TEST_PRINTER,
+    ),
+  );
+
+  // The printers installed on the host — phones print there too (§9), so a
+  // phone looking at Settings sees the host's list.
+  ipcMain.handle(IPC_CHANNELS_RECEIPT.RECEIPT_LIST_PRINTERS,
+    wrap<void, ReceiptListPrintersResponse>(
+      async () => {
+        const w = requireWorker();
+        if (w.role !== 'OWNER' && w.role !== 'FOUNDER') {
+          throw new Error('Only OWNER or FOUNDER can change printer settings.');
+        }
+        const { printers, error } = await listSpoolerPrinters();
+        return { printers, ...(error ? { error } : {}), canSetupUsb: process.platform === 'win32' };
+      },
+      IPC_CHANNELS_RECEIPT.RECEIPT_LIST_PRINTERS,
+    ),
+  );
+
+  // Adds a "Counter Receipt" printer on a driver-less USB port. It raises a
+  // Windows administrator prompt, so only someone at the host PC may start it:
+  // a phone on the LAN would pop a prompt on a screen nobody is watching.
+  ipcMain.handle(IPC_CHANNELS_RECEIPT.RECEIPT_SETUP_USB_PRINTER,
+    wrap<void, ReceiptSetupUsbPrinterResponse>(
+      async () => {
+        const w = requireWorker();
+        if (w.role !== 'OWNER' && w.role !== 'FOUNDER') {
+          throw new Error('Only OWNER or FOUNDER can change printer settings.');
+        }
+        if (currentStation() !== 'counter') {
+          return { ok: false, reason: 'NOT_ON_HOST', message: 'Set up the USB printer on the counter PC itself — Windows asks for permission on that screen.' };
+        }
+        const result = await setupWindowsUsbPrinter();
+        logAudit(db, {
+          workerId: w.workerId,
+          action: 'PRINTER_USB_SETUP',
+          entityType: 'device_config',
+          entityId: 'receipt',
+          beforeValue: null,
+          afterValue: result,
+          deviceId,
+        });
+        return result;
+      },
+      IPC_CHANNELS_RECEIPT.RECEIPT_SETUP_USB_PRINTER,
     ),
   );
 }

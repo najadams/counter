@@ -581,6 +581,10 @@ export function createCounterApi(invoke: Invoke) {
       invoke<ipc.ReceiptConfigResponse>(ipc.IPC_CHANNELS_RECEIPT.RECEIPT_SET_CONFIG, req),
     receiptTestPrinter: (req: ipc.ReceiptTestPrinterRequest) =>
       invoke<ipc.ReceiptTestPrinterResponse>(ipc.IPC_CHANNELS_RECEIPT.RECEIPT_TEST_PRINTER, req),
+    receiptListPrinters: () =>
+      invoke<ipc.ReceiptListPrintersResponse>(ipc.IPC_CHANNELS_RECEIPT.RECEIPT_LIST_PRINTERS, {}),
+    receiptSetupUsbPrinter: () =>
+      invoke<ipc.ReceiptSetupUsbPrinterResponse>(ipc.IPC_CHANNELS_RECEIPT.RECEIPT_SETUP_USB_PRINTER, {}),
 
     // --- Payment settings (does the shop use a bank?) ---
     paymentSettingsGet: () =>
