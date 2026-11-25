@@ -2,6 +2,18 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "counter-app",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 5173
+    },
+    {
+      "name": "counter-friendly",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:friendly"],
+      "port": 5175
+    },
+    {
       "name": "counter-lan",
       "runtimeExecutable": "npx",
       "runtimeArgs": [
