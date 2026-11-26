@@ -1,4 +1,4 @@
-# Build platform-specific installers for Counter via GitHub-hosted runners.
+# Build platform-specific Counter Friendly installers via GitHub-hosted runners.
 #
 # better-sqlite3 is a native module, so each OS must build on its own runner.
 # Building Windows from macOS yields a broken .exe (Mac .node binding).
@@ -29,54 +29,24 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Three production variants per OS from the SAME commit (no-VAT, VAT,
-        # Friendly), plus the isolated Windows Counters camouflage build.
-        # Ten jobs total.
+        # Counter Friendly only — the edition the shops run. One job per OS;
+        # each builds its own native better-sqlite3. The standard, VAT and
+        # Counters builds still build locally (npm run dist:win etc.) but CI
+        # no longer produces them. To bring one back, add its row here and
+        # its installer pattern to the release `files:` list below.
         include:
-          # --- no-VAT (default) ---
-          - os: windows-latest
-            dist_script: dist:win
-            artifact_glob: 'release/*/Counter-Setup-*.exe'
-            artifact_name: counter-windows
-          - os: macos-latest
-            dist_script: dist:mac
-            artifact_glob: 'release/*/Counter-[0-9]*.dmg'
-            artifact_name: counter-macos
-          - os: ubuntu-latest
-            dist_script: dist:linux
-            artifact_glob: 'release/*/Counter-[0-9]*.AppImage'
-            artifact_name: counter-linux
-          # --- VAT ---
-          - os: windows-latest
-            dist_script: dist:win:vat
-            artifact_glob: 'release/*/Counter-VAT-Setup-*.exe'
-            artifact_name: counter-windows-vat
-          - os: macos-latest
-            dist_script: dist:mac:vat
-            artifact_glob: 'release/*/Counter-VAT-*.dmg'
-            artifact_name: counter-macos-vat
-          - os: ubuntu-latest
-            dist_script: dist:linux:vat
-            artifact_glob: 'release/*/Counter-VAT-*.AppImage'
-            artifact_name: counter-linux-vat
-          # --- Friendly (illustrated, touch + keyboard UI; no-VAT) ---
           - os: windows-latest
             dist_script: dist:win:friendly
             artifact_glob: 'release/*/Counter-Friendly-Setup-*.exe'
-            artifact_name: counter-windows-friendly
+            artifact_name: counter-friendly-windows
           - os: macos-latest
             dist_script: dist:mac:friendly
             artifact_glob: 'release/*/Counter-Friendly-*.dmg'
-            artifact_name: counter-macos-friendly
+            artifact_name: counter-friendly-macos
           - os: ubuntu-latest
             dist_script: dist:linux:friendly
             artifact_glob: 'release/*/Counter-Friendly-*.AppImage'
-            artifact_name: counter-linux-friendly
-          # --- isolated camouflage application ---
-          - os: windows-latest
-            dist_script: dist:win:counters
-            artifact_glob: 'release/*/Counters-Setup-*.exe'
-            artifact_name: counters-windows
+            artifact_name: counter-friendly-linux
 
     steps:
       - name: Checkout
@@ -218,33 +188,21 @@ jobs:
           # matches the version DIRECTORY, not the files, and publishes an
           # empty release. Match the installer files directly, at any depth.
           files: |
-            dist/**/Counter-Setup-*.exe
-            dist/**/Counter-*.dmg
-            dist/**/Counter-*.AppImage
-            dist/**/Counter-VAT-Setup-*.exe
             dist/**/Counter-Friendly-Setup-*.exe
-            dist/**/Counters-Setup-*.exe
+            dist/**/Counter-Friendly-*.dmg
+            dist/**/Counter-Friendly-*.AppImage
           body: |
-            ## Counter ${{ github.ref_name }}
+            ## Counter Friendly ${{ github.ref_name }}
 
             Built by GitHub Actions on `${{ github.sha }}`.
 
             ### Installation
 
-            - **Windows**: download `Counter-Setup-*-x64.exe`, run it. Windows SmartScreen may warn that the publisher is unverified — click "More info" → "Run anyway" (the build is unsigned for v0.x).
-            - **Windows camouflage app**: download `Counters-Setup-*-x64.exe`. It installs beside Counter and uses an isolated synthetic database.
-            - **macOS**: download the `.dmg`, drag Counter to Applications. Right-click → Open the first time to bypass Gatekeeper (unsigned).
-            - **Linux**: download `Counter-*.AppImage`, `chmod +x`, run.
+            - **Windows**: download `Counter-Friendly-Setup-*-x64.exe` and run it. SmartScreen may warn that the publisher is unverified — click "More info" → "Run anyway" (the build is unsigned for v0.x).
+            - **macOS**: download the `.dmg` for your Mac (`arm64` for Apple Silicon, `x64` for Intel), drag Counter Friendly to Applications, and right-click → Open the first time (unsigned). Allow it on the local network when macOS asks, or network printers can't be reached.
+            - **Linux**: download `Counter-Friendly-*.AppImage`, `chmod +x`, run.
 
-            **VAT vs no-VAT:** the `Counter-VAT-*` installers charge/record Ghana VAT
-            (15% + 2.5% NHIL + 2.5% GETFund, inclusive); the plain `Counter-*`
-            installers do not. They install side by side with separate data — pick
-            the one matching the shop's VAT registration.
-
-            **Friendly:** the `Counter-Friendly-*` installers are the no-VAT build
-            with large illustrated buttons, simple wording and on-screen number
-            pads for touchscreen, mouse and keyboard. Same sales, stock and audit
-            rules; installs beside Counter with its own data.
+            **Receipt printer:** Settings → Appearance → Printers. Pick a USB printer from the list (on Windows, *Set up USB receipt printer* adds one with no driver), or choose Network IP for an Ethernet/Wi‑Fi printer. Phones on the LAN print on the same printer.
 
             See [CLAUDE.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/CLAUDE.md) for setup, backup, and runbook.
         env:

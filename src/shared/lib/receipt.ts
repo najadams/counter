@@ -1,6 +1,7 @@
 // Receipt formatter. Pure — takes a SaleReceipt struct, returns string[].
 //
-// 32 columns wide, monospace. No external deps. Easy to test, easy to read.
+// Monospace, as wide as the shop's paper allows (receiptColumns: 32 on 58 mm,
+// 48 on 80 mm). No external deps. Easy to test, easy to read.
 // The print adapter joins the lines with '\n' and ships them to the device.
 
 import { RECEIPT_COLUMNS } from './constants.js';
@@ -72,7 +73,43 @@ export interface SaleReceipt {
   showCustomer?: boolean;
 }
 
-const W = RECEIPT_COLUMNS;
+// Characters per line for the receipt being formatted. formatReceipt sets it
+// for one synchronous call; the helpers below read it.
+let W = RECEIPT_COLUMNS;
+
+/** Printable width of a thermal head, by roll width. 80 mm rolls print 72 mm
+ *  (576 dots), 58 mm rolls print 48 mm (384 dots), at 8 dots/mm. */
+const PRINTABLE_MM: Record<58 | 80, number> = { 58: 48, 80: 72 };
+/** ESC/POS Font A is 12 dots wide: 1.5 mm per character. */
+const CHAR_MM = 1.5;
+
+/** Characters per line for the shop's paper and side margin, as Settings →
+ *  Receipt sets them. The margin is measured from the paper's edge, the way
+ *  the on-screen preview draws it, so a margin inside the head's own
+ *  unprinted edge costs nothing. */
+export function receiptColumns(paperWidthMm: 58 | 80, sideMarginMm = 0): number {
+  const printable = PRINTABLE_MM[paperWidthMm] ?? PRINTABLE_MM[58];
+  const margin = Math.max(0, Math.min(6, sideMarginMm));
+  const usable = Math.min(printable, paperWidthMm - 2 * margin);
+  return Math.max(24, Math.floor(usable / CHAR_MM));
+}
+
+/** Most characters the head can print on one line of this paper. */
+export function maxReceiptColumns(paperWidthMm: 58 | 80): number {
+  return Math.floor((PRINTABLE_MM[paperWidthMm] ?? PRINTABLE_MM[58]) / CHAR_MM);
+}
+
+export interface ReceiptFormatOptions {
+  /** Characters per line. Defaults to 32 (58 mm paper). */
+  columns?: number;
+}
+
+/** A formatted receipt: the lines, plus which of them the printer should
+ *  print taller (the shop name and TOTAL, as the on-screen preview does). */
+export interface FormattedReceipt {
+  lines: string[];
+  emphasis: Set<number>;
+}
 
 function center(s: string): string {
   if (s.length >= W) return s.slice(0, W);
@@ -138,9 +175,25 @@ function formatLine(line: ReceiptLine): string[] {
   return out;
 }
 
-export function formatReceipt(r: SaleReceipt): string[] {
-  const lines: string[] = [];
+export function formatReceipt(r: SaleReceipt, opts: ReceiptFormatOptions = {}): string[] {
+  return formatReceiptRows(r, opts).lines;
+}
 
+export function formatReceiptRows(r: SaleReceipt, opts: ReceiptFormatOptions = {}): FormattedReceipt {
+  const previous = W;
+  W = Math.max(24, Math.floor(opts.columns ?? RECEIPT_COLUMNS));
+  try {
+    return buildReceipt(r);
+  } finally {
+    W = previous;
+  }
+}
+
+function buildReceipt(r: SaleReceipt): FormattedReceipt {
+  const lines: string[] = [];
+  const emphasis = new Set<number>();
+
+  emphasis.add(lines.length);
   lines.push(center(r.shopName.toUpperCase().slice(0, W)));
   if (r.shopSubtitle) lines.push(center(r.shopSubtitle.slice(0, W)));
   if (r.headerLine3) lines.push(center(r.headerLine3.slice(0, W)));
@@ -192,6 +245,7 @@ export function formatReceipt(r: SaleReceipt): string[] {
   if (r.discountPesewas > 0) {
     lines.push(leftRight('Discount', `-${formatMoney(r.discountPesewas)}`));
   }
+  emphasis.add(lines.length);
   lines.push(leftRight('TOTAL', formatMoney(r.totalPesewas)));
 
   // VAT breakdown (Ghana, Act 1151). Inclusive prices, so this is informational:
@@ -255,9 +309,11 @@ export function formatReceipt(r: SaleReceipt): string[] {
     lines.push('');
   }
   const footer = (r.footerText ?? 'Thank you. Come again.').trim();
-  if (footer) lines.push(center(footer.slice(0, W)));
+  // Wrapped, never cut: a footer is the shop's own words ("Goods sold are not
+  // returnable after 24 hours") and losing its end changes what it says.
+  if (footer) for (const row of wrapWords(footer)) lines.push(center(row));
 
-  return lines;
+  return { lines, emphasis };
 }
 
 function paymentLabel(method: string): string {

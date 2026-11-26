@@ -69,14 +69,30 @@ rebuild.
 — `npm run dist:win:vat`, `dist:mac:vat`, `dist:linux:vat` — to build the **VAT**
 installer (`Counter-VAT-Setup-${version}-x64.exe`, etc.). The `:vat` scripts set
 `COUNTER_VAT=1` and use `electron-builder.vat.cjs` to give the VAT build a
-distinct appId/name so both can install side by side. CI builds every variant —
-see `.github/workflows/release.yml` for the current matrix.
+distinct appId/name so both can install side by side. CI no longer builds
+this variant (see below); build it locally if a shop needs it.
 
 **Friendly variant.** `npm run dist:win:friendly` (and `dist:mac:friendly`,
 `dist:linux:friendly`) builds **Counter Friendly** — the no-VAT build with large
 illustrated buttons, simple wording and on-screen number pads (see §13). Output is
 `Counter-Friendly-Setup-${version}-x64.exe` etc.; it installs beside Counter with
-its own data. CI builds these three too.
+its own data.
+
+**CI builds Counter Friendly only.** The shops run Friendly, so
+`.github/workflows/release.yml` builds just `dist:{win,mac,linux}:friendly`
+(artifacts `counter-friendly-windows`, `-macos`, `-linux`) and a `v*` tag
+publishes only those installers. The standard, VAT and Counters builds still
+work locally with their `dist:*` scripts; to bring one back to CI, add its row
+to the matrix and its installer pattern to the release `files:` list.
+
+**Mac and the local network.** macOS (15+) blocks an app from reaching devices
+on the LAN — a network receipt printer — until the user allows it, and only
+asks if the app declares why. `build.mac.extendInfo` sets
+`NSLocalNetworkUsageDescription` for that. A dev run (`npm run dev`) is the
+bare Electron app with no such declaration: a print to a `tcp://` printer can
+fail at once with `EHOSTUNREACH` even though the printer answers from a
+terminal. Start the dev app from a terminal that already has Local Network
+access, or test printing with the packaged app.
 
 ### 2a. Cross-build caveat & the recommended path
 
@@ -138,7 +154,7 @@ copying `node_modules` across OS lines does not.
 
 Counter prints from the host PC only. Phones and tablets on the LAN (§9)
 never print themselves: their sales print on the host's **Door printer**,
-desktop sales on the **Counter printer** (Settings → Receipt → Printers).
+desktop sales on the **Counter printer** (Settings → Appearance → Printers).
 A Door printer left on **Same as Counter** (empty) prints on the Counter
 printer, so a one-printer shop sets one printer and is done. With neither set,
 prints fail and queue for reprint. Each takes one of:
@@ -148,6 +164,23 @@ prints fail and queue for reprint. Each takes one of:
 | USB / installed | `printer:<OS name>` | Picked from a list of the printers installed on the host. It doesn't need to be the OS default. |
 | Network IP | `tcp://192.168.1.50:9100` | Ethernet/Wi‑Fi printer. Reserve its IP on the router. Needs a local network, not internet. |
 | Default | `printer:auto` | Whatever the host's OS default printer is |
+
+**Printed receipts follow the Receipts settings** on the same page, like the
+on-screen preview: paper width (80 mm prints 48 characters a line, 58 mm 32;
+`receiptColumns` in `src/shared/lib/receipt.ts`), side margin (from the paper
+edge — up to 4 mm costs nothing on 80 mm, 6 mm gives 45 characters, centred),
+density (ESC 3 line spacing 26/32/42 dots) and bold. The shop name and TOTAL
+print double height. `writeReceipt` in `src/main/printer/printer.ts` applies it
+for both network and USB printers; a saved setting applies to the next print.
+
+A network printer that doesn't answer fails with the reason in the message:
+no answer within 1.5 s (off, unplugged, wrong IP), `ECONNREFUSED` (something
+else at that IP) or `EHOSTUNREACH` (not reachable from this PC — another
+subnet, or on a Mac, Local Network access not allowed). A printer that came
+with a fixed factory IP on another subnet (e.g. `192.168.0.118` on a
+`192.168.1.x` network) has to be moved: print its self-test page (hold FEED
+while switching on) for the address, reach its web page from a PC with an
+address on that subnet, set an IP on the shop's network, and power-cycle it.
 
 `printer:` specs go **raw through the OS spooler** (`src/main/printer/spooler.ts`):
 on Windows a PowerShell call to winspool `WritePrinter` (datatype RAW), on
@@ -168,7 +201,7 @@ never from a phone. It is audited as `PRINTER_USB_SETUP`.
 On a fresh counter PC:
 
 1. Plug in the receipt printer and switch it on.
-2. Settings → Receipt → Printers → Counter printer: pick it from the list. If
+2. Settings → Appearance → Printers → Counter printer: pick it from the list. If
    it isn't there, press **Set up USB receipt printer** and answer **Yes**.
 3. Press **Test print**. Leave the Door printer on **Same as Counter** unless
    the door has its own printer.
@@ -178,7 +211,7 @@ own name. Pick that instead. A Windows "offline" flag isn't always accurate
 for USB printers. If Test print succeeds but nothing comes out, check the
 Windows print queue.
 
-Verify with `npx vitest --run tests/printer-spooler.test.ts tests/printer-picker-ui.test.tsx`.
+Verify with `npx vitest --run tests/printer-spooler.test.ts tests/printer-network.test.ts tests/printer-picker-ui.test.tsx`.
 
 If the printer is offline at sale time the receipt is queued in the
 `pending_receipt_reprints` table — see Settings → Reprint queue.

@@ -9,4 +9,11 @@ export type {
   ReceiptTender,
   SaleReceipt,
 } from '../../shared/lib/receipt.js';
-export { formatReceipt, renderReceiptText } from '../../shared/lib/receipt.js';
+export type { FormattedReceipt } from '../../shared/lib/receipt.js';
+export {
+  formatReceipt,
+  formatReceiptRows,
+  maxReceiptColumns,
+  receiptColumns,
+  renderReceiptText,
+} from '../../shared/lib/receipt.js';

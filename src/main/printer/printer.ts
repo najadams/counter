@@ -13,7 +13,7 @@
 // Returns { ok, reason } — never throws across the IPC boundary.
 
 import type { SaleReceipt } from './receipt.js';
-import { formatReceipt } from './receipt.js';
+import { formatReceiptRows, maxReceiptColumns, receiptColumns } from './receipt.js';
 import { parseSpoolerSpec, printRawViaSpooler, type SpoolerOptions } from './spooler.js';
 
 export type Station = 'counter' | 'door';
@@ -35,6 +35,95 @@ const STATION_ENV: Record<Station, string> = {
 };
 
 const configuredInterfaces: Partial<Record<Station, string | null>> = {};
+
+// ── Layout from Settings → Receipt ─────────────────────────────────────────
+// Printed receipts follow the same paper width, side margin, density and bold
+// switch as the on-screen preview. setPrinterInterfaceSpecs receives the whole
+// receipt config (boot and every save), so the layout rides along with it.
+
+export type ReceiptDensity = 'compact' | 'normal' | 'spacious';
+
+export interface ReceiptLayoutInput {
+  paperWidthMm?: 58 | 80;
+  sideMarginMm?: number;
+  density?: ReceiptDensity;
+  bold?: boolean;
+}
+
+interface ReceiptLayout {
+  columns: number;
+  /** Spaces before each line, so a wide side margin centres the text. */
+  indent: number;
+  /** ESC 3 n line spacing, in dots (printer default is about 30). */
+  lineSpacingDots: number;
+  bold: boolean;
+}
+
+const LINE_SPACING_DOTS: Record<ReceiptDensity, number> = { compact: 26, normal: 32, spacious: 42 };
+
+// Until Settings has been read: the 80 mm, 2 mm, normal, bold defaults.
+let layout: ReceiptLayout = layoutFrom({});
+
+function layoutFrom(input: ReceiptLayoutInput): ReceiptLayout {
+  const paper = input.paperWidthMm === 58 ? 58 : 80;
+  const columns = receiptColumns(paper, input.sideMarginMm ?? 2);
+  const density = input.density ?? 'normal';
+  return {
+    columns,
+    indent: Math.floor((maxReceiptColumns(paper) - columns) / 2),
+    lineSpacingDots: LINE_SPACING_DOTS[density] ?? LINE_SPACING_DOTS.normal,
+    bold: input.bold !== false,
+  };
+}
+
+export function setReceiptLayout(input: ReceiptLayoutInput): void {
+  layout = layoutFrom(input);
+}
+
+/** Test hook: the layout printers use now. */
+export function _receiptLayout(): Readonly<ReceiptLayout> {
+  return layout;
+}
+
+/** The node-thermal-printer calls writeReceipt makes. */
+interface ReceiptWriter {
+  setTypeFontA(): void;
+  bold(enabled: boolean): void;
+  setLineSpacing(dots: number): void;
+  setTextDoubleHeight(): void;
+  setTextNormal(): void;
+  println(text: string): void;
+  cut(options?: { verticalTabAmount?: number }): void;
+}
+
+/** Writes a receipt in the shop's layout: Font A at the paper's width, the
+ *  chosen line spacing and weight, and the shop name and TOTAL printed tall
+ *  (double height keeps the width, so the columns still line up). */
+export function writeReceipt(printer: ReceiptWriter, receipt: SaleReceipt): void {
+  const { lines, emphasis } = formatReceiptRows(receipt, { columns: layout.columns });
+  const pad = ' '.repeat(layout.indent);
+  printer.setTypeFontA();
+  printer.setLineSpacing(layout.lineSpacingDots);
+  printer.bold(layout.bold);
+  lines.forEach((line, i) => {
+    if (emphasis.has(i)) {
+      printer.setTextDoubleHeight();
+      printer.println(pad + line);
+      printer.setTextNormal();
+    } else {
+      printer.println(pad + line);
+    }
+  });
+  printer.bold(false);
+  // node-thermal-printer's cut() defaults to verticalTabAmount: 2, and for
+  // the EPSON profile CTL_VT is `1b 64 04` — "print and feed 4 lines" —
+  // so the default fed EIGHT blank lines before every cut. One is enough:
+  // 4 lines carries the footer past the cutter blade (~12mm) and no
+  // further. The remaining blank leader on the next receipt is the fixed
+  // print-head-to-blade distance, which no software can remove.
+  printer.cut({ verticalTabAmount: 1 });
+}
+
 
 function ownSpecFor(station: Station): string | undefined {
   const configured = configuredInterfaces[station];
@@ -71,7 +160,7 @@ export function setPrinterDevMode(isDev: boolean): void {
 class ConsolePrinter implements PrinterAdapter {
   constructor(private station: Station) {}
   async print(receipt: SaleReceipt): Promise<PrintResult> {
-    const text = formatReceipt(receipt).join('\n');
+    const text = formatReceiptRows(receipt, { columns: layout.columns }).lines.join('\n');
     // eslint-disable-next-line no-console
     console.log(`\n----- RECEIPT (${this.station}, console fallback) -----\n${text}\n----- END RECEIPT -----\n`);
     return { ok: true };
@@ -118,19 +207,18 @@ class ThermalPrinter implements PrinterAdapter {
         // Bounded socket timeout so a dead tcp:// door printer fails fast.
         options: { timeout: this.timeoutMs },
       });
-      const isConnected = await printer.isPrinterConnected();
-      if (!isConnected) return { ok: false, reason: 'OFFLINE', message: 'printer offline' };
-
-      for (const line of formatReceipt(receipt)) {
-        printer.println(line);
+      const tcp = parseTcpSpec(this.interfaceSpec);
+      if (tcp) {
+        // Probe ourselves: the library's own check swallows the socket error,
+        // and "printer offline" alone can't tell a switched-off printer from a
+        // wrong IP or a blocked network.
+        const failure = await probeTcp(tcp.host, tcp.port, this.timeoutMs);
+        if (failure) return { ok: false, reason: 'OFFLINE', message: failure };
+      } else if (!(await printer.isPrinterConnected())) {
+        return { ok: false, reason: 'OFFLINE', message: 'printer offline' };
       }
-      // node-thermal-printer's cut() defaults to verticalTabAmount: 2, and for
-      // the EPSON profile CTL_VT is `1b 64 04` — "print and feed 4 lines" —
-      // so the default fed EIGHT blank lines before every cut. One is enough:
-      // 4 lines carries the footer past the cutter blade (~12mm) and no
-      // further. The remaining blank leader on the next receipt is the fixed
-      // print-head-to-blade distance, which no software can remove.
-      printer.cut({ verticalTabAmount: 1 });
+
+      writeReceipt(printer, receipt);
       await printer.execute();
       return { ok: true };
     } catch (err) {
@@ -141,6 +229,41 @@ class ThermalPrinter implements PrinterAdapter {
       };
     }
   }
+}
+
+export function parseTcpSpec(spec: string): { host: string; port: number } | null {
+  const m = /^tcp:\/\/([^:/\s]+)(?::(\d+))?\/?$/i.exec(spec.trim());
+  if (!m) return null;
+  return { host: m[1]!, port: m[2] ? Number(m[2]) : 9100 };
+}
+
+/** Connects to a network printer and hangs up. null when it answered,
+ *  otherwise a message the cashier and owner can act on. */
+export async function probeTcp(host: string, port: number, timeoutMs: number): Promise<string | null> {
+  const net = await import('node:net');
+  const where = `${host}:${port}`;
+  return new Promise((resolve) => {
+    const socket = net.connect({ host, port });
+    const done = (result: string | null) => {
+      clearTimeout(timer);
+      socket.destroy();
+      resolve(result);
+    };
+    const timer = setTimeout(
+      () => done(`printer offline: no answer from ${where} within ${timeoutMs} ms (switched off, unplugged, or wrong IP?)`),
+      timeoutMs,
+    );
+    socket.once('connect', () => done(null));
+    socket.once('error', (err: NodeJS.ErrnoException) => {
+      const code = err.code ?? 'ERROR';
+      const hint =
+        code === 'ECONNREFUSED' ? 'something is at that IP but it is not taking print jobs on that port'
+        : code === 'EHOSTUNREACH' || code === 'ENETUNREACH' ? 'this computer cannot reach that IP; check the printer is on the same network (on a Mac, also allow Counter under Privacy & Security → Local Network)'
+        : code === 'ENOTFOUND' ? 'that printer name could not be found'
+        : err.message;
+      done(`printer offline: ${where} ${code} — ${hint}`);
+    });
+  });
 }
 
 // ESC/POS bytes for a receipt, built by node-thermal-printer but not sent: a
@@ -157,8 +280,7 @@ async function receiptBytes(receipt: SaleReceipt): Promise<Buffer> {
     // The library accepts an interface object in place of a spec string.
     interface: noSend as unknown as string,
   });
-  for (const line of formatReceipt(receipt)) printer.println(line);
-  printer.cut({ verticalTabAmount: 1 }); // see ThermalPrinter.print for why 1
+  writeReceipt(printer, receipt);
   return printer.getBuffer();
 }
 
@@ -222,7 +344,8 @@ export function isPrinterConfigured(station: Station = 'counter'): boolean {
 export function setPrinterInterfaceSpecs(input: {
   counterPrinterInterface?: string | null;
   doorPrinterInterface?: string | null;
-}): void {
+} & ReceiptLayoutInput): void {
+  setReceiptLayout(input);
   configuredInterfaces.counter = normalizeSpec(input.counterPrinterInterface);
   configuredInterfaces.door = normalizeSpec(input.doorPrinterInterface);
   cache.clear();

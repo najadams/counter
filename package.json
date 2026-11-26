@@ -1,6 +1,6 @@
 {
   "name": "counter",
-  "version": "0.4.4",
+  "version": "0.4.5",
   "description": "Keyboard-first Electron POS for a Ghanaian beverage shop. Anti-shrinkage forensics on every cedi.",
   "author": {
     "name": "Counter POS",
@@ -175,7 +175,13 @@
       "artifactName": "Counter-${version}-${arch}.${ext}",
       "darkModeSupport": true,
       "hardenedRuntime": false,
-      "gatekeeperAssess": false
+      "gatekeeperAssess": false,
+      "extendInfo": {
+        "NSLocalNetworkUsageDescription": "Counter prints receipts on network receipt printers and serves the till to phones on this network.",
+        "NSBonjourServices": [
+          "_http._tcp"
+        ]
+      }
     },
     "dmg": {
       "icon": "build/icon.icns",

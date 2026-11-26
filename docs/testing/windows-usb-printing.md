@@ -5,12 +5,13 @@ packaged app, the receipt printer plugged in by USB, and no vendor driver.
 
 ## Get the build
 
-1. GitHub → Actions → **Release** → the run on `feat/usb-printing` →
-   Artifacts → download **counter-windows** (a zip with
-   `Counter-Setup-0.4.4-x64.exe`). Artifacts expire after 14 days.
-2. Copy it to the PC. Close Counter if it's open. Run the installer
-   (SmartScreen: *More info* → *Run anyway*). It installs over v0.4.4 and keeps
-   the data.
+1. GitHub → Actions → **Release** → the newest run on `feat/usb-printing` →
+   Artifacts → download **counter-friendly-windows** (a zip with
+   `Counter-Friendly-Setup-0.4.5-x64.exe`). Artifacts expire after 14 days.
+2. Copy it to the PC. Close Counter Friendly if it's open. Run the installer
+   (SmartScreen: *More info* → *Run anyway*). It installs over an earlier
+   Counter Friendly and keeps its data; on a PC without it, it starts with
+   activation and first-run setup (its own key — see CLAUDE.md §12).
 
 ## Before you start
 
@@ -21,7 +22,7 @@ packaged app, the receipt printer plugged in by USB, and no vendor driver.
 
 ## A. Picking the printer (sign in as OWNER)
 
-Settings → Receipt → **Printers**.
+Settings → **Appearance** → Printers.
 
 - [ ] Counter printer shows **USB / installed**, with a list headed
       *Printer on this computer*.
@@ -49,13 +50,21 @@ Settings → Receipt → **Printers**.
       the slip comes out of the same printer.
 - [ ] Ring up a cash sale on the PC. The receipt prints, and the till isn't
       held up noticeably (time it: \_\_\_ s from Complete to the printed slip).
-- [ ] Start Counter with LAN access. Quit it, then from Command Prompt:
-      `set COUNTER_HTTP=1 && set COUNTER_HTTP_HOST=0.0.0.0 && "%LOCALAPPDATA%\Programs\Counter\Counter.exe"`.
+- [ ] Settings → **Phone access**: turn it on for the local network. If
+      Windows Firewall asks, allow Counter Friendly on **private** networks.
       Join from a phone with the Home QR code and ring up a sale. Its receipt
       prints on the PC's printer.
 - [ ] On the phone: Settings → Printers shows the PC's printers. **Set up USB
       receipt printer** refuses with *Set up the USB printer on the counter PC
       itself*.
+
+## C2. Network printer and receipt layout
+
+- [ ] Counter printer → **Network IP** → the printer's IP (port 9100) → Save →
+      **Test print**. A slip prints.
+- [ ] Receipts → Paper width **80 mm**: a sale receipt fills the paper's width,
+      with the shop name and TOTAL printed tall. **58 mm** narrows it.
+- [ ] Change Density and Use bold text, save, Test print: the slip changes.
 
 ## D. Failures stay loud
 
@@ -72,4 +81,4 @@ Settings → Receipt → **Printers**.
 - What Windows showed when the printer was plugged in, and its exact name.
 - The result of each box, the print time, and what happened in D with the
   printer off.
-- `%APPDATA%\Counter\logs\main.log` if anything failed.
+- `%APPDATA%\Counter Friendly\logs\main.log` if anything failed.

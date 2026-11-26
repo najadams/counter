@@ -285,6 +285,21 @@ export function startHttpServer(deps: HttpServerDeps): http.Server {
     bonjour = undefined;
   });
 
+  // A port still held — usually the previous copy of Counter not yet gone
+  // (dev reload, quick restart) — must not crash the till. Retry for a few
+  // seconds, then give up with a log line; selling never needs this server.
+  let listenAttempts = 0;
+  server.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code === 'EADDRINUSE' && listenAttempts < 10) {
+      listenAttempts += 1;
+      log.warn(`[http] port ${deps.port} is in use; retrying (${listenAttempts}/10)`);
+      setTimeout(() => server.listen(deps.port, deps.host), 1000);
+      return;
+    }
+    log.error(`[http] server error: ${err.code ?? ''} ${err.message}` +
+      (err.code === 'EADDRINUSE' ? ` — port ${deps.port} is taken by another program; phones cannot connect` : ''));
+  });
+
   server.listen(deps.port, deps.host, () => {
     const addr = server.address();
     const boundPort = typeof addr === 'object' && addr ? addr.port : deps.port;
